@@ -5,7 +5,6 @@
   "description": "Video-first local marketplace for the GCC — monorepo root",
   "workspaces": [
     "apps/web",
-    "apps/mobile",
     "packages/*"
   ],
   "engines": {
@@ -13,7 +12,7 @@
   },
   "scripts": {
     "dev:web": "npm run dev --workspace @marketplace/web",
-    "dev:mobile": "npm run start --workspace @marketplace/mobile",
+    "dev:mobile": "echo 'Mobile is Kotlin Multiplatform. See apps/mobile-kmm/README.md' && exit 1",
     "build:web": "npm run build --workspace @marketplace/web",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

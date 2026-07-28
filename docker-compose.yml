@@ -95,8 +95,42 @@ services:
       timeout: 5s
       retries: 20
 
+  # The analytics warehouse (Phase 4). PLAN-VIDEO-FIRST §3: view and impression
+  # events go here and never to Postgres — "this is your highest-volume data by
+  # an order of magnitude".
+  #
+  # Behind a profile for the same reason as OpenSearch: nothing on the order
+  # path or the feed read path needs it running, and the Postgres event sink is
+  # the correct destination in development and in a launch district.
+  #   docker compose --profile analytics up -d
+  #   make clickhouse-schema
+  clickhouse:
+    profiles: ["analytics"]
+    image: clickhouse/clickhouse-server:24.8-alpine
+    environment:
+      CLICKHOUSE_USER: marketplace
+      CLICKHOUSE_PASSWORD: marketplace
+      CLICKHOUSE_DB: analytics
+      # Single-node dev only.
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"
+      - "9010:9000"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhousedata:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
 volumes:
   pgdata:
   redisdata:
   miniodata:
   opensearchdata:
+  clickhousedata:

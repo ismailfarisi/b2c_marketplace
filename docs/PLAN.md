@@ -82,7 +82,7 @@ Reserve inside the order transaction with `SELECT … FOR UPDATE` (or let the CH
 | Jobs | **River** (Postgres-backed) | Subscription cycles, billing retries, notifications. No Redis needed initially |
 | Contract | **OpenAPI 3.1** | Source of truth. `oapi-codegen` → Go stubs, `orval` → TS client |
 | Web | **Next.js** (App Router) | Customer + vendor + admin as three route groups, one app, shared UI lib |
-| Mobile | **Expo (React Native)** | Customer app + driver app, both consume the generated TS client |
+| Mobile | **Kotlin Multiplatform** | ⚠️ Changed at Phase 7 from Expo. Shared Kotlin for networking, paging and playback *policy*; native Compose/Media3 and SwiftUI/AVFoundation for the decoder. The driver app became a **web view** (PLAN.md §5 P4's own recommendation) — see PHASE-7 §3 |
 | Infra | AWS **me-central-1** (UAE) | Data residency — see §7 |
 
 **The OpenAPI spec is non-negotiable.** It is the only thing that gives a Go backend and three TypeScript clients a shared, compiler-enforced contract. Spec changes must fail CI if generated code is stale.
@@ -102,7 +102,8 @@ b2c_marketplace/
 │       ├── money/                # pricing, payments, ledger, invoices
 │       ├── logistics/            # routes, drivers, tracking
 │       └── platform/             # db, config, telemetry, outbox
-├── apps/{web,mobile-customer,mobile-driver}/
+├── apps/web/                     # customer + vendor console + driver view
+├── apps/mobile-kmm/              # shared Kotlin + androidApp + iosApp
 ├── packages/api-client/          # generated — never hand-edited
 └── db/migrations/
 ```
@@ -161,7 +162,9 @@ Add meals: subscription plans, menu cycles, the rolling-window scheduler, pause/
 **Gate:** if adding meals required changing `commerce` or `scheduling` internals rather than adding strategies, stop and fix the abstraction. This phase is the architecture's exam.
 
 ### Phase 3 — Clients · ~5 weeks
-Customer mobile app (Expo), responsive web polish, full vendor dashboard (catalog, capacity calendar, subscription roster, order queue, payout statements).
+Customer mobile app, responsive web polish, full vendor dashboard (catalog, capacity calendar, subscription roster, order queue, payout statements).
+
+*Built at PLAN-VIDEO-FIRST Phase 7, and two of the choices here changed on the way: the customer app is **Kotlin Multiplatform**, not Expo (video playback is the product), and the driver app is a **web view** rather than native — which is P4's own recommendation below, taken.*
 
 ### Phase 4 — Logistics · ~4 weeks
 Driver app, route building and assignment, live tracking, proof of delivery, admin console (vendor approvals, disputes, commission config, refunds).

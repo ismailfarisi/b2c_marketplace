@@ -30,6 +30,8 @@ import (
 	"github.com/marketplace/api/internal/auth"
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/boosts"
+	"github.com/marketplace/api/internal/platform/metrics"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/platform/redisx"
 )
@@ -86,20 +88,39 @@ func run() error {
 		return errors.New("feed service requires media configuration (S3_BUCKET)")
 	}
 
+	// Phase 9. Wired identically to cmd/api, and it has to be: this process
+	// serves most of the impressions in the product, so a boost system attached
+	// only to the transactional binary would sell reach that is almost never
+	// delivered — and would look, from the campaign report, exactly like a
+	// campaign nobody wanted to watch.
+	boostSvc := boosts.NewService(pool, nil)
+	media.Feed.WithSponsored(app.SponsoredFiller{Boosts: boostSvc})
+
 	issuer := auth.NewIssuer(cfg.JWTSigningKey, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	handlers := &api.ReelHandlers{
-		Reels: media.Reels,
-		Feed:  media.Feed,
+		Reels:  media.Reels,
+		Feed:   media.Feed,
+		Boosts: boostSvc,
 		// Actions is what makes a feed served here identical to one served by
 		// cmd/api: the same registry, the same handlers, the same CTAs. A feed
 		// without it would render reels with no buttons, which is the whole
 		// product minus the part that earns money.
 		Actions: media.Actions,
 		Ingest:  media.Ingest,
+		// Likes is read-only here: StateFor answers "have I liked this" for the
+		// page. The write endpoints stay on cmd/api — a like is a small write
+		// and the read path should not grow one.
+		Likes:    media.Likes,
+		Comments: media.Comments,
+		Ranking:  media.Ranking,
 	}
 
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
+	// Phase 10. The feed process is the one whose latency is the product
+	// rather than a quality of it, so it carries the same RED middleware as
+	// cmd/api and a `source` label that tells the two apart on one dashboard.
+	r.Use(metrics.Middleware)
 	r.Use(httpx.Recover)
 	r.Use(httpx.AccessLog)
 	r.Use(httpx.Locale)
@@ -114,6 +135,9 @@ func run() error {
 		ExposedHeaders: []string{"X-Request-Id"},
 		MaxAge:         300,
 	}))
+
+	metrics.BindPool(metrics.Default, pool, "feed")
+	r.Get("/metrics", metrics.Handler(metrics.Default))
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"status": "ok", "version": version})

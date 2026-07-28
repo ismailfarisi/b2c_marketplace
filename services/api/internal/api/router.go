@@ -44,6 +44,22 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// clicks, signs up, and orders is the feed doing the whole job, and
 			// it is the conversion path most worth being able to see.
 			r.Post("/actions/{actionId}/click", h.Reels.ClickAction)
+
+			// Reading a thread does not require an account. Writing one does —
+			// an anonymous comment cannot be struck, rate-limited across
+			// sessions, or held against a reputation.
+			r.Get("/reels/{reelId}/comments", h.Reels.ListComments)
+		}
+
+		// Phase 6 — classifieds browse.
+		//
+		// Public for the same reason the feed is. Car search is the highest-
+		// intent surface in the product and the one most likely to arrive from
+		// a shared link or a search engine; a login wall there converts a
+		// motivated buyer into a bounce.
+		if h.Vehicles != nil {
+			r.Get("/listings", h.Vehicles.Search)
+			r.Get("/listing-packages", h.Vehicles.ListPackages)
 		}
 	})
 
@@ -60,6 +76,162 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		r.Get("/orders/{orderId}", h.GetOrder)
 		r.Post("/orders/{orderId}/payment-intent", h.CreatePaymentIntent)
 
+		// Phase 5 — recurring. A subscription's money moves through the order
+		// endpoints above: signup returns a billing order, and the client pays
+		// it with the same payment-intent call a one-off order uses.
+		if h.Subscriptions != nil {
+			r.Post("/subscriptions", h.Subscriptions.Subscribe)
+			r.Post("/subscriptions/{subscriptionId}/pause", h.Subscriptions.Pause)
+			r.Post("/subscriptions/{subscriptionId}/skip", h.Subscriptions.Skip)
+			r.Post("/subscriptions/{subscriptionId}/cancel", h.Subscriptions.Cancel)
+		}
+
+		// Phase 6 — classifieds.
+		//
+		// Mounted before the media nil-check below, because the vehicles
+		// vertical does not depend on the media stack. A deployment with no
+		// object store still sells cars; it just sells them without video.
+		if h.Vehicles != nil {
+			r.Post("/listings", h.Vehicles.CreateListing)
+			r.Post("/listings/{listingId}/submit", h.Vehicles.SubmitListing)
+			r.Patch("/listings/{listingId}/price", h.Vehicles.ChangePrice)
+			r.Post("/listings/{listingId}/sold", h.Vehicles.MarkSold)
+			r.Post("/listings/{listingId}/status", h.Vehicles.SetStatus)
+
+			// Demand. Inquire is this vertical's conversion event — the
+			// analogue of POST /orders, and the thing the whole video bet is
+			// measured against for cars.
+			r.Post("/listings/{listingId}/inquire", h.Vehicles.Inquire)
+			r.Post("/listings/{listingId}/offers", h.Vehicles.MakeOffer)
+			r.Post("/offers/{offerId}/respond", h.Vehicles.RespondToOffer)
+			r.Put("/listings/{listingId}/favourite", h.Vehicles.Favourite)
+			r.Delete("/listings/{listingId}/favourite", h.Vehicles.Favourite)
+			r.Post("/listings/{listingId}/report", h.Vehicles.ReportListing)
+
+			// Monetisation. Paid placement is bought here and labelled in the
+			// search response — see VehicleHandlers.Search.
+			r.Post("/listing-packages/{packageId}/purchase", h.Vehicles.BuyPackage)
+			r.Post("/listings/{listingId}/bump", h.Vehicles.Bump)
+			r.Post("/listings/{listingId}/feature", h.Vehicles.Feature)
+
+			// Listings get their own moderation queue rather than sharing the
+			// reel one. Different reviewer skill, different SLA, and a listing
+			// decision needs the VIN and the price history in front of it.
+			r.Post("/moderation/listings/{listingId}/decide", h.Vehicles.DecideListing)
+			r.Get("/moderation/fraud", h.Vehicles.FraudQueue)
+			r.Post("/moderation/fraud/decide", h.Vehicles.DecideFraudSignal)
+		}
+
+		if h.Chat != nil {
+			r.Get("/me/conversations", h.Chat.Inbox)
+			r.Get("/conversations/{conversationId}/messages", h.Chat.History)
+			r.Post("/conversations/{conversationId}/messages", h.Chat.Send)
+			r.Post("/conversations/{conversationId}/read", h.Chat.MarkRead)
+
+			// A third queue. Held messages arrive at chat volume and are judged
+			// in seconds; interleaving them with reels would bury the queue
+			// that has a publish SLA on it — the same argument that gave
+			// comments their own queue in Phase 4.
+			r.Get("/moderation/messages", h.Chat.Queue)
+			r.Post("/moderation/messages/{messageId}/decide", h.Chat.Decide)
+		}
+
+		// Phase 7 — logistics.
+		//
+		// The driver routes carry no branch or vendor in the path. Every one of
+		// them resolves the signed-in user to a driver server-side, because a
+		// client that can name which driver it is acting as is a client that can
+		// complete someone else's deliveries.
+		if h.DriverOps != nil {
+			r.Post("/driver/shifts", h.DriverOps.StartShift)
+			r.Post("/driver/shifts/end", h.DriverOps.EndShift)
+			r.Get("/driver/manifest", h.DriverOps.Manifest)
+			r.Post("/driver/stops/{fulfillmentId}/dispatch", h.DriverOps.Dispatch_)
+			r.Post("/driver/stops/{fulfillmentId}/advance", h.DriverOps.Advance)
+			r.Post("/driver/stops/{fulfillmentId}/complete", h.DriverOps.Complete)
+			r.Post("/driver/stops/{fulfillmentId}/fail", h.DriverOps.Fail)
+			r.Post("/driver/location", h.DriverOps.Ping)
+			r.Get("/driver/cash", h.DriverOps.Cash)
+			r.Post("/driver/cash/remittances", h.DriverOps.DeclareRemittance)
+
+			// The dispatch board. Vendor-facing, branch-scoped.
+			r.Get("/branches/{branchId}/dispatch", h.DriverOps.Board)
+			r.Post("/branches/{branchId}/dispatch/plan", h.DriverOps.BuildRoutes)
+			r.Post("/routes/{routeId}/assign", h.DriverOps.AssignRoute)
+		}
+
+		// Phase 7 — the vendor console.
+		if h.Console != nil {
+			r.Get("/me/memberships", h.Console.Memberships)
+			r.Get("/branches/{branchId}/summary", h.Console.Summary)
+			r.Get("/branches/{branchId}/queue", h.Console.Queue)
+			r.Get("/branches/{branchId}/calendar", h.Console.Calendar)
+			r.Get("/branches/{branchId}/roster", h.Console.Roster)
+
+			r.Get("/vendors/{vendorId}/statements", h.Console.Statements)
+			r.Get("/vendors/{vendorId}/statements/{statementId}", h.Console.StatementDetail)
+			// Counted by the branch, never by the driver who declared it.
+			r.Post("/cash/remittances/{remittanceId}/settle", h.Console.SettleRemittance)
+
+			r.Post("/disputes", h.Console.OpenDispute)
+			r.Get("/disputes", h.Console.DisputeQueue)
+			r.Post("/disputes/{disputeId}/resolve", h.Console.ResolveDispute)
+		}
+
+		// Phase 8 — market readiness.
+		//
+		// Mounted outside the media nil-check below for the same reason the
+		// classifieds routes are: none of it depends on the media stack. A
+		// deployment with no object store still has to send delivery codes,
+		// issue tax invoices and honour a marketing opt-out — those are legal
+		// obligations rather than features, and gating them behind a bucket
+		// would be an odd place to lose them.
+		if h.Compliance != nil {
+			r.Get("/me/notifications", h.Compliance.Inbox)
+			r.Post("/me/notifications/{notificationId}/read", h.Compliance.MarkNotificationRead)
+			// The opt-out. Required to work in both launch markets, which is
+			// why it is a first-class endpoint rather than a support action.
+			r.Put("/me/notification-preferences", h.Compliance.SetPreference)
+
+			r.Get("/me/invoices", h.Compliance.MyInvoices)
+			// An author's own record. Self-scoped: there is no path here that
+			// takes someone else's id.
+			r.Get("/me/standing", h.Compliance.Standing)
+			r.Post("/appeals", h.Compliance.OpenAppeal)
+
+			// Vendor compliance. Both are vendor-scoped and authorise through
+			// `vendor_users`, so a vendor sees why *they* cannot be paid and
+			// never why anyone else cannot.
+			r.Get("/vendors/{vendorId}/compliance", h.Compliance.VendorCompliance)
+			r.Post("/vendors/{vendorId}/payout-account", h.Compliance.AddPayoutAccount)
+
+			// Ops. Authorised against platform_admins inside the handler on
+			// every call, never from a token claim.
+			r.Post("/kyc/cases/{caseId}/decide", h.Compliance.DecideKYC)
+			r.Post("/payout-accounts/{accountId}/verify", h.Compliance.VerifyPayoutAccount)
+			// Overdue only. The failure mode of an appeals process is that
+			// appeals are never decided, and a queue showing every open one
+			// buries the breached ones among them.
+			r.Get("/moderation/appeals", h.Compliance.AppealQueue)
+			r.Post("/moderation/appeals/{appealId}/decide", h.Compliance.DecideAppeal)
+		}
+
+		// Phase 9 — boosts.
+		//
+		// Nil in every deployment that has not switched advertising on, which
+		// PLAN-VIDEO-FIRST §7 says is correct until there is enough organic
+		// demand that reach is worth buying. Selling reach into a thin feed
+		// sells nothing and teaches the first advertisers that it does not
+		// work.
+		if h.BoostOps != nil {
+			r.Post("/boosts", h.BoostOps.Create)
+			r.Get("/boosts", h.BoostOps.Report)
+			r.Post("/boosts/{campaignId}/status", h.BoostOps.SetStatus)
+			// Staff. Not a second content review — the reel was moderated
+			// before it could be published — but a review of the campaign.
+			r.Post("/moderation/boosts/{campaignId}/decide", h.BoostOps.Review)
+		}
+
 		if h.Reels == nil {
 			return
 		}
@@ -67,6 +239,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// Authoring. The upload endpoint creates a draft and hands back a
 		// presigned PUT; bytes never pass through this process.
 		r.Post("/reels/uploads", h.Reels.CreateUpload)
+		// Seller reels (Phase 6). Separate endpoint, different authority: a
+		// vendor reel authorises through branch membership, a personal one
+		// through owning the subject.
+		r.Post("/reels/uploads/personal", h.Reels.CreatePersonalUpload)
 		r.Post("/reels/{reelId}", h.Reels.UpdateReel)
 		r.Get("/reels/{reelId}", h.Reels.GetReel)
 		r.Delete("/reels/{reelId}", h.Reels.DeleteReel)
@@ -83,6 +259,13 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		r.Put("/reels/{reelId}/save", h.Reels.SaveReel)
 		r.Delete("/reels/{reelId}/save", h.Reels.UnsaveReel)
 
+		// Phase 4 — social.
+		r.Put("/reels/{reelId}/like", h.Reels.LikeReel)
+		r.Delete("/reels/{reelId}/like", h.Reels.UnlikeReel)
+		r.Post("/reels/{reelId}/comments", h.Reels.PostComment)
+		r.Delete("/comments/{commentId}", h.Reels.DeleteComment)
+		r.Post("/comments/{commentId}/report", h.Reels.ReportComment)
+
 		// The vendor's own conversion numbers, scoped by authorship.
 		r.Get("/reels/{reelId}/funnel", h.Reels.ReelFunnel)
 
@@ -90,6 +273,18 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// platform_admins on every call, not carried in a token claim.
 		r.Get("/moderation/queue", h.Reels.ModerationQueue)
 		r.Post("/moderation/{reelId}/decide", h.Reels.DecideModeration)
+
+		// Comments get their own queue rather than sharing the reel one. They
+		// arrive at a rate orders of magnitude higher and are judged in seconds
+		// rather than minutes; interleaving them would bury the reel queue,
+		// which is the one with a publish SLA on it.
+		r.Get("/moderation/comments", h.Reels.CommentQueue)
+		r.Post("/moderation/comments/{commentId}/decide", h.Reels.DecideComment)
+
+		// What is ranking the feed right now. Staff-only, and it exists because
+		// "the feed looked wrong at 14:20" is otherwise a question that gets
+		// discussed rather than answered.
+		r.Get("/ranking/profile", h.Reels.RankingProfile)
 
 		// The Phase 3 decision itself. Admin-only: this is the number that
 		// determines whether the video bet continues, and it must not circulate
@@ -111,6 +306,7 @@ func MountFeed(r chi.Router, h *ReelHandlers, issuer *auth.Issuer) {
 
 		r.Get("/feed", h.GetFeed)
 		r.Post("/events", h.SubmitEvents)
+		r.Get("/reels/{reelId}/comments", h.ListComments)
 		// The click endpoint belongs here too. It is on the same hot path as
 		// the feed — every CTA press on a served page hits it — and separating
 		// them would put the highest-intent event in the product behind the

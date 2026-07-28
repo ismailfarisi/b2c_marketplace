@@ -90,6 +90,28 @@ type Handler interface {
 	Resolve(ctx context.Context, a Action, v Viewer) (Resolved, error)
 }
 
+// Labels is a vertical's presentation of a shared action kind.
+//
+// It exists because Phase 5 found the (Kind, TargetType) key to be one level
+// too coarse. `book_service` on a `service_offering` is not laundry's — a meal
+// box is also a service offering, and so is a haircut. Phase 3 let laundry
+// claim the pair because it was the only vertical; the second one to arrive
+// would have panicked at boot on a duplicate registration.
+//
+// The fix keeps the seam intact rather than widening the key. One handler owns
+// the pair — it lives in the module that owns the table, which is catalog — and
+// each vertical contributes only the words and the route. A vertical still
+// imports nothing but this package.
+type Labels struct {
+	Label   string
+	LabelAr string
+	// RoutePrefix is the client-side deep link this CTA opens, with the target
+	// id appended: "/offerings" produces "/offerings/{id}/book".
+	RoutePrefix string
+	// Verb completes the route, e.g. "book" or "order".
+	Verb string
+}
+
 // Registry binds handlers to (Kind, TargetType). Registration happens once at
 // startup from each module's init wiring; lookups are concurrent and read-only
 // after that.

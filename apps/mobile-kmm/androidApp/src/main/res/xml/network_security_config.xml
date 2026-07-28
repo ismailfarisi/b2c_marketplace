@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext for the emulator host only.
+
+  `android:usesCleartextTraffic="true"` in the manifest would apply to every
+  host in every build type, and it is the kind of line that survives to release
+  because nothing fails when it does. Scoping it to 10.0.2.2 means a debug build
+  can reach `make dev` and nothing else, and a release build has no exception at
+  all.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

@@ -20,6 +20,7 @@ import (
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/identity"
+	"github.com/marketplace/api/internal/modules/interests"
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/seam/fulfillment"
@@ -34,6 +35,38 @@ type Handlers struct {
 	// are not configured. The transactional API stays up without them; the feed
 	// routes simply are not mounted.
 	Reels *ReelHandlers
+	// Interests is used at exactly one point outside the feed: login, where an
+	// anonymous device profile is folded into the account being signed into.
+	Interests *interests.Service
+	// Subscriptions is nil in a deployment without the food vertical. The
+	// transactional API stays up; the recurring routes are simply not mounted.
+	Subscriptions *SubscriptionHandlers
+
+	// Vehicles and Chat are the Phase 6 classifieds surface. Nil-safe on the
+	// same principle as everything above, and worth stating for this one in
+	// particular: PLAN-VIDEO-FIRST §9 says never to run two cold starts at
+	// once, so a deployment that has food live and cars not yet launched is the
+	// expected configuration for a while, not a degraded one.
+	Vehicles *VehicleHandlers
+	Chat     *ChatHandlers
+
+	// Phase 7. Logistics is the first surface in this system with no customer
+	// on it at all — every route below is used by a driver, a vendor or ops —
+	// which is why it gets its own handler sets rather than joining the order
+	// endpoints they sit next to conceptually.
+	DriverOps *DriverHandlers
+	Console   *ConsoleHandlers
+
+	// Phase 8. Notifications, invoices, KYC and appeals — everything that
+	// exists to satisfy an obligation rather than a feature request. Nil-safe
+	// like the rest, though it is the one group where a nil is a launch
+	// blocker rather than a reduced deployment: without it cash on delivery
+	// cannot complete and no vendor can be paid.
+	Compliance *ComplianceHandlers
+
+	// Phase 9. The one handler set in this struct whose absence is the normal
+	// state rather than a reduced deployment.
+	BoostOps *BoostHandlers
 }
 
 // --- auth -------------------------------------------------------------------
@@ -91,6 +124,19 @@ func (h *Handlers) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
+	}
+
+	// Carry the anonymous interest profile into the account, once, here.
+	//
+	// Best-effort and after the session is minted: a failure to merge costs a
+	// slightly worse first feed, and failing the login to protect a
+	// personalisation profile would be a spectacularly bad trade.
+	if h.Interests != nil {
+		if device := r.Header.Get("X-Device-Id"); device != "" {
+			logIfErr(r, "interest profile merge failed",
+				h.Interests.LinkDevice(r.Context(), "d:"+device,
+					"u:"+session.User.ID.String(), session.User.ID))
+		}
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, "", tokenPairResponse(session))

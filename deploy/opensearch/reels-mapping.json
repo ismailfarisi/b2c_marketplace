@@ -1,0 +1,61 @@
+{
+  "settings": {
+    "index": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "refresh_interval": "5s"
+    },
+    "analysis": {
+      "analyzer": {
+        "caption_ar": {
+          "type": "arabic"
+        },
+        "caption_en": {
+          "type": "english"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "id": { "type": "keyword" },
+      "author_type": { "type": "keyword" },
+      "author_id": { "type": "keyword" },
+      "author_name": {
+        "type": "text",
+        "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+      },
+      "category_id": { "type": "keyword" },
+      "subject_type": { "type": "keyword" },
+      "subject_id": { "type": "keyword" },
+
+      "caption": {
+        "type": "text",
+        "fields": {
+          "ar": { "type": "text", "analyzer": "caption_ar" },
+          "en": { "type": "text", "analyzer": "caption_en" }
+        }
+      },
+      "caption_locale": { "type": "keyword" },
+      "tags": { "type": "keyword" },
+      "duration_ms": { "type": "integer" },
+
+      "coverage": { "type": "geo_shape" },
+      "origin_point": { "type": "geo_shape" },
+
+      "views": { "type": "long" },
+      "likes": { "type": "long" },
+      "published_at": { "type": "date" },
+
+      "impressions": { "type": "long" },
+      "clicks": { "type": "long" },
+      "orders": { "type": "long" },
+      "lifetime_impressions": { "type": "long" },
+
+      "author_published": { "type": "long" },
+      "author_orders": { "type": "long" },
+      "author_takedowns": { "type": "long" }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Black, not a light surface.
+
+      The app is a full-bleed video feed. A white window background flashes on
+      every cold start and behind every not-yet-decoded frame, which on a feed
+      of vertical video is the single most visible piece of jank there is.
+    -->
+    <style name="Theme.Marketplace" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

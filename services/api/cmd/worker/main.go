@@ -26,11 +26,30 @@ import (
 
 	"github.com/marketplace/api/internal/app"
 	"github.com/marketplace/api/internal/config"
+	"github.com/marketplace/api/internal/modules/boosts"
+	"github.com/marketplace/api/internal/modules/classifieds"
+	"github.com/marketplace/api/internal/modules/dispatch"
+	"github.com/marketplace/api/internal/modules/invoicing"
+	"github.com/marketplace/api/internal/modules/kyc"
+	"github.com/marketplace/api/internal/modules/payouts"
+	"github.com/marketplace/api/internal/modules/subscriptions"
+	"github.com/marketplace/api/internal/modules/tax"
+	"github.com/marketplace/api/internal/modules/trust"
+	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/platform/redisx"
 )
 
 var version = "dev"
+
+// Commission, matching cmd/api. Duplicated here rather than read from config
+// because it is the same open decision in both places — docs/README.md #4 — and
+// two copies that must agree are easier to notice than one that silently
+// diverges from a default nobody set.
+const (
+	commissionBP  = 1_500 // 15%
+	platformVATBP = 500   // 5% UAE VAT on the platform's own commission
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -78,6 +97,50 @@ func run() error {
 	// has a five-minute end-to-end budget (exit criterion #1) and must not
 	// queue behind a 30-second capacity sweep.
 	go runMediaLoop(ctx, pool, media)
+
+	// The recurring loop, likewise separate. Its slowest job walks the
+	// impressions-scale fulfillment table; putting it in line ahead of the
+	// media pipeline would blow the upload-to-feed budget on days when a lot of
+	// subscriptions renew.
+	registries := app.BuildRegistries(pool)
+	go runSubscriptionLoop(ctx, pool, subscriptions.NewService(pool, registries.Verticals,
+		subscriptions.Config{
+			CommissionBP:    commissionBP,
+			PlatformVATBP:   platformVATBP,
+			ReserveCapacity: true,
+		}))
+
+	// The classifieds loop, likewise separate and for the sharpest reason of
+	// the three: its fraud detectors are the only jobs in this process where
+	// being late has a victim. Queueing them behind a capacity sweep or a
+	// subscription materialisation run would make the tick interval a fiction.
+	go runClassifiedsLoop(ctx, classifiedsJobs{
+		Listings: vehicles.NewRepository(pool),
+		Packages: classifieds.NewService(pool),
+		Trust:    trust.NewService(pool),
+	})
+
+	// The logistics loop, on the fastest tick of the four. Route planning is the
+	// only job in this process whose lateness a customer can see.
+	go runLogisticsLoop(ctx, logisticsJobs{
+		Dispatch: dispatch.NewService(pool, dispatch.DefaultOptions()),
+		Payouts:  payouts.NewService(pool, nil, app.PayoutGate{KYC: kyc.NewService(pool)}),
+		Pool:     pool,
+	})
+
+	// The Phase 8 loop. Fastest tick in the process, because the delivery OTP
+	// on it has to reach a customer before the driver reaches their door.
+	go runComplianceLoop(ctx, complianceJobs{
+		Notify:   app.BuildNotify(cfg, pool),
+		KYC:      kyc.NewService(pool),
+		Invoices: invoicing.NewService(pool, tax.NewService(pool), true),
+		Pool:     pool,
+	})
+
+	// The Phase 9 loop. Its fast tick releases budget held by impressions that
+	// were served and never confirmed — without it a campaign's daily cap fills
+	// with holds and it stops serving while reporting zero spend.
+	go runBoostLoop(ctx, boosts.NewService(pool, nil))
 
 	// River is wired here once the first job type exists. Until then the loop
 	// below runs the two sweepers that Phase 1 genuinely needs, on a ticker.

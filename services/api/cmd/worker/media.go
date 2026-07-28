@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/app"
+	"github.com/marketplace/api/internal/modules/ranking"
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/modules/search"
 )
@@ -201,16 +202,25 @@ func indexReel(ctx context.Context, pool *pgxpool.Pool, indexer search.Indexer, 
 		       ST_AsGeoJSON(r.origin_point::geometry),
 		       COALESCE(ARRAY(SELECT tag FROM reel_tags t WHERE t.reel_id = r.id ORDER BY tag), '{}'),
 		       COALESCE(c.views, 0), COALESCE(c.likes, 0),
-		       COALESCE(r.published_at, now())
+		       COALESCE(r.published_at, now()),
+		       COALESCE(f.impressions, 0), COALESCE(f.clicks, 0),
+		       COALESCE(f.orders, 0), COALESCE(f.lifetime_impressions, 0),
+		       COALESCE(aq.published_count, 0), COALESCE(aq.orders, 0),
+		       COALESCE(aq.takedown_count, 0)
 		  FROM reels r
 		  LEFT JOIN vendor_branches vb
 		         ON r.author_type = 'vendor_branch' AND vb.id = r.author_id
 		  LEFT JOIN reel_counters c ON c.reel_id = r.id
+		  LEFT JOIN reel_features f ON f.reel_id = r.id
+		  LEFT JOIN author_quality aq
+		         ON aq.author_type = r.author_type AND aq.author_id = r.author_id
 		 WHERE r.id = $1`, reelID,
 	).Scan(&doc.ID, &doc.AuthorType, &doc.AuthorID, &doc.AuthorName,
 		&doc.CategoryID, &doc.SubjectType, &doc.SubjectID,
 		&doc.Caption, &doc.CaptionLocale, &doc.DurationMS,
-		&coverage, &origin, &tags, &doc.Views, &doc.Likes, &doc.PublishedAt)
+		&coverage, &origin, &tags, &doc.Views, &doc.Likes, &doc.PublishedAt,
+		&doc.Impressions, &doc.Clicks, &doc.Orders, &doc.LifetimeImpressions,
+		&doc.AuthorPublished, &doc.AuthorOrders, &doc.AuthorTakedowns)
 	if err != nil {
 		return err
 	}
@@ -268,6 +278,86 @@ func ensureImpressionPartitions(ctx context.Context, pool *pgxpool.Pool) {
 	}
 }
 
+// refreshRanking recomputes the inputs the feed scores on.
+//
+// Two jobs, in order, because the second reads what the first writes: author
+// quality is rolled up from reel_features rather than re-aggregated from the
+// raw event tables. That makes it cheap and — more importantly — makes the
+// author prior definitionally consistent with the reel scores it sits beside.
+// Two aggregations of the same events by different SQL is how an author with
+// good reels ends up with a bad prior and nobody can explain it.
+func refreshRanking(ctx context.Context, pool *pgxpool.Pool) {
+	refresher := ranking.NewRefresher(pool)
+
+	n, err := refresher.RefreshFeatures(ctx, 1000)
+	if err != nil {
+		slog.ErrorContext(ctx, "ranking feature refresh failed", "error", err)
+		return
+	}
+	slog.DebugContext(ctx, "ranking features refreshed", "reels", n)
+
+	authors, err := refresher.RefreshAuthorQuality(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "author quality refresh failed", "error", err)
+		return
+	}
+	slog.DebugContext(ctx, "author quality refreshed", "authors", authors)
+}
+
+// rebuildInterests recomputes viewer profiles for anyone active recently.
+//
+// Batched by viewer, because Fold recomputes from the full decayed history
+// every time. Running it over every viewer who has ever used the product would
+// make the job's cost grow with the install base rather than with the traffic —
+// which is fine for a year and then is the reason the database is slow.
+func rebuildInterests(ctx context.Context, media *app.Media) {
+	if media == nil || media.Interests == nil {
+		return
+	}
+
+	// Twice the tick, so a viewer active just before the previous run is still
+	// picked up by this one. Overlap costs a recomputation; a gap costs a
+	// profile that never updates.
+	since := time.Now().UTC().Add(-2 * interestTick)
+
+	n, err := media.Interests.RebuildBatch(ctx, since, 500)
+	if err != nil {
+		slog.ErrorContext(ctx, "interest rebuild failed", "error", err)
+		return
+	}
+	if n > 0 {
+		slog.DebugContext(ctx, "interest profiles rebuilt", "viewers", n)
+	}
+
+	// Anonymous device profiles accumulate with installs rather than with
+	// users: a key is created by anyone who opens the app once. Ninety days of
+	// silence is a device that is not coming back.
+	reaped, err := media.Interests.Reap(ctx, 90*24*time.Hour)
+	if err != nil {
+		slog.ErrorContext(ctx, "interest reap failed", "error", err)
+		return
+	}
+	if reaped > 0 {
+		slog.InfoContext(ctx, "reaped stale interest profiles", "rows", reaped)
+	}
+}
+
+// flushAnalytics drains the ClickHouse buffer.
+//
+// The counters are logged rather than merely returned, and dropped events are
+// logged at error level. A sink that quietly loses 10% of views produces a
+// conversion rate 11% too high — and Phase 3 spent an entire design on not
+// letting that number be wrong.
+func flushAnalytics(ctx context.Context, media *app.Media) {
+	if media == nil || media.ClickHouse == nil {
+		return
+	}
+	if _, err := media.ClickHouse.Flush(ctx); err != nil {
+		slog.ErrorContext(ctx, "analytics flush failed", "error", err)
+	}
+	media.ClickHouse.LogStats(ctx)
+}
+
 // mediaTick is faster than the transactional sweeper's 30 seconds because exit
 // criterion #1 is a five-minute upload-to-feed path and this poller sits on it
 // three times.
@@ -278,6 +368,19 @@ const mediaTick = 10 * time.Second
 // be cost with no consumer.
 const funnelTick = time.Hour
 
+// rankingTick is every five minutes.
+//
+// Chosen against one specific failure: a reel published this morning that is
+// converting well should start ranking on that fact today, not tomorrow. The
+// counter-pressure is that the refresh scans impressions, which is the largest
+// table in the product — so it is batched, ordered by staleness, and given its
+// own timeout well away from the ten-second pipeline loop.
+const rankingTick = 5 * time.Minute
+
+// interestTick is every fifteen minutes. A viewer's tastes do not move faster
+// than that, and the job re-folds a viewer's entire decayed history each run.
+const interestTick = 15 * time.Minute
+
 func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 	if media == nil {
 		slog.Info("media pipeline disabled: no object store configured")
@@ -286,15 +389,23 @@ func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 
 	// Run the slow maintenance once at startup so a fresh deployment is not a
 	// month behind on partitions and a day behind on numbers.
-	startupCtx, cancelStartup := context.WithTimeout(ctx, time.Minute)
+	startupCtx, cancelStartup := context.WithTimeout(ctx, 5*time.Minute)
 	ensureImpressionPartitions(startupCtx, pool)
 	rollupFunnel(startupCtx, media)
+	// Ranking too: a fresh deployment whose reel_features table is empty ranks
+	// every reel on its priors alone, which is a feed that ignores every signal
+	// it has until the first tick fires.
+	refreshRanking(startupCtx, pool)
 	cancelStartup()
 
 	ticker := time.NewTicker(mediaTick)
 	defer ticker.Stop()
 	funnel := time.NewTicker(funnelTick)
 	defer funnel.Stop()
+	rank := time.NewTicker(rankingTick)
+	defer rank.Stop()
+	interest := time.NewTicker(interestTick)
+	defer interest.Stop()
 
 	for {
 		select {
@@ -306,12 +417,26 @@ func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 			expireDrafts(tickCtx, pool)
 			mediaSweep(tickCtx, pool, media)
 			flushCounters(tickCtx, media)
+			flushAnalytics(tickCtx, media)
 			relayOutbox(tickCtx, pool, media.Indexer)
 			cancel()
 
 			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 				return
 			}
+
+		case <-rank.C:
+			// Its own timeout, generous: the feature refresh scans impressions,
+			// which is the largest table in the product. It must be able to
+			// take minutes without starving the ten-second pipeline loop.
+			rankCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			refreshRanking(rankCtx, pool)
+			cancel()
+
+		case <-interest.C:
+			interestCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			rebuildInterests(interestCtx, media)
+			cancel()
 
 		case <-funnel.C:
 			// On its own ticker and its own timeout: the rollup scans

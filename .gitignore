@@ -43,3 +43,12 @@ Thumbs.db
 # --- logs ---
 *.log
 npm-debug.log*
+
+# Kotlin Multiplatform / Gradle
+apps/mobile-kmm/.gradle/
+apps/mobile-kmm/build/
+apps/mobile-kmm/*/build/
+apps/mobile-kmm/local.properties
+apps/mobile-kmm/.kotlin/
+apps/mobile-kmm/iosApp/*.xcodeproj/xcuserdata/
+apps/mobile-kmm/iosApp/Pods/

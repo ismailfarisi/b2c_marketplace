@@ -17,19 +17,25 @@ import (
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/modules/actions"
 	"github.com/marketplace/api/internal/modules/attribution"
+	"github.com/marketplace/api/internal/modules/comments"
 	"github.com/marketplace/api/internal/modules/engagement"
 	"github.com/marketplace/api/internal/modules/feed"
+	"github.com/marketplace/api/internal/modules/interests"
 	"github.com/marketplace/api/internal/modules/media"
 	"github.com/marketplace/api/internal/modules/moderation"
 	"github.com/marketplace/api/internal/modules/pipeline"
+	"github.com/marketplace/api/internal/modules/ranking"
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/modules/search"
+	"github.com/marketplace/api/internal/modules/social"
+	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/objectstore"
 	"github.com/marketplace/api/internal/seam/action"
 )
 
 // Media is the Phase 2 dependency graph, extended in Phase 3 with the action
-// layer and attribution.
+// layer and attribution, and in Phase 4 with ranking, social and the analytics
+// warehouse.
 type Media struct {
 	Store      *objectstore.Store
 	Reels      *reels.Service
@@ -43,6 +49,16 @@ type Media struct {
 
 	Actions     *actions.Service
 	Attribution *attribution.Service
+
+	// Phase 4.
+	Ranking   *ranking.DBProvider
+	Interests *interests.Service
+	Likes     *social.Likes
+	Comments  *comments.Service
+	// ClickHouse is nil unless CLICKHOUSE_URL is set. Held on the struct so the
+	// worker can flush it and log what it dropped — a sink that loses events
+	// silently is a conversion rate that is wrong silently.
+	ClickHouse *engagement.ClickHouseSink
 }
 
 // BuildMedia constructs everything the media stack needs.
@@ -69,7 +85,10 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 		return nil, err
 	}
 
-	reelSvc := reels.NewService(pool, store)
+	// Seller reels (Phase 6). The media pipeline gains one interface, not a
+	// vertical: it learns that some subjects have owners, never that some
+	// subjects are cars.
+	reelSvc := reels.NewService(pool, store, vehicles.NewSubjectAuthorizer(pool))
 	modRepo := moderation.NewRepository(pool)
 
 	prober, err := buildProber(cfg)
@@ -107,14 +126,24 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 		indexer = search.NewClient(cfg.OpenSearchURL, cfg.OpenSearchIndex)
 	}
 
+	// Ranking weights come from the database, cached, with the compiled-in
+	// defaults as the fallback for every failure path. Retuning ranking is a
+	// twice-a-week activity and a weight change that needs a deploy is one that
+	// gets batched with an unrelated feature and rolled back with it.
+	rank := ranking.NewDBProvider(pool)
+
+	moderationSvc := moderation.NewService(pool, modRepo, reelSvc)
+
 	m := &Media{
 		Store:      store,
 		Reels:      reelSvc,
-		Feed:       feed.NewService(pool, seen, counterSource),
-		Moderation: moderation.NewService(pool, modRepo, reelSvc),
+		Feed:       feed.NewService(pool, seen, counterSource, rank),
+		Moderation: moderationSvc,
 		ModRepo:    modRepo,
 		Counters:   counters,
 		Indexer:    indexer,
+		Ranking:    rank,
+		Interests:  interests.NewService(pool),
 	}
 
 	// The actions service borrows the reels service's branch authorisation
@@ -123,7 +152,18 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 	m.Actions = actions.NewService(pool, registry, reelSvc.Repo())
 	m.Attribution = attribution.NewService(pool)
 
-	m.Ingest = engagement.NewIngest(engagement.NewPostgresSink(pool), counters)
+	m.Likes = social.NewLikes(pool, counterOrNil(counters))
+	// Comments reuse the reel pipeline's text moderator. The same classifier,
+	// the same GCC policy prompt, the same failure rule: an unavailable
+	// moderator holds content rather than publishing it.
+	m.Comments = comments.NewService(pool, text, counterOrNil(counters), moderationSvc)
+
+	sink, chSink, err := buildEventSink(cfg, pool)
+	if err != nil {
+		return nil, err
+	}
+	m.ClickHouse = chSink
+	m.Ingest = engagement.NewIngest(sink, counters)
 	m.Pipeline = pipeline.NewRunner(pipeline.Deps{
 		Pool:       pool,
 		Reels:      reelSvc,
@@ -135,6 +175,51 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 	})
 
 	return m, nil
+}
+
+// counterOrNil avoids handing a typed-nil *engagement.Counters to an interface
+// parameter, which would satisfy the `!= nil` guard at every call site and then
+// panic on first use. It is the oldest trap in Go interface plumbing and it is
+// worth two lines to close.
+func counterOrNil(c *engagement.Counters) social.Counter {
+	if c == nil {
+		return nil
+	}
+	return c
+}
+
+// buildEventSink chooses where engagement events land.
+//
+// Postgres by default, ClickHouse when configured, and both during a cutover.
+// The tee is the part worth keeping: a migration that switches the old store
+// off first has nothing to check its first bad number against.
+//
+// No production guard here, unlike the transcoder and the moderators. The
+// reason is the asymmetry in what goes wrong: a stub moderator silently
+// publishes everything, while a Postgres event sink at city scale merely gets
+// slow and expensive — visibly, in a place someone is already watching.
+func buildEventSink(cfg config.Config, pool *pgxpool.Pool) (engagement.Sink, *engagement.ClickHouseSink, error) {
+	pg := engagement.NewPostgresSink(pool)
+	if cfg.ClickHouseURL == "" {
+		return pg, nil, nil
+	}
+
+	ch, err := engagement.NewClickHouseSink(engagement.ClickHouseConfig{
+		URL:      cfg.ClickHouseURL,
+		Database: cfg.ClickHouseDatabase,
+		Table:    cfg.ClickHouseTable,
+		Username: cfg.ClickHouseUser,
+		Password: cfg.ClickHousePassword,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if cfg.ClickHouseTee {
+		slog.Info("analytics events writing to both ClickHouse and Postgres (cutover mode)")
+		return engagement.TeeSink{Primary: ch, Secondary: pg}, ch, nil
+	}
+	return ch, ch, nil
 }
 
 func buildProber(cfg config.Config) (media.Prober, error) {

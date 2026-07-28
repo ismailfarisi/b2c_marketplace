@@ -3,32 +3,33 @@ package feed
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 )
 
 func TestCursorRoundTrip(t *testing.T) {
 	want := Cursor{
-		Score:       0.7391304347826086,
-		PublishedAt: time.Date(2026, 7, 28, 9, 30, 15, 0, time.UTC),
-		ID:          uuid.MustParse("11111111-2222-3333-4444-555555555555"),
+		Page: 3,
+		Excluded: []uuid.UUID{
+			uuid.MustParse("11111111-2222-3333-4444-555555555555"),
+			uuid.MustParse("66666666-7777-8888-9999-aaaaaaaaaaaa"),
+		},
 	}
 
 	got, err := DecodeCursor(want.Encode())
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got.ID != want.ID {
-		t.Errorf("id = %s, want %s", got.ID, want.ID)
+	if got.Page != want.Page {
+		t.Errorf("page = %d, want %d", got.Page, want.Page)
 	}
-	if !got.PublishedAt.Equal(want.PublishedAt) {
-		t.Errorf("published_at = %s, want %s", got.PublishedAt, want.PublishedAt)
+	if len(got.Excluded) != len(want.Excluded) {
+		t.Fatalf("excluded = %v, want %v", got.Excluded, want.Excluded)
 	}
-	// Full float64 precision must survive: the cursor is a strict inequality,
-	// and a rounded score either re-serves the boundary row or skips it.
-	if got.Score != want.Score {
-		t.Errorf("score = %v, want %v", got.Score, want.Score)
+	for i := range want.Excluded {
+		if got.Excluded[i] != want.Excluded[i] {
+			t.Errorf("excluded[%d] = %s, want %s", i, got.Excluded[i], want.Excluded[i])
+		}
 	}
 }
 
@@ -47,8 +48,8 @@ func TestMalformedCursorIsRejected(t *testing.T) {
 	// user a feed that mysteriously jumps back to the beginning.
 	for _, bad := range []string{
 		"not-base64!!",
-		"YWJj",                     // valid base64, wrong shape
-		"MC41fG5vdC1hLW51bWJlcnx4", // right shape, unparseable parts
+		"YWJj",     // valid base64, too short for even a page number
+		"AAAAAQAB", // page present, trailing bytes that are not a whole uuid
 	} {
 		if _, err := DecodeCursor(bad); err == nil {
 			t.Errorf("DecodeCursor(%q) accepted a malformed cursor", bad)
@@ -56,12 +57,77 @@ func TestMalformedCursorIsRejected(t *testing.T) {
 	}
 }
 
+func TestCursorRefusesAnOversizedExclusionSet(t *testing.T) {
+	// A cursor is client-supplied. Without the cap, anyone can hand the feed a
+	// 100,000-element uuid array and have it passed straight into a
+	// `NOT (id = ANY($5))` predicate on the hottest query in the product.
+	oversized := Cursor{Page: 1, Excluded: make([]uuid.UUID, ExclusionCap+40)}
+	for i := range oversized.Excluded {
+		oversized.Excluded[i] = uuid.New()
+	}
+
+	// Encode trims, so a legitimately-produced cursor always decodes.
+	got, err := DecodeCursor(oversized.Encode())
+	if err != nil {
+		t.Fatalf("a cursor this package produced was rejected: %v", err)
+	}
+	if len(got.Excluded) != ExclusionCap {
+		t.Fatalf("excluded = %d ids, want the cap of %d", len(got.Excluded), ExclusionCap)
+	}
+}
+
 func TestCursorIsOpaque(t *testing.T) {
-	// If it looks parseable, a client will parse it — and the tie-break field
-	// changes when ranking lands in Phase 4.
-	c := Cursor{Score: 1, PublishedAt: time.Now(), ID: uuid.New()}
-	if strings.Contains(c.Encode(), "|") || strings.Contains(c.Encode(), "-") {
-		t.Fatalf("cursor leaks its structure: %q", c.Encode())
+	// If it looks parseable, a client will parse it — and then depend on it, and
+	// then break when the format changes. It already has once, between Phase 2
+	// and Phase 4.
+	id := uuid.New()
+	enc := Cursor{Page: 1, Excluded: []uuid.UUID{id}}.Encode()
+
+	// The ids are packed as raw 16-byte values, so nothing in the output is a
+	// readable uuid or a field separator a client could split on. (`-` and `_`
+	// do appear — they are the base64url alphabet, not structure.)
+	if strings.Contains(enc, id.String()) {
+		t.Fatalf("cursor contains a readable uuid: %q", enc)
+	}
+	if strings.Contains(enc, "|") || strings.Contains(enc, ":") {
+		t.Fatalf("cursor exposes a field separator: %q", enc)
+	}
+}
+
+func TestNextCursorAdvancesAndAccumulates(t *testing.T) {
+	first := Cursor{}
+	pageOne := []uuid.UUID{uuid.New(), uuid.New()}
+	second := first.Next(pageOne)
+
+	if second.Page != 1 {
+		t.Errorf("page = %d, want 1", second.Page)
+	}
+	if len(second.Excluded) != 2 {
+		t.Fatalf("excluded = %d, want 2", len(second.Excluded))
+	}
+
+	third := second.Next([]uuid.UUID{uuid.New()})
+	if third.Page != 2 || len(third.Excluded) != 3 {
+		t.Fatalf("third page = %d with %d exclusions", third.Page, len(third.Excluded))
+	}
+}
+
+func TestNextCursorKeepsTheMostRecentExclusions(t *testing.T) {
+	// The oldest exclusions are the ones the viewer saw pages ago and are least
+	// likely to resurface at the top of a re-ranked candidate set. Dropping the
+	// newest instead would re-serve the page the viewer is currently looking at.
+	c := Cursor{Excluded: make([]uuid.UUID, ExclusionCap)}
+	for i := range c.Excluded {
+		c.Excluded[i] = uuid.New()
+	}
+	newest := uuid.New()
+
+	next := c.Next([]uuid.UUID{newest})
+	if len(next.Excluded) != ExclusionCap {
+		t.Fatalf("excluded = %d, want %d", len(next.Excluded), ExclusionCap)
+	}
+	if next.Excluded[len(next.Excluded)-1] != newest {
+		t.Fatal("the just-served reel was evicted from the exclusion set")
 	}
 }
 
@@ -142,5 +208,72 @@ func TestSpreadHandlesTinyPages(t *testing.T) {
 		if got := Spread(in, authorOf); len(got) != len(in) {
 			t.Fatalf("Spread(%v) changed length", in)
 		}
+	}
+}
+
+// --- retrieval-independent ranking assembly ----------------------------------
+
+func TestCapPerAuthorKeepsTheBestOnesInOrder(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	items := []Item{
+		{ID: uuid.New(), AuthorID: a, Score: 9},
+		{ID: uuid.New(), AuthorID: a, Score: 8},
+		{ID: uuid.New(), AuthorID: a, Score: 7},
+		{ID: uuid.New(), AuthorID: b, Score: 6},
+	}
+
+	got := capPerAuthor(items, 2)
+	if len(got) != 3 {
+		t.Fatalf("kept %d items, want 3", len(got))
+	}
+	if got[0].Score != 9 || got[1].Score != 8 {
+		t.Fatalf("kept the wrong two from author a: %v %v", got[0].Score, got[1].Score)
+	}
+}
+
+func TestCapPerAuthorDoesNotMutateItsInput(t *testing.T) {
+	// It is called on a slice the caller still holds, and an in-place filter
+	// would silently truncate the exploration pool while ranking the main one.
+	a := uuid.New()
+	items := []Item{
+		{ID: uuid.New(), AuthorID: a, Score: 3},
+		{ID: uuid.New(), AuthorID: a, Score: 2},
+	}
+	original := items[1]
+
+	capPerAuthor(items, 1)
+	if items[1].ID != original.ID {
+		t.Fatal("capPerAuthor wrote through its input slice")
+	}
+}
+
+func TestUnionDeduplicatesTheTwoExclusionSources(t *testing.T) {
+	// Redis and the cursor overlap by construction — the cursor is written from
+	// the same page that was just marked seen. Passing duplicates into the SQL
+	// array is harmless but wasteful, and the overlap is near-total.
+	shared := uuid.New()
+	redisSide := []uuid.UUID{shared, uuid.New()}
+	cursorSide := []uuid.UUID{shared, uuid.New()}
+
+	got := union(redisSide, cursorSide)
+	if len(got) != 3 {
+		t.Fatalf("union produced %d ids, want 3", len(got))
+	}
+
+	seen := map[uuid.UUID]int{}
+	for _, id := range got {
+		seen[id]++
+	}
+	if seen[shared] != 1 {
+		t.Fatalf("the shared id appears %d times", seen[shared])
+	}
+}
+
+func TestUnionOfNothingIsUsableAsASQLArray(t *testing.T) {
+	// A nil slice binds as NULL rather than as an empty array, and
+	// `NOT (id = ANY(NULL))` is NULL — which filters out every candidate and
+	// returns an empty feed to every first-time viewer.
+	if got := union(nil, nil); got == nil {
+		t.Fatal("union returned nil rather than an empty slice")
 	}
 }

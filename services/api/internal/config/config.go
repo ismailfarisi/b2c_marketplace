@@ -47,6 +47,21 @@ type Config struct {
 	OpenSearchURL   string
 	OpenSearchIndex string
 	FFProbeBinary   string
+
+	// Phase 4: ranking, social, analytics warehouse.
+	//
+	// Unset means the Postgres event sink stays in use. That is correct for
+	// development and for a launch district, and wrong at city scale —
+	// PLAN-VIDEO-FIRST §3 is explicit that view events must never live in
+	// Postgres at volume.
+	ClickHouseURL      string
+	ClickHouseDatabase string
+	ClickHouseTable    string
+	ClickHouseUser     string
+	ClickHousePassword string
+	// ClickHouseTee writes every event to both stores during the cutover, so
+	// the numbers can be compared before anything depends on the new one.
+	ClickHouseTee bool
 }
 
 func (c Config) IsProduction() bool { return c.Env == "production" }
@@ -132,6 +147,13 @@ func Load() (Config, error) {
 		OpenSearchURL:   optional("OPENSEARCH_URL", ""),
 		OpenSearchIndex: optional("OPENSEARCH_INDEX", "reels"),
 		FFProbeBinary:   optional("FFPROBE_BINARY", ""),
+
+		ClickHouseURL:      optional("CLICKHOUSE_URL", ""),
+		ClickHouseDatabase: optional("CLICKHOUSE_DATABASE", "analytics"),
+		ClickHouseTable:    optional("CLICKHOUSE_TABLE", "reel_events"),
+		ClickHouseUser:     optional("CLICKHOUSE_USER", ""),
+		ClickHousePassword: optional("CLICKHOUSE_PASSWORD", ""),
+		ClickHouseTee:      boolean("CLICKHOUSE_TEE", false),
 	}
 
 	// Guardrails that only apply once the process is actually deployed.

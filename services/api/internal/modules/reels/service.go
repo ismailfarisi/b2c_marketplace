@@ -21,14 +21,37 @@ import (
 // short enough that abandoned drafts do not accumulate.
 const UploadTTL = 2 * time.Hour
 
-type Service struct {
-	pool  *pgxpool.Pool
-	repo  *Repository
-	store *objectstore.Store
+// SubjectAuthorizer answers "may this user post a reel about this thing".
+//
+// The one interface this package gained in Phase 6, when user-authored seller
+// reels arrived. Note what it is not: it is not "is this a car". A vendor-branch
+// reel authorises through branch membership, which this package already knew
+// how to do; a person is not a member of anything, so a user reel's authority
+// has to come from owning the subject. Nothing here learns what the subject is.
+//
+// One implementation today (vehicles.SubjectAuthorizer). It becomes a map keyed
+// on subject type when a second kind of user-authored content exists, and not
+// before — a registry with one entry is a registry that has never been tested
+// with two.
+type SubjectAuthorizer interface {
+	AuthorizeSubject(ctx context.Context, userID uuid.UUID, subjectType string, subjectID uuid.UUID) error
 }
 
-func NewService(pool *pgxpool.Pool, store *objectstore.Store) *Service {
-	return &Service{pool: pool, repo: NewRepository(pool), store: store}
+type Service struct {
+	pool     *pgxpool.Pool
+	repo     *Repository
+	store    *objectstore.Store
+	subjects SubjectAuthorizer
+}
+
+// NewService takes a SubjectAuthorizer, which may be nil.
+//
+// Nil disables user-authored uploads entirely rather than allowing them
+// unchecked. A deployment without the vehicles vertical wired in should not be
+// able to accept personal reels at all, and the safe direction for a missing
+// dependency in an upload path is closed.
+func NewService(pool *pgxpool.Pool, store *objectstore.Store, subjects SubjectAuthorizer) *Service {
+	return &Service{pool: pool, repo: NewRepository(pool), store: store, subjects: subjects}
 }
 
 func (s *Service) Repo() *Repository { return s.repo }
@@ -75,6 +98,74 @@ func (s *Service) RequestUpload(ctx context.Context, in UploadRequest) (*Upload,
 			AuthorID:    in.BranchID,
 			SubjectType: in.SubjectType,
 			SubjectID:   in.SubjectID,
+			Bucket:      s.store.Bucket(),
+			S3Key:       presigned.Key,
+			MimeType:    in.ContentType,
+			UploadTTL:   UploadTTL,
+		})
+		if err != nil {
+			return err
+		}
+		out = Upload{
+			ReelID:    reelID,
+			AssetID:   assetID,
+			URL:       presigned.URL,
+			Headers:   presigned.Headers,
+			ExpiresAt: presigned.ExpiresAt,
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UserUploadRequest is a seller reel: a person filming a thing they own.
+type UserUploadRequest struct {
+	UserID      uuid.UUID
+	SubjectType string
+	SubjectID   uuid.UUID
+	ContentType string
+}
+
+// RequestUserUpload is the Phase 6 authoring path.
+//
+// It differs from RequestUpload in exactly two places — where authority comes
+// from, and what author_type is written — and in nothing else. The same
+// presign, the same draft, the same state machine, the same moderation
+// pipeline. That is the result Phase 2 was aiming at when it made `reels`
+// polymorphic from the first migration instead of storing a branch id: adding a
+// whole new class of author cost this function and an interface.
+//
+// One thing does change materially, and it is not code. Every one of these
+// authors is `new` in author_trust, so moderation.Route sends all of it to a
+// human before publish — which is correct and is a step change in review
+// volume. PLAN-VIDEO-FIRST §6 calls that out as headcount rather than a
+// feature; see §4 of the phase doc.
+func (s *Service) RequestUserUpload(ctx context.Context, in UserUploadRequest) (*Upload, error) {
+	if s.subjects == nil {
+		return nil, fmt.Errorf("%w: personal reels are not enabled", httpx.ErrForbidden)
+	}
+	if err := s.subjects.AuthorizeSubject(ctx, in.UserID, in.SubjectType, in.SubjectID); err != nil {
+		return nil, err
+	}
+
+	presigned, err := s.store.PresignUpload(ctx, "user", in.UserID.String(), in.ContentType, UploadTTL)
+	if err != nil {
+		return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "content_type", Code: "unsupported", Message: in.ContentType,
+		}}}
+	}
+
+	subjectType := in.SubjectType
+	var out Upload
+	err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		reelID, assetID, err := s.repo.CreateDraft(ctx, tx, CreateDraftInput{
+			AuthorType:  "user",
+			AuthorID:    in.UserID,
+			SubjectType: &subjectType,
+			SubjectID:   &in.SubjectID,
 			Bucket:      s.store.Bucket(),
 			S3Key:       presigned.Key,
 			MimeType:    in.ContentType,

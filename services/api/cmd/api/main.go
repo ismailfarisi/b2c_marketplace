@@ -26,11 +26,27 @@ import (
 	"github.com/marketplace/api/internal/auth"
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/attribution"
+	"github.com/marketplace/api/internal/modules/boosts"
+	"github.com/marketplace/api/internal/modules/chat"
+	"github.com/marketplace/api/internal/modules/classifieds"
+	"github.com/marketplace/api/internal/modules/console"
+	"github.com/marketplace/api/internal/modules/dispatch"
+	"github.com/marketplace/api/internal/modules/driver"
 	"github.com/marketplace/api/internal/modules/identity"
+	"github.com/marketplace/api/internal/modules/invoicing"
+	"github.com/marketplace/api/internal/modules/kyc"
+	"github.com/marketplace/api/internal/modules/moderation"
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
+	"github.com/marketplace/api/internal/modules/payouts"
+	"github.com/marketplace/api/internal/modules/subscriptions"
+	"github.com/marketplace/api/internal/modules/tax"
+	"github.com/marketplace/api/internal/modules/trust"
+	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/idempotency"
+	"github.com/marketplace/api/internal/platform/metrics"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/platform/redisx"
 )
@@ -118,8 +134,93 @@ func run() error {
 		Identity: identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho),
 		Ordering: ordering.NewService(pool, registries.Verticals, attributionSvc),
 		Payments: payments.NewService(pool, provider, commissionBP, platformVATBP),
-		Catalog:  api.NewCatalogQueries(pool),
+		// The same commission numbers the order path uses. A subscription meal
+		// and a one-off meal must not earn the platform different margins, and
+		// two constants would drift the first time one of them was tuned.
+		Subscriptions: &api.SubscriptionHandlers{
+			Service: subscriptions.NewService(pool, registries.Verticals, subscriptions.Config{
+				CommissionBP:    commissionBP,
+				PlatformVATBP:   platformVATBP,
+				ReserveCapacity: true,
+			}),
+		},
+		Catalog: api.NewCatalogQueries(pool),
 	}
+
+	// Phase 7 — logistics and the console.
+	//
+	// `dispatch` and `driver` take a pool and a handful of numbers and nothing
+	// else. Neither is handed a vertical, a registry or a catalogue, which is
+	// the Fulfillment primitive's claim expressed as a constructor signature.
+	dispatchSvc := dispatch.NewService(pool, dispatch.DefaultOptions())
+
+	// Phase 8 — the notifier the driver module was written against but had no
+	// implementation for. Handed in as an interface: `driver` still knows one
+	// sentence about notifications, and it is the constructor signature that
+	// says so.
+	notifySvc := app.BuildNotify(cfg, pool)
+
+	driverSvc := driver.NewService(pool, driver.Config{
+		CommissionBP:  commissionBP,
+		PlatformVATBP: platformVATBP,
+	}, app.DeliveryCodeNotifier{Notify: notifySvc})
+	consoleSvc := console.NewService(pool)
+	// Phase 8 — payouts now run through the compliance gate. Handed the gate
+	// rather than a flag: there is one path to a bank transfer in this system
+	// and the check sits across it, so a future caller cannot reach the
+	// transfer without passing through the check.
+	kycSvc := kyc.NewService(pool)
+	payoutsSvc := payouts.NewService(pool, nil, app.PayoutGate{KYC: kycSvc})
+	adminSvc := admin.NewService(pool)
+
+	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
+	handlers.Console = &api.ConsoleHandlers{
+		Console: consoleSvc,
+		Payouts: payoutsSvc,
+		Driver:  driverSvc,
+		Admin:   adminSvc,
+	}
+
+	// Phase 8. `supplierIsVendor` is docs/README.md decision #4 expressed as a
+	// boolean: it decides whose TRN goes on the customer's invoice, and the two
+	// answers produce different legal documents from the same order. True is
+	// the assumption the ledger already makes in PostOrderCaptured — the
+	// vendor is the supplier of record — so the two are set from the same
+	// belief rather than drifting apart.
+	handlers.Compliance = &api.ComplianceHandlers{
+		Notify:   notifySvc,
+		Invoices: invoicing.NewService(pool, tax.NewService(pool), true),
+		KYC:      kycSvc,
+		Strikes:  moderation.NewStrikeService(pool),
+		Admin:    adminSvc,
+		Vendors:  handlers.Console,
+	}
+
+	// Phase 9 — boosts.
+	//
+	// Constructed unconditionally and mounted unconditionally, but it changes
+	// nothing until a campaign exists: `Fill` returns no winners when no
+	// campaign is active, and the feed serves the organic page it would have
+	// served anyway.
+	boostSvc := boosts.NewService(pool, nil)
+	handlers.BoostOps = &api.BoostHandlers{
+		Boosts:  boostSvc,
+		Admin:   adminSvc,
+		Console: handlers.Console,
+	}
+
+	// Phase 6 — classifieds. Constructed here rather than in app.BuildMedia
+	// because none of it depends on the media stack: a deployment with no
+	// object store still sells cars, it just sells them without video.
+	//
+	// The wiring reads as the dependency inversion the modules were written
+	// for. `vehicles` is handed three sentences — may this seller publish, open
+	// a thread, record this evidence — and never learns which packages exist,
+	// how a message is scanned, or how a fraud score is computed.
+	trustSvc := trust.NewService(pool)
+	chatSvc := chat.NewService(pool, trustSvc)
+	packagesSvc := classifieds.NewService(pool)
+	vehicleSvc := vehicles.NewService(pool, packagesSvc, chatSvc, trustSvc)
 
 	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
 	if err != nil {
@@ -133,6 +234,44 @@ func run() error {
 			Moderation:  media.Moderation,
 			Actions:     media.Actions,
 			Attribution: media.Attribution,
+
+			Likes:     media.Likes,
+			Comments:  media.Comments,
+			Ranking:   media.Ranking,
+			Interests: media.Interests,
+		}
+		// Paid slots. Attached to the feed after it is constructed rather than
+		// passed to the constructor, because a deployment with no advertising
+		// is the normal one for a long time and threading a nil through
+		// app.BuildMedia to say so would be worse than a setter.
+		media.Feed.WithSponsored(app.SponsoredFiller{Boosts: boostSvc})
+		handlers.Reels.Boosts = boostSvc
+
+		// Login is the one moment an anonymous profile can be carried into an
+		// account. A viewer browses anonymously, builds a real interest profile
+		// over three sessions, then signs in to place their first order —
+		// without this the account starts empty and the first personalised feed
+		// they ever see is the worst one they will get.
+		handlers.Interests = media.Interests
+	}
+
+	// Moderation is the one Phase 6 dependency that does come from the media
+	// stack: listing review, held messages and the fraud queue all authorise
+	// against platform_admins through it. Without media there is no moderation
+	// service, and rather than mount those routes with a nil staff check —
+	// which would make the fraud queue world-readable — the whole classifieds
+	// surface stays down. A marketplace that cannot review listings should not
+	// be publishing them.
+	if media != nil {
+		handlers.Vehicles = &api.VehicleHandlers{
+			Listings:   vehicleSvc,
+			Packages:   packagesSvc,
+			Trust:      trustSvc,
+			Moderation: media.Moderation,
+		}
+		handlers.Chat = &api.ChatHandlers{
+			Chat:       chatSvc,
+			Moderation: media.Moderation,
 		}
 	}
 
@@ -184,6 +323,10 @@ func newRouter(
 	r := chi.NewRouter()
 
 	r.Use(httpx.RequestID)
+	// After RequestID so a panic still carries one, and before Recover so a
+	// request that panics is still counted — an endpoint that only 500s is
+	// invisible in a metric that skips it.
+	r.Use(metrics.Middleware)
 	r.Use(httpx.Recover)
 	r.Use(httpx.AccessLog)
 	r.Use(httpx.Locale)
@@ -208,6 +351,16 @@ func newRouter(
 	})
 
 	r.Get("/readyz", readiness(pool))
+
+	// Phase 10 — the scrape endpoint.
+	//
+	// Outside /v1, and outside the auth and CORS middleware, for the same
+	// reason /healthz is: it is called by infrastructure rather than by
+	// clients, it has no versioning contract, and requiring a token would mean
+	// monitoring stops working after a credential rotation nobody connected to
+	// it. Network policy is what keeps it private, not application auth.
+	metrics.BindPool(metrics.Default, pool, "api")
+	r.Get("/metrics", metrics.Handler(metrics.Default))
 
 	r.Route("/v1", func(r chi.Router) {
 		api.Mount(r, handlers, issuer, idem)

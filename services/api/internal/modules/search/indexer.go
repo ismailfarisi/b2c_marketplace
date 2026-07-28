@@ -57,6 +57,27 @@ type Document struct {
 	Views       int64     `json:"views"`
 	Likes       int64     `json:"likes"`
 	PublishedAt time.Time `json:"published_at"`
+
+	// Phase 4 ranking signals.
+	//
+	// Indexed even though Phase 4 still ranks in Go against Postgres, and the
+	// reason is the same one that justified indexing at all in Phase 2: the
+	// moment retrieval moves here — which is when the candidate set stops
+	// fitting a single GiST scan, not before — these fields need to have been
+	// correct for months, not backfilled under load.
+	//
+	// Counts, never rates. The same rule as reel_features and for the same
+	// reason: a stored rate is a number whose denominator has been discarded.
+	Impressions         int64 `json:"impressions"`
+	Clicks              int64 `json:"clicks"`
+	Orders              int64 `json:"orders"`
+	LifetimeImpressions int64 `json:"lifetime_impressions"`
+
+	// The author prior, denormalised. A join at query time against a document
+	// store is a database with worse guarantees.
+	AuthorPublished int64 `json:"author_published"`
+	AuthorOrders    int64 `json:"author_orders"`
+	AuthorTakedowns int64 `json:"author_takedowns"`
 }
 
 // Indexer writes documents.

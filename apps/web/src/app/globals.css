@@ -27,3 +27,168 @@ body {
   padding-inline: var(--space);
   padding-block: calc(var(--space) * 2);
 }
+
+/*
+ * Phase 7 — console and driver.
+ *
+ * Still logical properties only. The console runs on a branch PC that may be in
+ * Arabic and the driver view runs on a phone that certainly is, and every
+ * physical property written here is one somebody will file a bug about.
+ */
+.page.wide {
+  --page-max: 84rem;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  list-style: none;
+  padding-inline: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.row.spread {
+  justify-content: space-between;
+}
+
+.card {
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.5rem;
+  padding: var(--space);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin-block: var(--space);
+}
+
+.metric {
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.metric-value {
+  font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric.warn {
+  border-color: #b58900;
+}
+
+.metric.bad {
+  border-color: #c0392b;
+}
+
+.muted {
+  opacity: 0.65;
+}
+
+.warn {
+  color: #b58900;
+}
+
+.bad {
+  color: #c0392b;
+}
+
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.pill {
+  display: inline-block;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 999px;
+  padding-inline: 0.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pill.bad {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
+/*
+ * Wide tables scroll inside their own container rather than pushing the page
+ * sideways. A dispatch board on a 13-inch laptop in a kitchen is the common
+ * case, not the exception.
+ */
+.scroll {
+  overflow-x: auto;
+}
+
+table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+th,
+td {
+  text-align: start;
+  padding: 0.5rem;
+  border-block-end: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  white-space: nowrap;
+}
+
+/*
+ * The driver view is one hand, in a car, in sunlight. Targets are large and the
+ * layout is a single column at every width — a responsive grid that becomes two
+ * columns on a large phone is two columns of buttons somebody taps by accident.
+ */
+.driver {
+  --page-max: 34rem;
+}
+
+.driver button,
+.driver input {
+  font-size: 1rem;
+  padding: 0.75rem 1rem;
+  min-block-size: 3rem;
+}
+
+.driver .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-block-start: 0.75rem;
+}
+
+.driver .stop.done {
+  opacity: 0.5;
+}
+
+.driver .cash {
+  font-size: 1.1rem;
+}
+
+.driver .notes {
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 0.5rem;
+  opacity: 0.8;
+}
+
+button.ghost {
+  background: transparent;
+}

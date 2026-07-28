@@ -1,0 +1,106 @@
+package ae.marketplace.mobile
+
+import ae.marketplace.mobile.events.EventQueue
+import ae.marketplace.mobile.events.EventSender
+import ae.marketplace.mobile.feed.FeedApi
+import ae.marketplace.mobile.feed.FeedPager
+import ae.marketplace.mobile.feed.FeedViewModel
+import ae.marketplace.mobile.identity.ViewerIdentity
+import ae.marketplace.mobile.identity.deviceIdProvider
+import ae.marketplace.mobile.network.ApiClientFactory
+import ae.marketplace.mobile.network.TokenStore
+import ae.marketplace.mobile.network.tokenStore
+import ae.marketplace.mobile.playback.PlaybackCoordinator
+import ae.marketplace.mobile.playback.ReelPlayerPool
+import ae.marketplace.mobile.playback.createReelPlayer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+// kotlinx-datetime 0.7 handed Clock back to the stdlib. `kotlinx.datetime.Clock`
+// is gone, and the replacement is still experimental — opted into here in one
+// place rather than at every call site.
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+
+/**
+ * The one object each app constructs at launch.
+ *
+ * Hand-wired rather than a DI framework. The graph is nine objects and it is
+ * read from top to bottom in forty lines; Koin or Hilt would add a runtime, a
+ * module DSL and a class of error that only appears on a device, in exchange for
+ * saving those forty lines. The Go side made the same call in
+ * `internal/app/BuildRegistries` and for the same reason.
+ *
+ * Constructed with [create] rather than at the declaration site so both apps get
+ * an identical graph — the failure this prevents is the one `internal/app`
+ * exists to prevent too: one platform quietly ending up with a stub where the
+ * other has the real thing.
+ */
+@OptIn(ExperimentalTime::class)
+class MarketplaceSdk private constructor(
+    val identity: ViewerIdentity,
+    val tokens: TokenStore,
+    private val context: PlatformContext,
+    private val api: FeedApi,
+    private val scope: CoroutineScope,
+    private val network: NetworkStatus,
+) {
+    companion object {
+        suspend fun create(
+            context: PlatformContext,
+            baseUrl: String,
+            locale: String = "en",
+            sessionId: String,
+        ): MarketplaceSdk {
+            val store = tokenStore(context)
+            val deviceId = deviceIdProvider(context).deviceId()
+            val identity = ViewerIdentity(deviceId = deviceId, locale = locale)
+
+            val client = ApiClientFactory.create(baseUrl, store, identity)
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+            return MarketplaceSdk(
+                identity = identity,
+                tokens = store,
+                context = context,
+                api = FeedApi(client),
+                scope = scope,
+                network = networkStatus(context),
+            ).also { it.sessionId = sessionId }
+        }
+    }
+
+    private var sessionId: String = ""
+
+    /**
+     * Builds the feed's state holder and everything under it.
+     *
+     * A factory rather than a singleton: the coordinator owns decoders, and a
+     * feed screen that is left and re-entered must release them. A shared
+     * instance would hold hardware decoders for the life of the process, which
+     * on a mid-range Android device means the next video anywhere in the app
+     * fails to start.
+     */
+    fun createFeedViewModel(): FeedViewModel {
+        val events = EventQueue(
+            sender = EventSender { api.submitEvents(it) },
+            sessionId = sessionId,
+            timestampProvider = { Clock.System.now().toString() },
+            scope = scope,
+        )
+
+        val playback = PlaybackCoordinator(
+            pool = ReelPlayerPool(factory = { createReelPlayer(context) }),
+            events = events,
+            metered = { network.isMetered() },
+            now = { Clock.System.now().toEpochMilliseconds() },
+        )
+
+        return FeedViewModel(
+            pager = FeedPager(api),
+            playback = playback,
+            events = events,
+            api = api,
+        )
+    }
+}

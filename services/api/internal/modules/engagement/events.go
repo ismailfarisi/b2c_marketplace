@@ -48,8 +48,24 @@ type Event struct {
 	// WatchedMS on a view_progress event. The view counter increments only when
 	// this crosses ViewMinimumMS, which is why the client sends progress rather
 	// than a pre-judged "view".
-	WatchedMS  int
+	WatchedMS int
+	// Completed is reported separately from WatchedMS, and deliberately: "did
+	// they watch it" and "did they finish it" answer different questions, and
+	// Phase 4's ranker weights them differently.
+	Completed  bool
 	Properties map[string]any
+}
+
+// Viewer identifies who reported a batch.
+//
+// Key is present for anonymous viewers and UserID is not, which is why both are
+// here. Phase 2 carried only the user id, and the consequence was invisible
+// until Phase 4 went looking for it: an interest profile keyed on user id
+// personalises nothing for anonymous viewers, and anonymous viewers are exactly
+// the population whose first session decides whether they ever return.
+type Viewer struct {
+	UserID uuid.NullUUID
+	Key    string
 }
 
 // Sink is where events go after ingest.
@@ -60,7 +76,7 @@ type Event struct {
 // dropped analytics event is a rounding error; a 500 to a mobile client makes
 // it retry the whole batch and amplify the outage.
 type Sink interface {
-	Publish(ctx context.Context, events []Event, userID uuid.NullUUID) error
+	Publish(ctx context.Context, events []Event, viewer Viewer) error
 }
 
 // Ingest handles batched client events.
@@ -83,7 +99,7 @@ const MaxBatch = 200
 // Note the ordering: counters first, sink second. If the sink is down, the
 // counts that drive the product still move; if counters are down, the analytics
 // record is still complete. Neither failure takes the other with it.
-func (i *Ingest) Submit(ctx context.Context, events []Event, userID uuid.NullUUID) error {
+func (i *Ingest) Submit(ctx context.Context, events []Event, viewer Viewer) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -117,7 +133,7 @@ func (i *Ingest) Submit(ctx context.Context, events []Event, userID uuid.NullUUI
 	if i.counters != nil {
 		i.applyCounters(ctx, events)
 	}
-	return i.sink.Publish(ctx, events, userID)
+	return i.sink.Publish(ctx, events, viewer)
 }
 
 // applyCounters translates events into counter movements.
@@ -159,15 +175,15 @@ type PostgresSink struct {
 
 func NewPostgresSink(pool *pgxpool.Pool) *PostgresSink { return &PostgresSink{pool: pool} }
 
-func (s *PostgresSink) Publish(ctx context.Context, events []Event, userID uuid.NullUUID) error {
+func (s *PostgresSink) Publish(ctx context.Context, events []Event, viewer Viewer) error {
 	for _, e := range events {
 		props, err := json.Marshal(e.Properties)
 		if err != nil {
 			props = []byte("{}")
 		}
 		var uid any
-		if userID.Valid {
-			uid = userID.UUID
+		if viewer.UserID.Valid {
+			uid = viewer.UserID.UUID
 		}
 		// ON CONFLICT DO NOTHING against the dedup key. Client batches are
 		// at-least-once by design — a mobile client that loses its connection
@@ -175,11 +191,12 @@ func (s *PostgresSink) Publish(ctx context.Context, events []Event, userID uuid.
 		// every flaky network doubles the view count.
 		if _, err := s.pool.Exec(ctx, `
 			INSERT INTO client_events
-			    (user_id, session_id, reel_id, event_type, occurred_at, properties, dedup_key)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			    (user_id, viewer_key, session_id, reel_id, event_type,
+			     occurred_at, watched_ms, completed, properties, dedup_key)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (dedup_key) DO NOTHING`,
-			uid, nullableText(e.SessionID), e.ReelID, e.Type, e.OccurredAt, props,
-			DedupKey(e, userID),
+			uid, nullableText(viewer.Key), nullableText(e.SessionID), e.ReelID, e.Type,
+			e.OccurredAt, e.WatchedMS, e.Completed, props, DedupKey(e, viewer),
 		); err != nil {
 			return fmt.Errorf("engagement: publish event: %w", err)
 		}
@@ -194,14 +211,22 @@ func (s *PostgresSink) Publish(ctx context.Context, events []Event, userID uuid.
 // footgun. The watched-ms bucket is included so successive progress events on
 // the same reel are distinct, and rounded to the nearest 25% so a client
 // reporting 5001 ms and 5003 ms on a retry does not create two rows.
-func DedupKey(e Event, userID uuid.NullUUID) string {
+func DedupKey(e Event, viewer Viewer) string {
 	reel := ""
 	if e.ReelID != nil {
 		reel = e.ReelID.String()
 	}
-	owner := "anon"
-	if userID.Valid {
-		owner = userID.UUID.String()
+	// The viewer key, falling back to the user id and then to a constant.
+	// Keying anonymous batches on the literal "anon" would make two different
+	// devices reporting the same event on the same reel in the same session
+	// collide — which does not happen for signed-in users and is exactly the
+	// population this key now covers.
+	owner := viewer.Key
+	if owner == "" {
+		owner = "anon"
+		if viewer.UserID.Valid {
+			owner = viewer.UserID.UUID.String()
+		}
 	}
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%d",
 		owner, e.SessionID, reel, e.Type, progressBucket(e.WatchedMS))))

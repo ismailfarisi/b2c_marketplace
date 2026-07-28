@@ -1,9 +1,15 @@
 /**
  * The single fetch mutator every generated endpoint routes through.
  *
- * Web and mobile share this file, which is why token storage is injected rather
- * than imported: the browser uses an httpOnly-cookie-backed store, Expo uses
- * SecureStore, and neither should be reachable from the other's bundle.
+ * **Web only.** This package was written when mobile was Expo and shared it;
+ * mobile is Kotlin Multiplatform now and has its own client, so `api/openapi.yaml`
+ * rather than this file is what the two platforms share.
+ *
+ * Token storage is still injected rather than imported, and it is worth keeping
+ * that way for a reason that outlived Expo: this package then has no opinion
+ * about where a token lives, which is what let the browser take the
+ * weaker-but-correct answer (`sessionStorage`, tab-scoped) without that choice
+ * leaking into a package other things import.
  */
 
 export interface ApiProblem {
@@ -136,12 +142,16 @@ export const apiFetch = async <T>(
       requestHeaders["Idempotency-Key"] = crypto.randomUUID();
     }
 
-    const res = await fetch(`${config.baseUrl}${url}${query}`, {
-      method,
-      headers: requestHeaders,
-      body: data !== undefined ? JSON.stringify(data) : undefined,
-      signal,
-    });
+    // Built up rather than declared with `undefined` values, because
+    // `exactOptionalPropertyTypes` is on and `{ body: undefined }` is not the
+    // same type as `{}` under it. This has never typechecked since Phase 0 —
+    // the package had no consumer running tsc over it until the Phase 7
+    // console arrived.
+    const init: RequestInit = { method, headers: requestHeaders };
+    if (data !== undefined) init.body = JSON.stringify(data);
+    if (signal) init.signal = signal;
+
+    const res = await fetch(`${config.baseUrl}${url}${query}`, init);
 
     if (res.status === 401 && retryOn401 && (await refreshTokens())) {
       return send(false);

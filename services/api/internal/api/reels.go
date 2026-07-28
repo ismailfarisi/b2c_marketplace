@@ -11,10 +11,15 @@ import (
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/actions"
 	"github.com/marketplace/api/internal/modules/attribution"
+	"github.com/marketplace/api/internal/modules/boosts"
+	"github.com/marketplace/api/internal/modules/comments"
 	"github.com/marketplace/api/internal/modules/engagement"
 	"github.com/marketplace/api/internal/modules/feed"
+	"github.com/marketplace/api/internal/modules/interests"
 	"github.com/marketplace/api/internal/modules/moderation"
+	"github.com/marketplace/api/internal/modules/ranking"
 	"github.com/marketplace/api/internal/modules/reels"
+	"github.com/marketplace/api/internal/modules/social"
 	"github.com/marketplace/api/internal/seam/action"
 )
 
@@ -30,6 +35,20 @@ type ReelHandlers struct {
 	// which is what Phase 2 did and is still a coherent product.
 	Actions     *actions.Service
 	Attribution *attribution.Service
+
+	// Phase 4. Nil-safe on the same principle — a deployment without the social
+	// surface serves a feed with no hearts and no threads, which is a smaller
+	// product rather than a broken one.
+	Likes     *social.Likes
+	Comments  *comments.Service
+	Ranking   *ranking.DBProvider
+	Interests *interests.Service
+
+	// Phase 9. Nil in every deployment that has not switched advertising on —
+	// which PLAN-VIDEO-FIRST §7 says is the correct state until there is enough
+	// organic demand that reach is worth buying. A nil here means the feed
+	// serves organic reels and view events confirm nothing.
+	Boosts *boosts.Service
 }
 
 // --- authoring ---------------------------------------------------------------
@@ -78,6 +97,60 @@ func (h *ReelHandlers) CreateUpload(w http.ResponseWriter, r *http.Request) {
 		// mismatch that reads like an auth failure and is not one.
 		"upload_headers": upload.Headers,
 		"expires_at":     upload.ExpiresAt.Format(time.RFC3339),
+	})
+}
+
+type personalUploadBody struct {
+	SubjectType string    `json:"subject_type"`
+	SubjectID   uuid.UUID `json:"subject_id"`
+	ContentType string    `json:"content_type"`
+}
+
+// CreatePersonalUpload is the Phase 6 seller-reel path.
+//
+// A separate endpoint rather than a nullable branch_id on CreateUpload. The two
+// look similar and authorise on completely different grounds — branch
+// membership versus owning the subject — and a single endpoint that picks
+// between them based on which field is null is one refactor away from letting a
+// user post as a vendor.
+func (h *ReelHandlers) CreatePersonalUpload(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+
+	var body personalUploadBody
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if body.ContentType == "" {
+		body.ContentType = "video/mp4"
+	}
+
+	upload, err := h.Reels.RequestUserUpload(r.Context(), reels.UserUploadRequest{
+		UserID:      userID,
+		SubjectType: body.SubjectType,
+		SubjectID:   body.SubjectID,
+		ContentType: body.ContentType,
+	})
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusCreated, "", map[string]any{
+		"reel_id":        upload.ReelID,
+		"asset_id":       upload.AssetID,
+		"upload_url":     upload.URL,
+		"upload_headers": upload.Headers,
+		"expires_at":     upload.ExpiresAt.Format(time.RFC3339),
+		// Set expectations at the point of upload. Every author on this path is
+		// `new` in author_trust, so all of it goes to a human before publish —
+		// a seller who expects their video live in ninety seconds and gets it
+		// in two hours writes a one-star review about a working system.
+		"review_note": "personal videos are reviewed by a person before they appear in the feed",
 	})
 }
 
@@ -293,15 +366,37 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 			h.Actions.Repo().RecordImpressions(r.Context(), viewerKey, viewerID, "feed", reelIDs))
 	}
 
+	// Whether this viewer has already liked, saved or followed each item, in one
+	// query for the page. Rendered by the client as a filled heart, so it is
+	// answered from the relation tables and never from a counter — a counter is
+	// a badge and being 3% low for ten seconds costs nothing, while a heart that
+	// un-fills when you scroll away and back is immediately wrong to the one
+	// person who knows the answer.
+	var state social.ViewerState
+	if h.Likes != nil && len(reelIDs) > 0 {
+		state, err = h.Likes.StateFor(r.Context(), viewerID, reelIDs)
+		if err != nil {
+			logIfErr(r, "viewer state lookup failed", err)
+		}
+	}
+
 	items := make([]map[string]any, 0, len(page.Items))
 	for _, it := range page.Items {
 		item := feedItemResponse(it)
 		item["actions"] = actionsResponse(resolved[it.ID])
+		item["viewer"] = map[string]any{
+			"liked":    state.Liked[it.ID],
+			"saved":    state.Saved[it.ID],
+			"followed": state.Followed[it.ID],
+		}
 		items = append(items, item)
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
 		"items":       items,
 		"next_cursor": nullable(page.NextCursor),
+		// The ranking configuration that produced this page. Returned so that
+		// "the feed looked wrong at 14:20" is answerable rather than debatable.
+		"ranking_profile": page.Profile,
 	})
 }
 
@@ -322,6 +417,7 @@ type eventsBody struct {
 		ReelID     *uuid.UUID     `json:"reel_id"`
 		OccurredAt string         `json:"occurred_at"`
 		WatchedMS  int            `json:"watched_ms"`
+		Completed  bool           `json:"completed"`
 		Properties map[string]any `json:"properties"`
 	} `json:"events"`
 }
@@ -350,6 +446,7 @@ func (h *ReelHandlers) SubmitEvents(w http.ResponseWriter, r *http.Request) {
 			SessionID:  body.SessionID,
 			OccurredAt: at,
 			WatchedMS:  e.WatchedMS,
+			Completed:  e.Completed,
 			Properties: e.Properties,
 		})
 	}
@@ -358,15 +455,47 @@ func (h *ReelHandlers) SubmitEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userID uuid.NullUUID
-	if id, ok := httpx.UserIDFromContext(r.Context()); ok {
-		userID = uuid.NullUUID{UUID: id, Valid: true}
-	}
+	// The viewer key, not only the user id. Phase 2 carried the id alone, and
+	// the consequence was invisible until Phase 4 went looking for it: interest
+	// profiles keyed on user id personalise nothing for anonymous viewers, who
+	// are exactly the population whose first session decides whether they ever
+	// return.
+	userID, viewerKey := viewerIdentity(r)
 
-	if err := h.Ingest.Submit(r.Context(), events, userID); err != nil {
+	if err := h.Ingest.Submit(r.Context(), events,
+		engagement.Viewer{UserID: userID, Key: viewerKey}); err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
+
+	// Phase 9 — a view event is also the confirmation that turns a served
+	// sponsored impression into a charged one.
+	//
+	// Only `view`, never `impression`. The distinction is what advertisers are
+	// buying: an impression is a reel that entered the page, a view is one the
+	// client reports as actually watched past the threshold. Charging on the
+	// first would bill a prefetched page nobody scrolled to, which is the
+	// difference between an ad product advertisers trust and one they audit.
+	//
+	// Best-effort and after the ingest. A billing failure must not cost the
+	// ranker its engagement data — that data is the product, the billing is a
+	// roll-up that the reservation-expiry sweep will reconcile anyway.
+	if h.Boosts != nil {
+		var viewed []uuid.UUID
+		for _, e := range events {
+			if e.Type == "view" && e.ReelID != nil {
+				viewed = append(viewed, *e.ReelID)
+			}
+		}
+		if len(viewed) > 0 {
+			logIfErr(r, "sponsored impression confirmation failed",
+				func() error {
+					_, err := h.Boosts.Confirm(r.Context(), viewerKey, viewed)
+					return err
+				}())
+		}
+	}
+
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -507,5 +636,10 @@ func feedItemResponse(it feed.Item) map[string]any {
 			"saves":    it.Counters.Saves,
 		},
 		"published_at": it.PublishedAt.Format(time.RFC3339),
+		// Whether this slot was reserved for exploration rather than earned on
+		// score. Surfaced so the impression it produces can be told apart from
+		// an earned one — without that distinction, exploration's cost is
+		// unmeasurable and the first cost-cutting exercise deletes it.
+		"explore": it.Explore,
 	}
 }

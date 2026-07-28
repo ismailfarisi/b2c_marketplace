@@ -39,6 +39,13 @@ tags:
   - name: actions
   - name: social
   - name: analytics
+  - name: listings
+  - name: chat
+  - name: packages
+  - name: driver
+  - name: dispatch
+  - name: console
+  - name: disputes
 
 security:
   - bearerAuth: []
@@ -564,16 +571,30 @@ paths:
       operationId: getFeed
       summary: The local video feed
       description: |
-        Chronological in Phase 2; ranked from Phase 4. The cursor format does not
-        change between them, so a client holding a cursor across that deploy keeps
-        working.
+        Ranked as of Phase 4. Retrieval (what is eligible) happens in Postgres;
+        ranking (what is best) happens in the service, so that the scoring rules are
+        unit-testable. Candidates come from four sources — fresh and geo-local,
+        followed authors, category affinity, and an exploration pool — unioned and
+        deduplicated.
+
+        **The cursor format changed in Phase 4 and is not compatible with a Phase 2
+        cursor.** Score-based keyset pagination stopped working when scoring moved
+        out of SQL: a cursor holding a score would ask the next page to compare
+        against a number computed from counters that have since moved. A stale cursor
+        is rejected with 422 rather than silently restarting from the top.
+
+        Roughly 15% of every page is reserved for reels that have not had a fair
+        hearing yet, marked `explore: true`. This costs measured engagement by
+        approximately that share and it is the price of having supply next quarter —
+        without it new vendors never get impressions and the supply side churns.
 
         `lat` and `lng` are **required**. The product is local discovery; a feed
         without a location is a different product. Only reels whose resolved coverage
         geometry contains the point are returned.
 
         Authentication is optional. A signed-in viewer additionally gets block
-        filtering and a durable seen-set; an anonymous one is keyed by `X-Device-Id`.
+        filtering, follow-based candidates and per-item `viewer` state; an anonymous
+        one is keyed by `X-Device-Id`, which also keys their interest profile.
       security: []
       parameters:
         - name: lat
@@ -914,6 +935,496 @@ paths:
         "204": { description: Removed }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  # --------------------------------------------------------- subscriptions --
+  /subscriptions:
+    post:
+      tags: [subscriptions]
+      operationId: createSubscription
+      summary: Subscribe to a plan
+      description: |
+        Creates the subscription, its delivery schedule, and its first billing
+        cycle — **and delivers nothing yet.**
+
+        The response carries `order_id`: a real row in `orders`, paid with the same
+        `POST /v1/orders/{orderId}/payment-intent` a one-off order uses. A
+        subscription's money moves through the same path as any other money in the
+        system, so it reaches payments, quotes, the ledger and the vendor's payout
+        statement without a second implementation of any of them.
+
+        Deliveries appear once that order is paid. Materialising them at signup
+        would hold two weeks of a kitchen's capacity against a card that may
+        decline.
+
+        The schedule must match the plan's shape exactly — a customer who picks six
+        days on a five-day plan is not paying for six, and the kitchen would cook a
+        meal nobody was billed for, every week, invisibly.
+
+        `weekday` is **0 = Sunday**. The GCC working week starts Sunday; ISO-8601's
+        Monday-first numbering delivers every meal one day late.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id, address_id, start_date, schedule]
+              properties:
+                plan_id: { type: string, format: uuid }
+                tier_id:
+                  type: [string, "null"]
+                  format: uuid
+                  description: Overrides the plan's price, days per week and meals per day.
+                address_id: { type: string, format: uuid }
+                start_date: { type: string, format: date }
+                renewal_mode:
+                  type: string
+                  enum: [auto, manual, none]
+                  default: auto
+                  description: |
+                    `none` ends the subscription after one cycle — which is how a
+                    trial is sold without building a trial feature.
+                schedule:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [weekday, meal_slot, window_id]
+                    properties:
+                      weekday:
+                        type: integer
+                        minimum: 0
+                        maximum: 6
+                        description: 0 = Sunday.
+                      meal_slot:
+                        type: string
+                        enum: [breakfast, lunch, dinner, snack, suhoor, iftar]
+                        description: |
+                          `suhoor` and `iftar` are ordinary values, not exceptions.
+                          Meal subscriptions invert during Ramadan and a schedule
+                          that cannot express it is a month of undeliverable plans.
+                      window_id: { type: string, format: uuid }
+                      address_id:
+                        type: [string, "null"]
+                        format: uuid
+                        description: |
+                          Per-day override. Office Sunday to Thursday and home on
+                          Friday is the normal case in this market, not an edge one.
+                source_reel_id: { type: [string, "null"], format: uuid }
+                source_action_id: { type: [string, "null"], format: uuid }
+      responses:
+        "201":
+          description: Created, awaiting payment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionCreated" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /subscriptions/{subscriptionId}/pause:
+    post:
+      tags: [subscriptions]
+      operationId: pauseSubscription
+      summary: Pause deliveries over a date range
+      description: |
+        Two things happen and they are separable: deliveries stop, and the money is
+        dealt with. A pause that only did the first would quietly keep the
+        customer's money for meals they never received.
+
+        `credit_mode` decides which. `extend` pushes the end date out by the paused
+        delivery days — the default, because a paused subscriber is worth far more
+        than a credited one. `wallet` credits the unearned portion instead.
+
+        Only **delivery days** count, not calendar days. A customer on a
+        Sunday-to-Thursday plan who pauses over a weekend has lost nothing, and
+        charging them two days against their allowance would be wrong.
+
+        Refused past the plan's cutoff: the kitchen has already bought the
+        ingredients, and a late pause is waste the vendor absorbs.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_date, to_date]
+              properties:
+                from_date: { type: string, format: date }
+                to_date:
+                  type: string
+                  format: date
+                  description: Inclusive. "Away from the 3rd to the 7th" includes the 7th.
+                credit_mode:
+                  type: string
+                  enum: [extend, wallet]
+                  default: extend
+      responses:
+        "200": { description: Paused }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      x-error-codes: |
+        past_cutoff, allowance_exceeded, no_deliveries
+
+  /subscriptions/{subscriptionId}/skip:
+    post:
+      tags: [subscriptions]
+      operationId: skipDelivery
+      summary: Skip a single delivery
+      description: |
+        Distinct from a pause, and not cosmetically. A skip is one meal the customer
+        did not want; it is **not credited** and does not consume the pause
+        allowance. A pause is the customer being away, and it is the one with the
+        money attached.
+
+        Conflating them would let a customer skip an entire cycle one day at a time
+        and expect a refund.
+
+        Omitting `meal_slot` skips every slot on that date.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date]
+              properties:
+                date: { type: string, format: date }
+                meal_slot:
+                  type: string
+                  enum: [breakfast, lunch, dinner, snack, suhoor, iftar]
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200": { description: Skipped }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /subscriptions/{subscriptionId}/cancel:
+    post:
+      tags: [subscriptions]
+      operationId: cancelSubscription
+      summary: Cancel a subscription
+      description: |
+        Stops future deliveries and returns the unearned remainder of the current
+        cycle to the customer's wallet. Meals already delivered stay delivered, and
+        the revenue already recognised against them stays recognised — that money is
+        the vendor's and cancelling does not reach back for it.
+
+        The subscription row survives, cancelled. Support answers "why did my meals
+        stop" from `subscription_events`, and a deleted row cannot answer it.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200": { description: Cancelled }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /reels/{reelId}/like:
+    parameters:
+      - name: reelId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [social]
+      operationId: likeReel
+      summary: Like a reel
+      description: |
+        Idempotent. A double-tap, a retry on a flaky connection, and a client that
+        fires optimistically must all leave exactly one like and move the counter
+        exactly once — so `changed` reports whether this call was the one that did
+        anything, and the status code is 200 either way.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [liked]
+                properties:
+                  liked: { type: boolean }
+                  changed:
+                    type: boolean
+                    description: False when the like already existed.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [social]
+      operationId: unlikeReel
+      summary: Remove a like
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [liked]
+                properties:
+                  liked: { type: boolean }
+                  changed: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # -------------------------------------------------------------- comments --
+  /reels/{reelId}/comments:
+    parameters:
+      - name: reelId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [comments]
+      operationId: listComments
+      summary: A reel's comment thread
+      description: |
+        Published, undeleted roots newest-first, each followed inline by up to three
+        replies. Threads are two levels deep by construction — unbounded nesting is
+        unreadable on a phone in portrait, and a thread nobody can read is a thread
+        nobody moderates.
+
+        Reading does not require an account. Writing does.
+      security: []
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: Keyset on the oldest **root** returned by the previous page.
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommentPage" }
+    post:
+      tags: [comments]
+      operationId: postComment
+      summary: Comment on a reel
+      description: |
+        Moderated synchronously, before the response returns. A comment that appears
+        and then vanishes twenty seconds later reads as censorship; one that takes
+        three seconds to appear reads as a slow network.
+
+        **201 means published. 202 means held for review.** The distinction is the
+        reason the state exists: a client that renders a pending comment as live
+        shows its author something nobody else can see, and they find out days later
+        that their question was never asked.
+
+        If the classifier is unavailable or times out, the comment is held — never
+        published. Comments arrive at a rate that makes "publish while moderation is
+        down" equivalent to "publish everything" within minutes.
+
+        Rate limited in two windows: a burst limit that stops a script and a daily
+        limit that stops a determined human working through a competitor's reels one
+        comment at a time. Rejected comments count toward both.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 600
+                  description: |
+                    Counted in runes, not bytes. An Arabic comment is roughly two
+                    bytes per character, and a byte limit would silently give
+                    Arabic-speaking users half the allowance.
+                parent_id:
+                  type: [string, "null"]
+                  format: uuid
+                  description: A root comment. Replies to replies are rejected.
+      responses:
+        "201":
+          description: Published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "202":
+          description: Accepted and held for review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /comments/{commentId}:
+    delete:
+      tags: [comments]
+      operationId: deleteComment
+      summary: Delete a comment
+      description: |
+        The comment's author, the reel's author, and platform staff may all delete.
+        The reel's author is on that list because a vendor cannot be told to accept
+        whatever appears under their storefront while waiting for a moderator.
+
+        Soft delete: the row survives, because the replies underneath it did not
+        consent to disappearing and because a deleted comment is evidence when the
+        thread is reported.
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+      x-note: |
+        Not-found and not-yours return the same 404. Distinguishing them would let
+        anyone enumerate which comment ids exist.
+
+  /comments/{commentId}/report:
+    post:
+      tags: [comments]
+      operationId: reportComment
+      summary: Report a comment
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+                detail: { type: string, maxLength: 1000 }
+      responses:
+        "202": { description: Received }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /moderation/comments:
+    get:
+      tags: [moderation]
+      operationId: getCommentQueue
+      summary: Comments awaiting a human
+      description: |
+        Pending and reported comments, oldest first — always. A queue worked
+        newest-first leaves its worst backlog permanently unworked, and the comments
+        at the bottom are the ones invisible to their authors the longest.
+
+        Separate from the reel queue rather than interleaved: comments arrive at a
+        rate orders of magnitude higher and are judged in seconds rather than
+        minutes, so mixing them would bury the queue that has a publish SLA on it.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/CommentQueueItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/comments/{commentId}/decide:
+    post:
+      tags: [moderation]
+      operationId: decideComment
+      summary: Rule on a comment
+      description: |
+        Approve or reject. "Review" is where it already is.
+
+        Every open report on the comment is resolved by the same ruling — leaving
+        them open would mean the next moderator judges a comment that has already
+        been judged.
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, reject] }
+                notes:
+                  type: string
+                  description: Shown to the author on a rejection.
+      responses:
+        "200": { description: Recorded }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /ranking/profile:
+    get:
+      tags: [moderation]
+      operationId: getRankingProfile
+      summary: What is ranking the feed right now
+      description: |
+        Staff-only. It exists because "the feed looked wrong at 14:20" is otherwise a
+        question that gets discussed rather than answered: a ranking system whose
+        configuration is invisible turns every regression into an argument about
+        whether anything changed.
+
+        Weights live in the `ranking_profiles` table so that retuning — a
+        twice-a-week activity — does not require a deploy. Exactly one row may be
+        active. A profile that fails validation is refused and the previous weights
+        stay in force; if none can be loaded, compiled-in defaults rank the feed.
+        Cached for up to one minute.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RankingProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   # ------------------------------------------------------------- analytics --
   /reels/{reelId}/funnel:
     get:
@@ -973,6 +1484,1887 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  # ── Phase 6 · vehicles ────────────────────────────────────────────────────
+  #
+  # A second supply engine behind the same feed. Note what is absent from every
+  # operation below: no order, no capacity, no fulfillment, no commission. The
+  # sale closes offline at an RTA counter the platform never observes, so this
+  # vertical's conversion event is a *lead*, and nothing past that point is
+  # verifiable. See docs/PHASE-6-VEHICLES.md §5 before quoting any number that
+  # comes after `POST /listings/{listingId}/inquire`.
+
+  /listings:
+    get:
+      tags: [listings]
+      operationId: searchListings
+      summary: Faceted used-car search
+      description: |
+        Public. Car search arrives from shared links and search engines more than
+        any other surface in the product, and a login wall there converts a
+        motivated buyer into a bounce.
+
+        Results are *complete* within the filter, not "best matches". A buyer who
+        filters for a 2019 Patrol under 120k and is shown a curated subset will not
+        believe the site — which is why this is Postgres and not the reel ranker.
+
+        `regional_spec` is the filter most worth understanding: GCC, US, Japanese
+        and European specs of the same year and mileage are different products and
+        the difference swings resale value 20–30%.
+
+        Every promoted result carries `promoted: true`. Paid placement is capped at
+        two per page — a page where everything is featured is an advertisement, and
+        then the placement is worth nothing to the seller who bought it.
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Free text over title and description }
+        - { name: make_id, in: query, schema: { type: string }, description: Comma-separated uuids }
+        - { name: model_id, in: query, schema: { type: string }, description: Comma-separated uuids }
+        - { name: year_min, in: query, schema: { type: integer } }
+        - { name: year_max, in: query, schema: { type: integer } }
+        - { name: price_min_minor, in: query, schema: { type: integer, format: int64 } }
+        - { name: price_max_minor, in: query, schema: { type: integer, format: int64 } }
+        - { name: mileage_max, in: query, schema: { type: integer } }
+        - name: regional_spec
+          in: query
+          description: Comma-separated. gcc, us, japanese, european, canadian, chinese, other
+          schema: { type: string }
+        - { name: transmission, in: query, schema: { type: string } }
+        - { name: fuel_type, in: query, schema: { type: string } }
+        - { name: body_type, in: query, schema: { type: string } }
+        - { name: seller_kind, in: query, schema: { type: string, enum: [private, dealer] } }
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+        - { name: radius_m, in: query, schema: { type: integer } }
+        - name: sort
+          in: query
+          description: |
+            `newest` orders by the later of published_at and bumped_at — a bump is
+            what a seller buys, and hiding its effect in a sort nobody selects
+            would make the product not work.
+          schema:
+            type: string
+            enum: [newest, price_asc, price_desc, mileage_asc, year_desc, distance]
+        - { name: limit, in: query, schema: { type: integer, maximum: 60 } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListingSearchResult" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+    post:
+      tags: [listings]
+      operationId: createListing
+      summary: Create a listing draft
+      description: |
+        Drafts are free and unlimited. Quota is checked when the listing is
+        submitted for review and spent when it is approved — charging before the
+        seller has seen their own listing loses the seller, and a listing rejected
+        by a moderator must not cost anything.
+
+        `seller_kind` is deliberately not accepted here. It is derived from whether
+        the caller has an active dealer profile: a private seller who could set it
+        themselves would get the dealer badge for free, and that badge is the only
+        signal a buyer has.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ListingDraft" }
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListingCreated" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /listings/{listingId}/submit:
+    post:
+      tags: [listings]
+      operationId: submitListing
+      summary: Send a draft to the review queue
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      responses:
+        "200": { description: Queued for review }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: |
+            No listing credit. Buy a package first — see `GET /listing-packages`.
+
+  /listings/{listingId}/price:
+    patch:
+      tags: [listings]
+      operationId: changeListingPrice
+      summary: Change the asking price
+      description: |
+        A price *drop* publishes immediately: it is the healthiest thing a stale
+        listing can do, and putting it behind a review queue means sellers stop
+        doing it. A price *rise* on a live listing returns the listing to review —
+        that is the bait-and-switch shape, and it raises a fraud signal either way.
+
+        Every change writes a price-history row, which buyers can see and which the
+        price-outlier detector reads.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [price_minor]
+              properties:
+                price_minor: { type: integer, format: int64 }
+      responses:
+        "200": { description: Updated }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /listings/{listingId}/sold:
+    post:
+      tags: [listings]
+      operationId: markListingSold
+      summary: Mark a listing sold
+      description: |
+        `sold_price_minor` is **seller-declared and unverified**. The platform never
+        observes the transaction — it happens at an RTA counter — so this is a
+        survey answer, not a market observation. The response says so explicitly,
+        and nothing downstream may present it as a market price.
+
+        Sold is not terminal: deals fall through, and forcing a re-listing would
+        lose the photos, the reel and the history the fraud detectors read.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sold_price_minor: { type: integer, format: int64 }
+      responses:
+        "200": { description: Marked sold }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /listings/{listingId}/status:
+    post:
+      tags: [listings]
+      operationId: setListingStatus
+      summary: Pause, resume or remove a listing
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, paused, removed] }
+                reason: { type: string }
+      responses:
+        "200": { description: Updated }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: Not a legal transition from the current status }
+
+  /listings/{listingId}/inquire:
+    post:
+      tags: [listings]
+      operationId: inquireAboutListing
+      summary: Contact the seller — this vertical's conversion event
+      description: |
+        The analogue of `POST /orders`, and deliberately much smaller: no capacity,
+        no pricing, no payment, no fulfillment. What it shares with an order is the
+        Phase 3 attribution chain, so "did a reel produce a lead" is answerable with
+        the same query shape as "did a reel produce a booking".
+
+        Opens a conversation as a side effect. The seller's phone number is never
+        published — that is the entire reason chat exists in this vertical.
+
+        Idempotent per (listing, buyer): a second call returns `200` with the same
+        lead, because a buyer who taps twice must not double a seller's lead count.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source: { type: string, enum: [reel_action, listing_page, search, saved_search] }
+                source_reel_id: { type: string, format: uuid }
+                source_action_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Lead created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Inquiry" }
+        "200":
+          description: Existing lead — this buyer has already contacted this seller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Inquiry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: "The listing is sold, expired or under review" }
+
+  /listings/{listingId}/offers:
+    post:
+      tags: [listings]
+      operationId: makeOffer
+      summary: Offer a price — non-binding
+      description: |
+        **An accepted offer is not a contract and no money is held.** Escrow would
+        solve most of this category's fraud and implies a payment-institution
+        licence, which is not built. The response carries `binding: false` so a
+        client cannot render this as a commitment without ignoring the API.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount_minor]
+              properties:
+                amount_minor: { type: integer, format: int64 }
+      responses:
+        "201":
+          description: Offer recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Offer" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: "The listing is not available, or it is your own" }
+
+  /offers/{offerId}/respond:
+    post:
+      tags: [listings]
+      operationId: respondToOffer
+      summary: Accept or reject an offer
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accept]
+              properties:
+                accept: { type: boolean }
+      responses:
+        "200": { description: Answered }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: "Already answered, withdrawn or expired" }
+
+  /listings/{listingId}/favourite:
+    put:
+      tags: [listings]
+      operationId: favouriteListing
+      summary: Save a listing
+      description: |
+        Distinct from saving a reel. A listing outlives the reel that advertised it
+        and a reel can advertise a listing that has sold, so collapsing the two
+        would make "my saved cars" show sold cars.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      responses:
+        "204": { description: Saved }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [listings]
+      operationId: unfavouriteListing
+      summary: Remove a saved listing
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /listings/{listingId}/report:
+    post:
+      tags: [listings]
+      operationId: reportListing
+      summary: Report a listing
+      description: |
+        Returns 202, never 200. The report is recorded; the outcome is a human's.
+        A 200 reads as "handled" and the reporter checks back tomorrow to find the
+        listing still up.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        "202": { description: Report received }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /listings/{listingId}/bump:
+    post:
+      tags: [packages]
+      operationId: bumpListing
+      summary: Spend a bump credit
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      responses:
+        "200": { description: Bumped }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: No bumps left on any active package }
+
+  /listings/{listingId}/feature:
+    post:
+      tags: [packages]
+      operationId: featureListing
+      summary: Spend featured days
+      description: |
+        The feature ends with the package that paid for it, never after. Selling
+        reach that outlives its entitlement is how a promotions table starts
+        disagreeing with the money behind it.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      responses:
+        "200": { description: Featured }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: No package with featured days }
+
+  /listing-packages:
+    get:
+      tags: [packages]
+      operationId: listListingPackages
+      summary: What a listing costs
+      description: |
+        Prices are **tax-inclusive**, which is what a UAE consumer price must be.
+        The platform is the supplier of record here — unlike GMV, where the vendor
+        is — so this VAT is the platform's own output tax and is due at payment.
+
+        The free tier is not a trial. Supply is the binding constraint in a
+        cold-start classifieds market, and charging a private seller to list their
+        only car before there are buyers is how the listing count stays at zero.
+      security: []
+      parameters:
+        - name: audience
+          in: query
+          schema: { type: string, enum: [private, dealer] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ListingPackage" }
+
+  /listing-packages/{packageId}/purchase:
+    post:
+      tags: [packages]
+      operationId: purchaseListingPackage
+      summary: Buy a listing package
+      description: |
+        Returns a purchase awaiting payment; free packages activate immediately and
+        post nothing to the ledger. Paid purchases become active when the payment
+        succeeds, at which point the fee lands in **deferred revenue** and is
+        recognised straight-line across the entitlement window — the same
+        arithmetic a prepaid meal cycle uses.
+      parameters:
+        - name: packageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: Purchase created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PackagePurchase" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Dealer packages require a verified dealer profile }
+
+  /reels/uploads/personal:
+    post:
+      tags: [reels]
+      operationId: createPersonalReelUpload
+      summary: Upload a seller reel
+      description: |
+        The Phase 6 authoring path, and a separate endpoint from `/reels/uploads`
+        rather than a nullable branch id. The two authorise on completely different
+        grounds — branch membership versus owning the subject — and one endpoint
+        choosing between them based on which field is null is one refactor away
+        from letting a user post as a vendor.
+
+        Every author here is `new` in author_trust, so **all** of this content is
+        reviewed by a human before it appears. The response says so: a seller who
+        expects their video live in ninety seconds and gets it in two hours writes
+        a one-star review about a system working exactly as designed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_type, subject_id]
+              properties:
+                subject_type: { type: string, enum: [vehicle_listing] }
+                subject_id: { type: string, format: uuid }
+                content_type: { type: string, default: video/mp4 }
+      responses:
+        "201":
+          description: Draft created with a presigned upload URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReelUpload" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: You do not own this listing }
+
+  # ── Phase 6 · chat ────────────────────────────────────────────────────────
+
+  /me/conversations:
+    get:
+      tags: [chat]
+      operationId: listConversations
+      summary: Message inbox
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ConversationSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /conversations/{conversationId}/messages:
+    get:
+      tags: [chat]
+      operationId: listMessages
+      summary: Read a thread
+      description: |
+        A sender always sees their own held message; the recipient never does. A
+        sender whose message vanished without trace re-sends it four more ways, and
+        each attempt is another row for a moderator to read.
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChatMessage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+    post:
+      tags: [chat]
+      operationId: sendMessage
+      summary: Send a message
+      description: |
+        Every message is scanned before it is stored, and the verdict decides the
+        row's state — so a held message is never briefly visible to a poller.
+
+        Three outcomes:
+
+        - **201 `sent`** — delivered unchanged.
+        - **201 `redacted`** — contact details removed, message delivered. The
+          response names what was removed. Most people sharing a number are not
+          defrauding anyone; they are trying to arrange a viewing and the app felt
+          slower than WhatsApp. Blocking them teaches them the product is broken.
+        - **202 `held`** — advance-fee language, or a message that is nothing but
+          contact details. A human decides. The recipient sees nothing and their
+          unread badge does not move, because a badge with nothing behind it reads
+          as a bug and produces a support ticket for every held scam.
+
+        The scanner folds Arabic-Indic digits before matching. A number typed as
+        ٠٥٠١٢٣٤٥٦٧ is a number.
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, maxLength: 4000 }
+      responses:
+        "201":
+          description: Delivered, possibly redacted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SentMessage" }
+        "202":
+          description: Held for review — not delivered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SentMessage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /conversations/{conversationId}/read:
+    post:
+      tags: [chat]
+      operationId: markConversationRead
+      summary: Clear the unread badge
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "204": { description: Cleared }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ── Phase 6 · moderation ──────────────────────────────────────────────────
+
+  /moderation/listings/{listingId}/decide:
+    post:
+      tags: [moderation]
+      operationId: decideListing
+      summary: Approve or reject a listing
+      description: |
+        Approval is the only path to `active`, and it spends the seller's listing
+        credit. Rejection costs them nothing.
+      parameters:
+        - $ref: "#/components/parameters/ListingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+                reason: { type: string }
+      responses:
+        "200": { description: Decided }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/messages:
+    get:
+      tags: [moderation]
+      operationId: listHeldMessages
+      summary: Held chat messages
+      description: |
+        A third queue, alongside reels and comments. Held messages arrive at chat
+        volume and are judged in seconds; interleaving them with reels would bury
+        the queue that has a publish SLA on it.
+
+        The body returned here is the **original**, unredacted. A reviewer judging
+        whether a message is a scam needs the text that triggered the hold.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/HeldMessage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/messages/{messageId}/decide:
+    post:
+      tags: [moderation]
+      operationId: decideHeldMessage
+      summary: Release or block a held message
+      description: |
+        Releasing delivers the **redacted** body, not the original. Judging that a
+        message is not a scam is not the same decision as publishing the phone
+        number inside it, and only one of them was asked for.
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [release]
+              properties:
+                release: { type: boolean }
+      responses:
+        "200": { description: Decided }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: This message is no longer held }
+
+  /moderation/fraud:
+    get:
+      tags: [moderation]
+      operationId: listFraudSignals
+      summary: Open fraud evidence, worst subjects first
+      description: |
+        Ordered by trust score ascending, then by age. Ordering by age alone buries
+        a stolen-vehicle hit behind three hundred shared-phone-number rows.
+
+        `weight_if_confirmed` is what confirming this signal will cost the subject.
+        A reviewer deciding without knowing that is guessing — and the invariant
+        behind it is worth stating: **no machine signal can block an account on its
+        own. Only a human confirming one can.**
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/FraudSignal" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/fraud/decide:
+    post:
+      tags: [moderation]
+      operationId: decideFraudSignal
+      summary: Confirm or dismiss fraud evidence
+      description: |
+        A dismissed signal is kept, at zero weight. "We looked and it was fine" is a
+        different fact from "we never saw it", and only one of them survives an
+        appeal — or stops the next detector run raising it again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_type, subject_id, kind, confirm]
+              properties:
+                subject_type: { type: string, enum: [listing, user, conversation, message] }
+                subject_id: { type: string, format: uuid }
+                kind: { type: string }
+                confirm: { type: boolean }
+      responses:
+        "200":
+          description: Rescored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  score: { type: integer }
+                  band: { type: string, enum: [ok, watch, restricted, blocked] }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+
+  # ── Phase 7 · driver ──────────────────────────────────────────────────────
+  #
+  # The whole driver API. Read what is *not* in any response below: no item
+  # list, no product name, no order total, no vertical. Everything a driver
+  # needs — an address, a window, a name, a phone number — was snapshotted onto
+  # the fulfillment when it was created, which is the Fulfillment primitive
+  # (PLAN.md §1) paying off. See docs/PHASE-7-CLIENTS-AND-LOGISTICS.md §2.
+  #
+  # No route carries a driver id. Every one resolves the signed-in user to a
+  # driver server-side: a client that can name which driver it is acting as is a
+  # client that can complete someone else's deliveries.
+
+  /driver/shifts:
+    post:
+      tags: [driver]
+      operationId: startShift
+      summary: Go on shift
+      description: |
+        Refuses a second open shift rather than silently reusing the first. Two
+        overlapping shifts make "was anyone on shift at 19:40" ambiguous, and that
+        is the first question asked after a late delivery.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                branch_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: On shift
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shift_id: { type: string, format: uuid }
+        "403": { description: Not an active driver }
+        "409": { description: This driver already has an open shift }
+
+  /driver/shifts/end:
+    post:
+      tags: [driver]
+      operationId: endShift
+      summary: Go off shift
+      description: |
+        **Undelivered stops are returned to dispatch.** A driver who ends their
+        shift with four stops left has four customers waiting on someone who has
+        gone home, and leaving the route assigned means the planner skips that
+        work entirely — the fulfillments look handled and nobody is handling them.
+      responses:
+        "200": { description: "Off shift, work released" }
+        "403": { description: Not an active driver }
+
+  /driver/manifest:
+    get:
+      tags: [driver]
+      operationId: getManifest
+      summary: The driver's stops for a day
+      parameters:
+        - name: date
+          in: query
+          description: Defaults to today. A driver opening the app has not chosen a date and never will.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Manifest" }
+        "403": { description: Not an active driver }
+
+  /driver/stops/{fulfillmentId}/dispatch:
+    post:
+      tags: [driver]
+      operationId: dispatchStop
+      summary: Pick up the work and issue the delivery code
+      description: |
+        Issues a four-digit code to the customer and starts the route.
+
+        The code is issued here rather than at completion because the customer
+        needs it *before* the driver arrives, and issuing it at creation means it
+        sits in a notification for three days before the delivery it belongs to.
+        Only its hash is stored: a database reader who can see every OTP can mark
+        every delivery complete.
+      parameters:
+        - $ref: "#/components/parameters/FulfillmentId"
+      responses:
+        "200": { description: "Dispatched, code issued to the customer" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Not a legal transition from the current status }
+
+  /driver/stops/{fulfillmentId}/advance:
+    post:
+      tags: [driver]
+      operationId: advanceStop
+      summary: Move a stop through the lifecycle
+      description: |
+        `en_route` and `arrived` only — completing and failing carry proof and a
+        reason and have their own endpoints.
+
+        Marking arrival is geofenced to 250 m. Generous on purpose: GPS in a dense
+        urban block is routinely 100 m out, and a driver who cannot mark arrival
+        stops using the app and phones the customer instead, at which point there
+        is no record of anything.
+
+        `arrived` can go back to `en_route`. A driver who marked the wrong
+        building needs a way back that is not "fail the delivery" — without it
+        they fail and redeliver, and the failure statistics stop meaning anything.
+      parameters:
+        - $ref: "#/components/parameters/FulfillmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [en_route, arrived] }
+                lat: { type: number, format: double }
+                lng: { type: number, format: double }
+      responses:
+        "200": { description: Advanced }
+        "409": { description: "Illegal transition, or too far from the address to mark arrival" }
+
+  /driver/stops/{fulfillmentId}/complete:
+    post:
+      tags: [driver]
+      operationId: completeStop
+      summary: Close a stop with proof
+      description: |
+        Proof requirements are graded, and the grading is sent with the manifest
+        so the driver knows before they are at the door:
+
+        - **cash on the stop → OTP, always.** "The driver says they collected
+          AED 240" is not a position anyone can defend.
+        - **pickup → photo.** The customer is handing something over, so their
+          presence is self-evident; the disputed question is *what was collected*.
+        - **delivery → recipient name.** The disputed question is whether anyone
+          received it at all.
+
+        `left_at_door` is never sufficient. It is named honestly because it proves
+        the driver says so and nothing else.
+
+        `collected_minor` may differ from what was expected — the customer had no
+        change, or paid part by card. Commission is taken on what was *collected*,
+        not on what was owed: charging a vendor commission on money nobody received
+        is a bill they will query and win.
+      parameters:
+        - $ref: "#/components/parameters/FulfillmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliveryProof" }
+      responses:
+        "200": { description: Completed }
+        "403": { description: The delivery code does not match }
+        "409": { description: "Not arrived yet, or the proof is weaker than this stop requires" }
+
+  /driver/stops/{fulfillmentId}/fail:
+    post:
+      tags: [driver]
+      operationId: failStop
+      summary: Close a stop without delivering
+      description: |
+        The outcome comes from a closed list. Free text would produce "customer not
+        answering", "no answer", "nobody home" and "cust absent" as four distinct
+        reasons, and then nobody can tell whether the time windows are wrong or the
+        address capture is.
+
+        A driver cannot *cancel* work — only fail it, with a reason and an attempt
+        row. A driver who could cancel has a way to make their route shorter, and
+        the incentive points exactly the wrong way.
+      parameters:
+        - $ref: "#/components/parameters/FulfillmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome:
+                  type: string
+                  enum: [customer_absent, wrong_address, refused, unreachable, access_denied, vehicle_issue, cancelled_by_customer]
+                note: { type: string }
+                lat: { type: number, format: double }
+                lng: { type: number, format: double }
+      responses:
+        "200": { description: "Failed, attempt recorded" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /driver/location:
+    post:
+      tags: [driver]
+      operationId: reportLocation
+      summary: Report position
+      description: |
+        Returns 204 with no body. This is the highest-frequency write in the
+        system — every driver, every fifteen seconds — and a JSON response the
+        client discards is bytes on a mobile connection somebody is paying for.
+
+        Pings are retained for 30 days and dropped a partition at a time. This is
+        location data about identifiable people; keeping it forever is a liability
+        rather than an asset, and its operational value is spent within days.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                lat: { type: number, format: double }
+                lng: { type: number, format: double }
+                accuracy_m: { type: number, format: float }
+                speed_kmh: { type: number, format: float }
+                route_id: { type: string, format: uuid }
+      responses:
+        "204": { description: Recorded }
+
+  /driver/cash:
+    get:
+      tags: [driver]
+      operationId: getHeldCash
+      summary: What this driver is carrying
+      description: |
+        The balance of a driver's float account is exactly the cash they are
+        holding that the platform has not received. Everything in the cash model
+        follows from keeping that sentence true.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collections: { type: integer }
+                  total_minor: { type: integer, format: int64 }
+                  currency: { type: string }
+
+  /driver/cash/remittances:
+    post:
+      tags: [driver]
+      operationId: declareRemittance
+      summary: Declare cash for hand-in
+      description: |
+        The driver declares; someone at the branch counts. They are separate
+        fields and separate moments because collapsing them means the system can
+        never represent a shortfall — and a system that cannot represent a
+        shortfall gets one anyway, silently.
+      responses:
+        "201":
+          description: Declared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  remittance_id: { type: string, format: uuid }
+                  declared_minor: { type: integer, format: int64 }
+                  next_step: { type: string }
+        "409": { description: Nothing to remit }
+
+  # ── Phase 7 · dispatch ────────────────────────────────────────────────────
+
+  /branches/{branchId}/dispatch:
+    get:
+      tags: [dispatch]
+      operationId: getDispatchBoard
+      summary: The branch's routes for a day
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DispatchBoard" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/dispatch/plan:
+    post:
+      tags: [dispatch]
+      operationId: planRoutes
+      summary: Sequence unrouted work into routes
+      description: |
+        Idempotent: it reads only fulfillments with no route, so running it again
+        picks up whatever arrived since and leaves the rest alone. The worker runs
+        it every five minutes; this endpoint exists so a dispatcher can force it
+        after a late batch of orders.
+
+        Stops are grouped by time window *before* sequencing. A route that mixes
+        the 09:00–12:00 and 18:00–21:00 windows is a driver sitting in a car park
+        for five hours, and no amount of clever sequencing fixes it — the
+        constraint is the promise made to the customer, not the geometry.
+
+        `stops_already_late` is returned rather than buried in a log. A plan with
+        late stops in it is a reassignment decision now, not a customer discovery
+        in three hours.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: Planned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  routes_created: { type: integer }
+                  stops_routed: { type: integer }
+                  unrouted: { type: integer }
+                  stops_already_late: { type: integer }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /routes/{routeId}/assign:
+    post:
+      tags: [dispatch]
+      operationId: assignRoute
+      summary: Give a route to a driver
+      description: |
+        Re-checks the driver's own stop capacity, because the planner split routes
+        against a default maximum and the driver who ends up taking one may be on
+        a bike.
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [driver_id]
+              properties:
+                driver_id: { type: string, format: uuid }
+      responses:
+        "200": { description: Assigned }
+        "409": { description: "Route already started, driver inactive, or too many stops for this vehicle" }
+
+  # ── Phase 7 · vendor console ──────────────────────────────────────────────
+
+  /me/memberships:
+    get:
+      tags: [console]
+      operationId: listMemberships
+      summary: Which vendors this user works for
+      description: |
+        A null `branch_id` means vendor-wide. The distinction is load-bearing: a
+        chain delegates by branch, and a manager scoped to one facility must not
+        see another's revenue.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Membership" }
+
+  /branches/{branchId}/summary:
+    get:
+      tags: [console]
+      operationId: getBranchSummary
+      summary: Today, at a glance
+      description: |
+        `payable_minor` comes live from the ledger, not from the last statement. A
+        vendor asking "what am I owed" on a Wednesday wants the current number, and
+        statements close weekly.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BranchSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/queue:
+    get:
+      tags: [console]
+      operationId: getOrderQueue
+      summary: Everything this branch owes today, by window
+      description: |
+        Unlike the driver's manifest, this response *does* carry item names. That
+        asymmetry is the point of the Fulfillment seam rather than a violation of
+        it: dispatch answers "where does the van go", which is the same question
+        for a meal box and a laundry bag; the console answers "what does my kitchen
+        cook by six", which is meaningless without knowing what a meal is.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/QueueItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/calendar:
+    get:
+      tags: [console]
+      operationId: getCapacityCalendar
+      summary: Capacity utilisation by day, window and resource
+      description: |
+        The read side of PLAN.md §2.3's concurrency hotspot. Deliberately a plain
+        aggregate: the write path holds the correctness guarantee in a CHECK
+        constraint, and a read that tried to be authoritative would be a second,
+        slower version of the same rule.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cells:
+                    type: array
+                    items: { $ref: "#/components/schemas/CapacityCell" }
+
+  /branches/{branchId}/roster:
+    get:
+      tags: [console]
+      operationId: getSubscriptionRoster
+      summary: The kitchen's prep list for a day
+      description: |
+        The most-used screen in a meal business, and the reason Phase 5's scheduler
+        materialises fulfillments 14 days ahead: a kitchen that cannot see Thursday
+        until Thursday cannot buy for Thursday.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/RosterEntry" }
+
+  /vendors/{vendorId}/statements:
+    get:
+      tags: [console]
+      operationId: listPayoutStatements
+      summary: Payout statements
+      description: |
+        A statement is **derived, never authoritative**. Every number on it is a
+        sum over `ledger_entries` for the period. It exists so a vendor can be
+        shown a stable version of that sum — a screen that recomputes on every load
+        shows a different total the moment a late refund lands, and then nobody can
+        be paid against it. If a statement and the ledger ever disagree, the ledger
+        is right.
+
+        Periods run Sunday–Saturday. An ISO week starting Monday cuts the Gulf
+        weekend in half, so a vendor's busiest two days land in different
+        statements and their weekly figures oscillate for reasons unrelated to
+        their business.
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PayoutStatement" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /vendors/{vendorId}/statements/{statementId}:
+    get:
+      tags: [console]
+      operationId: getPayoutStatement
+      summary: A statement's lines
+      description: |
+        The screen where a vendor disagrees with a number. Every line carries a
+        `journal_id` pointing back into the ledger — which is what makes "why is
+        this AED 43" answerable rather than re-derivable.
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: statementId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lines:
+                    type: array
+                    items: { $ref: "#/components/schemas/StatementLine" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /cash/remittances/{remittanceId}/settle:
+    post:
+      tags: [console]
+      operationId: settleRemittance
+      summary: Count a driver's cash in
+      description: |
+        Vendor-side, never driver-side: the person who counts must not be the
+        person who declared.
+
+        A shortfall has **no ledger posting of its own**. The difference simply
+        stays in the driver's float, which is exactly what that account means —
+        cash they are holding that the platform has not received. Only a decision
+        to stop pursuing it moves the money, and that is a write-off.
+      parameters:
+        - name: remittanceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [counted_minor]
+              properties:
+                counted_minor: { type: integer, format: int64 }
+      responses:
+        "200": { description: Settled }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Phase 7 · disputes ────────────────────────────────────────────────────
+
+  /disputes:
+    post:
+      tags: [disputes]
+      operationId: openDispute
+      summary: Raise a dispute
+      description: |
+        The response carries `due_at`, computed from the dispute kind. Returned
+        rather than kept internal: a customer told when to expect an answer stops
+        asking for one every hour.
+
+        SLAs are 4h for the kinds where the customer is still waiting for
+        something — not delivered, damaged, wrong item — and 24–72h for the rest,
+        which are money and can wait a day without anyone going hungry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_type, subject_id, kind]
+              properties:
+                subject_type: { type: string, enum: [order, fulfillment, subscription, payout_statement, listing] }
+                subject_id: { type: string, format: uuid }
+                raised_as: { type: string, enum: [customer, vendor, driver] }
+                kind:
+                  type: string
+                  enum: [not_delivered, damaged, wrong_item, late, quality, charged_incorrectly, payout_amount, driver_conduct, other]
+                body: { type: string }
+      responses:
+        "201":
+          description: Raised
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  reference_no: { type: string }
+                  state: { type: string }
+                  due_at: { type: string, format: date-time }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+    get:
+      tags: [disputes]
+      operationId: listDisputes
+      summary: The ops worklist
+      description: |
+        Ordered by the clock, not by age. An eight-hour-old payout query with a
+        72-hour SLA is not more urgent than a one-hour-old "it never arrived" with
+        a four-hour one, and a queue sorted by age says it is.
+
+        Requires the `ops` or `superadmin` role. A moderator judges content;
+        refunding money and suspending vendors is a different job with a different
+        blast radius, and one role covering both is how a content moderator ends up
+        able to move cash.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Dispute" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /disputes/{disputeId}/resolve:
+    post:
+      tags: [disputes]
+      operationId: resolveDispute
+      summary: Close a dispute
+      description: |
+        `resolution` comes from a closed list and `note` is required. The list
+        exists because "how often do we refund" is a question ops asks weekly and a
+        free-text note cannot answer it; the note is required because a refund with
+        no stated reason is indistinguishable from an unauthorised one six months
+        later.
+
+        The audit row is written in the same transaction as the decision — a refund
+        and the record of who made it must not be able to come apart.
+      parameters:
+        - name: disputeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution, note]
+              properties:
+                resolution:
+                  type: string
+                  enum: [refunded, partially_refunded, redelivered, credited, no_action, vendor_charged, driver_penalised]
+                amount_minor: { type: integer, format: int64 }
+                note: { type: string }
+      responses:
+        "200": { description: Resolved }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: Already closed }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # -- Phase 8 . market readiness ---------------------------------------------
+  #
+  # Everything below exists to satisfy an obligation rather than a feature
+  # request. A customer never asked for an opt-out switch, a vendor never asked
+  # to upload a trade licence, and an author never asked for an appeals form -
+  # they are here because launching without them is not permitted in either
+  # market.
+
+  /me/notifications:
+    get:
+      tags: [notifications]
+      operationId: listNotifications
+      summary: The in-app inbox
+      description: |
+        In-app and push messages only. SMS and WhatsApp are not listed: a message
+        sent to a phone is not something the app should be able to re-read, and a
+        delivery code that stays visible in an inbox defeats the point of it
+        being one-time.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Notification" }
+
+  /me/notifications/{notificationId}/read:
+    post:
+      tags: [notifications]
+      operationId: markNotificationRead
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Marked }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/notification-preferences:
+    put:
+      tags: [notifications]
+      operationId: setNotificationPreference
+      summary: Opt in or out of a category on a channel
+      description: |
+        Only `marketing` may be switched off. A delivery code, a login code and an
+        order confirmation cannot be - a customer who could refuse the first is a
+        customer standing at their door unable to receive an order they paid for.
+
+        Attempting to refuse a non-optional category returns 422 with the reason
+        rather than 403, because the client shows it next to the switch and that
+        is the only place anyone can act on it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, channel, allowed]
+              properties:
+                category: { type: string, enum: [marketing] }
+                channel: { type: string, enum: [sms, push, email, whatsapp, in_app] }
+                allowed: { type: boolean }
+      responses:
+        "204": { description: Saved }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /me/invoices:
+    get:
+      tags: [invoices]
+      operationId: listMyInvoices
+      summary: Tax invoices issued to the caller
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/InvoiceSummary" }
+
+  /me/standing:
+    get:
+      tags: [moderation]
+      operationId: getMyStanding
+      summary: The caller's own moderation record
+      description: |
+        Includes the date the next strike expires. "You are restricted" with no end
+        date is indistinguishable from a ban, and an author who believes they have
+        been banned does not come back when the restriction lifts.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  standing: { type: string, enum: [none, warned, review_all, suspended, banned] }
+                  active_strikes: { type: integer }
+                  next_expires_at: { type: string, format: date-time }
+
+  /appeals:
+    post:
+      tags: [moderation]
+      operationId: openAppeal
+      summary: Challenge a moderation decision
+      description: |
+        Answered within an SLA. An appeals process with no deadline is a way of
+        saying no slowly, and the app stores treat "users cannot appeal" as a
+        policy violation rather than a product choice.
+
+        An appeal is never reviewed by the person whose decision is being appealed
+        - enforced by a database constraint, not by rota discipline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_type, subject_id, statement]
+              properties:
+                subject_type: { type: string, enum: [reel, comment, message, listing, strike, account] }
+                subject_id: { type: string, format: uuid }
+                statement: { type: string, minLength: 10 }
+      responses:
+        "201":
+          description: Opened
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string }
+                  due_in_days: { type: integer }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /vendors/{vendorId}/compliance:
+    get:
+      tags: [payouts]
+      operationId: getVendorCompliance
+      summary: Why this vendor can or cannot be paid
+      description: |
+        Every entry in `blocking` is phrased as something the vendor can do.
+        "Not eligible" opens a support ticket; "your trade licence expired on 12
+        June" gets it renewed.
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eligible_for_payout: { type: boolean }
+                  blocking:
+                    type: array
+                    items: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /vendors/{vendorId}/payout-account:
+    post:
+      tags: [payouts]
+      operationId: addPayoutAccount
+      summary: Register the bank account payouts go to
+      description: |
+        The IBAN is checked with ISO 7064 MOD-97-10 before it is stored. A payout
+        sent to a mistyped IBAN is not bounced immediately - it is accepted, moves
+        through the correspondent chain for days, and comes back minus fees, or
+        does not come back at all.
+
+        Every change re-enters verification. "The vendor changed their IBAN" is the
+        most common payout-fraud pattern there is, and an account that inherited
+        the previous one's verified state is exactly what an attacker wants.
+
+        The response echoes the IBAN masked. Responses are logged, cached and
+        screenshotted in ways request bodies are not.
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [iban, holder_name]
+              properties:
+                iban: { type: string }
+                bank_name: { type: string }
+                holder_name: { type: string }
+                currency: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        "201":
+          description: Registered, pending verification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  iban: { type: string, description: Masked }
+                  status: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /kyc/cases/{caseId}/decide:
+    post:
+      tags: [moderation]
+      operationId: decideKycCase
+      summary: Approve or reject an identity check
+      description: |
+        Approval takes its expiry from the earliest document expiry on the case,
+        not from a date the reviewer picks. A case backed by a trade licence
+        expiring in March is not verified past March, whatever anyone sets.
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+                reason: { type: string, description: Required on rejection }
+      responses:
+        "204": { description: Decided }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /payout-accounts/{accountId}/verify:
+    post:
+      tags: [payouts]
+      operationId: verifyPayoutAccount
+      summary: Confirm the account holder matches the identity check
+      description: |
+        A person does the comparison, because "Karama Kitchen L.L.C." against
+        "KARAMA KITCHEN LLC" is not a regex. What the code enforces is that the
+        comparison happened and who says so.
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+      responses:
+        "204": { description: Decided }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/appeals:
+    get:
+      tags: [moderation]
+      operationId: listOverdueAppeals
+      summary: Appeals past their SLA
+      description: |
+        Overdue only, rather than everything sorted by age. The failure mode of an
+        appeals process is not that appeals are decided wrongly - it is that they
+        are never decided, and a queue showing every open appeal buries the
+        breached ones among them.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/OverdueAppeal" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/appeals/{appealId}/decide:
+    post:
+      tags: [moderation]
+      operationId: decideAppeal
+      parameters:
+        - name: appealId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [overturn]
+              properties:
+                overturn: { type: boolean }
+                note: { type: string }
+      responses:
+        "204": { description: Decided }
+        "403":
+          description: The original reviewer cannot decide an appeal against their own decision
+        "409": { description: Already decided }
+
+  # -- Phase 9 . boosts --------------------------------------------------------
+  #
+  # Three rules constrain this surface, and each costs revenue. They are in
+  # docs/PHASE-9-BOOSTS.md §1 and are repeated in the endpoint descriptions
+  # below because they are the ones a future change is most likely to relax:
+  #
+  #   1. A boosted reel passes the same hard filters as an organic one.
+  #      Targeting narrows where a reel appears; it never widens it past where
+  #      the vendor delivers.
+  #   2. Paid slots never come out of the exploration slice.
+  #   3. Sponsored engagement does not feed the ranker.
+
+  /boosts:
+    post:
+      tags: [boosts]
+      operationId: createCampaign
+      summary: Open a draft campaign
+      description: |
+        Draft, not active. Three things must happen before a single impression is
+        served — the advertiser pays, a human reviews the campaign, and the
+        schedule starts — and collapsing any of them into creation is how an
+        unreviewed video reaches a feed.
+
+        `bid_cpm_minor` is checked against the published rate-card floor.
+        `daily_cap_minor` must not exceed `funded_minor`: a campaign funded with
+        200 AED and a daily cap of 500 is not a campaign, it is one day of
+        spending with a misleading label.
+
+        **Targeting narrows and never widens.** A vendor who sets a 50 km radius
+        does not thereby deliver to 50 km — the reel's own service-area coverage
+        still applies, in the same query, always. There is no field here that
+        relaxes it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reel_id, bid_cpm_minor, funded_minor, daily_cap_minor, starts_on]
+              properties:
+                reel_id:
+                  type: string
+                  format: uuid
+                  description: Must already be published. A campaign cannot buy its way past moderation.
+                vendor_id:
+                  type: string
+                  format: uuid
+                  description: Omit for a private seller's own campaign. Authorised through vendor_users when present.
+                objective: { type: string, enum: [reach, conversion] }
+                bid_cpm_minor: { type: integer, description: Per thousand impressions }
+                funded_minor: { type: integer, format: int64 }
+                daily_cap_minor: { type: integer, format: int64 }
+                starts_on: { type: string, format: date }
+                ends_on: { type: string, format: date }
+                targeting:
+                  type: object
+                  description: Every field narrows. None widens.
+                  properties:
+                    lat: { type: number }
+                    lng: { type: number }
+                    radius_m: { type: integer, minimum: 500, maximum: 100000 }
+                    emirates: { type: array, items: { type: string } }
+                    category_ids: { type: array, items: { type: string, format: uuid } }
+                    locales: { type: array, items: { type: string, enum: [en, ar] } }
+                    hours_of_day:
+                      type: array
+                      items: { type: integer, minimum: 0, maximum: 23 }
+                      description: Local time. Restaurants buy iftar; that is a two-hour window.
+                    days_of_week: { type: array, items: { type: integer, minimum: 0, maximum: 6 } }
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string }
+                  next: { type: string }
+                  note: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: The reel is not published }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+    get:
+      tags: [boosts]
+      operationId: listCampaigns
+      summary: Campaign performance
+      description: |
+        Impressions and spend. Deliberately **no conversion number** — clicks and
+        orders already have a home in the Phase 3 funnel, and a second conversion
+        figure computed a different way in the ad console is exactly what
+        PHASE-3 §4 warns about: two numbers for one question, and whoever is
+        presenting picks the flattering one.
+
+        `conversion_at` points at the endpoint that does answer it.
+      parameters:
+        - name: vendor_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/CampaignReport" }
+                  conversion_at: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /boosts/{campaignId}/status:
+    post:
+      tags: [boosts]
+      operationId: setCampaignStatus
+      summary: Pause or resume
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, paused, completed] }
+      responses:
+        "204": { description: Updated }
+        "404":
+          description: Not found. Returned rather than 403 for a campaign the caller does not own, because a 403 confirms it exists.
+        "409": { description: The campaign cannot reach that state from its current one }
+
+  /moderation/boosts/{campaignId}/decide:
+    post:
+      tags: [boosts]
+      operationId: reviewCampaign
+      summary: Approve or reject a campaign
+      description: |
+        Not a second content review — the reel was moderated before it could be
+        published. This reviews the *campaign*: is a vendor paying to amplify a
+        reel about something they are licensed to sell, is the targeting sane, is
+        this a competitor's video. Different question, different queue.
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+                note: { type: string, description: Required on rejection }
+      responses:
+        "204": { description: Decided }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: Not awaiting review }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1011,6 +3403,26 @@ components:
       required: false
       description: Inclusive of the named day. Defaults to today.
       schema: { type: string, format: date }
+    ListingId:
+      name: listingId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    FulfillmentId:
+      name: fulfillmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   responses:
     Unauthorized:
@@ -1043,6 +3455,60 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+
+    CampaignReport:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, example: BST-2608-K7M2QX }
+        status:
+          type: string
+          enum: [draft, pending_review, active, paused, exhausted, completed, rejected]
+        impressions:
+          type: integer
+          format: int64
+          description: Confirmed views, not served impressions. A prefetched page nobody rendered bills nobody.
+        spent: { $ref: "#/components/schemas/Money" }
+        funded: { $ref: "#/components/schemas/Money" }
+        remaining: { $ref: "#/components/schemas/Money" }
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        key: { type: string }
+        category: { type: string, enum: [transactional, delivery, account, moderation, marketing] }
+        body: { type: string }
+        read: { type: boolean }
+
+    InvoiceSummary:
+      type: object
+      description: |
+        `supply_date` is the tax point and is not the issue date. An order
+        delivered on 31 December and invoiced on 2 January belongs to the earlier
+        tax period; an accountant reconciling a quarter needs the first date and
+        nothing else on this object tells them what it was.
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, example: INV-AE-2026-000117 }
+        kind: { type: string, enum: [tax_invoice, simplified, credit_note] }
+        total: { $ref: "#/components/schemas/Money" }
+        tax: { $ref: "#/components/schemas/Money" }
+        supply_date: { type: string, format: date }
+        issued_at: { type: string, format: date-time }
+        status: { type: string, enum: [issued, cancelled, superseded] }
+
+    OverdueAppeal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subject_type: { type: string }
+        subject_id: { type: string, format: uuid }
+        appellant_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        due_at: { type: string, format: date-time }
+        overdue_by_hours: { type: integer }
     # RFC 9457 problem details. One error shape for the whole API.
     Problem:
       type: object
@@ -1537,6 +4003,26 @@ components:
           items: { $ref: "#/components/schemas/Rendition" }
         counters: { $ref: "#/components/schemas/ReelCounters" }
         published_at: { type: string, format: date-time }
+        explore:
+          type: boolean
+          default: false
+          description: |
+            This slot was reserved for exploration rather than earned on score.
+            Surfaced so the impression it produces can be told apart from an earned
+            one — without that distinction exploration's cost is unmeasurable, and
+            the first cost-cutting exercise deletes it.
+        viewer:
+          type: object
+          description: |
+            This viewer's relationship to the reel. Absent values are false for
+            anonymous viewers. Answered from the relation tables rather than from a
+            counter: a badge that is 3% low for ten seconds costs nothing, while a
+            heart that un-fills when you scroll away and back is immediately wrong to
+            the one person who knows the answer.
+          properties:
+            liked: { type: boolean }
+            saved: { type: boolean }
+            followed: { type: boolean }
 
     FeedPage:
       type: object
@@ -1548,8 +4034,18 @@ components:
         next_cursor:
           type: [string, "null"]
           description: |
-            Opaque. Keyset, never offset. Do not parse it — the tie-break field
-            changes when ranking lands in Phase 4.
+            Opaque, and never an offset. Do not parse it: the format already changed
+            once, between Phase 2 and Phase 4.
+
+            It carries the page index and the reels already served. The exclusion set
+            travels in the cursor rather than living only in Redis so that pagination
+            stays correct when Redis is absent or has evicted — otherwise a
+            deployment without it returns page 1 forever.
+        ranking_profile:
+          type: string
+          description: |
+            Which weight set produced this page. Returned so that "the feed looked
+            wrong at 14:20" is answerable rather than debatable.
 
     ClientEvent:
       type: object
@@ -1576,9 +4072,170 @@ components:
         watched_ms:
           type: integer
           description: On view_progress. The server applies the ≥2000ms view definition.
+        completed:
+          type: boolean
+          default: false
+          description: |
+            Reported separately from `watched_ms`, deliberately. "Did they watch it"
+            and "did they finish it" answer different questions and the ranker
+            weights them differently; conflating them misleads the ranking work.
         properties:
           type: object
           additionalProperties: true
+
+    SubscriptionCreated:
+      type: object
+      required: [id, status, start_date, order_id, amount_minor, currency]
+      properties:
+        id: { type: string, format: uuid }
+        subscription_no:
+          type: string
+          description: Human-quotable. Support reads this over the phone.
+        status:
+          type: string
+          enum: [pending_payment, active, paused, suspended, cancelled, completed]
+        start_date: { type: string, format: date }
+        order_id:
+          type: string
+          format: uuid
+          description: |
+            The billing order for the first cycle. Pay it with
+            `POST /v1/orders/{orderId}/payment-intent` — the same call a one-off
+            order uses.
+        amount_minor: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        first_cycle:
+          type: object
+          properties:
+            cycle_no: { type: integer }
+            starts_on: { type: string, format: date }
+            ends_on: { type: string, format: date }
+            deliverable_days:
+              type: integer
+              description: |
+                Delivery days in this cycle, frozen when it opens. It is the divisor
+                for daily revenue recognition, and freezing it means a mid-cycle
+                pause cannot retroactively change the rate applied to days already
+                recognised.
+        next_step:
+          type: string
+          description: Stated explicitly because nothing is delivered until the order is paid.
+
+    Comment:
+      type: object
+      required: [id, reel_id, author_id, body, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        reel_id: { type: string, format: uuid }
+        parent_id: { type: [string, "null"], format: uuid }
+        depth:
+          type: integer
+          enum: [0, 1]
+          description: Threads are two levels deep by construction.
+        author_id: { type: string, format: uuid }
+        author_name: { type: string }
+        body: { type: string }
+        state:
+          type: string
+          enum: [pending, published, rejected, removed]
+          description: |
+            A comment is invisible until something has judged it. There is no path
+            that creates a visible comment directly.
+        reason:
+          type: string
+          description: |
+            Why it was rejected, shown to its author. "Your comment was removed" with
+            no reason is the most common complaint about every platform that has
+            comments, and it turns a correct decision into a grievance.
+        reply_count:
+          type: integer
+          description: Root comments only.
+        created_at: { type: string, format: date-time }
+
+    CommentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Comment" }
+        next_before:
+          type: string
+          format: date-time
+          description: |
+            Keyset on the oldest **root** in this page, not the oldest row. Replies
+            are fetched under their parent, so paginating on a reply's timestamp
+            would skip every root published between it and its parent.
+
+    CommentQueueItem:
+      type: object
+      required: [id, reel_id, body, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        reel_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        author_name: { type: string }
+        body: { type: string }
+        state: { type: string, enum: [pending, published, rejected, removed] }
+        reports: { type: integer }
+        created_at: { type: string, format: date-time }
+        waiting_seconds: { type: integer }
+        sla_breached: { type: boolean }
+
+    RankingProfile:
+      type: object
+      required: [profile, weights]
+      properties:
+        profile:
+          type: string
+          description: The active row's name, or "default (compiled-in)".
+        weights:
+          type: object
+          description: |
+            Every score term multiplies a *lift over baseline*, not a raw rate. Order
+            rates run near 0.2% and engagement rates near 5%, so a linear combination
+            of raw rates would let engagement dominate at any weight — and whoever
+            turned `conversion` up would watch nothing happen.
+          properties:
+            conversion:
+              type: number
+              description: |
+                Verified orders per impression. Largest by design: the north star is
+                transactions per weekly active user, and watch time is the easier
+                number to move.
+            intent: { type: number, description: CTA presses per impression. }
+            engagement: { type: number, description: Weighted like/comment/share/save rate. }
+            author_quality: { type: number, description: The prior a new reel inherits. }
+            recency: { type: number }
+            affinity: { type: number, description: "Viewer category affinity, in [-1, 1]." }
+            followed_author: { type: number }
+            proximity:
+              type: number
+              description: |
+                Breaks ties among vendors who can all serve the address. Deliverability
+                is a hard filter, never a soft signal.
+            recency_half_life_hours: { type: number }
+            proximity_half_km: { type: number }
+            prior_events:
+              type: number
+              description: |
+                Bayesian prior strength in **events**, not impressions. Stated as
+                impressions, the pseudo-count for a rare event is a fraction of one
+                order and a single real order swamps it — which is exactly the reel
+                the smoothing exists to hold back.
+            prior_click_rate: { type: number }
+            prior_order_rate: { type: number }
+            prior_engagement_rate: { type: number }
+            takedown_penalty: { type: number }
+            reject_penalty: { type: number }
+            exploration_share:
+              type: number
+              description: |
+                Fraction of every page reserved for reels that have not had a fair
+                hearing. Zero means new vendors never get impressions and the supply
+                side churns — a failure invisible from every demand-side metric.
+            exploration_impression_floor: { type: integer }
+        notes: { type: string }
 
     ModerationQueueItem:
       type: object
@@ -1769,3 +4426,480 @@ components:
             flattering reading and a conservative one; carrying the definitions means
             both parties are arguing about the same thing.
           additionalProperties: true
+
+    # ── Phase 6 · vehicles ──────────────────────────────────────────────────
+
+    RegionalSpec:
+      type: string
+      description: |
+        The single most price-relevant fact about a used car in this market —
+        a US-spec and a GCC-spec car of the same year and mileage are different
+        products, with different air conditioning, warranty and resale. Required
+        on every listing and never defaulted: guessing it would put a claim in
+        the advert that the seller never made.
+      enum: [gcc, us, japanese, european, canadian, chinese, other]
+
+    ListingDraft:
+      type: object
+      required: [make, model, year, mileage_km, regional_spec, price_minor, lat, lng]
+      properties:
+        make: { type: string, description: 'Taxonomy slug, e.g. "nissan"' }
+        model: { type: string, description: 'Taxonomy slug, e.g. "patrol"' }
+        year:
+          type: integer
+          description: |
+            One model year ahead of the calendar is allowed — cars are sold as next
+            year's model from around August. Two years ahead is a typo.
+        mileage_km: { type: integer }
+        regional_spec: { $ref: "#/components/schemas/RegionalSpec" }
+        price_minor: { type: integer, format: int64 }
+        currency: { type: string, default: AED }
+        vin:
+          type: string
+          description: |
+            17 characters. I, O and Q are absent from the ISO 3779 alphabet so they
+            are never confused with 1 and 0. Optional — a private seller may not
+            want it public before a serious buyer appears, and refusing the listing
+            over it loses supply. A failing check digit raises a fraud signal rather
+            than rejecting the listing: the digit is mandatory only for vehicles
+            built for North America, so genuine GCC and Japanese imports fail it
+            routinely.
+        transmission: { type: string, enum: [automatic, manual, cvt, dct, other] }
+        fuel_type: { type: string, enum: [petrol, diesel, hybrid, plug_in_hybrid, electric] }
+        body_type:
+          type: string
+          enum: [sedan, suv, coupe, hatchback, pickup, van, convertible, wagon, crossover, other]
+        title: { type: string }
+        description: { type: string }
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        radius_m:
+          type: integer
+          description: |
+            How far a buyer would travel to see this car. Capped at 150 km — the geo
+            filter is the product's entire wedge, and a seller who sets it to the
+            whole country turns it off.
+          default: 50000
+
+    ListingCreated:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reference_no:
+          type: string
+          description: Human-quotable. Support reads it over the phone and buyers screenshot it.
+        status: { type: string }
+        next_step: { type: string }
+
+    ListingSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reference_no: { type: string }
+        year: { type: integer }
+        mileage_km: { type: integer }
+        price_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        regional_spec: { $ref: "#/components/schemas/RegionalSpec" }
+        seller_kind: { type: string, enum: [private, dealer] }
+        is_negotiable: { type: boolean }
+        title: { type: string }
+        emirate: { type: string }
+        city: { type: string }
+        distance_m: { type: integer, format: int64 }
+        published_at: { type: string, format: date-time }
+        promoted:
+          type: boolean
+          description: |
+            Paid placement, always labelled. A promoted result that looks organic is
+            what makes buyers stop trusting the order — at which point the placement
+            is worth nothing to the seller who bought it.
+
+    ListingSearchResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ListingSummary" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+
+    Inquiry:
+      type: object
+      properties:
+        lead_id: { type: string, format: uuid }
+        conversation_id: { type: string, format: uuid }
+
+    Offer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        expires_in: { type: string }
+        binding:
+          type: boolean
+          description: Always false. No payment is held and acceptance is not a contract.
+        note: { type: string }
+
+    ListingPackage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        name_ar: { type: string }
+        audience: { type: string, enum: [private, dealer] }
+        listing_quota: { type: integer }
+        duration_days: { type: integer }
+        featured_days: { type: integer }
+        bump_quota: { type: integer }
+        price_minor: { type: integer, format: int64, description: Tax-inclusive }
+        currency: { type: string }
+        is_recurring: { type: boolean }
+
+    PackagePurchase:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [pending_payment, active, exhausted, expired, refunded, cancelled]
+        amount_minor: { type: integer, format: int64, description: Net of VAT }
+        tax_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+
+    # ── Phase 6 · chat ──────────────────────────────────────────────────────
+
+    ConversationSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        listing_id: { type: string, format: uuid }
+        listing_title: { type: string }
+        counterparty_id: { type: string, format: uuid }
+        unread: { type: integer }
+        last_message_at: { type: string, format: date-time }
+        state: { type: string, enum: [open, archived, blocked, closed] }
+
+    MessageState:
+      type: string
+      description: |
+        `redacted` means contact details were removed and the message was delivered.
+        `held` means a person is reviewing it and the recipient has seen nothing.
+      enum: [sent, redacted, held, blocked, deleted]
+
+    ChatMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sender_id: { type: string, format: uuid }
+        body: { type: string }
+        state: { $ref: "#/components/schemas/MessageState" }
+        created_at: { type: string, format: date-time }
+
+    SentMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        state: { $ref: "#/components/schemas/MessageState" }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+        message:
+          type: string
+          description: |
+            Present when something was removed or held. Shown to the sender verbatim —
+            a silently altered message is the most alienating thing a chat product can
+            do, and the sender simply retries until something gets through.
+        removed:
+          type: array
+          description: What kind of content was stripped, for the sender's benefit.
+          items:
+            type: string
+            enum: [phone, email, messaging_handle, external_link]
+
+    HeldMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        conversation_id: { type: string, format: uuid }
+        listing_id: { type: string, format: uuid }
+        sender_id: { type: string, format: uuid }
+        body:
+          type: string
+          description: |
+            The original, unredacted. A reviewer judging whether a message is a scam
+            needs the text that triggered the hold, not a version with the evidence
+            removed.
+        findings: { type: array, items: { type: string } }
+        reason: { type: string }
+        created_at: { type: string, format: date-time }
+
+    # ── Phase 6 · trust ─────────────────────────────────────────────────────
+
+    FraudSignal:
+      type: object
+      properties:
+        subject_type: { type: string, enum: [listing, user, conversation, message] }
+        subject_id: { type: string, format: uuid }
+        kind: { type: string }
+        severity:
+          type: integer
+          description: 1–100, the detector's confidence in this particular instance.
+        score: { type: integer, description: "The subject's current trust score, 0–100" }
+        band: { type: string, enum: [ok, watch, restricted, blocked] }
+        weight_if_confirmed:
+          type: number
+          description: |
+            Points this signal will cost the subject if confirmed. Shown because a
+            reviewer deciding without it is guessing — and because the invariant
+            behind the numbers matters: no machine signal blocks an account on its
+            own; only a human confirming one does.
+        created_at: { type: string, format: date-time }
+
+    # ── Phase 7 · logistics ─────────────────────────────────────────────────
+
+    ManifestStop:
+      type: object
+      description: |
+        One line on a driver's screen. Note what is absent: no item list, no
+        product name, no order total, no vertical. Everything here was snapshotted
+        onto the fulfillment when it was created — which is the Fulfillment
+        primitive's entire argument, expressed as a response body.
+      properties:
+        fulfillment_id: { type: string, format: uuid }
+        route_id: { type: string, format: uuid }
+        sequence: { type: integer }
+        kind: { type: string, enum: [pickup, delivery, visit] }
+        status:
+          type: string
+          enum: [scheduled, dispatched, en_route, arrived, completed, failed, cancelled]
+        address:
+          type: object
+          properties:
+            line: { type: string }
+            landmark: { type: string }
+            area: { type: string }
+            city: { type: string }
+            notes: { type: string }
+            lat: { type: number, format: double }
+            lng: { type: number, format: double }
+        recipient_name: { type: string }
+        recipient_phone: { type: string }
+        window: { type: string }
+        eta: { type: string, format: date-time }
+        cod_minor: { type: integer, format: int64, description: "Cash to collect. Zero for prepaid work." }
+        currency: { type: string }
+        attempt_count: { type: integer }
+        requires_otp:
+          type: boolean
+          description: |
+            Sent with the manifest, not discovered at completion. A driver who
+            learns at the door that they needed a code has already walked away.
+
+    Manifest:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        stops:
+          type: array
+          items: { $ref: "#/components/schemas/ManifestStop" }
+
+    DeliveryProof:
+      type: object
+      required: [proof]
+      properties:
+        proof:
+          type: string
+          description: |
+            `left_at_door` is never sufficient — it is named honestly because it
+            proves the driver says so and nothing else. Stronger proof than
+            required is always accepted; refusing it would train drivers to
+            capture the minimum.
+          enum: [otp, signature, photo, recipient_name, left_at_door]
+        otp: { type: string, description: "Four digits, single-use, scoped to this fulfillment." }
+        signature_key: { type: string }
+        photo_key: { type: string }
+        recipient_name: { type: string }
+        note: { type: string }
+        collected_minor:
+          type: integer
+          format: int64
+          description: |
+            Cash actually taken. May differ from what was expected — the customer
+            had no change, or paid part by card. Commission is taken on this
+            figure, not on what was owed.
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+
+    BoardRoute:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        driver_id: { type: string, format: uuid }
+        driver_name: { type: string }
+        status:
+          type: string
+          enum: [planned, assigned, in_progress, completed, abandoned, cancelled]
+        planned_stops: { type: integer }
+        completed_stops: { type: integer }
+        failed_stops: { type: integer }
+        planned_distance_m: { type: integer }
+        first_eta: { type: string, format: date-time }
+        last_eta: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+
+    DispatchBoard:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        routes:
+          type: array
+          items: { $ref: "#/components/schemas/BoardRoute" }
+        unassigned:
+          type: integer
+          description: Scheduled work with no route. The board's left-hand column.
+
+    # ── Phase 7 · console ───────────────────────────────────────────────────
+
+    Membership:
+      type: object
+      properties:
+        vendor_id: { type: string, format: uuid }
+        role: { type: string, enum: [owner, manager, staff] }
+        branch_id:
+          type: [string, "null"]
+          format: uuid
+          description: Null means vendor-wide, covering every branch.
+
+    BranchSummary:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        scheduled: { type: integer }
+        in_progress: { type: integer }
+        completed: { type: integer }
+        failed: { type: integer }
+        unassigned: { type: integer }
+        cash_held_minor:
+          type: integer
+          format: int64
+          description: Cash this branch's drivers are carrying against today's work.
+        payable_minor:
+          type: integer
+          format: int64
+          description: Live from the ledger, not from the last statement.
+        currency: { type: string }
+
+    QueueItem:
+      type: object
+      properties:
+        fulfillment_id: { type: string, format: uuid }
+        order_no: { type: string }
+        service_type: { type: string }
+        kind: { type: string }
+        status: { type: string }
+        window: { type: string }
+        recipient_name: { type: string }
+        area: { type: string }
+        items:
+          type: string
+          description: |
+            Item names, which the driver's manifest deliberately does not carry.
+            A kitchen needs them; a van does not.
+        payload_ref:
+          type: string
+          description: |
+            What the fulfillment carries for its own vertical to resolve — a meal
+            slot, a bag count. Passed through as text rather than interpreted, so
+            the console gains a new vertical's work for free even though it cannot
+            pretty-print it.
+        driver_name: { type: string }
+        eta: { type: string, format: date-time }
+        attempt_count: { type: integer }
+
+    CapacityCell:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        window_id: { type: string, format: uuid }
+        window: { type: string }
+        resource_key:
+          type: string
+          description: What is scarce here — pickup_slot, kitchen_covers, chair.
+        capacity: { type: integer }
+        reserved: { type: integer }
+        consumed: { type: integer }
+        remaining: { type: integer }
+
+    RosterEntry:
+      type: object
+      properties:
+        subscription_no: { type: string }
+        customer_name: { type: string }
+        meal_slot: { type: string }
+        window: { type: string }
+        area: { type: string }
+        item: { type: string }
+        status: { type: string }
+
+    PayoutStatement:
+      type: object
+      description: |
+        gross - commission - vat + adjustments = net, enforced by a database
+        CHECK. A statement whose lines do not add up is the fastest way to lose a
+        vendor's trust in every other number.
+      properties:
+        id: { type: string, format: uuid }
+        reference_no: { type: string }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        currency: { type: string }
+        gross_minor: { type: integer, format: int64 }
+        commission_minor: { type: integer, format: int64 }
+        vat_minor: { type: integer, format: int64 }
+        adjustments_minor: { type: integer, format: int64 }
+        net_minor: { type: integer, format: int64 }
+        state: { type: string, enum: [draft, issued, paid, disputed, cancelled] }
+        issued_at: { type: string, format: date-time }
+        paid_at: { type: string, format: date-time }
+
+    StatementLine:
+      type: object
+      properties:
+        occurred_on: { type: string, format: date }
+        kind:
+          type: string
+          description: |
+            `cod_offset` is cash a driver collected on the vendor's behalf. It is
+            already in their payable — the platform never received it — so it is
+            deducted, otherwise the vendor is paid twice for one order: once at
+            the door and once in the payout.
+          enum: [order, subscription, refund, adjustment, cod_offset, penalty]
+        description: { type: string }
+        journal_id:
+          type: string
+          format: uuid
+          description: The ledger journal behind this line. What makes a number answerable rather than re-derivable.
+        reference_type: { type: string }
+        reference_id: { type: string, format: uuid }
+        gross_minor: { type: integer, format: int64 }
+        commission_minor: { type: integer, format: int64 }
+        vat_minor: { type: integer, format: int64 }
+        net_minor: { type: integer, format: int64 }
+
+    Dispute:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reference_no: { type: string }
+        subject_type: { type: string }
+        subject_id: { type: string, format: uuid }
+        kind: { type: string }
+        state:
+          type: string
+          enum: [open, investigating, awaiting_response, resolved, rejected, withdrawn]
+        due_at: { type: string, format: date-time }
+        assigned_to: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        overdue: { type: boolean }

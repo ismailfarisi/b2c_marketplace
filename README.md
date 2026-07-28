@@ -15,8 +15,8 @@ that are currently blocking work.
 api/                    OpenAPI 3.1 contract + codegen configs   ← source of truth
 services/api/           Go modular monolith (API + worker + feed)
 apps/web/               Next.js 15, App Router, locale-segmented
-apps/mobile/            Expo + expo-router
-packages/api-client/    Generated TS client, shared by web and mobile
+apps/mobile-kmm/        Kotlin Multiplatform — shared logic, Compose + SwiftUI shells
+packages/api-client/    Generated TS client — web only; mobile generates Kotlin
 packages/tsconfig/      Shared TypeScript config
 scripts/                Repo tooling
 docs/                   Planning and design
@@ -57,12 +57,16 @@ make dev-web        # :3000
 skips it. Set it to a real path or drop the variable once you want the
 validation gate exercised against actual files.
 
-OpenSearch is behind a compose profile, because it is a JVM nobody needs running
-to work on the order path:
+OpenSearch and ClickHouse are behind compose profiles, because neither is needed
+to work on the order path or the feed:
 
 ```bash
-docker compose --profile search up -d
+docker compose --profile search up -d       # then: make opensearch-mapping
+docker compose --profile analytics up -d    # then: make clickhouse-schema
 ```
+
+Without `CLICKHOUSE_URL` set, engagement events land in Postgres — correct in
+development and in a launch district, wrong at city scale.
 
 Without `make` (Windows without Git Bash), each target in the `Makefile` is a
 single command you can run directly.
@@ -118,6 +122,26 @@ impressions, follows and saves, and the funnel endpoints. See
 turns on one instruction from the plan: *instrument conversion honestly before
 building ranking*.
 
+**Phase 4 — ranking and social.** The feed split into retrieval (SQL) and
+ranking (Go, unit-tested): a smoothed conversion-weighted score, an author
+prior, category affinity, and a reserved exploration slice. Weights live in a
+table so retuning does not need a deploy. Interest profiles keyed on the viewer
+rather than the user, so anonymous browsing personalises too. Likes, comments
+with synchronous moderation, and the ClickHouse event sink. See
+[`docs/PHASE-4-RANKING-AND-SOCIAL.md`](./docs/PHASE-4-RANKING-AND-SOCIAL.md) —
+§1 records why the Phase 2 prediction ("Phase 4 replaces one SQL expression")
+turned out wrong, and what changing the cursor format cost.
+
+**Phase 5 — food vertical and subscriptions.** The launch vertical: meal plans,
+menu cycles, the rolling 14-day scheduler, prepaid billing with daily revenue
+recognition against a deferred-revenue account, pause/skip/cancel with real
+credit arithmetic, and the dunning state machine. See
+[`docs/PHASE-5-FOOD-AND-SUBSCRIPTIONS.md`](./docs/PHASE-5-FOOD-AND-SUBSCRIPTIONS.md)
+— **§2 is the verdict on PLAN.md §5 P2's architecture gate.** Short version:
+meals passed with zero engine changes; *recurrence* turned out to be a second
+axis the plan never named, so it became an engine module that any vertical can
+use rather than something food owns.
+
 **Not yet written:**
 
 - `/me`, `/me/addresses`, `/vendors/{vendorId}`, `/orders` list, `/auth/logout`
@@ -128,6 +152,11 @@ building ranking*.
   playlists point at nothing. Same production guard.
 - River job wiring — the worker still polls on a ticker
 - Anything under `internal/gen/` — run `make gen` to produce it
+- **A learned ranking model.** Phase 4 shipped heuristics. PLAN-VIDEO-FIRST §11
+  scopes that at roughly six months, and its open question 5 — is there an
+  in-house data/ML capability — is now live rather than hypothetical.
+- Audio transcript moderation (Transcribe), and serving the feed *from*
+  OpenSearch rather than only indexing into it
 
 ---
 
@@ -150,6 +179,13 @@ Go interfaces *is* a vertical. If adding one requires editing ordering, pricing,
 capacity or logistics code, the abstraction has leaked and that is worth stopping
 for.
 
+Phase 5 ran that test for real and it held — and it also found what the two
+seams do *not* cover. Neither of them models **recurrence**: a subscription is
+not a shape of order, it is a thing that produces orders and fulfillments over
+weeks. That became `internal/modules/subscriptions`, engine code no vertical
+owns, and a weekly laundry pickup would have needed it just as much as a meal
+plan did.
+
 Phase 2 adds three more seams, all for the same reason — every one of them is an
 external service that will be swapped, and none of them should be swappable only
 by rewriting a module:
@@ -165,8 +201,20 @@ by rewriting a module:
   with digits for letters, or both code-switched inside one sentence — and the
   AWS-native option is effectively blind to all three.
 - **`feed.SeenStore`** — Redis, with a no-op fallback. The consequence of the
-  fallback is stated, not hidden: the feed repeats itself. That is a degraded
-  front door, which beats a 503 one.
+  fallback is stated, not hidden: the feed repeats itself. Phase 4 narrowed that
+  by moving the pagination exclusion set into the cursor — correctness of paging
+  no longer depends on an optional cache, only the seven-day repeat-avoidance
+  does.
+
+Phase 4 adds one more, for a different reason:
+
+- **`ranking.Provider`** — the active scoring weights. An interface so the feed
+  can be built without a database in tests, and so a future experiment framework
+  can assign weights per viewer without the feed learning what an experiment is.
+  `DBProvider` never returns an error and never returns zero weights: every
+  failure path degrades to the last good value and ultimately to the compiled-in
+  defaults, because ranking on stale weights is a product that works and ranking
+  that refuses to load is a blank front door.
 
 ---
 
@@ -199,10 +247,21 @@ Worth knowing before changing anything in `services/api/migrations/`:
 | Attribution stores its own `window_seconds` | `000013` | A number computed under a 24h window is not comparable to one under 7d, and nobody will remember which was in force |
 | The funnel splits orders by model, never sums them | `000013` | A view-through order and a click-through order are different claims about whether the feed works |
 | `feed_impressions` is durable and day-partitioned | `000013` | Without it, "conversion rate" quietly becomes orders-per-click — the flattering denominator |
+| `reel_features` stores counts, never rates | `000014` | A stored rate is a number whose denominator has been thrown away. Every ratio is derived in one Go function |
+| Ranking weights are a table row, not a constant | `000014` | Retuning is a twice-a-week activity; a weight change needing a deploy gets batched with a feature and rolled back with it |
+| `viewer_interests` keys on `viewer_key`, not `user_id` | `000014` | A profile only signed-in users have personalises nothing for the population whose first session decides whether they return |
+| Comments default to `pending` | `000014` | There is no path that creates a visible comment. A moderation outage delays comments; the alternative publishes everything |
+| Comment depth is set by a trigger | `000014` | A `CHECK` cannot read the parent row, and a thread nobody can render is a thread nobody moderates |
+| `client_events` gains `viewer_key`, `watched_ms`, `completed` | `000014` | "A view is ≥2s watched" must not depend on a client remembering a JSON key name |
+| A subscription's cycle is billed through a real `orders` row | `000015` | One path for money. A parallel billing table means two places to fix every reconciliation bug |
+| Cycles are measured in **days**, never calendar months | `000015` | A "monthly" plan billed on calendar months costs a 5-day-a-week subscriber a different amount in February |
+| Fulfillment uniqueness keys on `sequence`, not a meal slot | `000015` | The first place the word "meal" would have leaked into a table dispatch reads |
+| `subscription_meal_selections` is range-partitioned | `000015` | One row per customer per meal per day. Linear, forever, and read exactly twice |
+| Weekday `0` is Sunday, everywhere | `000003`, `000015` | The GCC week starts Sunday. ISO's Monday-first numbering delivers every meal one day late |
 
 Arabic and RTL are carried from Phase 0, not retrofitted: locale is a route
-segment on web, `I18nManager.forceRTL` runs at module scope on mobile, and CSS
-uses logical properties throughout. Adding RTL later means re-auditing every
+segment on web, direction is a layout attribute on mobile, and CSS uses logical
+properties throughout. Adding RTL later means re-auditing every
 component ever built assuming left-to-right, which is the actual reason RTL
 projects get indefinitely postponed.
 
@@ -216,22 +275,30 @@ projects get indefinitely postponed.
 - `go vet ./...` — clean
 - `gofmt -l .` — clean
 - `go test ./...` — passing (`money`, `ledger`, `reels`, `moderation`, `media`,
-  `feed`, `attribution`, `actions`, `social`)
-- `redocly lint api/openapi.yaml` — valid; 18 warnings, all cosmetic
+  `feed`, `attribution`, `actions`, `social`, `ranking`, `interests`,
+  `comments`, `subscriptions`, `meals`)
+- `redocly lint api/openapi.yaml` — valid; 19 warnings, all cosmetic
 
 **Not verified** — no Docker daemon has been available at any point:
 
 - **Migrations have never been applied against PostGIS.** Still the big one, and
-  it keeps growing: 13 migrations now, including five PL/pgSQL functions, a
+  it keeps growing: 15 migrations now, including eight PL/pgSQL functions, a
   deferred constraint trigger, a `gist (coverage, published_at)` index that
   depends on `btree_gist`, `ST_Intersects` against a
   `geography(Geometry, 4326)` column, and a range-partitioned table whose
   partitions are created by a function called from the worker. None of it is
   checkable by the Go compiler.
-- Every SQL string in the repositories is unexecuted. Two to distrust most: the
-  Phase 2 feed query (three CTEs, two lateral joins, a JSON aggregate, a
-  row-comparison keyset predicate) and the Phase 3 funnel rollup (four lateral
-  joins and `FILTER` aggregates over a partitioned table).
+- Every SQL string in the repositories is unexecuted. Four to distrust most:
+  the Phase 4 feed retrieval (a materialised CTE referenced four times, four
+  candidate sources unioned, three left joins and a lateral aggregate), the
+  Phase 4 feature refresh (nine lateral subqueries, one a lifetime count over a
+  partitioned table), the Phase 5 renewal statement (a CTE inserting into two
+  tables with a correlated `generate_series` count), and the Phase 3 funnel
+  rollup.
+- No ClickHouse instance has run, so `deploy/clickhouse/schema.sql` and the
+  `JSONEachRow` insert are both unexecuted. The same is true of
+  `deploy/opensearch/reels-mapping.json`, whose `dynamic: strict` setting will
+  reject any document field the mapping does not name.
 - No presigned URL has been generated against MinIO, so the S3 wiring is
   compiled but unexercised.
 - `go test -race` cannot run here — the toolchain has `CGO_ENABLED=0` and the
