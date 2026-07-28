@@ -71,12 +71,15 @@ gen-check: ## Fail if generated code is stale (CI runs this)
 
 # --------------------------------------------------------------------- dev --
 
-.PHONY: run-api run-worker
+.PHONY: run-api run-worker run-feed
 run-api: ## Run the API server
 	cd $(API_DIR) && go run -ldflags "-X main.version=$(GIT_SHA)" ./cmd/api
 
 run-worker: ## Run the background worker
 	cd $(API_DIR) && go run -ldflags "-X main.version=$(GIT_SHA)" ./cmd/worker
+
+run-feed: ## Run the feed read-path service (:8081)
+	cd $(API_DIR) && go run -ldflags "-X main.version=$(GIT_SHA)" ./cmd/feed
 
 .PHONY: dev-web dev-mobile
 dev-web: ## Run the Next.js web app
@@ -104,6 +107,7 @@ lint-go:
 lint-ts:
 	npm run lint
 
-build: ## Build API and worker binaries
+build: ## Build API, worker and feed binaries
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/api ./cmd/api
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/worker ./cmd/worker
+	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/feed ./cmd/feed

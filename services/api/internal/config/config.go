@@ -38,6 +38,15 @@ type Config struct {
 	DefaultCurrency string
 	DefaultLocale   string
 	DefaultTimezone string
+
+	// Phase 2: media, moderation, feed.
+	MediaCDNBaseURL string
+	TranscodeVendor string
+	AnthropicAPIKey string
+	ModerationModel string
+	OpenSearchURL   string
+	OpenSearchIndex string
+	FFProbeBinary   string
 }
 
 func (c Config) IsProduction() bool { return c.Env == "production" }
@@ -111,6 +120,18 @@ func Load() (Config, error) {
 		DefaultCurrency: optional("DEFAULT_CURRENCY", "AED"),
 		DefaultLocale:   optional("DEFAULT_LOCALE", "en"),
 		DefaultTimezone: optional("DEFAULT_TIMEZONE", "Asia/Dubai"),
+
+		MediaCDNBaseURL: optional("MEDIA_CDN_BASE_URL", ""),
+		TranscodeVendor: optional("TRANSCODE_VENDOR", "stub"),
+		AnthropicAPIKey: optional("ANTHROPIC_API_KEY", ""),
+		// Opus 5 is the default. Haiku 4.5 is roughly 5× cheaper at moderation
+		// volume — but its minimum cacheable prefix is 4096 tokens against
+		// Opus's 512, so switching without checking the policy prompt still
+		// crosses that line turns caching off and can cost more than it saves.
+		ModerationModel: optional("MODERATION_MODEL", "claude-opus-5"),
+		OpenSearchURL:   optional("OPENSEARCH_URL", ""),
+		OpenSearchIndex: optional("OPENSEARCH_INDEX", "reels"),
+		FFProbeBinary:   optional("FFPROBE_BINARY", ""),
 	}
 
 	// Guardrails that only apply once the process is actually deployed.

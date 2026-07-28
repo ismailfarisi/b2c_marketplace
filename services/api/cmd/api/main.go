@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/api"
+	"github.com/marketplace/api/internal/app"
 	"github.com/marketplace/api/internal/auth"
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/httpx"
@@ -30,6 +31,7 @@ import (
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/platform/idempotency"
 	"github.com/marketplace/api/internal/platform/postgres"
+	"github.com/marketplace/api/internal/platform/redisx"
 	"github.com/marketplace/api/internal/seam/action"
 	"github.com/marketplace/api/internal/seam/servicetype"
 	"github.com/marketplace/api/internal/verticals/laundry"
@@ -103,11 +105,35 @@ func run() error {
 			"wire a real gateway before deploying")
 	}
 
+	// Redis is optional. Without it the feed repeats and counters stall; the
+	// order path is unaffected, which is why a Redis outage must not stop the
+	// API from booting.
+	rdb, err := redisx.Connect(ctx, cfg.RedisURL)
+	if err != nil {
+		return err
+	}
+	if rdb != nil {
+		defer rdb.Close()
+	}
+
 	handlers := &api.Handlers{
 		Identity: identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho),
 		Ordering: ordering.NewService(pool, verticals),
 		Payments: payments.NewService(pool, provider, commissionBP, platformVATBP),
 		Catalog:  api.NewCatalogQueries(pool),
+	}
+
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb)
+	if err != nil {
+		return err
+	}
+	if media != nil {
+		handlers.Reels = &api.ReelHandlers{
+			Reels:      media.Reels,
+			Feed:       media.Feed,
+			Ingest:     media.Ingest,
+			Moderation: media.Moderation,
+		}
 	}
 
 	srv := &http.Server{

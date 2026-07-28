@@ -32,6 +32,10 @@ tags:
   - name: catalog
   - name: availability
   - name: orders
+  - name: reels
+  - name: feed
+  - name: events
+  - name: moderation
 
 security:
   - bearerAuth: []
@@ -399,6 +403,324 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  # ----------------------------------------------------------------- reels --
+  /reels/uploads:
+    post:
+      tags: [reels]
+      operationId: createReelUpload
+      summary: Reserve a reel and get a presigned upload URL
+      description: |
+        Creates a `draft` reel and returns a presigned `PUT` for the raw video.
+
+        **The client uploads directly to object storage.** Bytes never pass through
+        this API: a 30–60s reel is 10–30 MB, and proxying it would pin a request
+        goroutine and a connection for the duration of a mobile upload.
+
+        Send the returned `upload_headers` verbatim on the PUT. A presigned URL signs
+        the headers it was created with, so omitting `Content-Type` produces a
+        signature mismatch that looks like an auth failure and is not one.
+
+        The upload and the metadata call (`POST /reels/{reelId}`) are independent and
+        may complete in either order.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branch_id]
+              properties:
+                branch_id:
+                  type: string
+                  format: uuid
+                  description: The branch this reel is authored by. The caller must be a member of its vendor.
+                content_type:
+                  type: string
+                  enum: [video/mp4, video/quicktime, video/webm]
+                  default: video/mp4
+                subject_type: { type: [string, "null"], enum: [service_offering, meal_plan, vehicle_listing, null] }
+                subject_id: { type: [string, "null"], format: uuid }
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReelUpload" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /reels/{reelId}:
+    parameters:
+      - name: reelId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [reels]
+      operationId: updateReel
+      summary: Set caption, tags, category and visibility
+      description: |
+        Idempotent, and may arrive before or after the upload finishes.
+
+        Refused once moderation has begun. Editing a caption after it has passed
+        review would let clean text be swapped for dirty text post-approval.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReelMetadata" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthorReel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Metadata can no longer be changed at this state
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    get:
+      tags: [reels]
+      operationId: getReel
+      summary: Author-visible state, including the rejection reason
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthorReel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [reels]
+      operationId: deleteReel
+      summary: Take the reel down
+      description: |
+        Moves the reel to `removed` and drops it from the feed. The row, its state
+        history and its moderation record are kept — they are the evidence when the
+        decision is disputed.
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /reels/{reelId}/report:
+    post:
+      tags: [reels]
+      operationId: reportReel
+      summary: Report a reel for policy violation
+      description: |
+        One report per person per reel. Returns 202 whether or not this reporter has
+        already reported it — telling a reporter their duplicate was rejected reveals
+        nothing useful and invites them to try again with another account.
+      parameters:
+        - name: reelId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [sexual, violence, hate, misleading, spam, illegal, other]
+                detail: { type: string, maxLength: 1000 }
+      responses:
+        "202":
+          description: Report received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [received] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ------------------------------------------------------------------ feed --
+  /feed:
+    get:
+      tags: [feed]
+      operationId: getFeed
+      summary: The local video feed
+      description: |
+        Chronological in Phase 2; ranked from Phase 4. The cursor format does not
+        change between them, so a client holding a cursor across that deploy keeps
+        working.
+
+        `lat` and `lng` are **required**. The product is local discovery; a feed
+        without a location is a different product. Only reels whose resolved coverage
+        geometry contains the point are returned.
+
+        Authentication is optional. A signed-in viewer additionally gets block
+        filtering and a durable seen-set; an anonymous one is keyed by `X-Device-Id`.
+      security: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, minimum: -90, maximum: 90 }
+        - name: lng
+          in: query
+          required: true
+          schema: { type: number, minimum: -180, maximum: 180 }
+        - name: category
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: X-Device-Id
+          in: header
+          required: false
+          description: Namespaces the seen-set for anonymous viewers.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeedPage" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ---------------------------------------------------------------- events --
+  /events:
+    post:
+      tags: [events]
+      operationId: submitEvents
+      summary: Batched client engagement events
+      description: |
+        The client batches and POSTs roughly every 10 seconds or on app background.
+        One request per event would turn a 30-second viewing session into a dozen
+        requests per user.
+
+        Ingest is idempotent: a client that loses its connection mid-POST resends the
+        whole batch, and without deduplication every flaky network would inflate the
+        view count.
+
+        A **view** is ≥2 seconds watched, deduped per (user, reel, session). Send
+        `watched_ms` and let the server apply that definition — it is also what the
+        Phase 4 ranking model trains on, and two definitions of the same word is how
+        a model learns the wrong thing.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                session_id: { type: string, maxLength: 128 }
+                events:
+                  type: array
+                  maxItems: 200
+                  items: { $ref: "#/components/schemas/ClientEvent" }
+      responses:
+        "202": { description: Accepted }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ------------------------------------------------------------ moderation --
+  /moderation/queue:
+    get:
+      tags: [moderation]
+      operationId: getModerationQueue
+      summary: Reels awaiting human review, oldest first
+      description: |
+        Oldest-first, never by severity: the queue exists to meet a two-hour SLA, and
+        any ordering that lets an item be overtaken lets one item sit forever.
+
+        Requires platform staff membership, checked against the database on every
+        call rather than carried as a token claim — revoking a moderator has to take
+        effect immediately.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ModerationQueueItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/{reelId}/decide:
+    post:
+      tags: [moderation]
+      operationId: decideModeration
+      summary: Approve or reject a reel awaiting review
+      description: |
+        A moderator decides approve or reject. `review` is not accepted — that is
+        where the reel already is.
+
+        Approval moves the reel to `approved`, not `published`: publication still
+        needs coverage geometry resolved, and folding the two together would let a
+        click publish a reel with no audience.
+      parameters:
+        - name: reelId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, reject] }
+                notes:
+                  type: string
+                  description: Shown to the author on rejection. Be specific enough to act on.
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [recorded] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Reel is not awaiting review
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -429,6 +751,14 @@ components:
   responses:
     Unauthorized:
       description: Missing, expired or revoked credentials
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: |
+        Authenticated, but not permitted. Distinct from 404 on purpose where the
+        caller already knows the resource exists — a vendor dashboard that gets a 404
+        for a branch it just listed cannot tell a permissions problem from a bug.
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -814,3 +1144,197 @@ components:
         provider: { type: string, examples: ["checkout", "stripe", "tap"] }
         client_secret: { type: [string, "null"] }
         redirect_url: { type: [string, "null"], format: uri }
+
+    # ------------------------------------------------------------- Phase 2 --
+
+    ReelUpload:
+      type: object
+      required: [reel_id, asset_id, upload_url, upload_headers, expires_at]
+      properties:
+        reel_id: { type: string, format: uuid }
+        asset_id: { type: string, format: uuid }
+        upload_url: { type: string, format: uri }
+        upload_headers:
+          type: object
+          description: Send these verbatim on the PUT. They are part of the signature.
+          additionalProperties: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    ReelState:
+      type: string
+      description: |
+        The reel lifecycle. Transitions are enforced in one place server-side; a
+        client should treat any state it does not recognise as "still processing".
+      enum:
+        - draft
+        - uploaded
+        - probing
+        - transcoding
+        - moderating
+        - review_pending
+        - approved
+        - published
+        - rejected
+        - removed
+        - failed
+        - expired
+
+    ReelMetadata:
+      type: object
+      properties:
+        caption: { type: string, maxLength: 2200 }
+        caption_locale: { type: string, enum: [ar, en, mixed] }
+        category_id: { type: [string, "null"], format: uuid }
+        tags:
+          type: array
+          maxItems: 30
+          items: { type: string, maxLength: 64 }
+        visibility: { type: string, enum: [public, unlisted, private], default: public }
+        subject_type: { type: [string, "null"], enum: [service_offering, meal_plan, vehicle_listing, null] }
+        subject_id: { type: [string, "null"], format: uuid }
+
+    AuthorReel:
+      type: object
+      description: |
+        The author's view. Carries the failure reason, which the feed representation
+        deliberately does not — a rejected vendor who is told only "rejected" has no
+        way to fix it, and that is the most common complaint about every content
+        platform.
+      required: [id, state, visibility]
+      properties:
+        id: { type: string, format: uuid }
+        state: { $ref: "#/components/schemas/ReelState" }
+        visibility: { type: string, enum: [public, unlisted, private] }
+        caption: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        poster_key: { type: [string, "null"] }
+        preview_key: { type: [string, "null"] }
+        lqip:
+          type: [string, "null"]
+          description: BlurHash or base64 micro-thumb, inline so the client paints before any fetch resolves.
+        duration_ms: { type: [integer, "null"] }
+        created_at: { type: string, format: date-time }
+        published_at: { type: [string, "null"], format: date-time }
+        failure:
+          type: [object, "null"]
+          properties:
+            code: { type: string }
+            detail: { type: string }
+
+    Rendition:
+      type: object
+      required: [label, width, height, bitrate_kbps, playlist_url]
+      properties:
+        label:
+          type: string
+          enum: ["360p", "540p", "720p"]
+          description: Capped at 720p. 1080p roughly doubles egress for a difference nobody sees on a phone.
+        width: { type: integer }
+        height: { type: integer }
+        bitrate_kbps: { type: integer }
+        playlist_url: { type: string, format: uri }
+
+    ReelCounters:
+      type: object
+      description: |
+        Read from the hot store with a Postgres fallback, so they lag by up to the
+        flush interval (~10s). Never treat them as transactionally consistent.
+      properties:
+        views: { type: integer, format: int64 }
+        likes: { type: integer, format: int64 }
+        comments: { type: integer, format: int64 }
+        shares: { type: integer, format: int64 }
+        saves: { type: integer, format: int64 }
+
+    FeedItem:
+      type: object
+      required: [id, author, renditions, published_at]
+      properties:
+        id: { type: string, format: uuid }
+        author:
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: string, enum: [vendor_branch, user] }
+            id: { type: string, format: uuid }
+            name: { type: string }
+        subject_type: { type: [string, "null"] }
+        subject_id: { type: [string, "null"], format: uuid }
+        category_id: { type: [string, "null"], format: uuid }
+        caption: { type: string }
+        duration_ms: { type: integer }
+        poster_key: { type: string }
+        preview_key: { type: string }
+        lqip: { type: string }
+        renditions:
+          type: array
+          items: { $ref: "#/components/schemas/Rendition" }
+        counters: { $ref: "#/components/schemas/ReelCounters" }
+        published_at: { type: string, format: date-time }
+
+    FeedPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FeedItem" }
+        next_cursor:
+          type: [string, "null"]
+          description: |
+            Opaque. Keyset, never offset. Do not parse it — the tie-break field
+            changes when ranking lands in Phase 4.
+
+    ClientEvent:
+      type: object
+      required: [type, occurred_at]
+      properties:
+        type:
+          type: string
+          enum:
+            - view_start
+            - view_progress
+            - like
+            - unlike
+            - comment
+            - share
+            - save
+            - unsave
+            - skip
+            - action_click
+        reel_id: { type: [string, "null"], format: uuid }
+        occurred_at:
+          type: string
+          format: date-time
+          description: Client clock. Kept alongside server receipt time so an offline backlog is visible.
+        watched_ms:
+          type: integer
+          description: On view_progress. The server applies the ≥2000ms view definition.
+        properties:
+          type: object
+          additionalProperties: true
+
+    ModerationQueueItem:
+      type: object
+      required: [reel_id, entered_at]
+      properties:
+        reel_id: { type: string, format: uuid }
+        author_type: { type: string, enum: [vendor_branch, user] }
+        author_id: { type: string, format: uuid }
+        caption: { type: string }
+        poster_key: { type: string }
+        categories:
+          type: array
+          items: { type: string }
+        tier:
+          type: string
+          enum: [new, probation, trusted, flagged]
+          description: Author trust tier. Drives how much of this author's content is reviewed at all.
+        reports: { type: integer }
+        entered_at: { type: string, format: date-time }
+        waiting_seconds: { type: integer }
+        sla_breached:
+          type: boolean
+          description: True past the two-hour review SLA. Surfaced here so a breach is visible in the tool the moderator already has open.

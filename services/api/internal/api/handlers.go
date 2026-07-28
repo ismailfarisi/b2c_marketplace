@@ -30,6 +30,10 @@ type Handlers struct {
 	Ordering *ordering.Service
 	Payments *payments.Service
 	Catalog  *CatalogQueries
+	// Reels is nil when the Phase 2 media dependencies (object store, Redis)
+	// are not configured. The transactional API stays up without them; the feed
+	// routes simply are not mounted.
+	Reels *ReelHandlers
 }
 
 // --- auth -------------------------------------------------------------------

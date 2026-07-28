@@ -507,3 +507,72 @@ Phase 2 is done when all of these are true:
 7. A content operator has filmed and published **≥50 reels** in the launch district.
 
 Criterion 7 is not a technical one and it is the one most likely to be quietly dropped. Don't — a feed with 6 test reels proves the pipeline works and tells you nothing about whether the product does.
+
+---
+
+## 10. Implementation status
+
+Written against this design in `services/api`. What follows is what is actually
+in the repository, not what is planned.
+
+**Built and unit-tested**
+
+| Area | Where | Notes |
+|---|---|---|
+| Schema | `migrations/000012_media_feed.*` | The 12 tables from §6, plus `vendor_users`, `platform_admins` and `client_events` — all three needed by this phase and absent from §6 |
+| Reel state machine | `internal/modules/reels/state.go` | The graph in one value; every write to `reels.state` goes through `CanTransition` |
+| The §1.1 upload race | `internal/modules/reels/advance.go` | `Advance` is a pure function of a snapshot, so correctness does not depend on which writer ran |
+| Probe validation gate | `internal/modules/media/probe.go` | Reports every problem at once, and applies the rotation tag before judging aspect ratio |
+| GCC thresholds | `internal/modules/moderation/thresholds.go` | §3.2 as data, with a test asserting alcohol and gambling stay stricter than Western defaults |
+| Trust tiers | `internal/modules/moderation/trust.go` | Routing can only make a verdict stricter, never looser |
+| Claude text layer | `internal/modules/moderation/text.go` | Structured output, `effort: low`, cached policy prefix |
+| Feed query | `internal/modules/feed/service.go` | The §4.2 candidate → scored → diversified shape, keyset cursor, Go-side author spacing |
+| Counters and events | `internal/modules/engagement` | Redis hot path, Postgres truth, idempotent batch ingest |
+| Search indexer | `internal/modules/search` | Runs cold behind the outbox, exactly as §4.4 argues |
+| Read-path split | `cmd/feed` | Owns no tables; deletable by mounting `MountFeed` in `cmd/api` |
+
+**Deliberately stubbed, and refused in production at boot**
+
+- **Rekognition.** `moderation.StubVisionModerator` returns no labels, which
+  `Decide` reads as approve. `app.buildModerators` returns an error when
+  `APP_ENV=production` rather than letting a misconfiguration silently disable
+  half the gate — that failure would be invisible until it was a screenshot.
+- **The transcoder.** `media.StubProvider` synthesises three renditions whose
+  playlists point at nothing. Same guard.
+- **ffprobe.** Real by default; `FFPROBE_BINARY=stub` skips the binary in
+  development.
+
+**Not started**
+
+- Transcribe → audio transcript (layer 4 of §3.1). The pipeline accepts a
+  transcript and moderates it; nothing produces one yet.
+- Kinesis → ClickHouse. Events land in `client_events` behind
+  `engagement.Sink`, which is the interface the Kinesis implementation
+  satisfies.
+- River. The worker polls on a 10-second ticker. Every pipeline step is
+  idempotent, which is what makes the poller adequate and the eventual swap
+  uninteresting.
+
+**Nothing here has run against a database.** The migrations have never been
+applied; the feed query in particular — three CTEs, two lateral joins, a JSON
+aggregate, a row-comparison keyset predicate — has never been parsed by
+Postgres. Assume the first `make migrate-up` finds errors.
+
+### Where this deviates from the design above
+
+1. **`draft → uploaded` waits for both preconditions, not just the bytes.**
+   §1.2 reads as though the S3 event alone advances the reel. Gating on both
+   costs a few seconds of latency in the common case and saves a full transcode
+   on every upload whose author abandoned the caption form.
+
+2. **Text categories never pass through the threshold table.** §3.3 returns a
+   verdict and category names with no confidence. There is no confidence value
+   that works: 50 is simultaneously tobacco's review line and hate symbols'
+   reject line, so any number chosen either under- or over-fires. They are
+   carried separately and combined at the verdict level instead.
+
+3. **Three tables §6 does not list.** `vendor_users` (there was no answer to
+   "may this user post as this branch"), `platform_admins` (the moderation queue
+   is the first privileged surface, and "any authenticated user can approve
+   content" is not a state to pass through), and `client_events` (the
+   development sink behind `engagement.Sink`).

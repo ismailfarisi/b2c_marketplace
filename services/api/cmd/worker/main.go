@@ -24,8 +24,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/marketplace/api/internal/app"
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/platform/postgres"
+	"github.com/marketplace/api/internal/platform/redisx"
 )
 
 var version = "dev"
@@ -58,6 +60,24 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+
+	rdb, err := redisx.Connect(ctx, cfg.RedisURL)
+	if err != nil {
+		return err
+	}
+	if rdb != nil {
+		defer rdb.Close()
+	}
+
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb)
+	if err != nil {
+		return err
+	}
+
+	// The media pipeline runs on its own faster loop, in its own goroutine: it
+	// has a five-minute end-to-end budget (exit criterion #1) and must not
+	// queue behind a 30-second capacity sweep.
+	go runMediaLoop(ctx, pool, media)
 
 	// River is wired here once the first job type exists. Until then the loop
 	// below runs the two sweepers that Phase 1 genuinely needs, on a ticker.
