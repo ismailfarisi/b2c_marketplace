@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
+
 	"github.com/marketplace/api/internal/seam/fulfillment"
 )
 
@@ -49,18 +51,53 @@ type CapacityResource interface {
 type Pricing interface {
 	Key() string
 	FinalAtBooking() bool
-	Quote(ctx context.Context, order fulfillment.OrderContext) (QuoteResult, error)
+	Quote(ctx context.Context, in PricingContext) (QuoteResult, error)
+}
+
+// PricingContext is what a Pricing strategy is allowed to see.
+//
+// Deliberately separate from fulfillment.OrderContext: a fulfillment pattern
+// has no business knowing prices, and a pricing strategy has no business
+// knowing delivery windows. Sharing one context type between them would hand
+// each strategy the other's concerns and the seam would erode by convenience.
+type PricingContext struct {
+	BranchID         uuid.UUID
+	ServiceType      string
+	Currency         string
+	Lines            []PricingLine
+	Options          map[string]any
+	FulfillmentCount int
+}
+
+// PricingLine carries the snapshot values, not the offering row. Pricing must
+// compute from what the customer was shown, not from what the catalogue says
+// now.
+type PricingLine struct {
+	OfferingID      uuid.UUID
+	Name            string
+	NameAr          string
+	UnitPriceMinor  int64
+	TaxRateBP       int
+	Quantity        int
+	PriceIsEstimate bool
+	Options         map[string]any
 }
 
 type QuoteResult struct {
-	Currency      string
-	SubtotalMinor int64
-	DeliveryMinor int64
-	DiscountMinor int64
-	TaxMinor      int64
-	TotalMinor    int64
-	TaxInclusive  bool
-	Lines         []QuoteLine
+	Currency       string
+	SubtotalMinor  int64
+	DeliveryMinor  int64
+	DiscountMinor  int64
+	SurchargeMinor int64
+	TaxMinor       int64
+	TotalMinor     int64
+	// True in every GCC market: TaxMinor is the portion extracted FROM
+	// TotalMinor, not added to it.
+	TaxInclusive bool
+	// AuthorizeMinor is what to authorize on the card. Equals TotalMinor when
+	// the price is final at booking, and carries headroom when it is not.
+	AuthorizeMinor int64
+	Lines          []QuoteLine
 }
 
 type QuoteLine struct {

@@ -26,7 +26,9 @@ type IdempotencyStore interface {
 	// with a different body.
 	Begin(ctx context.Context, key uuid.UUID, userID uuid.UUID, endpoint, requestHash string) (*StoredResponse, error)
 	// Complete records the response so a later replay can return it verbatim.
-	Complete(ctx context.Context, key uuid.UUID, status int, body []byte) error
+	// Endpoint is part of the key: the same client UUID sent to two endpoints
+	// is two independent operations.
+	Complete(ctx context.Context, key uuid.UUID, endpoint string, status int, body []byte) error
 }
 
 type StoredResponse struct {
@@ -76,7 +78,9 @@ func Idempotency(store IdempotencyStore) func(http.Handler) http.Handler {
 			sum := sha256.Sum256(body)
 			hash := hex.EncodeToString(sum[:])
 
-			stored, err := store.Begin(r.Context(), key, userID, r.Method+" "+r.URL.Path, hash)
+			endpoint := r.Method + " " + r.URL.Path
+
+			stored, err := store.Begin(r.Context(), key, userID, endpoint, hash)
 			if err != nil {
 				WriteProblem(w, r, err)
 				return
@@ -97,7 +101,7 @@ func Idempotency(store IdempotencyStore) func(http.Handler) http.Handler {
 			// pin a transient failure to the key forever — the client should be
 			// allowed to retry into a healthy process.
 			if rec.status >= 200 && rec.status < 400 {
-				if err := store.Complete(r.Context(), key, rec.status, buf.Bytes()); err != nil {
+				if err := store.Complete(r.Context(), key, endpoint, rec.status, buf.Bytes()); err != nil {
 					// The response is already on the wire; surfacing this now
 					// would corrupt it. Log and move on — the cost is that one
 					// replay re-executes, which the handlers tolerate.

@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,15 +21,33 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/marketplace/api/internal/api"
+	"github.com/marketplace/api/internal/auth"
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/identity"
+	"github.com/marketplace/api/internal/modules/ordering"
+	"github.com/marketplace/api/internal/modules/payments"
+	"github.com/marketplace/api/internal/platform/idempotency"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/seam/action"
 	"github.com/marketplace/api/internal/seam/servicetype"
+	"github.com/marketplace/api/internal/verticals/laundry"
 )
 
 // version is stamped at build time: -ldflags "-X main.version=$(git rev-parse --short HEAD)"
 var version = "dev"
+
+// Commission and platform VAT.
+//
+// Constants because the commission model is still open (docs/README.md decision
+// #4) — flat, per-vertical and volume-tiered all imply different tables. One
+// hard-coded number is honest about that; inventing a schema for a model nobody
+// has chosen is not.
+const (
+	commissionBP  = 1_500 // 15%
+	platformVATBP = 500   // 5% UAE VAT on the platform's own commission
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -67,19 +86,33 @@ func run() error {
 	actions := action.NewRegistry()
 	verticals := servicetype.NewRegistry()
 
-	// Phase 1 registers laundry here as the walking skeleton:
-	//
-	//	laundry.Register(verticals, actions, pool)
-	//
-	// Note for whoever picks this up: laundry is the *engineering* skeleton, not
-	// a launch decision. PLAN-VIDEO-FIRST §5 ranks it last for feed suitability
-	// and no phase in §8 ships it to customers — see docs/README.md open
-	// decision #3, which is still unresolved.
-	_ = verticals
+	// Laundry is the *engineering* skeleton, not a launch decision.
+	// PLAN-VIDEO-FIRST §5 ranks it last for feed suitability and no phase in §8
+	// ships it to customers — see docs/README.md open decision #3, still open.
+	laundry.Register(verticals, actions)
+
+	issuer := auth.NewIssuer(cfg.JWTSigningKey, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	idempotencyStore := idempotency.New(pool)
+
+	// The sandbox gateway approves everything. config.Load has already rejected
+	// APP_ENV=production with dev flags on, but this is the one that would move
+	// real money, so it gets its own guard rather than trusting that check.
+	var provider payments.Provider = payments.SandboxProvider{}
+	if cfg.IsProduction() {
+		return fmt.Errorf("no production payment provider is configured — " +
+			"wire a real gateway before deploying")
+	}
+
+	handlers := &api.Handlers{
+		Identity: identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho),
+		Ordering: ordering.NewService(pool, verticals),
+		Payments: payments.NewService(pool, provider, commissionBP, platformVATBP),
+		Catalog:  api.NewCatalogQueries(pool),
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           newRouter(cfg, pool, actions),
+		Handler:           newRouter(cfg, pool, handlers, issuer, idempotencyStore),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		// Generous relative to ReadTimeout: presigned-upload responses are
@@ -115,7 +148,13 @@ func run() error {
 	return nil
 }
 
-func newRouter(cfg config.Config, pool *pgxpool.Pool, actions *action.Registry) http.Handler {
+func newRouter(
+	cfg config.Config,
+	pool *pgxpool.Pool,
+	handlers *api.Handlers,
+	issuer *auth.Issuer,
+	idem httpx.IdempotencyStore,
+) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(httpx.RequestID)
@@ -145,19 +184,13 @@ func newRouter(cfg config.Config, pool *pgxpool.Pool, actions *action.Registry) 
 	r.Get("/readyz", readiness(pool))
 
 	r.Route("/v1", func(r chi.Router) {
-		// Generated boundary mounts here once `make gen-go` has run:
-		//
-		//	openapi.HandlerFromMuxWithBaseURL(strictHandler, r, "")
-		//
-		// It is intentionally absent from source control until the first
-		// handler exists — a generated file with no implementation behind it
-		// is a compile error that teaches nothing.
+		api.Mount(r, handlers, issuer, idem)
+
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteProblem(w, r, httpx.ErrNotFound)
 		})
 	})
 
-	_ = actions
 	return r
 }
 

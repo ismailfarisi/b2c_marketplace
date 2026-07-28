@@ -21,13 +21,13 @@ import (
 type Kind string
 
 const (
-	KindBookService   Kind = "book_service"
-	KindSubscribePlan Kind = "subscribe_plan"
+	KindBookService    Kind = "book_service"
+	KindSubscribePlan  Kind = "subscribe_plan"
 	KindInquireListing Kind = "inquire_listing"
-	KindOpenMenu      Kind = "open_menu"
-	KindFollow        Kind = "follow"
-	KindShare         Kind = "share"
-	KindExternal      Kind = "external"
+	KindOpenMenu       Kind = "open_menu"
+	KindFollow         Kind = "follow"
+	KindShare          Kind = "share"
+	KindExternal       Kind = "external"
 )
 
 type TargetType string

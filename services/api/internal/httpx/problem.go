@@ -32,11 +32,11 @@ type FieldError struct {
 // Sentinel errors modules return. The mapping to HTTP lives here and nowhere
 // else, so a module never imports net/http to express "not found".
 var (
-	ErrNotFound        = errors.New("not found")
-	ErrUnauthorized    = errors.New("unauthorized")
-	ErrForbidden       = errors.New("forbidden")
-	ErrConflict        = errors.New("conflict")
-	ErrCapacityTaken   = errors.New("capacity exhausted")
+	ErrNotFound            = errors.New("not found")
+	ErrUnauthorized        = errors.New("unauthorized")
+	ErrForbidden           = errors.New("forbidden")
+	ErrConflict            = errors.New("conflict")
+	ErrCapacityTaken       = errors.New("capacity exhausted")
 	ErrIdempotencyMismatch = errors.New("idempotency key reused with a different body")
 )
 

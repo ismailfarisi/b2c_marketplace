@@ -140,14 +140,25 @@ projects get indefinitely postponed.
 
 ## Verification status
 
-This scaffold was written without a local Go toolchain and without a running
-Docker daemon, so the following are **unverified**:
+**Verified locally** (Go 1.26.5):
 
-- Go code has not been compiled — `go mod tidy` will also need to resolve the
-  `tool` directives, which are not yet in `go.sum`
-- Migrations have not been applied against PostGIS
-- No npm install has run, so dependency versions are unresolved
+- `go build ./...` — clean
+- `go vet ./...` — clean
+- `gofmt -l .` — clean
+- `go test ./...` — passing (`money`, `ledger`)
+- `redocly lint api/openapi.yaml` — valid; 10 warnings, all cosmetic
+- All JSON and YAML files parse
 
-The CI workflow covers all three (including a full down-migration and re-apply).
-The first local task is `make setup` followed by `make test` — expect to fix
-version pins.
+**Not verified** — no Docker daemon was available:
+
+- **Migrations have never been applied against PostGIS.** This is the big one:
+  11 migrations including PL/pgSQL functions and a deferred constraint trigger,
+  none of which the Go compiler can check. Expect to fix things here.
+- Every SQL string in the repositories is unexecuted, so column-name and
+  parameter-order mistakes are still live.
+- `go test -race` could not run — the toolchain has `CGO_ENABLED=0` and the race
+  detector requires cgo. CI runs it on Linux, where it works.
+- No `npm install` has run, so the TypeScript dependency versions are unresolved.
+
+Start with `docker compose up -d && make migrate-up`; that is where the
+remaining errors are.
