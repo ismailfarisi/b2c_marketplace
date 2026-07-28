@@ -117,6 +117,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// Listings get their own moderation queue rather than sharing the
 			// reel one. Different reviewer skill, different SLA, and a listing
 			// decision needs the VIN and the price history in front of it.
+			r.Get("/moderation/listings", h.Vehicles.ListingQueue)
 			r.Post("/moderation/listings/{listingId}/decide", h.Vehicles.DecideListing)
 			r.Get("/moderation/fraud", h.Vehicles.FraudQueue)
 			r.Post("/moderation/fraud/decide", h.Vehicles.DecideFraudSignal)
@@ -207,6 +208,15 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 
 			// Ops. Authorised against platform_admins inside the handler on
 			// every call, never from a token claim.
+			//
+			// The three GETs below were added when the admin panel was built,
+			// and their absence was the finding: this API had nine `decide`
+			// endpoints and five `queue` endpoints. A decide endpoint with no
+			// queue behind it can only be reached by someone who already knows
+			// the id, which means the work never reaches a reviewer at all.
+			r.Get("/moderation/queues", h.Compliance.Queues)
+			r.Get("/kyc/cases", h.Compliance.KYCQueue)
+			r.Get("/payout-accounts", h.Compliance.PayoutAccountQueue)
 			r.Post("/kyc/cases/{caseId}/decide", h.Compliance.DecideKYC)
 			r.Post("/payout-accounts/{accountId}/verify", h.Compliance.VerifyPayoutAccount)
 			// Overdue only. The failure mode of an appeals process is that
@@ -229,6 +239,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/boosts/{campaignId}/status", h.BoostOps.SetStatus)
 			// Staff. Not a second content review — the reel was moderated
 			// before it could be published — but a review of the campaign.
+			r.Get("/moderation/boosts", h.BoostOps.ReviewQueue)
 			r.Post("/moderation/boosts/{campaignId}/decide", h.BoostOps.Review)
 		}
 

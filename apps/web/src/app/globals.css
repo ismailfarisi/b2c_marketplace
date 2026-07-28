@@ -192,3 +192,111 @@ td {
 button.ghost {
   background: transparent;
 }
+
+/*
+ * The staff panel.
+ *
+ * The one surface in this app that is not RTL-aware, and deliberately: the
+ * chrome is fixed English (see admin/layout.tsx), while the *content* inside
+ * every card carries dir="auto" so an Arabic caption renders correctly inside
+ * an English frame. That split is the whole i18n design here — localising the
+ * chrome would be a translation project nobody asked for; rendering the content
+ * wrong would make a moderator misjudge it.
+ */
+.admin {
+  --page-max: 76rem;
+}
+
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem var(--space);
+  border-block-end: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  position: sticky;
+  inset-block-start: 0;
+  /* Opaque, because the queue below scrolls under it and a translucent bar
+     over a wall of text is unreadable at exactly the moment someone is
+     skimming. */
+  background: Canvas;
+  z-index: 1;
+}
+
+.admin-nav a {
+  text-decoration: none;
+  opacity: 0.7;
+  padding-block: 0.25rem;
+  border-block-end: 2px solid transparent;
+}
+
+.admin-nav a:hover {
+  opacity: 1;
+}
+
+.admin-nav a.active {
+  opacity: 1;
+  border-block-end-color: currentColor;
+}
+
+/*
+ * A denser stack for the high-volume queues. Comments and held messages are
+ * cleared sixty at a time, and vertical space is the thing that costs a
+ * reviewer — every extra rem is one fewer item on screen and one more scroll
+ * between decisions.
+ */
+.stack.tight {
+  gap: 0.5rem;
+}
+
+.stack.tight .card {
+  padding: 0.75rem;
+}
+
+/*
+ * Tiles on the overview are links. Without this they inherit the underline and
+ * link colour and the dashboard reads as a list of navigation rather than a set
+ * of numbers.
+ */
+a.metric {
+  text-decoration: none;
+  color: inherit;
+}
+
+a.metric:hover {
+  border-color: currentColor;
+}
+
+.admin .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-block-start: 0.75rem;
+}
+
+.admin .actions input,
+.admin .actions select {
+  padding: 0.5rem;
+  font: inherit;
+}
+
+.admin button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+}
+
+/*
+ * The KYC screen puts two names in a two-column table where the whole task is
+ * comparing them. Left-aligned headers of a fixed width keep the values in a
+ * vertical line, which is what makes a mismatch visible rather than something
+ * to be read for.
+ */
+.admin table th {
+  inline-size: 14rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.admin table td {
+  white-space: normal;
+}

@@ -3365,6 +3365,157 @@ paths:
         "409": { description: Not awaiting review }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  # -- Staff review queues -----------------------------------------------------
+  #
+  # Added when the admin panel was built, and their absence was the finding:
+  # this API had nine `decide` endpoints and five `queue` endpoints. A decide
+  # endpoint with no queue behind it can only be reached by someone who already
+  # knows the id, which means the work never reaches a reviewer at all.
+  #
+  # Every one of these checks `platform_admins` on the server, on every call,
+  # rather than reading a claim from the token. Granting staff access takes
+  # effect immediately and so does revoking it.
+
+  /moderation/queues:
+    get:
+      tags: [moderation]
+      operationId: getQueueDepths
+      summary: Every review queue's depth in one call
+      description: |
+        Returns all ten queues including the empty ones. A queue that disappears
+        from a dashboard when it empties is one whose sudden reappearance nobody
+        notices.
+
+        `oldest_seconds` matters more than `waiting`: a deep and *young* queue is
+        a busy afternoon, a shallow and *old* one is a queue nobody is working,
+        and only the second is an incident. `sla_seconds` travels with each row
+        so the client renders the deadline this system actually promises rather
+        than one a designer picked.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queues:
+                    type: array
+                    items: { $ref: "#/components/schemas/QueueDepth" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/listings:
+    get:
+      tags: [moderation]
+      operationId: listListingQueue
+      summary: Vehicle listings awaiting review
+      description: |
+        The VIN, the price and the seller's trust band come with each row.
+        PHASE-6 §2 said a listing decision "needs the VIN and the price history
+        in front of it"; a queue that returns titles and ids makes that a second
+        request per row, and the second request is the one nobody makes at forty
+        listings an hour.
+
+        Trust is keyed on the *user*, not the listing's seller kind — a dealer's
+        signals attach to the person who owns the account, which is what makes a
+        fraudster's second dealership visible.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ListingQueueItem" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /kyc/cases:
+    get:
+      tags: [moderation]
+      operationId: listKycQueue
+      summary: Identity checks awaiting a decision
+      description: |
+        Documents come back with the case rather than behind a second call — a
+        reviewer decides by looking at the evidence, and a screen that lists
+        cases then fetches documents per row turns one decision into two round
+        trips.
+
+        `document_ref` is a reference into object storage, never the document
+        and never an image URL. A scan of an Emirates ID is the highest-value
+        object in this system to an attacker.
+
+        `expired` is computed server-side. Approving a case backed by a licence
+        that lapsed last week is the failure that flag exists to make impossible
+        to miss.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/KycCase" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /payout-accounts:
+    get:
+      tags: [payouts]
+      operationId: listPendingPayoutAccounts
+      summary: Bank accounts awaiting the name check
+      description: |
+        Returns the legal name on record and the name on the account, side by
+        side and **uncompared**. Deciding whether they are the same entity is the
+        reviewer's whole job, and a fuzzy match that is right 90% of the time
+        would be wrong exactly where it matters — payout redirection is the most
+        common fraud against a marketplace, and the attacker picks a name that
+        nearly matches.
+
+        The IBAN is masked. The check digits were validated when it was stored.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PendingPayoutAccount" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /moderation/boosts:
+    get:
+      tags: [boosts]
+      operationId: listCampaignQueue
+      summary: Campaigns awaiting review
+      description: |
+        Everything here is funded and idle — the advertiser has paid and nothing
+        is running, which is the worst state available because a rejection at
+        least gets refunded.
+
+        Targeting is rendered as a sentence server-side. The reviewer's question
+        is "is this sane", and eight nullable columns is not the shape that
+        answers it.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PendingCampaign" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3455,6 +3606,99 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+
+    QueueDepth:
+      type: object
+      properties:
+        queue:
+          type: string
+          enum: [reel, comment, message, listing, fraud, appeal, kyc, payout_account, dispute, boost]
+        waiting: { type: integer }
+        oldest_seconds: { type: integer }
+        sla_seconds: { type: integer }
+        sla_breached: { type: boolean }
+
+    ListingQueueItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        seller_kind: { type: string, enum: [user, dealer] }
+        seller_id: { type: string, format: uuid }
+        seller_name: { type: string }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        price: { $ref: "#/components/schemas/Money" }
+        mileage_km: { type: integer }
+        vin: { type: [string, "null"] }
+        regional_spec: { type: string }
+        city: { type: [string, "null"] }
+        photo_key: { type: [string, "null"] }
+        submitted_at: { type: string, format: date-time }
+        trust:
+          type: object
+          properties:
+            score: { type: number }
+            band: { type: string }
+
+    KycDocument:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        document_ref:
+          type: [string, "null"]
+          description: An object-storage reference. Never the document, never an image URL.
+        number_last4: { type: [string, "null"] }
+        issued_on: { type: [string, "null"], format: date }
+        expires_on: { type: [string, "null"], format: date }
+        status: { type: string, enum: [pending, verified, rejected] }
+        expired: { type: boolean }
+
+    KycCase:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subject_type: { type: string, enum: [vendor, user, driver] }
+        subject_id: { type: string, format: uuid }
+        subject_name: { type: string }
+        tier: { type: string, enum: [basic, verified, enhanced] }
+        status: { type: string }
+        created_at: { type: string, format: date-time }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/KycDocument" }
+
+    PendingPayoutAccount:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        owner_type: { type: string, enum: [vendor, driver] }
+        owner_id: { type: string, format: uuid }
+        owner_name: { type: string, description: The legal name on the identity check }
+        holder_name: { type: string, description: The name on the bank account }
+        iban: { type: string, description: Masked }
+        bank_name: { type: [string, "null"] }
+        currency: { type: string }
+        created_at: { type: string, format: date-time }
+
+    PendingCampaign:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string }
+        advertiser_type: { type: string, enum: [vendor, user] }
+        advertiser_name: { type: string }
+        reel_id: { type: string, format: uuid }
+        caption: { type: string }
+        poster_key: { type: string }
+        bid_cpm: { $ref: "#/components/schemas/Money" }
+        funded: { $ref: "#/components/schemas/Money" }
+        daily_cap: { $ref: "#/components/schemas/Money" }
+        starts_on: { type: string, format: date }
+        created_at: { type: string, format: date-time }
+        targeting: { type: string, description: Rendered as a sentence, not as fields }
 
     CampaignReport:
       type: object

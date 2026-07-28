@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -620,4 +621,56 @@ func atoi64Or(s string, fallback int64) int64 {
 		return n
 	}
 	return fallback
+}
+
+// ListingQueue lists listings awaiting review.
+//
+// Phase 6 shipped the decide endpoint and the fraud queue and no way to find a
+// listing waiting for either. The seller's trust score comes with each row
+// rather than behind a second call: a reviewer deciding on a car from a seller
+// with two confirmed fraud signals is making a different decision from one
+// deciding on the same car from a clean seller, and a lookup that costs a
+// second request is a lookup that gets skipped under queue pressure.
+func (h *VehicleHandlers) ListingQueue(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	if err := h.Moderation.RequireStaff(r.Context(), userID); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	items, err := h.Listings.ReviewQueue(r.Context(), 100)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	out := make([]map[string]any, 0, len(items))
+	for _, l := range items {
+		out = append(out, map[string]any{
+			"id":            l.ID,
+			"title":         l.Title,
+			"seller_kind":   l.SellerType,
+			"seller_id":     l.SellerID,
+			"seller_name":   l.SellerName,
+			"make":          l.Make,
+			"model":         l.Model,
+			"year":          l.Year,
+			"price":         map[string]any{"amount": l.PriceMinor, "currency": l.Currency},
+			"mileage_km":    l.Mileage,
+			"vin":           nullable(l.VIN),
+			"regional_spec": l.RegionalSpec,
+			"city":          nullable(l.City),
+			"photo_key":     nullable(l.PhotoKey),
+			"submitted_at":  l.SubmittedAt.Format(time.RFC3339),
+			"trust": map[string]any{
+				"score": l.TrustScore,
+				"band":  l.TrustBand,
+			},
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
 }

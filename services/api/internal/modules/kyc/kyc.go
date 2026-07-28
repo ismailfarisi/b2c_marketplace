@@ -387,6 +387,166 @@ func (s *Service) Decide(ctx context.Context, caseID, reviewerID uuid.UUID, appr
 	})
 }
 
+// --- the review queue -------------------------------------------------------
+
+// Case is one item awaiting a decision.
+type Case struct {
+	ID          uuid.UUID
+	SubjectType string
+	SubjectID   uuid.UUID
+	SubjectName string
+	Tier        Tier
+	Status      string
+	CreatedAt   time.Time
+	Documents   []Document
+}
+
+// Document is what a reviewer is looking at — or rather, what they are looking
+// at a *reference* to.
+type Document struct {
+	ID          uuid.UUID
+	Kind        string
+	DocumentRef string
+	NumberLast4 string
+	IssuedOn    *time.Time
+	ExpiresOn   *time.Time
+	Status      string
+}
+
+// Queue lists cases awaiting review, with their documents.
+//
+// Written when the admin panel was built, and its absence was the finding: this
+// module shipped a `Decide` endpoint and no way to reach a case. Reviewing was
+// possible only for someone who already knew the case id, which meant it was
+// not possible.
+//
+// Documents come back with the case rather than behind a second call. A
+// reviewer decides by looking at the evidence, and a screen that lists cases and
+// then fetches documents per row turns one decision into two round trips and
+// a spinner between them.
+func (s *Service) Queue(ctx context.Context, limit int) ([]Case, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.id, c.subject_type, c.subject_id, c.tier, c.status, c.created_at,
+		       coalesce(v.legal_name, u.display_name, u.phone, '')
+		  FROM kyc_cases c
+		  LEFT JOIN vendors v ON c.subject_type = 'vendor' AND v.id = c.subject_id
+		  LEFT JOIN users u   ON c.subject_type IN ('user', 'driver') AND u.id = c.subject_id
+		 WHERE c.status IN ('submitted', 'in_review')
+		 ORDER BY c.created_at
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("kyc: queue: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Case
+	ids := make([]uuid.UUID, 0, limit)
+	for rows.Next() {
+		var c Case
+		if err := rows.Scan(&c.ID, &c.SubjectType, &c.SubjectID, &c.Tier,
+			&c.Status, &c.CreatedAt, &c.SubjectName); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+		ids = append(ids, c.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return out, nil
+	}
+
+	docRows, err := s.pool.Query(ctx, `
+		SELECT case_id, id, kind, coalesce(document_ref, ''), coalesce(number_last4, ''),
+		       issued_on, expires_on, status
+		  FROM kyc_documents WHERE case_id = ANY($1)
+		 ORDER BY case_id, kind`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("kyc: queue documents: %w", err)
+	}
+	defer docRows.Close()
+
+	byCase := map[uuid.UUID][]Document{}
+	for docRows.Next() {
+		var caseID uuid.UUID
+		var d Document
+		if err := docRows.Scan(&caseID, &d.ID, &d.Kind, &d.DocumentRef,
+			&d.NumberLast4, &d.IssuedOn, &d.ExpiresOn, &d.Status); err != nil {
+			return nil, err
+		}
+		byCase[caseID] = append(byCase[caseID], d)
+	}
+	if err := docRows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range out {
+		out[i].Documents = byCase[out[i].ID]
+	}
+	return out, nil
+}
+
+// PendingAccount is a bank account awaiting the name check.
+type PendingAccount struct {
+	ID uuid.UUID
+	// OwnerName is the legal name on record. The reviewer's whole job is
+	// comparing it to HolderName, so both are returned and neither is compared
+	// here — "Karama Kitchen L.L.C." against "KARAMA KITCHEN LLC" is not a
+	// regex.
+	OwnerType  string
+	OwnerID    uuid.UUID
+	OwnerName  string
+	HolderName string
+	// MaskedIBAN, never the full number. A verification screen open on a shared
+	// ops laptop does not need it, and the check digits have already been
+	// validated in code.
+	MaskedIBAN string
+	BankName   string
+	Currency   string
+	CreatedAt  time.Time
+}
+
+// PendingAccounts lists bank accounts awaiting verification.
+func (s *Service) PendingAccounts(ctx context.Context, limit int) ([]PendingAccount, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT a.id, a.owner_type, a.owner_id, a.holder_name, a.iban,
+		       coalesce(a.bank_name, ''), a.currency, a.created_at,
+		       coalesce(v.legal_name, u.display_name, '')
+		  FROM payout_accounts a
+		  LEFT JOIN vendors v ON a.owner_type = 'vendor' AND v.id = a.owner_id
+		  LEFT JOIN drivers d ON a.owner_type = 'driver' AND d.id = a.owner_id
+		  LEFT JOIN users u   ON u.id = d.user_id
+		 WHERE a.status = 'pending'
+		 ORDER BY a.created_at
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("kyc: pending accounts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []PendingAccount
+	for rows.Next() {
+		var a PendingAccount
+		var iban string
+		if err := rows.Scan(&a.ID, &a.OwnerType, &a.OwnerID, &a.HolderName, &iban,
+			&a.BankName, &a.Currency, &a.CreatedAt, &a.OwnerName); err != nil {
+			return nil, err
+		}
+		a.MaskedIBAN = MaskIBAN(iban)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // ExpireLapsedCases marks approved cases whose evidence has run out.
 //
 // Run on a tick. Belt and braces: `Eligible` already refuses an expired case,

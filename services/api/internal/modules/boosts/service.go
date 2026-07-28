@@ -639,6 +639,86 @@ func (s *Service) AuthorizeAdvertiser(ctx context.Context, userID, campaignID uu
 	return nil
 }
 
+// PendingReview is a campaign waiting on a human.
+type PendingReview struct {
+	ID             uuid.UUID
+	Reference      string
+	AdvertiserType string
+	AdvertiserID   uuid.UUID
+	AdvertiserName string
+	ReelID         uuid.UUID
+	Caption        string
+	PosterKey      string
+	BidCPMinor     int
+	FundedMinor    int64
+	DailyCapMinor  int64
+	Currency       string
+	StartsOn       time.Time
+	CreatedAt      time.Time
+	// Targeting, rendered as a sentence rather than as fields. The reviewer's
+	// question is "is this sane", and eight nullable columns is not the shape
+	// that answers it.
+	Targeting string
+}
+
+// ReviewQueue lists campaigns awaiting approval.
+//
+// Added when the admin panel was built, and its absence was the finding: Phase 9
+// shipped `POST /moderation/boosts/{id}/decide` and no way to find a campaign
+// to decide on. A funded campaign sat in `pending_review` forever, which is the
+// worst outcome available — the advertiser has paid and nothing is running.
+func (s *Service) ReviewQueue(ctx context.Context, limit int) ([]PendingReview, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.id, c.reference_no, c.advertiser_type, c.advertiser_id,
+		       coalesce(v.trade_name, u.display_name, u.phone, ''),
+		       c.reel_id, coalesce(r.caption, ''), coalesce(r.poster_key, ''),
+		       c.bid_cpm_minor, c.funded_minor, c.daily_cap_minor, c.currency,
+		       c.starts_on, c.created_at,
+		       coalesce(
+		           nullif(concat_ws(', ',
+		               CASE WHEN t.radius_m IS NOT NULL
+		                    THEN (t.radius_m / 1000)::text || ' km radius' END,
+		               CASE WHEN t.locales IS NOT NULL
+		                    THEN array_to_string(t.locales, '/') END,
+		               CASE WHEN t.hours_of_day IS NOT NULL
+		                    THEN array_length(t.hours_of_day, 1)::text || ' hours of the day' END,
+		               CASE WHEN t.days_of_week IS NOT NULL
+		                    THEN array_length(t.days_of_week, 1)::text || ' days of the week' END,
+		               CASE WHEN t.category_ids IS NOT NULL
+		                    THEN array_length(t.category_ids, 1)::text || ' categories' END
+		           ), ''),
+		           'no narrowing — the reel''s own service area only')
+		  FROM boost_campaigns c
+		  JOIN reels r ON r.id = c.reel_id
+		  LEFT JOIN boost_targeting t ON t.campaign_id = c.id
+		  LEFT JOIN vendors v ON c.advertiser_type = 'vendor' AND v.id = c.advertiser_id
+		  LEFT JOIN users u   ON c.advertiser_type = 'user'   AND u.id = c.advertiser_id
+		 WHERE c.status = 'pending_review'
+		 ORDER BY c.created_at
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("boosts: review queue: %w", err)
+	}
+	defer rows.Close()
+
+	var out []PendingReview
+	for rows.Next() {
+		var p PendingReview
+		if err := rows.Scan(&p.ID, &p.Reference, &p.AdvertiserType, &p.AdvertiserID,
+			&p.AdvertiserName, &p.ReelID, &p.Caption, &p.PosterKey,
+			&p.BidCPMinor, &p.FundedMinor, &p.DailyCapMinor, &p.Currency,
+			&p.StartsOn, &p.CreatedAt, &p.Targeting); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // SetStatus pauses or resumes.
 func (s *Service) SetStatus(ctx context.Context, campaignID uuid.UUID, status string) error {
 	if status != "paused" && status != "active" && status != "completed" {

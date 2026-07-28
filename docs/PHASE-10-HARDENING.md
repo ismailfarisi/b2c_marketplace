@@ -292,6 +292,7 @@ that says "ready" is not one.
 | # | Gap | Size |
 |---|---|---|
 | 7 | Strikes are never issued — `StrikeService.Issue` is not called from `moderation.SaveDecision` (PHASE-8 §8.6) | One call, plus a policy decision about which rejections carry which severity |
+| 7a | **Moderators cannot watch the reel they are judging.** `poster_key` is an object-storage key and there is no signed-URL endpoint, so the admin panel renders the key. This is the largest remaining gap on that surface — see §7.3 | Small: one endpoint |
 | 8 | `kyc_documents` has no upload endpoint | Small — the Phase 2 presigned-upload machinery is the right mechanism |
 | 9 | Campaign funding is not wired to a payment (PHASE-9 §6.2) | Small — a third subject on `payments.Authorize` |
 | 10 | No rate limiting anywhere | Medium, and the events endpoint is public and unauthenticated by design |
@@ -329,6 +330,75 @@ that lists none.
   vertical — now including the ad system.
 - **The ledger balances by construction.** Nothing outside `ledger` writes
   entries, and every posting path is tested for balance.
+
+---
+
+## 7. The admin panel
+
+Built after the rest of this phase, and it exists because of a question this
+document should have asked and did not: **PLAN-VIDEO-FIRST §8 lists eleven
+phases and an admin console is a deliverable in none of them.** PLAN.md §5 P4
+mentions one in passing — *"admin console (vendor approvals, disputes,
+commission config, refunds)"* — and the video-first replan dropped it silently.
+
+The consequence was concrete rather than theoretical. Phase 2 budgeted a
+moderator as headcount from launch with a two-hour review SLA; until this was
+built, that person's tool was `curl`. The claim system, the locale routing and
+the appeal deadlines were all in place and all unusable.
+
+`apps/web/[locale]/admin` — an overview and eight review screens.
+
+### 7.1 What building it found in the API
+
+**Nine `decide` endpoints and five `queue` endpoints.** Four review surfaces
+could be acted on and not found: listings, identity checks, bank accounts and
+campaigns. A decide endpoint with no queue behind it is reachable only by
+someone who already knows the id, which means the work never reaches a reviewer
+at all.
+
+The worst of the four was campaigns. A funded campaign sat in `pending_review`
+with no way to find it — the advertiser has paid and nothing is running, which
+is worse than a rejection because a rejection gets refunded.
+
+Five endpoints added: `GET /moderation/queues`, `/moderation/listings`,
+`/kyc/cases`, `/payout-accounts`, `/moderation/boosts`.
+
+### 7.2 Three decisions on the panel itself
+
+**The overview makes the oldest wait prominent, not the depth.** A deep and
+*young* queue is a busy afternoon; a shallow and *old* one is a queue nobody is
+working. Only the second is an incident, and a dashboard showing depth alone
+reports them identically. The SLA travels with each row from the server's own
+table rather than being a number the client picked.
+
+**The chrome is English and `dir="ltr"`; the content is `dir="auto"`.** Every
+other surface in this app is Arabic-first because customers are. This one is
+used by a team whose working language is the platform's and whose job is judging
+content that is often Arabic — so the frame stays stable and each caption,
+comment and message renders in the direction it was written. Localising the
+chrome would be a translation project nobody asked for; rendering the content
+wrong would make a moderator misjudge it.
+
+**No throughput metrics, deliberately.** A moderation team measured on
+items-per-hour approves faster, which is the exact failure GCC content standards
+make expensive. The measure that *is* worth building — the rate at which appeals
+succeed — is named on the overview as missing, and voided strikes are retained
+specifically so it can be computed.
+
+### 7.3 What the panel still cannot do
+
+1. **Play video.** The largest gap, and it means the reel queue is not yet
+   sufficient for the decision it asks for. One signed-URL endpoint away.
+2. **Show KYC documents.** Same cause — `document_ref` renders as a key. This
+   one is a deliberate half-measure rather than an oversight: a short-lived
+   signed link for an Emirates ID scan needs its own access log, and issuing one
+   from a generic media endpoint would put the highest-value object in this
+   system behind the same control as a poster image.
+3. **Assign or claim.** `moderation_assignments` exists, expires stale claims
+   lazily, and nothing in this UI calls it — so two moderators can still open the
+   same reel.
+4. **Search or filter.** Every queue is oldest-first, capped at 100. Correct at
+   launch volume and wrong at the first backlog.
 
 ---
 

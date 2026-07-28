@@ -437,3 +437,124 @@ func (h *ComplianceHandlers) requireOps(w http.ResponseWriter, r *http.Request) 
 	}
 	return userID, true
 }
+
+// --- review queues ----------------------------------------------------------
+
+// Queues is the overview an ops shift starts on.
+//
+// One call rather than nine. It returns every queue including the empty ones —
+// a queue that disappears from a dashboard when it empties is one whose sudden
+// reappearance nobody notices.
+func (h *ComplianceHandlers) Queues(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireOps(w, r)
+	if !ok {
+		return
+	}
+
+	depths, err := h.Admin.Queues(r.Context(), userID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	out := make([]map[string]any, 0, len(depths))
+	for _, d := range depths {
+		out = append(out, map[string]any{
+			"queue":          d.Queue,
+			"waiting":        d.Waiting,
+			"oldest_seconds": d.OldestSeconds,
+			// The SLA travels with the row so the client renders the deadline
+			// this system actually promises rather than a number a designer
+			// picked.
+			"sla_seconds":  int(admin.SLAFor(d.Queue).Seconds()),
+			"sla_breached": d.BreachedSLA > 0,
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"queues": out})
+}
+
+// KYCQueue lists identity checks awaiting a decision, with their documents.
+func (h *ComplianceHandlers) KYCQueue(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireOps(w, r); !ok {
+		return
+	}
+
+	cases, err := h.KYC.Queue(r.Context(), 100)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	out := make([]map[string]any, 0, len(cases))
+	for _, c := range cases {
+		docs := make([]map[string]any, 0, len(c.Documents))
+		for _, d := range c.Documents {
+			docs = append(docs, map[string]any{
+				"id":   d.ID,
+				"kind": d.Kind,
+				// A reference into object storage, never the document. The
+				// client turns it into a short-lived signed link; it is not an
+				// image src.
+				"document_ref": nullable(d.DocumentRef),
+				"number_last4": nullable(d.NumberLast4),
+				"issued_on":    dateOrNil(d.IssuedOn),
+				"expires_on":   dateOrNil(d.ExpiresOn),
+				"status":       d.Status,
+				// Computed server-side. A reviewer approving a case backed by a
+				// licence that expired last week is the failure this flag
+				// exists to make impossible to miss.
+				"expired": d.ExpiresOn != nil && d.ExpiresOn.Before(time.Now()),
+			})
+		}
+		out = append(out, map[string]any{
+			"id":           c.ID,
+			"subject_type": c.SubjectType,
+			"subject_id":   c.SubjectID,
+			"subject_name": c.SubjectName,
+			"tier":         string(c.Tier),
+			"status":       c.Status,
+			"created_at":   c.CreatedAt.Format(time.RFC3339),
+			"documents":    docs,
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
+}
+
+// PayoutAccountQueue lists bank accounts awaiting the name check.
+func (h *ComplianceHandlers) PayoutAccountQueue(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireOps(w, r); !ok {
+		return
+	}
+
+	accounts, err := h.KYC.PendingAccounts(r.Context(), 100)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	out := make([]map[string]any, 0, len(accounts))
+	for _, a := range accounts {
+		out = append(out, map[string]any{
+			"id":         a.ID,
+			"owner_type": a.OwnerType,
+			"owner_id":   a.OwnerID,
+			// Both names, uncompared. The reviewer's entire job is deciding
+			// whether they are the same entity, and no code here should
+			// pre-empt that with a fuzzy match that is right 90% of the time.
+			"owner_name":  a.OwnerName,
+			"holder_name": a.HolderName,
+			"iban":        a.MaskedIBAN,
+			"bank_name":   nullable(a.BankName),
+			"currency":    a.Currency,
+			"created_at":  a.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
+}
+
+func dateOrNil(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.Format("2006-01-02")
+}

@@ -261,3 +261,49 @@ func orDefault(v, fallback string) string {
 	}
 	return v
 }
+
+// ReviewQueue lists campaigns awaiting approval.
+//
+// The counterpart Phase 9 shipped without. A funded campaign sat in
+// `pending_review` with no way to find it, which is the worst state available:
+// the advertiser has paid and nothing is running.
+func (h *BoostHandlers) ReviewQueue(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	if err := h.Admin.RequireOps(r.Context(), userID); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	items, err := h.Boosts.ReviewQueue(r.Context(), 100)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	out := make([]map[string]any, 0, len(items))
+	for _, c := range items {
+		out = append(out, map[string]any{
+			"id":              c.ID,
+			"reference":       c.Reference,
+			"advertiser_type": c.AdvertiserType,
+			"advertiser_name": c.AdvertiserName,
+			"reel_id":         c.ReelID,
+			"caption":         c.Caption,
+			"poster_key":      c.PosterKey,
+			"bid_cpm":         map[string]any{"amount": c.BidCPMinor, "currency": c.Currency},
+			"funded":          map[string]any{"amount": c.FundedMinor, "currency": c.Currency},
+			"daily_cap":       map[string]any{"amount": c.DailyCapMinor, "currency": c.Currency},
+			"starts_on":       c.StartsOn.Format("2006-01-02"),
+			"created_at":      c.CreatedAt.Format(time.RFC3339),
+			// Rendered as a sentence server-side. The reviewer's question is
+			// "is this sane", and eight nullable columns is not the shape that
+			// answers it.
+			"targeting": c.Targeting,
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
+}

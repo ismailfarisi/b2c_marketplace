@@ -464,3 +464,87 @@ func validationError(issues []FieldIssue) error {
 	}
 	return &httpx.ValidationError{Fields: fields}
 }
+
+// PendingListing is one listing awaiting review.
+type PendingListing struct {
+	ID           uuid.UUID
+	Title        string
+	SellerType   string
+	SellerID     uuid.UUID
+	SellerName   string
+	Make         string
+	Model        string
+	Year         int
+	PriceMinor   int64
+	Currency     string
+	Mileage      int
+	VIN          string
+	RegionalSpec string
+	City         string
+	PhotoKey     string
+	SubmittedAt  time.Time
+	// TrustScore is the seller's standing at the moment of review. Carried with
+	// the listing because a reviewer deciding on a car from a seller with two
+	// confirmed fraud signals is making a different decision from one deciding
+	// on the same car from a clean seller — and looking it up separately is a
+	// step that gets skipped under queue pressure.
+	TrustScore float64
+	TrustBand  string
+}
+
+// ReviewQueue lists listings awaiting a decision.
+//
+// Written when the admin panel was built. Phase 6 shipped `Approve`/`Reject`
+// and a fraud queue, and no way to find a listing waiting for either — so the
+// only listings that could be reviewed were the ones somebody was already
+// looking at.
+//
+// Oldest first, and the VIN and price come with the row. PHASE-6 §2 said a
+// listing decision "needs the VIN and the price history in front of it"; a
+// queue that returns titles and ids makes that a second request per row, and
+// the second request is the one nobody makes.
+func (s *Service) ReviewQueue(ctx context.Context, limit int) ([]PendingListing, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT l.id, coalesce(l.title, ''), l.seller_kind, l.seller_id,
+		       coalesce(d.business_name, u.display_name, u.phone, ''),
+		       coalesce(mk.name, ''), coalesce(md.name, ''), coalesce(l.year, 0),
+		       l.price_minor, l.currency, coalesce(l.mileage_km, 0),
+		       coalesce(l.vin, ''), l.regional_spec, coalesce(l.city, ''),
+		       coalesce((SELECT p.s3_key FROM listing_photos p
+		                  WHERE p.listing_id = l.id ORDER BY p.position LIMIT 1), ''),
+		       l.updated_at,
+		       coalesce(ts.score, 100), coalesce(ts.band, 'clean')
+		  FROM vehicle_listings l
+		  LEFT JOIN users u ON u.id = l.seller_id
+		  LEFT JOIN dealer_profiles d ON d.id = l.dealer_id
+		  LEFT JOIN vehicle_models md ON md.id = l.model_id
+		  LEFT JOIN vehicle_makes mk  ON mk.id = md.make_id
+		  -- Trust is keyed on the *user*, not the listing's seller kind: a
+		  -- dealer's signals attach to the person who owns the account, which is
+		  -- what makes a fraudster's second dealership visible.
+		  LEFT JOIN trust_scores ts ON ts.subject_type = 'user' AND ts.subject_id = l.seller_id
+		 WHERE l.status = 'pending_review'
+		 ORDER BY l.updated_at
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("vehicles: review queue: %w", err)
+	}
+	defer rows.Close()
+
+	var out []PendingListing
+	for rows.Next() {
+		var p PendingListing
+		if err := rows.Scan(&p.ID, &p.Title, &p.SellerType, &p.SellerID, &p.SellerName,
+			&p.Make, &p.Model, &p.Year, &p.PriceMinor, &p.Currency, &p.Mileage,
+			&p.VIN, &p.RegionalSpec, &p.City, &p.PhotoKey, &p.SubmittedAt,
+			&p.TrustScore, &p.TrustBand); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}

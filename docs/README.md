@@ -25,6 +25,8 @@ Read in this order.
 | 13 | [PHASE-10-HARDENING.md](./PHASE-10-HARDENING.md) | Built | The two load tests, metrics, SLOs, and **§5, an honest launch-readiness assessment** |
 | 14 | [RUNBOOKS.md](./RUNBOOKS.md) | Current | What to do at 02:00. One entry per failure mode that exists in the code today |
 
+> **The admin panel was not in the plan.** PLAN-VIDEO-FIRST §8 lists eleven phases and a staff console is a deliverable in none of them; PLAN.md §5 P4 mentions one in passing and the video-first replan dropped it without saying so. It was built after Phase 10 and is documented in [PHASE-10 §7](./PHASE-10-HARDENING.md). Building it found four review surfaces with a `decide` endpoint and no queue behind them — work that could be acted on and not found.
+
 ---
 
 ## ⚠️ Phase numbers mean two different things
