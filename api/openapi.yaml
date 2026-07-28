@@ -1,0 +1,816 @@
+openapi: 3.1.0
+
+info:
+  title: Marketplace API
+  version: 0.1.0
+  description: |
+    Video-first local marketplace — GCC.
+
+    **This file is the source of truth.** The Go server interfaces and the TypeScript
+    client are both generated from it. Do not hand-edit anything under
+    `services/api/internal/gen/` or `packages/api-client/src/gen/`; CI fails the build
+    if regenerating produces a diff.
+
+    Conventions:
+      - Money is always an integer in **minor units** plus an ISO-4217 currency code.
+        There are no floats in this API.
+      - Every mutating endpoint accepts `Idempotency-Key`. Mobile networks retry;
+        double-charging is unrecoverable.
+      - Timestamps are RFC 3339 with offset. Calendar dates carrying no time are
+        `format: date` and are interpreted in the branch's timezone.
+
+servers:
+  - url: http://localhost:8080/v1
+    description: Local
+  - url: https://api.staging.example.ae/v1
+    description: Staging
+
+tags:
+  - name: health
+  - name: auth
+  - name: me
+  - name: catalog
+  - name: availability
+  - name: orders
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------- health --
+  /healthz:
+    get:
+      tags: [health]
+      operationId: getLiveness
+      summary: Liveness — process is up
+      security: []
+      responses:
+        "200":
+          description: Alive
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /readyz:
+    get:
+      tags: [health]
+      operationId: getReadiness
+      summary: Readiness — dependencies reachable
+      security: []
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  # ------------------------------------------------------------------ auth --
+  /auth/otp/request:
+    post:
+      tags: [auth]
+      operationId: requestOtp
+      summary: Send a one-time code to a phone number
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OtpRequest" }
+      responses:
+        "202":
+          description: Code dispatched (response is identical whether or not the number exists)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OtpChallenge" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /auth/otp/verify:
+    post:
+      tags: [auth]
+      operationId: verifyOtp
+      summary: Exchange a one-time code for a token pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OtpVerification" }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshSession
+      summary: Rotate a refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "200":
+          description: Rotated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke the current session, or all sessions for this user
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                all_devices: { type: boolean, default: false }
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # -------------------------------------------------------------------- me --
+  /me:
+    get:
+      tags: [me]
+      operationId: getCurrentUser
+      summary: The authenticated user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /me/addresses:
+    get:
+      tags: [me]
+      operationId: listAddresses
+      summary: The user's saved addresses
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Address" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [me]
+      operationId: createAddress
+      summary: Save an address
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddressInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Address" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # --------------------------------------------------------------- catalog --
+  /vendors/{vendorId}:
+    get:
+      tags: [catalog]
+      operationId: getVendor
+      summary: Public vendor profile
+      security: []
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Vendor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/offerings:
+    get:
+      tags: [catalog]
+      operationId: listOfferings
+      summary: Bookable offerings at a branch
+      security: []
+      parameters:
+        - name: branchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: service_type
+          in: query
+          required: false
+          description: Filter by service type key, e.g. `laundry_wash_fold`.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ServiceOffering" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------- availability --
+  /branches/{branchId}/availability:
+    get:
+      tags: [availability]
+      operationId: getAvailability
+      summary: Remaining capacity per day and time window
+      description: |
+        Returns only windows with remaining capacity. A window absent from the response
+        is either full, closed, or outside the branch's operating calendar — the client
+        must not distinguish between those cases.
+      security: []
+      parameters:
+        - name: branchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: resource_key
+          in: query
+          required: true
+          description: Capacity resource being consumed, e.g. `pickup_slot`, `kitchen_covers`.
+          schema: { type: string }
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: Inclusive. At most 31 days after `from`.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AvailabilityDay" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ---------------------------------------------------------------- orders --
+  /orders:
+    get:
+      tags: [orders]
+      operationId: listOrders
+      summary: The user's orders, newest first
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Order" }
+                  next_cursor:
+                    type: [string, "null"]
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [orders]
+      operationId: createOrder
+      summary: Place an order
+      description: |
+        Reserves capacity, materialises fulfillments, and produces a price quote in
+        `estimated` state. No money moves here — payment authorization is a separate
+        call so that a failed card does not orphan a capacity reservation.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: Capacity for the requested window was exhausted between quote and submit
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /orders/{orderId}:
+    get:
+      tags: [orders]
+      operationId: getOrder
+      summary: One order with its fulfillments and quote
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /orders/{orderId}/payment-intent:
+    post:
+      tags: [orders]
+      operationId: createPaymentIntent
+      summary: Authorize payment for an order
+      description: |
+        Moves the quote `estimated → authorized`. Returns the gateway client secret;
+        the app completes 3DS with the gateway SDK directly and the platform learns
+        the outcome by webhook, never by trusting the client.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: Intent created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentIntent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Quote is not in a state that can be authorized
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Client-generated UUID. Replaying a key with an identical request body returns
+        the original response; replaying it with a different body is a 422.
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    Unauthorized:
+      description: Missing, expired or revoked credentials
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: No such resource, or not visible to this caller
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    UnprocessableEntity:
+      description: Well-formed but semantically invalid
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    TooManyRequests:
+      description: Rate limited
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    # RFC 9457 problem details. One error shape for the whole API.
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri, default: "about:blank" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        request_id: { type: string }
+        errors:
+          type: array
+          description: Field-level detail for validation failures.
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+              message: { type: string }
+
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, degraded, down] }
+        version: { type: string }
+        checks:
+          type: object
+          additionalProperties: { type: string }
+
+    Money:
+      type: object
+      description: Integer minor units. `1250` + `AED` is 12.50 AED.
+      required: [amount, currency]
+      properties:
+        amount: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3, examples: ["AED", "SAR"] }
+
+    GeoPoint:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+
+    Locale:
+      type: string
+      enum: [en, ar]
+
+    # --- auth ---
+    OtpRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          description: E.164, including country code.
+          pattern: '^\+[1-9]\d{7,14}$'
+          examples: ["+971501234567"]
+        purpose: { type: string, enum: [login, verify_phone], default: login }
+        locale: { $ref: "#/components/schemas/Locale" }
+
+    OtpChallenge:
+      type: object
+      required: [challenge_id, expires_at]
+      properties:
+        challenge_id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
+        resend_after_seconds: { type: integer }
+
+    OtpVerification:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id: { type: string, format: uuid }
+        code: { type: string, minLength: 4, maxLength: 8 }
+        device:
+          type: object
+          properties:
+            platform: { type: string, enum: [ios, android, web] }
+            name: { type: string }
+            push_token: { type: string }
+
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token, expires_in, user]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, default: Bearer }
+        expires_in: { type: integer, description: Access token lifetime in seconds. }
+        user: { $ref: "#/components/schemas/User" }
+
+    User:
+      type: object
+      required: [id, phone, locale, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        phone: { type: string }
+        email: { type: [string, "null"], format: email }
+        display_name: { type: [string, "null"] }
+        locale: { $ref: "#/components/schemas/Locale" }
+        status: { type: string, enum: [active, suspended, deleted] }
+        created_at: { type: string, format: date-time }
+
+    # --- addresses ---
+    AddressInput:
+      type: object
+      description: |
+        GCC addressing is landmark-based. A postcode-driven form fails here — `landmark`
+        carries more routing value than `street` in most of the region.
+      required: [label, city, country, point]
+      properties:
+        label: { type: string, examples: ["Home", "Office"] }
+        recipient_name: { type: string }
+        recipient_phone: { type: string, pattern: '^\+[1-9]\d{7,14}$' }
+        building: { type: string }
+        flat: { type: string }
+        street: { type: string }
+        landmark: { type: string }
+        area: { type: string, description: "District / community, e.g. Al Barsha 1." }
+        city: { type: string }
+        emirate: { type: string, description: "Emirate (UAE) or region (KSA)." }
+        country: { type: string, minLength: 2, maxLength: 2, examples: ["AE", "SA"] }
+        point: { $ref: "#/components/schemas/GeoPoint" }
+        notes: { type: string }
+
+    Address:
+      allOf:
+        - $ref: "#/components/schemas/AddressInput"
+        - type: object
+          required: [id, created_at]
+          properties:
+            id: { type: string, format: uuid }
+            is_default: { type: boolean }
+            created_at: { type: string, format: date-time }
+
+    # --- catalog ---
+    Vendor:
+      type: object
+      required: [id, slug, trade_name, status]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        trade_name: { type: string }
+        trade_name_ar: { type: [string, "null"] }
+        status: { type: string, enum: [pending, active, suspended] }
+        rating: { type: [number, "null"] }
+        rating_count: { type: integer }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/VendorBranch" }
+
+    VendorBranch:
+      type: object
+      description: |
+        Capacity, service areas and operating hours attach to the **branch**, not the
+        vendor. A laundry chain has three facilities with independent catchments.
+      required: [id, vendor_id, name, timezone]
+      properties:
+        id: { type: string, format: uuid }
+        vendor_id: { type: string, format: uuid }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        timezone: { type: string, examples: ["Asia/Dubai"] }
+        point: { $ref: "#/components/schemas/GeoPoint" }
+        is_active: { type: boolean }
+
+    ServiceOffering:
+      type: object
+      required: [id, branch_id, service_type, name, base_price, is_active]
+      properties:
+        id: { type: string, format: uuid }
+        branch_id: { type: string, format: uuid }
+        service_type: { type: string, description: "Strategy registry key." }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        base_price: { $ref: "#/components/schemas/Money" }
+        price_is_estimate:
+          type: boolean
+          description: |
+            True when the final amount is only known after handling — laundry priced by
+            weight, for example. The client must show an estimate, not a total.
+        lead_time_minutes: { type: integer }
+        image_url: { type: [string, "null"], format: uri }
+        is_active: { type: boolean }
+
+    # --- availability ---
+    AvailabilityDay:
+      type: object
+      required: [date, windows]
+      properties:
+        date: { type: string, format: date }
+        windows:
+          type: array
+          items: { $ref: "#/components/schemas/AvailabilityWindow" }
+
+    AvailabilityWindow:
+      type: object
+      required: [window_id, starts_at, ends_at, remaining]
+      properties:
+        window_id: { type: string, format: uuid }
+        starts_at: { type: string, description: "Local wall-clock HH:MM in the branch timezone.", examples: ["08:00"] }
+        ends_at: { type: string, examples: ["10:00"] }
+        remaining: { type: integer, minimum: 0 }
+        surcharge:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+
+    # --- orders ---
+    OrderInput:
+      type: object
+      required: [branch_id, address_id, lines, schedule]
+      properties:
+        branch_id: { type: string, format: uuid }
+        address_id: { type: string, format: uuid }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [offering_id, quantity]
+            properties:
+              offering_id: { type: string, format: uuid }
+              quantity: { type: integer, minimum: 1 }
+              options:
+                type: object
+                additionalProperties: true
+                description: Vertical-specific selections, validated by the service type's strategy.
+        schedule:
+          type: object
+          description: |
+            One entry per fulfillment the vertical requires. A laundry order supplies
+            two (pickup and delivery); a single-visit service supplies one. The count
+            is validated against the service type's fulfillment pattern.
+          required: [slots]
+          properties:
+            slots:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [kind, date, window_id]
+                properties:
+                  kind: { type: string, enum: [pickup, delivery, visit] }
+                  date: { type: string, format: date }
+                  window_id: { type: string, format: uuid }
+        notes: { type: string }
+        source:
+          type: object
+          description: |
+            Attribution. Present when the order originated from a reel — this is the
+            conversion signal Phase 3 depends on, so the field exists from Phase 1
+            even though nothing writes it yet.
+          properties:
+            reel_id: { type: [string, "null"], format: uuid }
+            action_id: { type: [string, "null"], format: uuid }
+
+    Order:
+      type: object
+      required: [id, order_no, status, branch_id, lines, fulfillments, quote, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        order_no: { type: string, examples: ["AE-2K7F4M"] }
+        status:
+          type: string
+          enum: [pending_payment, confirmed, in_progress, completed, cancelled, failed]
+        branch_id: { type: string, format: uuid }
+        vendor: { $ref: "#/components/schemas/Vendor" }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/OrderLine" }
+        fulfillments:
+          type: array
+          items: { $ref: "#/components/schemas/Fulfillment" }
+        quote: { $ref: "#/components/schemas/PriceQuote" }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+
+    OrderLine:
+      type: object
+      description: |
+        Name and price are **snapshots** taken when the order was placed. Never render
+        from the offering — a vendor's later price change must not rewrite history.
+      required: [id, offering_id, name_snapshot, unit_price_snapshot, quantity]
+      properties:
+        id: { type: string, format: uuid }
+        offering_id: { type: string, format: uuid }
+        name_snapshot: { type: string }
+        unit_price_snapshot: { $ref: "#/components/schemas/Money" }
+        quantity: { type: integer }
+        options:
+          type: object
+          additionalProperties: true
+
+    Fulfillment:
+      type: object
+      description: |
+        The atomic unit of physical work: someone goes somewhere at a time to do a
+        thing. Logistics operates on this shape alone and never learns what a laundry
+        or a meal is.
+      required: [id, kind, status, scheduled_date, window]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [pickup, delivery, visit] }
+        status:
+          type: string
+          enum: [scheduled, dispatched, en_route, arrived, completed, failed, cancelled]
+        sequence: { type: integer, description: "Ordering within the parent order, 1-based." }
+        scheduled_date: { type: string, format: date }
+        window: { $ref: "#/components/schemas/AvailabilityWindow" }
+        address: { $ref: "#/components/schemas/Address" }
+        completed_at: { type: [string, "null"], format: date-time }
+
+    PriceQuote:
+      type: object
+      description: |
+        Price is a state machine, not a column:
+        `estimated → authorized → adjusted → captured → refunded`.
+        Laundry priced by weight is `adjusted` after pickup — the model must carry that
+        natively rather than treating it as an exception.
+      required: [id, state, version, subtotal, tax_total, total]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [estimated, authorized, adjusted, captured, refunded, void] }
+        version: { type: integer }
+        subtotal: { $ref: "#/components/schemas/Money" }
+        discount_total: { $ref: "#/components/schemas/Money" }
+        delivery_total: { $ref: "#/components/schemas/Money" }
+        tax_total: { $ref: "#/components/schemas/Money" }
+        total: { $ref: "#/components/schemas/Money" }
+        tax_inclusive:
+          type: boolean
+          description: |
+            True in GCC markets — displayed prices already contain VAT. `tax_total` is
+            the extracted portion of `total`, not an addition to it.
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/QuoteLine" }
+
+    QuoteLine:
+      type: object
+      required: [kind, label, amount]
+      properties:
+        kind: { type: string, enum: [item, delivery, surcharge, discount, tax] }
+        label: { type: string }
+        amount: { $ref: "#/components/schemas/Money" }
+        tax_rate_bp:
+          type: [integer, "null"]
+          description: Basis points. 500 = 5% (UAE), 1500 = 15% (KSA).
+
+    PaymentIntent:
+      type: object
+      required: [id, status, amount, provider]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [requires_action, authorized, failed] }
+        amount: { $ref: "#/components/schemas/Money" }
+        provider: { type: string, examples: ["checkout", "stripe", "tap"] }
+        client_secret: { type: [string, "null"] }
+        redirect_url: { type: [string, "null"], format: uri }

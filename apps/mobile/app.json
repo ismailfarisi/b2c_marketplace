@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Marketplace",
+    "slug": "marketplace",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "marketplace",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ae.example.marketplace",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Used to show services and listings that can actually reach your address.",
+        "NSCameraUsageDescription": "Used to record videos of items you list for sale.",
+        "NSMicrophoneUsageDescription": "Used to record audio with your videos.",
+        "NSPhotoLibraryUsageDescription": "Used to upload videos you have already recorded."
+      }
+    },
+    "android": {
+      "package": "ae.example.marketplace",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "http://localhost:8080/v1"
+    }
+  }
+}

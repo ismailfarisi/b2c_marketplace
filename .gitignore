@@ -1,0 +1,45 @@
+# --- dependencies ---
+node_modules/
+.pnp.*
+.yarn/
+
+# --- build output ---
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+bin/
+services/api/bin/
+
+# --- go ---
+vendor/
+*.test
+coverage.out
+
+# --- env & secrets ---
+.env
+.env.*
+!.env.example
+
+# --- local infra ---
+.docker-data/
+
+# --- editors / os ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- expo ---
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# --- logs ---
+*.log
+npm-debug.log*

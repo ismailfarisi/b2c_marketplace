@@ -1,0 +1,29 @@
+:root {
+  --page-max: 64rem;
+  --space: 1rem;
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", sans-serif;
+  line-height: 1.5;
+}
+
+/*
+ * Logical properties throughout, never left/right.
+ *
+ * `margin-inline` flips automatically under dir="rtl"; `margin-left` does not.
+ * Every physical property written here is one an Arabic-speaking user will
+ * eventually file a bug about.
+ */
+.page {
+  max-inline-size: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--space);
+  padding-block: calc(var(--space) * 2);
+}

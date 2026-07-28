@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.24"
+  NODE_VERSION: "22"
+
+jobs:
+  # Migrations are verified against a real PostGIS instance rather than parsed.
+  # A migration that only "looks right" is not a migration that applies — and the
+  # first place that shows up should be CI, not a production deploy window.
+  migrations:
+    name: Migrations apply and roll back
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: marketplace
+          POSTGRES_PASSWORD: marketplace
+          POSTGRES_DB: marketplace
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U marketplace"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DB_URL: postgres://marketplace:marketplace@localhost:5432/marketplace?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/api/go.sum
+
+      - name: Apply
+        working-directory: services/api
+        run: go tool migrate -path migrations -database "$DB_URL" up
+
+      # Rolling all the way back proves the down migrations are real. An
+      # untested down migration is discovered during an incident, which is the
+      # worst possible time to find out it drops the wrong thing.
+      - name: Roll back to zero
+        working-directory: services/api
+        run: go tool migrate -path migrations -database "$DB_URL" down -all
+
+      - name: Re-apply
+        working-directory: services/api
+        run: go tool migrate -path migrations -database "$DB_URL" up
+
+  go:
+    name: Go build, vet, test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: marketplace
+          POSTGRES_PASSWORD: marketplace
+          POSTGRES_DB: marketplace
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U marketplace"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://marketplace:marketplace@localhost:5432/marketplace?sslmode=disable
+      JWT_SIGNING_KEY: ci-only-signing-key-at-least-32-bytes-long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/api/go.sum
+
+      - name: Verify formatting
+        working-directory: services/api
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would change these files:"
+            echo "$unformatted"
+            gofmt -d .
+            exit 1
+          fi
+
+      - name: Vet
+        working-directory: services/api
+        run: go vet ./...
+
+      - name: Migrate
+        working-directory: services/api
+        run: go tool migrate -path migrations -database "$DATABASE_URL" up
+
+      # -race is not optional here. Capacity reservation is a contended write
+      # path by design, and a data race in it manifests as overbooking that
+      # nobody can reproduce.
+      - name: Test
+        working-directory: services/api
+        run: go test -race -count=1 ./...
+
+      - name: Build
+        working-directory: services/api
+        run: |
+          go build ./cmd/api
+          go build ./cmd/worker
+
+  web:
+    name: TypeScript typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:web
+
+  # The contract is only a source of truth if drift is impossible. A spec change
+  # merged without regenerated clients is the same class of bug as a migration
+  # merged without the code that uses it — it just fails later and further away.
+  contract:
+    name: Generated clients match the spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/api/go.sum
+
+      - run: npm ci
+      - run: node scripts/check-generated.mjs

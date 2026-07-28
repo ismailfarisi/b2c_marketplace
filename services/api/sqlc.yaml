@@ -1,0 +1,29 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/db/queries
+    gen:
+      go:
+        package: dbgen
+        out: internal/db/dbgen
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_json_tags: false
+        overrides:
+          # PostGIS types have no pgx-native Go mapping. Keep them opaque at the
+          # sqlc layer — geometry is only ever read via ST_* expressions that
+          # project to scalars, never marshalled into Go.
+          - db_type: "geography"
+            go_type: "string"
+          - db_type: "geometry"
+            go_type: "string"
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              type: "uuid.NullUUID"
+              import: "github.com/google/uuid"

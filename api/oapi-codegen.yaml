@@ -1,0 +1,20 @@
+# Generates the Go server boundary from api/openapi.yaml.
+#   go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+#
+# Only the *boundary* is generated: request/response types, the ServerInterface the
+# handlers implement, and the chi route wiring. Business logic lives in
+# internal/modules/** and never imports this package's HTTP concerns.
+package: openapi
+output: services/api/internal/gen/openapi/openapi.gen.go
+
+generate:
+  chi-server: true
+  models: true
+  strict-server: true
+  embedded-spec: true
+
+output-options:
+  # Fail loudly on a spec the generator only half-understands rather than emitting
+  # something that compiles but silently drops a field.
+  skip-prune: false
+  nullable-type: true

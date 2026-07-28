@@ -1,0 +1,64 @@
+name: b2c-marketplace
+
+services:
+  postgres:
+    # PostGIS is required from migration 000001 — plain postgres will not boot the schema.
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: marketplace
+      POSTGRES_DB: marketplace
+      # C collation keeps index behaviour identical across dev machines and CI.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace -d marketplace"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # S3-compatible object storage for presigned uploads (Phase 2 media pipeline).
+  # Present from Phase 0 so the upload seam has somewhere to point in dev.
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

@@ -1,0 +1,33 @@
+# Normalise to LF in the repository and in the working tree.
+#
+# Without this, a Windows checkout gets CRLF and the Makefile recipes, the
+# .mjs scripts and the SQL migrations all fail on Linux CI — the shell reads
+# the trailing \r as part of the command. Committing CRLF is the same bug one
+# step earlier.
+* text=auto eol=lf
+
+# Files that must be LF regardless of any local core.autocrlf setting.
+*.sh        text eol=lf
+*.mjs       text eol=lf
+*.sql       text eol=lf
+*.go        text eol=lf
+Makefile    text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary — never touched, never diffed as text.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.mp4       binary
+*.mov       binary
+*.woff      binary
+*.woff2     binary
+*.ico       binary
+
+# Generated. Collapsed in PR review, but still diffable when needed — these are
+# reviewed for *drift*, not for content.
+packages/api-client/src/gen/**    linguist-generated=true
+services/api/internal/gen/**      linguist-generated=true
