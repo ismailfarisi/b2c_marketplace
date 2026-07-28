@@ -1,9 +1,11 @@
 # Data Model — Full Entity Catalogue
 
 **Status:** Draft v1 · 2026-07-28 · companion to [PLAN.md](./PLAN.md)
-**Total:** 114 authored tables (+ ~3 River job tables you don't author)
+**Scope:** the 114-table **services engine**. Reels, vehicles and ranking tables are counted separately — see "Where the other tables live" at the end.
 
-Phase tags map to PLAN.md §5. **P1 = 15 tables** — that is the entire walking skeleton with real money moving. Everything else is widening.
+> ⚠️ **The `P` column uses PLAN.md §5's numbering, which is *not* PLAN-VIDEO-FIRST §8's calendar phasing.** They collide — PLAN.md P2 (meals) is video-first Phase 5; PLAN.md P3 (clients) is video-first Phase 7. Read `P` as **dependency ordering** — "this table is needed once the engine reaches that stage" — not as a date. Full mapping in [README.md](./README.md).
+
+**P1 = 15 tables** — that is the entire walking skeleton with real money moving. Everything else is widening.
 
 | Module | Tables | P1 |
 |---|---:|---:|
@@ -217,11 +219,29 @@ Vertical-specific tables: `menu_cycles`, `menu_cycle_days`, `menu_items`, `menu_
 
 **8 of 114 — 7%.** The other 93% is vertical-agnostic. Adding cleaning or salon should cost **0–2 tables** (probably just a `service_types` row plus its strategy code). If a new vertical starts demanding five or more tables, the strategy pattern has leaked — stop and fix it before shipping.
 
+> **Scope of this metric:** it applies to **service verticals riding the Fulfillment engine** — cleaning, salon, tutoring. It does *not* apply to vehicles, which costs 25 tables. That is not a leak in the abstraction: vehicles is a listing kind with its own domain (taxonomy, inspections, offers, classifieds billing), not a service consumed through fulfillments. Don't read the 25 as a failure of the 0–2 rule; they measure different things. See SCOPE-EXTENSIONS §3.
+
+## Where the other tables live
+
+This document covers the services engine only. The rest of the system:
+
+| Scope | Tables | Defined in |
+|---|---:|---|
+| Services engine (this doc) | 114 | — |
+| Reels, feed, moderation | +21 → 135 | [SCOPE-EXTENSIONS.md](./SCOPE-EXTENSIONS.md) §2 · schema in [PHASE-2-MEDIA-AND-FEED.md](./PHASE-2-MEDIA-AND-FEED.md) §6 |
+| Vehicles C2C | +25 → 160 | [SCOPE-EXTENSIONS.md](./SCOPE-EXTENSIONS.md) §3 |
+| Ranking, experiments, creators, ads | +15 → **~175** | [PLAN-VIDEO-FIRST.md](./PLAN-VIDEO-FIRST.md) §8 |
+
+`reel_views` and all impression/engagement events go to ClickHouse, not Postgres, and are excluded.
+
 ## Reading the counts honestly
 
-- **~15 tables for Phase 1** — a real order with real money end-to-end.
-- **~40 by end of Phase 2** — subscriptions working, abstraction proven.
-- **~75 by end of Phase 3** — first revenue possible here, with manual ops behind the scenes.
-- **114 is the full-scope target**, not a starting schema. Roughly a third of it (logistics, ZATCA, loyalty, support tooling) is deferrable past launch.
+Against the **video-first calendar** (PLAN-VIDEO-FIRST §8), not PLAN.md's:
+
+- **~15 tables by Phase 1** — a real order with real money end-to-end.
+- **~35 by Phase 2** — plus the 12 media/feed tables from PHASE-2 §6.
+- **~50 by Phase 4** — actions, engagement, ranking.
+- **~90 by Phase 5** — subscriptions land, and **this is where first revenue is realistic**, not earlier.
+- **~175 is the full-scope target** across all four documents, not a starting schema. Roughly a third (logistics, ZATCA, loyalty, support tooling, ads) is deferrable past launch.
 
 Do not create these up front. Each phase's migrations add only what that phase's features need — the value of this list is knowing what's *coming*, so P1 tables don't get shaped in a way that blocks them.

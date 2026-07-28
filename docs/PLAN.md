@@ -1,7 +1,9 @@
 # B2C Services Marketplace — Technical Plan
 
 > **Superseded on framing by [PLAN-VIDEO-FIRST.md](./PLAN-VIDEO-FIRST.md).**
-> The engine design in this document — the Fulfillment primitive (§1), the price state machine and ledger (§2), capacity buckets (§2.3), the data model (§4) and the GCC compliance requirements (§7) — all remain correct and in force. What changed is centrality: this engine is now one fulfillment backend behind a shared discovery layer, and the phasing in §5 is replaced by PLAN-VIDEO-FIRST §8.
+> The engine design in this document — the Fulfillment primitive (§1), the price state machine and ledger (§2), capacity buckets (§2.3), the data model (§4) and the GCC compliance requirements (§7) — all remain correct and in force. What changed is centrality: this engine is now one fulfillment backend behind a shared discovery layer.
+>
+> **§5's phases, timeline and team size are superseded** by PLAN-VIDEO-FIRST §8 (~40 weeks, ~5–6 engineers). Read §5 as **engine dependency ordering**, not as a calendar. `DATA-MODEL.md`'s per-table `P` column uses §5's numbering — the mapping between the two schemes is in [README.md](./README.md).
 
 **Status:** Draft v1 · 2026-07-28
 **Market:** GCC (UAE first, KSA second)
@@ -208,8 +210,8 @@ Recurring + prepaid + multi-vendor + refunds is the hardest money shape there is
 
 | Risk | Mitigation |
 |---|---|
-| Abstraction leaks; meals need engine surgery | Phase 2 gate exists precisely to catch this while it's cheap |
-| Capacity race under launch spike | Explicit bucket model + DB constraints + targeted load test in Phase 6 |
+| Abstraction leaks; meals need engine surgery | The meals gate (§5 P2 · video-first Phase 5) exists precisely to catch this while it's cheap |
+| Capacity race under launch spike | Explicit bucket model + DB constraints + targeted load test at hardening (§5 P6 · video-first Phase 10) |
 | Ledger deferred → money reporting drifts | Build it in Phase 1 when it's small |
 | Driver app blows the timeline | Launch with vendor-managed delivery; defer native driver app |
 | Cold-start: no vendors → no customers | Launch one city, one district, hand-recruit ~10 vendors. Product cannot fix marketplace liquidity |
@@ -220,7 +222,7 @@ Recurring + prepaid + multi-vendor + refunds is the hardest money shape there is
 ## 9. Open questions
 
 1. **Commission model** — flat %, per-vertical %, or subscription fee for vendors? Affects the ledger's account structure.
-2. **Who delivers?** Platform drivers, vendor's own drivers, or 3PL? Changes Phase 4 substantially.
+2. **Who delivers?** Platform drivers, vendor's own drivers, or 3PL? Reshapes the logistics phase (§5 P4 · video-first Phase 7) substantially.
 3. **Ramadan timing** — is the first launch before or after? Meal-plan demand and menu logic shift entirely.
 4. **KSA in year one?** If yes, ZATCA must be scoped immediately.
 5. **Existing ops?** If you already run a laundry or kitchen, seeding the first vendor is solved and Phase 1 gets a real pilot customer.

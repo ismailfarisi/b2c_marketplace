@@ -2,6 +2,8 @@
 
 **Status:** Analysis · 2026-07-28 · companion to [PLAN.md](./PLAN.md) and [DATA-MODEL.md](./DATA-MODEL.md)
 
+> **Decision taken: Framing B.** §1 posed the fork; the answer was video-first local discovery, and the replan is [PLAN-VIDEO-FIRST.md](./PLAN-VIDEO-FIRST.md). **§6's recommendation ("ship reels, defer cars") is superseded** — under Framing B, vehicles is a load-bearing content-supply engine at Phase 6, not a deferral. §1–§5 remain the reference for *why* each piece was scoped the way it was.
+
 Two proposals: (1) short-video reels with location + attribute filters, (2) C2C used-car sales with seller-posted reels.
 
 They differ in kind. Reels is a **feature** that strengthens the existing business. Used-car C2C is a **second business** with different economics, different operations, different trust model and different revenue mechanics. Treating them as one decision is the main risk here.
@@ -16,7 +18,7 @@ Reels are **vendor-authored** content: the cloud kitchen filming today's biryani
 - Reuses vendors, offerings, service areas, identity
 - Content supply is bounded and accountable (vendors have trade licences and a contract)
 - Directly measurable: reel → offering view → order
-- Moderate cost: **+16 tables, ~5–7 weeks**
+- Moderate cost: **+21 tables, ~5–7 weeks**
 
 ### Framing B — Video-first local discovery app
 The feed is the **front door**. Verticals become different actionable outcomes behind a shared discovery layer: book a service, subscribe to meals, inquire about a car. TikTok Shop / Xiaohongshu shape.
@@ -37,7 +39,7 @@ Shared user base transfer value in the short term is close to zero. What *does* 
 ### Pipeline
 ```
 client → presigned S3 upload (direct, never through the API)
-      → transcode (MediaConvert or Mux) → HLS ladder 360/480/720p + thumbnail
+      → transcode (MediaConvert or Mux) → HLS ladder 360/540/720p + thumbnail
       → auto-moderation (Rekognition video + Transcribe → text moderation)
       → human review queue for flagged
       → publish → feed index
@@ -54,24 +56,26 @@ Requirements: geo filter, category/tag/price filters, engagement + recency ranki
 | MVP | **PostGIS + Postgres.** `ST_DWithin` / `ST_Contains` + score ordering. Good to ~100k reels at modest traffic. Costs you nothing new |
 | Scale | **OpenSearch** `geo_distance` + `function_score`. The right answer once multi-filter + ranking + volume converge |
 
-**The important product insight on the location filter:** for services, distance is the wrong primitive. A reel from a vendor who cannot deliver to your address is worthless no matter how close it is. The filter should be `ST_Contains(vendor_service_area, user_address)` — a polygon match against data you already have in `service_areas`. That is strictly better than a radius, and it is a real differentiator versus generic video feeds.
+**The important product insight on the location filter:** for services, distance is the wrong primitive. A reel from a vendor who cannot deliver to your address is worthless no matter how close it is. The filter should be a polygon match against data you already have in `service_areas` — strictly better than a radius, and a real differentiator versus generic video feeds.
 
 For cars, radius/emirate *is* correct — there's no service area, and buyers will travel for the right vehicle.
 
-### Entities · +16
+> **Refined in implementation:** rather than branching on reel kind at query time, resolve both semantics into a single `reels.coverage` geography column at publish time — one predicate, one GiST index, one code path. See [PHASE-2-MEDIA-AND-FEED.md](./PHASE-2-MEDIA-AND-FEED.md) §4.1.
 
-| Table | Purpose |
-|---|---|
-| `reels` | **`author_type`/`author_id` and `subject_type`/`subject_id` — polymorphic from day one** (see §5) |
-| `reel_renditions` | HLS variants per reel |
-| `reel_products` | reel → offering/listing join. **This is the revenue link** — an unshoppable reel is a cost centre |
-| `reel_tags`, `hashtags`, `reel_hashtags` | Discovery (3 tables) |
-| `reel_likes`, `reel_comments`, `reel_comment_likes`, `reel_saves`, `reel_shares` | Engagement (5) |
-| `reel_views` | **Very high volume.** Push to an analytics store, not Postgres — this table will dwarf everything else |
-| `feed_impressions` | Dedup so the feed doesn't repeat |
-| `follows` | user → vendor/seller |
-| `reel_reports` | Abuse reporting |
-| `moderation_jobs`, `moderation_decisions` | Auto + human review (2) |
+### Entities · +21
+
+| Group | Tables | Notes |
+|---|---:|---|
+| Core | `reels`, `reel_renditions`, `reel_state_history`, `reel_tags` | 4 · `reels` is **polymorphic from day one** on `author_type`/`author_id` and `subject_type`/`subject_id` (see §5) |
+| Actions | `reel_actions` | 1 · reel → offering/plan/listing CTA. **This is the revenue link** — an unactionable reel is a cost centre. Defined in PLAN-VIDEO-FIRST §2 |
+| Discovery | `hashtags`, `reel_hashtags` | 2 |
+| Engagement | `reel_likes`, `reel_comments`, `reel_comment_likes`, `reel_saves`, `reel_shares`, `reel_counters` | 6 · counters materialised from Redis |
+| Feed | `feed_impressions`, `follows`, `user_blocks` | 3 · impressions for analytics; serving dedup uses a Redis seen-set |
+| Moderation | `moderation_jobs`, `moderation_labels`, `moderation_decisions`, `author_trust`, `reel_reports` | 5 |
+
+`reel_views` and all engagement events go to **ClickHouse, not Postgres** — that stream dwarfs everything else and is excluded from the count. `media_assets` already exists as DATA-MODEL #114 and is reused, not added.
+
+Phase 2's subset of these (12 tables) is specified with full DDL in [PHASE-2-MEDIA-AND-FEED.md](./PHASE-2-MEDIA-AND-FEED.md) §6.
 
 ### Cost — the part that gets missed
 
@@ -124,10 +128,13 @@ Ownership transfer runs through the emirate authority (RTA in Dubai) or Absher/T
 
 | | Tables | Added timeline |
 |---|---:|---|
-| Current plan | 114 | ~23 weeks |
-| \+ Reels (vendor-authored) | +16 → **130** | +5–7 weeks |
-| \+ Used cars C2C | +25 → **155** | +10–14 weeks |
-| **All three** | **~155** | **~40–45 weeks** |
+| Services engine alone | 114 | ~23 weeks |
+| \+ Reels & feed | +21 → **135** | +5–7 weeks |
+| \+ Used cars C2C | +25 → **160** | +10–14 weeks |
+| \+ Ranking, experiments, creators, ads¹ | +15 → **~175** | included below |
+| **All of it (Framing B)** | **~175** | **~43 weeks** |
+
+¹ Only exists under Framing B — a boosted-reels ad surface and a ranking stack have no place in Framing A. Itemised in PLAN-VIDEO-FIRST §8.
 
 Plus: ~$2–4k/month video opex, a trust & safety function, and a second go-to-market motion with no shared playbook.
 
@@ -155,7 +162,11 @@ Do **not** create the `listings` supertype now. With one listing kind it's prema
 
 ---
 
-## 6. Recommendation
+## 6. Recommendation — ⚠️ SUPERSEDED
+
+> **This section is kept for the record only.** It recommended Framing A. **Framing B was chosen**, which inverts points 2 and 3 below: vehicles is no longer a deferral but a load-bearing content-supply engine at Phase 6, and reels is the core system rather than a Phase 4–5 feature. The live plan is [PLAN-VIDEO-FIRST.md](./PLAN-VIDEO-FIRST.md) §8. Point 1 (apply the §5 seams in Phase 0) still stands.
+>
+> The reasoning below is still worth reading for *why* the sequencing argument cuts the way it does — it's the strongest case against the path now being taken, and it names the risks that Framing B has to actively manage (content supply, two GTM motions, unproven ops).
 
 **Ship reels. Defer cars. Decide the framing consciously.**
 

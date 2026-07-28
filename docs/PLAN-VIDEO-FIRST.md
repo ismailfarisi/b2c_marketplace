@@ -90,7 +90,7 @@ Rank on predicted conversion weighted by engagement — not engagement alone. Te
 | Concern | Store |
 |---|---|
 | Reel metadata, actions, social graph | PostgreSQL |
-| Candidate retrieval + geo + multi-filter ranking | **OpenSearch — needed from day one now, not "at scale"** |
+| Candidate retrieval + geo + multi-filter ranking | **OpenSearch — index from day one, serve from Postgres until ranking needs it.** See [PHASE-2-MEDIA-AND-FEED.md](./PHASE-2-MEDIA-AND-FEED.md) §4.4 |
 | Engagement counters | Redis, write-behind to Postgres |
 | View/impression events | Kinesis → **ClickHouse.** Never Postgres — this is your highest-volume data by an order of magnitude |
 | Embeddings (personalization v2) | pgvector initially |
@@ -172,8 +172,11 @@ Stream 3 is why the per-view cost problem in §9 is solvable — but only after 
 | **7 · Clients + logistics** | 5 | Mobile polish, vendor dashboard, driver app or vendor-managed delivery |
 | **8 · Market readiness** | 4 | Arabic/RTL, VAT, ZATCA if KSA, KYC, payouts, T&S scale-up |
 | **9 · Boosts** | 3 | Paid reach — campaigns, budgets, delivery, billing |
+| **10 · Hardening** | 3 | **Load-test capacity contention and the feed read path.** Observability, on-call runbooks, launch readiness |
 
-**~40 weeks.** Roughly **~170 tables** at full scope (155 from DATA-MODEL.md + SCOPE-EXTENSIONS, plus ~15 for ranking features, experiments, creator programs and ad delivery).
+**~43 weeks.** Roughly **~175 tables** at full scope — 114 engine (DATA-MODEL.md) + 21 reels + 25 vehicles (SCOPE-EXTENSIONS.md) + ~15 for ranking features, experiments, creator programs and ad delivery.
+
+Phase 10 was missing from the first draft of this plan — an oversight, not a decision. PLAN.md §2.3 calls for a targeted load test of capacity reservation, and the video-first plan adds a second contention point the services plan never had: the feed read path under a Ramadan-scale signup spike. Neither survives being skipped.
 
 First real signal arrives at **Phase 3** (~13 weeks): does a reel actually produce a booking? Everything after that is a bet on the answer being yes. Design Phase 3's instrumentation so the answer is unambiguous.
 
