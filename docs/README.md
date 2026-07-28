@@ -10,7 +10,8 @@ Read in this order.
 | 2 | [PLAN.md](./PLAN.md) | **Partially superseded** | Engine design — Fulfillment, ledger, pricing, capacity, GCC compliance. All still in force. Its §5 phasing is **not** |
 | 3 | [DATA-MODEL.md](./DATA-MODEL.md) | Current | 114-table engine catalogue. Reels and vehicles are counted separately — see §"Where the other tables live" |
 | 4 | [SCOPE-EXTENSIONS.md](./SCOPE-EXTENSIONS.md) | Analysis; §6 superseded | Why reels and vehicles were scoped the way they were. The §6 recommendation was overtaken by the Framing B decision |
-| 5 | [PHASE-2-MEDIA-AND-FEED.md](./PHASE-2-MEDIA-AND-FEED.md) | Current | Implementation design for the current Phase 2 |
+| 5 | [PHASE-2-MEDIA-AND-FEED.md](./PHASE-2-MEDIA-AND-FEED.md) | Built | Media pipeline, moderation gate, geo feed. §10 records what shipped and where it deviates |
+| 6 | [PHASE-3-ACTION-LAYER.md](./PHASE-3-ACTION-LAYER.md) | Built | Action layer and conversion attribution. **Read §4 before quoting any conversion number** |
 
 ---
 

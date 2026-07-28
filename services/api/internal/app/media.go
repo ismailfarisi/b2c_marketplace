@@ -15,6 +15,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/marketplace/api/internal/config"
+	"github.com/marketplace/api/internal/modules/actions"
+	"github.com/marketplace/api/internal/modules/attribution"
 	"github.com/marketplace/api/internal/modules/engagement"
 	"github.com/marketplace/api/internal/modules/feed"
 	"github.com/marketplace/api/internal/modules/media"
@@ -23,9 +25,11 @@ import (
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/modules/search"
 	"github.com/marketplace/api/internal/platform/objectstore"
+	"github.com/marketplace/api/internal/seam/action"
 )
 
-// Media is the Phase 2 dependency graph.
+// Media is the Phase 2 dependency graph, extended in Phase 3 with the action
+// layer and attribution.
 type Media struct {
 	Store      *objectstore.Store
 	Reels      *reels.Service
@@ -36,15 +40,18 @@ type Media struct {
 	Ingest     *engagement.Ingest
 	Pipeline   *pipeline.Runner
 	Indexer    search.Indexer
+
+	Actions     *actions.Service
+	Attribution *attribution.Service
 }
 
-// BuildMedia constructs everything Phase 2 needs.
+// BuildMedia constructs everything the media stack needs.
 //
 // Returns nil, nil when no object store is configured. The transactional API
 // then runs without the media surface rather than failing to boot — a
 // deployment that only serves orders is a legitimate configuration, and the
 // alternative is that a missing bucket name takes down checkout.
-func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client) (*Media, error) {
+func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client, registry *action.Registry) (*Media, error) {
 	if cfg.S3Bucket == "" {
 		slog.Warn("media disabled: S3_BUCKET is not set")
 		return nil, nil
@@ -109,6 +116,12 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 		Counters:   counters,
 		Indexer:    indexer,
 	}
+
+	// The actions service borrows the reels service's branch authorisation
+	// rather than reimplementing it. Two copies of an authorisation rule is one
+	// too many, and the one that drifts is always the one nobody is watching.
+	m.Actions = actions.NewService(pool, registry, reelSvc.Repo())
+	m.Attribution = attribution.NewService(pool)
 
 	m.Ingest = engagement.NewIngest(engagement.NewPostgresSink(pool), counters)
 	m.Pipeline = pipeline.NewRunner(pipeline.Deps{

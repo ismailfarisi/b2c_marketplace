@@ -40,6 +40,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// exactly what Phase 4's ranking needs. Rate limiting, not
 			// authentication, is what protects this endpoint.
 			r.Post("/events", h.Reels.SubmitEvents)
+			// CTA presses. Public for the same reason: an anonymous viewer who
+			// clicks, signs up, and orders is the feed doing the whole job, and
+			// it is the conversion path most worth being able to see.
+			r.Post("/actions/{actionId}/click", h.Reels.ClickAction)
 		}
 	})
 
@@ -72,10 +76,25 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// retrofitting it after launch means launching without it.
 		r.Post("/reels/{reelId}/report", h.Reels.ReportReel)
 
+		// Phase 3 — the action layer.
+		r.Put("/reels/{reelId}/actions", h.Reels.SetActions)
+		r.Post("/me/follows", h.Reels.Follow)
+		r.Delete("/me/follows/{followeeId}", h.Reels.Unfollow)
+		r.Put("/reels/{reelId}/save", h.Reels.SaveReel)
+		r.Delete("/reels/{reelId}/save", h.Reels.UnsaveReel)
+
+		// The vendor's own conversion numbers, scoped by authorship.
+		r.Get("/reels/{reelId}/funnel", h.Reels.ReelFunnel)
+
 		// Admin. Authorisation is checked in the service against
 		// platform_admins on every call, not carried in a token claim.
 		r.Get("/moderation/queue", h.Reels.ModerationQueue)
 		r.Post("/moderation/{reelId}/decide", h.Reels.DecideModeration)
+
+		// The Phase 3 decision itself. Admin-only: this is the number that
+		// determines whether the video bet continues, and it must not circulate
+		// stripped of the definitions that make it meaningful.
+		r.Get("/analytics/feed-funnel", h.Reels.PlatformFunnel)
 	})
 }
 
@@ -92,5 +111,10 @@ func MountFeed(r chi.Router, h *ReelHandlers, issuer *auth.Issuer) {
 
 		r.Get("/feed", h.GetFeed)
 		r.Post("/events", h.SubmitEvents)
+		// The click endpoint belongs here too. It is on the same hot path as
+		// the feed — every CTA press on a served page hits it — and separating
+		// them would put the highest-intent event in the product behind the
+		// transactional core's scaling profile.
+		r.Post("/actions/{actionId}/click", h.ClickAction)
 	})
 }

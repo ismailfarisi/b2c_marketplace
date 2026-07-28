@@ -26,15 +26,13 @@ import (
 	"github.com/marketplace/api/internal/auth"
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/attribution"
 	"github.com/marketplace/api/internal/modules/identity"
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/platform/idempotency"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/platform/redisx"
-	"github.com/marketplace/api/internal/seam/action"
-	"github.com/marketplace/api/internal/seam/servicetype"
-	"github.com/marketplace/api/internal/verticals/laundry"
 )
 
 // version is stamped at build time: -ldflags "-X main.version=$(git rev-parse --short HEAD)"
@@ -83,15 +81,10 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// The two seams and the strategy registry are constructed once and handed
-	// to modules. Modules register into them; nothing reaches back.
-	actions := action.NewRegistry()
-	verticals := servicetype.NewRegistry()
-
-	// Laundry is the *engineering* skeleton, not a launch decision.
-	// PLAN-VIDEO-FIRST §5 ranks it last for feed suitability and no phase in §8
-	// ships it to customers — see docs/README.md open decision #3, still open.
-	laundry.Register(verticals, actions)
+	// The two seams are constructed and wired once, in app, so all three
+	// binaries end up with an identical handler set. Modules register into
+	// them; nothing reaches back.
+	registries := app.BuildRegistries(pool)
 
 	issuer := auth.NewIssuer(cfg.JWTSigningKey, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	idempotencyStore := idempotency.New(pool)
@@ -116,23 +109,30 @@ func run() error {
 		defer rdb.Close()
 	}
 
+	// Attribution runs inside the order transaction (see ordering.PlaceOrder
+	// step 7): the evidence is time-windowed, so an order that commits without
+	// its attribution row can never be attributed afterwards.
+	attributionSvc := attribution.NewService(pool)
+
 	handlers := &api.Handlers{
 		Identity: identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho),
-		Ordering: ordering.NewService(pool, verticals),
+		Ordering: ordering.NewService(pool, registries.Verticals, attributionSvc),
 		Payments: payments.NewService(pool, provider, commissionBP, platformVATBP),
 		Catalog:  api.NewCatalogQueries(pool),
 	}
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb)
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
 	if err != nil {
 		return err
 	}
 	if media != nil {
 		handlers.Reels = &api.ReelHandlers{
-			Reels:      media.Reels,
-			Feed:       media.Feed,
-			Ingest:     media.Ingest,
-			Moderation: media.Moderation,
+			Reels:       media.Reels,
+			Feed:        media.Feed,
+			Ingest:      media.Ingest,
+			Moderation:  media.Moderation,
+			Actions:     media.Actions,
+			Attribution: media.Attribution,
 		}
 	}
 

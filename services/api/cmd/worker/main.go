@@ -69,7 +69,7 @@ func run() error {
 		defer rdb.Close()
 	}
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb)
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, app.BuildRegistries(pool).Actions)
 	if err != nil {
 		return err
 	}

@@ -36,6 +36,9 @@ tags:
   - name: feed
   - name: events
   - name: moderation
+  - name: actions
+  - name: social
+  - name: analytics
 
 security:
   - bearerAuth: []
@@ -721,6 +724,255 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  # --------------------------------------------------------------- actions --
+  /reels/{reelId}/actions:
+    put:
+      tags: [actions]
+      operationId: setReelActions
+      summary: Set a reel's call-to-action buttons
+      description: |
+        Replaces the whole list. Position is implied by array order; index 0 is the
+        primary CTA and is the one that gets pressed.
+
+        Refused once moderation has begun, for two reasons. A CTA swapped after
+        approval means the reviewed content and the live destination are different
+        things — the oldest trick in content moderation. And repointing a published
+        reel's CTA would silently reassign its accumulated click history to a new
+        target, corrupting the funnel retroactively.
+
+        A CTA whose `(kind, target_type)` pair has no registered handler is rejected
+        here rather than stored. Otherwise the failure surfaces weeks later as a
+        greyed-out button in the feed, which everyone reads as a feed bug.
+      parameters:
+        - name: reelId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actions]
+              properties:
+                actions:
+                  type: array
+                  maxItems: 3
+                  description: |
+                    At most three. Not a storage limit — a product one: a reel with
+                    six buttons has no primary call to action, and attribution
+                    credits one action, so spreading intent across six makes every
+                    one of them look weak.
+                  items: { $ref: "#/components/schemas/ActionInput" }
+      responses:
+        "200":
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Actions are fixed once moderation has begun
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /actions/{actionId}/click:
+    post:
+      tags: [actions]
+      operationId: clickAction
+      summary: Record a CTA press and get the route
+      description: |
+        Recording and routing are the same call deliberately. If the client routed
+        itself and reported the click separately, every dropped analytics request
+        would be a conversion the server never saw — and those drops are not random,
+        they cluster in exactly the bad-network conditions where conversion is
+        already lowest. Coupling them means the number cannot quietly under-count.
+
+        The click is recorded even when the CTA resolves unavailable. A viewer
+        pressing "Book" on a fully-booked branch is demand, and it is the most
+        actionable signal a vendor will get — dropping it because the outcome failed
+        would hide a capacity problem behind a conversion one.
+
+        Authentication is optional, but an identity is required: sign in, or send
+        `X-Device-Id`. An anonymous viewer who clicks, signs up, and then orders is
+        the feed doing the entire job including acquisition, and that path is only
+        visible if the click carried a key that survives the sign-up.
+      security: []
+      parameters:
+        - name: actionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-Device-Id
+          in: header
+          required: false
+          description: Required when not authenticated.
+          schema: { type: string }
+        - name: lat
+          in: query
+          required: false
+          schema: { type: number }
+        - name: lng
+          in: query
+          required: false
+          schema: { type: number }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id: { type: string, maxLength: 128 }
+                surface:
+                  type: string
+                  enum: [feed, profile, search, share_link, deep_link]
+                  default: feed
+                  description: |
+                    A click from the feed and one from a shared link are not the same
+                    event. Attribution treats everything but `feed` and `search` as
+                    off-feed, so the feed's own number stays honest.
+                watched_ms:
+                  type: integer
+                  description: A press at 400ms is a mis-tap; one at 12s is intent.
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResolvedAction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ---------------------------------------------------------------- social --
+  /me/follows:
+    post:
+      tags: [social]
+      operationId: follow
+      summary: Follow a vendor, branch or creator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [followee_type, followee_id]
+              properties:
+                followee_type: { type: string, enum: [vendor, vendor_branch, user] }
+                followee_id: { type: string, format: uuid }
+      responses:
+        "204": { description: Followed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /me/follows/{followeeId}:
+    delete:
+      tags: [social]
+      operationId: unfollow
+      summary: Unfollow
+      parameters:
+        - name: followeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: type
+          in: query
+          required: false
+          schema: { type: string, enum: [vendor, vendor_branch, user], default: vendor_branch }
+      responses:
+        "204": { description: Unfollowed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /reels/{reelId}/save:
+    parameters:
+      - name: reelId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [social]
+      operationId: saveReel
+      summary: Save a reel
+      responses:
+        "204": { description: Saved }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [social]
+      operationId: unsaveReel
+      summary: Remove a saved reel
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ------------------------------------------------------------- analytics --
+  /reels/{reelId}/funnel:
+    get:
+      tags: [analytics]
+      operationId: getReelFunnel
+      summary: One reel's conversion funnel
+      description: |
+        Scoped to the reel's author.
+
+        There is deliberately no single `conversion_rate` field. The available
+        denominators differ by an order of magnitude — orders ÷ clicks flatters
+        roughly tenfold against orders ÷ impressions — so every rate is returned
+        named for its denominator, and orders are split by attribution model rather
+        than summed.
+      parameters:
+        - name: reelId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReelFunnel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /analytics/feed-funnel:
+    get:
+      tags: [analytics]
+      operationId: getFeedFunnel
+      summary: Platform-wide conversion — does the feed produce bookings?
+      description: |
+        The number Phase 3 exists to produce, and the one the decision to keep
+        investing in video rests on.
+
+        Staff-only. Not because it is sensitive, but because it must not circulate
+        stripped of the `definitions` block that makes it interpretable: the same
+        raw counts support a flattering reading and a conservative one, and the
+        response carries the definitions so both parties are quoting the same thing.
+
+        `feed_share_of_orders` is verifiable click-attributed orders over *all*
+        orders placed, including organic. It is the conservative reading on purpose.
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeedFunnel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -747,6 +999,18 @@ components:
       in: query
       required: false
       schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    FromDate:
+      name: from
+      in: query
+      required: false
+      description: Inclusive. Defaults to 30 days ago.
+      schema: { type: string, format: date }
+    ToDate:
+      name: to
+      in: query
+      required: false
+      description: Inclusive of the named day. Defaults to today.
+      schema: { type: string, format: date }
 
   responses:
     Unauthorized:
@@ -1338,3 +1602,170 @@ components:
         sla_breached:
           type: boolean
           description: True past the two-hour review SLA. Surfaced here so a breach is visible in the tool the moderator already has open.
+
+    # ------------------------------------------------------------- Phase 3 --
+
+    ActionKind:
+      type: string
+      description: |
+        The complete vocabulary the feed has for commerce. Adding a vertical means
+        registering a kind and its handler — never touching feed, ranking or
+        moderation code.
+      enum:
+        - book_service
+        - subscribe_plan
+        - inquire_listing
+        - open_menu
+        - follow
+        - share
+        - external
+
+    ActionTargetType:
+      type: string
+      enum:
+        - service_offering
+        - meal_plan
+        - vehicle_listing
+        - vendor_branch
+        - vendor
+        - url
+
+    ActionInput:
+      type: object
+      required: [kind, target_type]
+      properties:
+        kind: { $ref: "#/components/schemas/ActionKind" }
+        target_type: { $ref: "#/components/schemas/ActionTargetType" }
+        target_id:
+          type: [string, "null"]
+          format: uuid
+          description: Required for every target type except `url`.
+        target_url:
+          type: [string, "null"]
+          format: uri
+          description: |
+            Required when `target_type` is `url`. Only http and https are accepted —
+            a CTA is a link a vendor supplies and a customer taps inside our app.
+        label: { type: string, maxLength: 40 }
+        label_ar: { type: string, maxLength: 40 }
+
+    ResolvedAction:
+      type: object
+      description: |
+        A CTA as the client renders it. `label`, `available` and `reason` come from
+        the owning vertical's handler; the feed itself never learns what the target
+        is.
+      required: [id, kind, target_type, available]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ActionKind" }
+        target_type: { $ref: "#/components/schemas/ActionTargetType" }
+        target_id: { type: string, format: uuid }
+        position: { type: integer }
+        label: { type: string }
+        label_ar: { type: string }
+        available: { type: boolean }
+        reason:
+          type: [string, "null"]
+          description: |
+            Shown when `available` is false. Always populated in that case — a
+            greyed-out button with no explanation reads as a broken app, and the
+            vendor gets blamed for a platform decision.
+        route:
+          type: string
+          description: Client-side deep link, or an absolute URL for `external`.
+        meta:
+          type: [object, "null"]
+          additionalProperties: true
+
+    AttributionModel:
+      type: string
+      description: |
+        Which rule credited an order to a reel. Stored per row, because the rules
+        will change and a historical number is only interpretable under the rule
+        that produced it.
+
+        `last_click` is the only model backed by something the server observed.
+        The others are reported beside it, never merged into it.
+      enum:
+        - last_click
+        - declared
+        - view_through
+        - none
+
+    AttributedOrders:
+      type: object
+      description: |
+        Split by model and never summed into one "orders" figure. A view-through
+        order and a click-through order are different claims about whether the feed
+        works, and adding them asserts they are the same claim.
+      properties:
+        last_click: { type: integer, format: int64 }
+        declared: { type: integer, format: int64 }
+        view_through: { type: integer, format: int64 }
+        organic: { type: integer, format: int64 }
+
+    ReelFunnel:
+      type: object
+      required: [reel_id, impressions, views, clicks, orders]
+      properties:
+        reel_id: { type: string, format: uuid }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        impressions:
+          type: integer
+          format: int64
+          description: Times the reel was served in a feed page. The denominator egress is spent on.
+        views:
+          type: integer
+          format: int64
+          description: ≥2s watched, deduped per (user, reel, session).
+        clicks: { type: integer, format: int64 }
+        orders: { $ref: "#/components/schemas/AttributedOrders" }
+        off_feed_orders:
+          type: integer
+          format: int64
+          description: |
+            Arrived by shared or deep link rather than the feed. Reported apart
+            because a vendor pushing their own reel to a WhatsApp group converts at
+            rates the feed will never approach.
+        gmv_last_click_minor:
+          type: integer
+          format: int64
+          description: Verifiable attributions only. A revenue figure nobody can defend is worse than none.
+        currency: { type: string }
+        rates:
+          type: object
+          description: Each named for its denominator, so the flattering one cannot be quoted by accident.
+          properties:
+            clicks_per_impression: { type: number }
+            orders_per_click: { type: number }
+            orders_per_impression: { type: number }
+
+    FeedFunnel:
+      type: object
+      required: [impressions, clicks, orders, feed_share_of_orders, definitions]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        impressions: { type: integer, format: int64 }
+        clicks: { type: integer, format: int64 }
+        orders: { $ref: "#/components/schemas/AttributedOrders" }
+        gmv_last_click_minor: { type: integer, format: int64 }
+        gmv_total_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        reels_with_impressions: { type: integer, format: int64 }
+        reels_with_any_order: { type: integer, format: int64 }
+        feed_share_of_orders:
+          type: number
+          description: |
+            Verifiable click-attributed orders ÷ all orders placed, organic included.
+            The conservative reading, computed server-side so everyone quotes the
+            same definition.
+        definitions:
+          type: object
+          description: |
+            Shipped with the numbers, not in a wiki. The same raw counts support a
+            flattering reading and a conservative one; carrying the definitions means
+            both parties are arguing about the same thing.
+          additionalProperties: true

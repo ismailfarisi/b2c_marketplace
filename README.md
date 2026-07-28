@@ -111,6 +111,13 @@ layered moderation gate with GCC thresholds and Claude text classification,
 author trust tiers, the geo-filtered feed with keyset pagination, Redis counters
 and seen-sets, batched event ingest, and the OpenSearch indexer.
 
+**Phase 3 — action layer and conversion.** `reel_actions` with real per-vertical
+handlers, server-side click logging, the attribution resolver, durable feed
+impressions, follows and saves, and the funnel endpoints. See
+[`docs/PHASE-3-ACTION-LAYER.md`](./docs/PHASE-3-ACTION-LAYER.md) — the design
+turns on one instruction from the plan: *instrument conversion honestly before
+building ranking*.
+
 **Not yet written:**
 
 - `/me`, `/me/addresses`, `/vendors/{vendorId}`, `/orders` list, `/auth/logout`
@@ -187,6 +194,11 @@ Worth knowing before changing anything in `services/api/migrations/`:
 | Reels are polymorphic (`author_type`) from the first migration | `000012` | Phase 6 adds user content; retrofitting polymorphism onto a live table is a migration nobody schedules |
 | A takedown keeps the row | `000012` | The state and moderation history is the evidence when the decision is disputed |
 | Every raw moderation label is stored | `000012` | The thresholds get retuned against the queue's overturn rate, and you cannot tune on data you discarded |
+| `action_clicks` is separate from `orders.source_reel_id` | `000013` | The client's claim is not evidence. Attribution records which of the two it believed |
+| `order_attributions.order_id` is the primary key | `000013` | One order credits at most one reel, or the funnel sums to more revenue than the business made |
+| Attribution stores its own `window_seconds` | `000013` | A number computed under a 24h window is not comparable to one under 7d, and nobody will remember which was in force |
+| The funnel splits orders by model, never sums them | `000013` | A view-through order and a click-through order are different claims about whether the feed works |
+| `feed_impressions` is durable and day-partitioned | `000013` | Without it, "conversion rate" quietly becomes orders-per-click — the flattering denominator |
 
 Arabic and RTL are carried from Phase 0, not retrofitted: locale is a route
 segment on web, `I18nManager.forceRTL` runs at module scope on mobile, and CSS
@@ -204,20 +216,22 @@ projects get indefinitely postponed.
 - `go vet ./...` — clean
 - `gofmt -l .` — clean
 - `go test ./...` — passing (`money`, `ledger`, `reels`, `moderation`, `media`,
-  `feed`)
-- `redocly lint api/openapi.yaml` — valid; 14 warnings, all cosmetic
+  `feed`, `attribution`, `actions`, `social`)
+- `redocly lint api/openapi.yaml` — valid; 18 warnings, all cosmetic
 
 **Not verified** — no Docker daemon has been available at any point:
 
 - **Migrations have never been applied against PostGIS.** Still the big one, and
-  it grew: 12 migrations now, including four PL/pgSQL functions, a deferred
-  constraint trigger, a `gist (coverage, published_at)` index that depends on
-  `btree_gist`, and `ST_Intersects` against a `geography(Geometry, 4326)` column.
-  None of it is checkable by the Go compiler.
-- Every SQL string in the repositories is unexecuted. The Phase 2 feed query is
-  the one to distrust most — three CTEs, two lateral joins, a JSON aggregate and
-  a row-comparison keyset predicate, none of which has ever been parsed by
-  Postgres.
+  it keeps growing: 13 migrations now, including five PL/pgSQL functions, a
+  deferred constraint trigger, a `gist (coverage, published_at)` index that
+  depends on `btree_gist`, `ST_Intersects` against a
+  `geography(Geometry, 4326)` column, and a range-partitioned table whose
+  partitions are created by a function called from the worker. None of it is
+  checkable by the Go compiler.
+- Every SQL string in the repositories is unexecuted. Two to distrust most: the
+  Phase 2 feed query (three CTEs, two lateral joins, a JSON aggregate, a
+  row-comparison keyset predicate) and the Phase 3 funnel rollup (four lateral
+  joins and `FILTER` aggregates over a partitioned table).
 - No presigned URL has been generated against MinIO, so the S3 wiring is
   compiled but unexercised.
 - `go test -race` cannot run here — the toolchain has `CGO_ENABLED=0` and the

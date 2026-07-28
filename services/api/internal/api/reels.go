@@ -9,10 +9,13 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/actions"
+	"github.com/marketplace/api/internal/modules/attribution"
 	"github.com/marketplace/api/internal/modules/engagement"
 	"github.com/marketplace/api/internal/modules/feed"
 	"github.com/marketplace/api/internal/modules/moderation"
 	"github.com/marketplace/api/internal/modules/reels"
+	"github.com/marketplace/api/internal/seam/action"
 )
 
 // ReelHandlers covers the Phase 2 surface: authoring, the feed, reporting,
@@ -22,6 +25,11 @@ type ReelHandlers struct {
 	Feed       *feed.Service
 	Ingest     *engagement.Ingest
 	Moderation *moderation.Service
+
+	// Phase 3. Nil-safe: a feed served without them renders reels with no CTAs,
+	// which is what Phase 2 did and is still a coherent product.
+	Actions     *actions.Service
+	Attribution *attribution.Service
 }
 
 // --- authoring ---------------------------------------------------------------
@@ -237,12 +245,9 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 	// Optional auth: a signed-in viewer gets block filtering and a durable
 	// seen-set; an anonymous one gets the feed keyed by device. Requiring login
 	// here would put a wall in front of the product's front door.
-	if userID, ok := httpx.UserIDFromContext(r.Context()); ok {
-		query.ViewerID = uuid.NullUUID{UUID: userID, Valid: true}
-		query.ViewerKey = "u:" + userID.String()
-	} else if device := r.Header.Get("X-Device-Id"); device != "" {
-		query.ViewerKey = "d:" + device
-	}
+	viewerID, viewerKey := viewerIdentity(r)
+	query.ViewerID = viewerID
+	query.ViewerKey = viewerKey
 
 	page, err := h.Feed.Get(r.Context(), query)
 	if err != nil {
@@ -250,14 +255,62 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reelIDs := make([]uuid.UUID, len(page.Items))
+	for i, it := range page.Items {
+		reelIDs[i] = it.ID
+	}
+
+	// Resolve the CTAs for the whole page in one batch. This is the seam doing
+	// its job: the feed hands over (kind, target_type, target_id) triples and
+	// gets back labels, availability and routes without ever learning what a
+	// laundry offering is.
+	var resolved map[uuid.UUID][]actions.Resolved
+	if h.Actions != nil && len(reelIDs) > 0 {
+		resolved, err = h.Actions.ResolvePage(r.Context(), reelIDs, action.Viewer{
+			UserID:  viewerID,
+			Lat:     lat,
+			Lng:     lng,
+			Locale:  httpx.LocaleFromContext(r.Context()),
+			Country: "AE",
+		})
+		if err != nil {
+			// A CTA-resolution failure must not blank the feed. Reels still
+			// play; they simply render without buttons this request.
+			logIfErr(r, "action resolution failed", err)
+			resolved = nil
+		}
+	}
+
+	// Record the impression denominator. Phase 2 kept the seen-set in Redis and
+	// out of the serving path, which was right for serving and wrong for
+	// measurement: without a durable impression count, "conversion rate"
+	// quietly becomes orders-per-click — the flattering one.
+	//
+	// Best-effort. Losing an impression row costs accuracy on a metric; failing
+	// the request to protect that metric would cost the front door.
+	if h.Actions != nil && len(reelIDs) > 0 {
+		logIfErr(r, "impression recording failed",
+			h.Actions.Repo().RecordImpressions(r.Context(), viewerKey, viewerID, "feed", reelIDs))
+	}
+
 	items := make([]map[string]any, 0, len(page.Items))
 	for _, it := range page.Items {
-		items = append(items, feedItemResponse(it))
+		item := feedItemResponse(it)
+		item["actions"] = actionsResponse(resolved[it.ID])
+		items = append(items, item)
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
 		"items":       items,
 		"next_cursor": nullable(page.NextCursor),
 	})
+}
+
+func actionsResponse(list []actions.Resolved) []map[string]any {
+	out := make([]map[string]any, 0, len(list))
+	for _, a := range list {
+		out = append(out, resolvedActionResponse(a))
+	}
+	return out
 }
 
 // --- events ------------------------------------------------------------------

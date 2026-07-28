@@ -59,6 +59,13 @@ type Order struct {
 	Currency    string
 	QuoteID     uuid.UUID
 	PlacedAt    time.Time
+
+	// Filled at placement, not loaded from the row. Surfaced so a client can
+	// confirm the order was credited to the reel the customer came from — which
+	// is the one moment the attribution is cheap to sanity-check, before the
+	// evidence ages out of the window.
+	AttributionModel string
+	AttributedReelID *uuid.UUID
 }
 
 func (r *Repository) LoadBranch(ctx context.Context, tx pgx.Tx, id uuid.UUID) (Branch, error) {

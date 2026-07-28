@@ -15,6 +15,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/marketplace/api/internal/money"
 	"github.com/marketplace/api/internal/seam/action"
 	"github.com/marketplace/api/internal/seam/fulfillment"
@@ -41,7 +43,12 @@ const (
 )
 
 // Register wires the vertical into the engine. Called once from main.
-func Register(types *servicetype.Registry, actions *action.Registry) {
+//
+// eligibility is optional: passing nil gives a CTA that always renders as
+// available. That is the right default for a test or a process with no database
+// — and the wrong one in production, which is why cmd/api supplies a real
+// checker rather than leaving it nil.
+func Register(types *servicetype.Registry, actions *action.Registry, eligibility Eligibility) {
 	for _, key := range []string{TypeWashFold, TypeDryClean} {
 		types.Register(servicetype.Definition{
 			Key:         key,
@@ -53,7 +60,19 @@ func Register(types *servicetype.Registry, actions *action.Registry) {
 	}
 
 	// The feed's only knowledge of laundry: a CTA kind and a target type.
-	actions.Register(action.KindBookService, action.TargetOffering, ctaHandler{})
+	actions.Register(action.KindBookService, action.TargetOffering, ctaHandler{eligibility: eligibility})
+}
+
+// Eligibility answers whether an offering can actually be booked by this viewer.
+//
+// An interface, and one this package defines rather than imports, so laundry
+// still depends on nothing. The implementation lives in the catalog module,
+// where the tables are.
+type Eligibility interface {
+	// OfferingBookable reports whether the offering is live, its branch is
+	// open, and the viewer's location falls inside the service area. The
+	// returned reason is shown to the customer, so it is written for them.
+	OfferingBookable(ctx context.Context, offeringID uuid.UUID, lat, lng float64) (ok bool, reason string, err error)
 }
 
 // --- item selection ---------------------------------------------------------
@@ -240,17 +259,48 @@ func (p pricing) Quote(_ context.Context, in servicetype.PricingContext) (servic
 
 // --- feed action ------------------------------------------------------------
 
-type ctaHandler struct{}
+type ctaHandler struct {
+	eligibility Eligibility
+}
 
-func (ctaHandler) Resolve(_ context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
+// Resolve renders the book-pickup CTA.
+//
+// Eligibility is checked here rather than deferred to the booking screen
+// because the alternative is the worst version of both: the customer taps,
+// waits for a screen to load, and is then told the vendor does not deliver to
+// them. In a feed where the next swipe is free, that is a customer lost to a
+// question we could have answered before they tapped.
+//
+// The reason string matters as much as the boolean. A greyed-out button with no
+// explanation reads as a broken app, and the vendor gets blamed for it.
+func (h ctaHandler) Resolve(ctx context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Book pickup", "احجز الاستلام"
 	if a.Label != "" {
 		label, labelAr = a.Label, a.LabelAr
 	}
-	return action.Resolved{
+
+	res := action.Resolved{
 		Label:     label,
 		LabelAr:   labelAr,
 		Available: true,
 		Route:     fmt.Sprintf("/offerings/%s/book", a.TargetID),
-	}, nil
+	}
+
+	if h.eligibility == nil {
+		return res, nil
+	}
+
+	ok, reason, err := h.eligibility.OfferingBookable(ctx, a.TargetID, v.Lat, v.Lng)
+	if err != nil {
+		// Render optimistically on error. The booking flow refuses properly and
+		// can explain why; a feed tile cannot, and blanking CTAs across the
+		// page because one query timed out is a far more visible failure than
+		// one customer reaching a screen that says no.
+		return res, nil
+	}
+	if !ok {
+		res.Available = false
+		res.Reason = reason
+	}
+	return res, nil
 }

@@ -154,6 +154,11 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The viewer key is the same identity the feed and the click log use, so a
+	// viewer who clicked anonymously, signed up, and is now ordering still
+	// resolves back to the reel that started it.
+	_, viewerKey := viewerIdentity(r)
+
 	in := ordering.PlaceOrderInput{
 		UserID:         userID,
 		BranchID:       body.BranchID,
@@ -161,6 +166,7 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		Notes:          body.Notes,
 		SourceReelID:   body.Source.ReelID,
 		SourceActionID: body.Source.ActionID,
+		ViewerKey:      viewerKey,
 	}
 
 	for _, l := range body.Lines {
@@ -288,7 +294,7 @@ func tokenPairResponse(s *identity.Session) map[string]any {
 }
 
 func orderResponse(o *ordering.Order) map[string]any {
-	return map[string]any{
+	out := map[string]any{
 		"id":           o.ID,
 		"order_no":     o.OrderNo,
 		"status":       o.Status,
@@ -297,6 +303,16 @@ func orderResponse(o *ordering.Order) map[string]any {
 		"currency":     o.Currency,
 		"created_at":   o.PlacedAt.Format(time.RFC3339),
 	}
+	// Echoed at placement so a client can confirm the order was credited to the
+	// reel the customer came from. This is the one moment that check is cheap —
+	// afterwards the evidence ages out of the attribution window.
+	if o.AttributionModel != "" {
+		out["attribution"] = map[string]any{
+			"model":   o.AttributionModel,
+			"reel_id": o.AttributedReelID,
+		}
+	}
+	return out
 }
 
 func nullable(s string) any {

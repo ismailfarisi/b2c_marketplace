@@ -33,6 +33,13 @@ func NewService(pool *pgxpool.Pool, repo *Repository, reelSvc *reels.Service) *S
 // removing someone's moderation rights has to take effect now, and a claim
 // stays valid until the access token expires — which, at a 15-minute TTL, is
 // fifteen minutes of a revoked moderator still approving content.
+// RequireStaff is the exported form, for callers outside this package that
+// guard a privileged surface — the platform funnel, which is the number that
+// decides whether to keep funding the feed.
+func (s *Service) RequireStaff(ctx context.Context, userID uuid.UUID) error {
+	return s.requireModerator(ctx, userID)
+}
+
 func (s *Service) requireModerator(ctx context.Context, userID uuid.UUID) error {
 	var ok bool
 	if err := s.pool.QueryRow(ctx,

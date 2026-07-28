@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/attribution"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/seam/fulfillment"
 	"github.com/marketplace/api/internal/seam/servicetype"
@@ -27,17 +28,23 @@ type Service struct {
 	verticals *servicetype.Registry
 	repo      *Repository
 
+	// Nil in a deployment without the media stack. Orders still place; they
+	// simply record no attribution, which is correct — there is no feed to
+	// attribute them to.
+	attribution *attribution.Service
+
 	// reservationTTL bounds how long an unpaid order holds capacity. Long
 	// enough for 3DS on a bad connection, short enough that an abandoned cart
 	// does not cost the vendor a slot for the rest of the day.
 	reservationTTL time.Duration
 }
 
-func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry) *Service {
+func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry, attr *attribution.Service) *Service {
 	return &Service{
 		pool:           pool,
 		verticals:      verticals,
 		repo:           &Repository{},
+		attribution:    attr,
 		reservationTTL: 15 * time.Minute,
 	}
 }
@@ -50,8 +57,15 @@ type PlaceOrderInput struct {
 	Slots     []fulfillment.Slot
 	Notes     string
 
+	// What the client claims sent them here. A claim, not evidence — the
+	// attribution module reconciles it against the server's own click log and
+	// records which of the two it believed.
 	SourceReelID   *uuid.UUID
 	SourceActionID *uuid.UUID
+	// ViewerKey is the same identity the feed and the click log use, so an
+	// anonymous viewer who clicked, signed up, and then ordered still resolves
+	// to the reel that started it.
+	ViewerKey string
 }
 
 type LineInput struct {
@@ -253,6 +267,38 @@ func (s *Service) PlaceOrder(ctx context.Context, in PlaceOrderInput) (*Order, e
 			return err
 		}
 		order.QuoteID = quoteID
+
+		// 7. Attribution, in the same transaction and for the same reason as
+		//    the outbox. The evidence is time-windowed, so an order that
+		//    commits without its attribution row is permanently unattributable
+		//    — there is no backfill, and by the time anyone notices the clicks
+		//    have aged out. A resolution *error* is downgraded to "organic"
+		//    inside AttributeOrder rather than failing the order.
+		if s.attribution != nil {
+			targets := make([]attribution.Target, 0, len(in.Lines))
+			for _, line := range in.Lines {
+				targets = append(targets, attribution.Target{
+					Type: "service_offering", ID: line.OfferingID,
+				})
+			}
+
+			attributed := s.attribution.AttributeOrder(ctx, tx, attribution.Order{
+				ID:               orderID,
+				PlacedAt:         order.PlacedAt,
+				GMVMinor:         quote.TotalMinor,
+				Currency:         branch.Currency,
+				BranchID:         branch.ID,
+				VendorID:         branch.VendorID,
+				Targets:          targets,
+				DeclaredReelID:   in.SourceReelID,
+				DeclaredActionID: in.SourceActionID,
+			}, attribution.Viewer{
+				UserID:    uuid.NullUUID{UUID: in.UserID, Valid: true},
+				ViewerKey: in.ViewerKey,
+			})
+			order.AttributionModel = string(attributed.Model)
+			order.AttributedReelID = attributed.ReelID
+		}
 		return nil
 	})
 

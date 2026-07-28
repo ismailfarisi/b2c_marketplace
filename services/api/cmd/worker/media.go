@@ -225,10 +225,58 @@ func indexReel(ctx context.Context, pool *pgxpool.Pool, indexer search.Indexer, 
 	return indexer.Index(ctx, doc)
 }
 
+// rollupFunnel recomputes yesterday's per-reel funnel, and today's so far.
+//
+// Recompute-and-replace, not incremental accumulation. Events arrive late — a
+// mobile client that was offline delivers yesterday's batch this morning — and
+// an incremental counter cannot absorb that without double-counting. Yesterday
+// is recomputed every hour for a day so those stragglers land.
+func rollupFunnel(ctx context.Context, media *app.Media) {
+	if media == nil || media.Attribution == nil {
+		return
+	}
+	now := time.Now().UTC()
+	for _, day := range []time.Time{now, now.AddDate(0, 0, -1)} {
+		n, err := media.Attribution.RollupDay(ctx, day)
+		if err != nil {
+			slog.ErrorContext(ctx, "funnel rollup failed",
+				"day", day.Format("2006-01-02"), "error", err)
+			continue
+		}
+		slog.DebugContext(ctx, "funnel rolled up",
+			"day", day.Format("2006-01-02"), "reels", n)
+	}
+}
+
+// ensureImpressionPartitions creates next month's partition ahead of time.
+//
+// Pre-creating is not merely tidy: rows that land in the DEFAULT partition
+// *block* the later creation of any partition whose range would have covered
+// them. A month that slips through cannot be given its own partition without
+// moving rows out first, so this job running is what keeps that from happening.
+func ensureImpressionPartitions(ctx context.Context, pool *pgxpool.Pool) {
+	for _, offset := range []int{0, 1, 2} {
+		month := time.Now().UTC().AddDate(0, offset, 0)
+		var name string
+		if err := pool.QueryRow(ctx,
+			`SELECT create_feed_impression_partition($1::date)`,
+			month.Format("2006-01-02")).Scan(&name); err != nil {
+			slog.ErrorContext(ctx, "impression partition creation failed",
+				"month", month.Format("2006-01"), "error", err)
+			return
+		}
+	}
+}
+
 // mediaTick is faster than the transactional sweeper's 30 seconds because exit
 // criterion #1 is a five-minute upload-to-feed path and this poller sits on it
 // three times.
 const mediaTick = 10 * time.Second
+
+// funnelTick is hourly. The numbers feed a dashboard someone checks daily and a
+// Phase 4 training set that reads closed days, so minute-level freshness would
+// be cost with no consumer.
+const funnelTick = time.Hour
 
 func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 	if media == nil {
@@ -236,13 +284,23 @@ func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 		return
 	}
 
+	// Run the slow maintenance once at startup so a fresh deployment is not a
+	// month behind on partitions and a day behind on numbers.
+	startupCtx, cancelStartup := context.WithTimeout(ctx, time.Minute)
+	ensureImpressionPartitions(startupCtx, pool)
+	rollupFunnel(startupCtx, media)
+	cancelStartup()
+
 	ticker := time.NewTicker(mediaTick)
 	defer ticker.Stop()
+	funnel := time.NewTicker(funnelTick)
+	defer funnel.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
+
 		case <-ticker.C:
 			tickCtx, cancel := context.WithTimeout(ctx, mediaTick*5)
 			expireDrafts(tickCtx, pool)
@@ -254,6 +312,15 @@ func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 				return
 			}
+
+		case <-funnel.C:
+			// On its own ticker and its own timeout: the rollup scans
+			// impressions, which is the largest table in the product, and it
+			// must not be able to starve the 10-second pipeline loop.
+			funnelCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+			ensureImpressionPartitions(funnelCtx, pool)
+			rollupFunnel(funnelCtx, media)
+			cancel()
 		}
 	}
 }

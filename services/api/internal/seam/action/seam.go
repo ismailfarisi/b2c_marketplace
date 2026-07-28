@@ -48,9 +48,13 @@ type Action struct {
 	Kind       Kind
 	TargetType TargetType
 	TargetID   uuid.UUID
-	Position   int
-	Label      string
-	LabelAr    string
+	// TargetURL is set only when TargetType is TargetURL. It is the one target
+	// that cannot be a UUID, and carrying it here rather than in a generic
+	// metadata bag keeps handlers from having to type-assert their own input.
+	TargetURL string
+	Position  int
+	Label     string
+	LabelAr   string
 }
 
 // Resolved is what a handler returns: enough for a client to render the CTA and
@@ -110,6 +114,19 @@ func (r *Registry) Register(k Kind, t TargetType, h Handler) {
 		panic(fmt.Sprintf("action: duplicate handler for %s", key(k, t)))
 	}
 	r.handlers[key(k, t)] = h
+}
+
+// Has reports whether a handler is registered for this pair.
+//
+// Used to reject a CTA at authoring time rather than at read time. Without it
+// an author can attach an action nobody implemented, it stores cleanly, and the
+// failure surfaces weeks later as a greyed-out button in the feed — which
+// everyone reads as a feed bug.
+func (r *Registry) Has(k Kind, t TargetType) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.handlers[key(k, t)]
+	return ok
 }
 
 func (r *Registry) Resolve(ctx context.Context, a Action, v Viewer) (Resolved, error) {

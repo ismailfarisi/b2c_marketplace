@@ -78,7 +78,7 @@ func run() error {
 		defer rdb.Close()
 	}
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb)
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, app.BuildRegistries(pool).Actions)
 	if err != nil {
 		return err
 	}
@@ -88,9 +88,14 @@ func run() error {
 
 	issuer := auth.NewIssuer(cfg.JWTSigningKey, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	handlers := &api.ReelHandlers{
-		Reels:  media.Reels,
-		Feed:   media.Feed,
-		Ingest: media.Ingest,
+		Reels: media.Reels,
+		Feed:  media.Feed,
+		// Actions is what makes a feed served here identical to one served by
+		// cmd/api: the same registry, the same handlers, the same CTAs. A feed
+		// without it would render reels with no buttons, which is the whole
+		// product minus the part that earns money.
+		Actions: media.Actions,
+		Ingest:  media.Ingest,
 	}
 
 	r := chi.NewRouter()
