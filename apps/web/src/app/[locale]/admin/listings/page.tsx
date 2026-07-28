@@ -115,11 +115,14 @@ export default function ListingQueue() {
               </span>
             </div>
 
-            <p className="muted">
-              {/* The consequence, before the decision. A reviewer confirming a
-                  signal should know it is worth 90 points against a threshold
-                  of 25, not discover it from the seller's support ticket. */}
-              Confirming costs this seller {s.weight_if_confirmed} points.
+            <p className={s.score_if_confirmed < 55 ? "bad" : "muted"}>
+              {/* The consequence, before the decision — and the *total*, not
+                  just this signal's share. "Does this restrict them" is a
+                  question about where the score lands, and QA found this line
+                  quoting a figure more than twice the one actually applied. */}
+              Confirming costs {s.cost_if_confirmed} points, leaving this seller
+              at {s.score_if_confirmed}.
+              {s.score_if_confirmed < 55 && " That restricts the account."}
             </p>
 
             <p className="mono muted">

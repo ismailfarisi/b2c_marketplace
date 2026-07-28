@@ -222,3 +222,67 @@ func TestExplainMarksEvidenceItDidNotCount(t *testing.T) {
 		t.Fatalf("dropped evidence contributed %v points", got[0].Points)
 	}
 }
+
+// ── the figure shown to a reviewer ───────────────────────────────────────────
+
+// QA found the fraud queue telling a moderator a confirmation would cost 90
+// points when it cost 40. The displayed number was the kind's weight at full
+// severity, doubled; the applied number is scaled by the signal's own severity
+// and decayed by its age.
+//
+// A moderator deciding whether confirming crosses a restriction threshold was
+// reading a figure consistently overstating the consequence of their decision.
+func TestTheCostShownIsTheCostApplied(t *testing.T) {
+	now := time.Now()
+	issued := now.Add(-2 * time.Hour)
+
+	const kind = "odometer_rollback"
+	const severity = 45
+
+	open := []Signal{{Kind: kind, Severity: severity, State: "open", CreatedAt: issued}}
+	confirmed := []Signal{{Kind: kind, Severity: severity, State: "confirmed", CreatedAt: issued}}
+
+	scoreOpen, _ := Score(open, now)
+	scoreConfirmed, _ := Score(confirmed, now)
+	applied := scoreOpen - scoreConfirmed
+
+	shown := CostOfConfirming(kind, severity, issued, now)
+
+	// Within a point, because both round independently.
+	if diff := shown - applied; diff > 1 || diff < -1 {
+		t.Fatalf("the queue shows %d points, confirming applies %d — a reviewer is "+
+			"reasoning with the wrong number", shown, applied)
+	}
+}
+
+func TestCostOfConfirmingScalesWithSeverity(t *testing.T) {
+	now := time.Now()
+	low := CostOfConfirming("odometer_rollback", 10, now, now)
+	high := CostOfConfirming("odometer_rollback", 100, now, now)
+
+	if low >= high {
+		t.Fatalf("severity 10 costs %d and severity 100 costs %d — severity must "+
+			"scale the penalty, or the field is decoration", low, high)
+	}
+}
+
+// An old signal is worth less, and the figure a reviewer sees has to say so —
+// otherwise confirming a nine-month-old report looks as consequential as
+// confirming one from this morning.
+func TestCostOfConfirmingDecaysWithAge(t *testing.T) {
+	now := time.Now()
+	fresh := CostOfConfirming("odometer_rollback", 50, now, now)
+	old := CostOfConfirming("odometer_rollback", 50, now.Add(-4*HalfLife), now)
+
+	if old >= fresh {
+		t.Fatalf("a fresh signal costs %d and a four-half-life-old one costs %d", fresh, old)
+	}
+}
+
+func TestAnUnknownKindStillHasACost(t *testing.T) {
+	now := time.Now()
+	if got := CostOfConfirming("invented_kind", 100, now, now); got <= 0 {
+		t.Fatalf("got %d — an unrecognised kind must still carry the default weight, "+
+			"or a typo in a policy code makes a confirmation free", got)
+	}
+}

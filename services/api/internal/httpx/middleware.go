@@ -145,3 +145,34 @@ func Timeout(d time.Duration) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// RequestHeaders is the CORS allow-list, shared by every HTTP binary.
+//
+// One list, because there were two and they drifted. `cmd/feed` permitted
+// `X-Device-Id` and `cmd/api` did not — so the same `GET /feed` succeeded from
+// the read-path process and failed the preflight from the transactional one,
+// and with it every anonymous call a browser makes: the feed, event ingest, and
+// `POST /actions/{id}/click`.
+//
+// That last one is the expensive part. The click is Phase 3's conversion event
+// — the measurement the whole video bet is judged on — and `actions.go` requires
+// `X-Device-Id` on it for anonymous viewers. It could not be sent from a
+// browser at all, so anonymous conversions were unrecorded rather than
+// under-recorded, and the number would have read as "reels do not convert".
+//
+// Found in QA against a real browser. Nothing in the Go tests exercises a
+// preflight, and curl does not send one.
+var RequestHeaders = []string{
+	"Authorization",
+	"Content-Type",
+	"Accept-Language",
+	"Idempotency-Key",
+	"X-Request-Id",
+	// Identifies an anonymous viewer across requests: it namespaces the
+	// seen-set, the interest profile and the click attribution. Without it
+	// every visit is a first visit.
+	"X-Device-Id",
+}
+
+// ResponseHeaders is what browsers are allowed to read back.
+var ResponseHeaders = []string{"X-Request-Id", "Idempotent-Replay"}

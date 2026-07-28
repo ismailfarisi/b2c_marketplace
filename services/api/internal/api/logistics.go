@@ -131,17 +131,26 @@ func (h *DriverHandlers) Dispatch_(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// The code never comes back here. Phase 7 returned it to this handler with a
-	// note that sending it was Phase 8's job; Phase 8 moved the enqueue inside
-	// the dispatch transaction, so the only thing this layer learns is whether
-	// the stop is now dispatched.
-	if err := h.Driver.Dispatch(r.Context(), id, fulfillmentID); err != nil {
+	// The code itself never comes back here — Phase 8 moved the enqueue inside
+	// the dispatch transaction. What does come back is whether one was needed.
+	codeSent, err := h.Driver.Dispatch(r.Context(), id, fulfillmentID)
+	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
+
+	// The note says what actually happened. QA found it claiming a code had been
+	// sent on every dispatch, including pickups and card-paid deliveries where
+	// none is needed and none was sent — a driver reading that at a door asks
+	// for a code the customer never received.
+	note := "no code needed for this stop — capture the proof shown on the stop"
+	if codeSent {
+		note = "a delivery code has been sent to the recipient"
+	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
-		"status": "dispatched",
-		"note":   "a delivery code has been sent to the recipient",
+		"status":    "dispatched",
+		"code_sent": codeSent,
+		"note":      note,
 	})
 }
 

@@ -101,7 +101,12 @@ func (s *Service) Resolve(ctx context.Context, locale string, keys []Key) (map[K
 			SELECT entity_id, field, locale::text, value, source, stale_since IS NOT NULL
 			  FROM translations
 			 WHERE entity_type = $1 AND entity_id = ANY($2) AND field = ANY($3)
-			   AND locale = ANY (ARRAY[$4, 'en']::locale_code[])`,
+			   -- Cast per element rather than on the array. Casting the array
+			   -- makes Postgres infer the parameter's type from this use, and
+			   -- any second use at a different type then fails to resolve an
+			   -- operator — see the note in notify.loadTemplate, where exactly
+			   -- that broke the delivery OTP.
+			   AND locale = ANY (ARRAY[$4::locale_code, 'en'::locale_code])`,
 			entityType, ids, fields, locale)
 		if err != nil {
 			return nil, fmt.Errorf("i18n: resolve %s: %w", entityType, err)

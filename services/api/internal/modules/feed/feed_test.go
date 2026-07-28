@@ -277,3 +277,93 @@ func TestUnionOfNothingIsUsableAsASQLArray(t *testing.T) {
 		t.Fatal("union returned nil rather than an empty slice")
 	}
 }
+
+// ── the cold-start bug QA found ──────────────────────────────────────────────
+
+func author(n int) uuid.UUID {
+	return uuid.NewSHA1(uuid.Nil, []byte{byte(n)})
+}
+
+func exploreItem(id int, a int) Item {
+	return Item{ID: uuid.NewSHA1(uuid.Nil, []byte{9, byte(id)}), AuthorID: author(a), Explore: true}
+}
+
+// A launch district has one vendor and almost everything in it is
+// low-impression, so almost everything lands in the exploration bucket — which
+// is capped at one item per author. The result was a **one-item feed** however
+// many reels that vendor had published, and it appeared exactly when supply was
+// thinnest, which is when the product can least afford it.
+func TestAThinDistrictDoesNotServeAOneItemFeed(t *testing.T) {
+	all := []Item{exploreItem(1, 1), exploreItem(2, 1), exploreItem(3, 1)}
+	// What Interleave would have produced after capPerAuthor(explore, 1).
+	page := []Item{all[0]}
+
+	got := backfill(page, 20, nil, all)
+
+	if len(got) != maxPerAuthor {
+		t.Fatalf("backfilled to %d items, want %d — one vendor's page is capped at "+
+			"maxPerAuthor, not at one", len(got), maxPerAuthor)
+	}
+}
+
+// The cap that stops one author owning the page still holds. Backfill only ever
+// tops up to `maxPerAuthor`; a vendor with nine reels does not get nine slots
+// because they happen to be the only vendor in range.
+func TestBackfillRespectsThePerAuthorCap(t *testing.T) {
+	var all []Item
+	for i := 0; i < 9; i++ {
+		all = append(all, exploreItem(i, 1))
+	}
+
+	got := backfill([]Item{all[0]}, 20, all)
+
+	if len(got) > maxPerAuthor {
+		t.Fatalf("one author took %d slots, cap is %d", len(got), maxPerAuthor)
+	}
+}
+
+func TestBackfillLeavesAFullPageAlone(t *testing.T) {
+	page := []Item{exploreItem(1, 1), exploreItem(2, 2)}
+	got := backfill(page, 2, []Item{exploreItem(3, 3)})
+
+	if len(got) != 2 {
+		t.Fatalf("a full page was extended to %d", len(got))
+	}
+}
+
+func TestBackfillNeverDuplicates(t *testing.T) {
+	a, b := exploreItem(1, 1), exploreItem(2, 2)
+	got := backfill([]Item{a}, 20, []Item{a, b})
+
+	seen := map[uuid.UUID]bool{}
+	for _, it := range got {
+		if seen[it.ID] {
+			t.Fatalf("%s appears twice", it.ID)
+		}
+		seen[it.ID] = true
+	}
+}
+
+// An item that arrives through backfill was still chosen without earning its
+// place on score. Clearing the flag would put unearned impressions into the
+// measurement of what exploration costs — the number that decides whether
+// exploration survives its first budget review.
+func TestBackfilledExplorationKeepsItsLabel(t *testing.T) {
+	all := []Item{exploreItem(1, 1), exploreItem(2, 1)}
+	got := backfill([]Item{all[0]}, 20, all)
+
+	for _, it := range got {
+		if !it.Explore {
+			t.Fatal("an exploration item lost its label on the way through backfill")
+		}
+	}
+}
+
+// A feed that can be exhausted is the product promise (PLAN-VIDEO-FIRST §10).
+// Backfill must not invent items to reach the limit.
+func TestBackfillCannotExtendBeyondWhatExists(t *testing.T) {
+	got := backfill([]Item{exploreItem(1, 1)}, 20, nil, nil)
+	if len(got) != 1 {
+		t.Fatalf("got %d items from an empty candidate set", len(got))
+	}
+}

@@ -120,15 +120,29 @@ const DefaultWeight = 20
 // A dismissed signal contributes exactly zero and is still kept: "we looked and
 // it was fine" has to survive, or the next detector run re-raises it and the
 // same reviewer looks at it again forever.
+// The three multipliers, named rather than inline. `CostOfConfirming` needs the
+// gap between open and confirmed, and a literal 2.0 in two places is a literal
+// that will disagree with itself.
+const (
+	openMultiplier      = 1.0
+	confirmedMultiplier = 2.0
+	dismissedMultiplier = 0.0
+)
+
 func stateMultiplier(state string) float64 {
 	switch state {
 	case "confirmed":
-		return 2.0
+		return confirmedMultiplier
 	case "dismissed":
-		return 0
+		return dismissedMultiplier
 	default: // open
-		return 1.0
+		return openMultiplier
 	}
+}
+
+// decayFactor is the exponential fold every scoring path shares.
+func decayFactor(age time.Duration) float64 {
+	return math.Exp2(-age.Hours() / HalfLife.Hours())
 }
 
 // Score folds evidence into 0–100 and a band.
@@ -162,8 +176,7 @@ func Score(signals []Signal, now time.Time) (int, Band) {
 			severity = 100
 		}
 
-		decay := math.Exp2(-age.Hours() / HalfLife.Hours())
-		penalty += w * (severity / 100) * decay * stateMultiplier(s.State)
+		penalty += w * (severity / 100) * decayFactor(age) * stateMultiplier(s.State)
 	}
 
 	score := int(math.Round(100 - penalty))
@@ -235,7 +248,7 @@ func Explain(signals []Signal, now time.Time) []Contribution {
 			severity = 100
 		}
 		c.Points += w * (severity / 100) *
-			math.Exp2(-age.Hours()/HalfLife.Hours()) * stateMultiplier(s.State)
+			decayFactor(age) * stateMultiplier(s.State)
 	}
 
 	out := make([]Contribution, 0, len(byKind))
@@ -253,6 +266,41 @@ func Explain(signals []Signal, now time.Time) []Contribution {
 
 // Weight exposes the table for tests and for the moderator UI, which shows what
 // a signal is worth *before* a reviewer confirms it.
+// CostOfConfirming is what confirming one open signal actually takes off a
+// subject's score, today.
+//
+// `Weight(kind) * 2` looks like the same number and is not: the penalty in
+// `Score` is scaled by the signal's severity and decayed by its age, so a
+// severity-45 odometer rollback costs 40 points rather than the 90 its kind is
+// worth at full severity.
+//
+// QA found the fraud queue showing the unscaled figure — telling a reviewer a
+// confirmation would cost 90 when it cost 40. A moderator deciding whether a
+// confirmation crosses a restriction threshold was being handed a number more
+// than twice the truth, consistently in the direction of over-estimating the
+// consequence.
+func CostOfConfirming(kind string, severity int, issuedAt, now time.Time) int {
+	w, ok := weights[kind]
+	if !ok {
+		w = DefaultWeight
+	}
+
+	sev := float64(severity)
+	if sev <= 0 {
+		sev = 50
+	}
+	if sev > 100 {
+		sev = 100
+	}
+
+	decay := decayFactor(now.Sub(issuedAt))
+
+	// The *difference* the decision makes, not the total. An open signal is
+	// already costing `×1`; confirming moves it to `×2`, so the reviewer's
+	// action is worth the gap between them.
+	return int(math.Round(w * (sev / 100) * decay * (confirmedMultiplier - openMultiplier)))
+}
+
 func Weight(kind string) float64 {
 	if w, ok := weights[kind]; ok {
 		return w

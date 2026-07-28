@@ -334,8 +334,8 @@ func newRouter(
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins(cfg),
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type", "Idempotency-Key", "Accept-Language", "X-Request-Id"},
-		ExposedHeaders:   []string{"X-Request-Id", "Idempotent-Replay"},
+		AllowedHeaders:   httpx.RequestHeaders,
+		ExposedHeaders:   httpx.ResponseHeaders,
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))

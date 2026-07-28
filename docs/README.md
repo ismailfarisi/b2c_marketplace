@@ -24,6 +24,7 @@ Read in this order.
 | 12 | [PHASE-9-BOOSTS.md](./PHASE-9-BOOSTS.md) | Built | Paid reach. **§1 is three rules that each cost revenue** — read it before proposing a change to any of them |
 | 13 | [PHASE-10-HARDENING.md](./PHASE-10-HARDENING.md) | Built | The two load tests, metrics, SLOs, and **§5, an honest launch-readiness assessment** |
 | 14 | [RUNBOOKS.md](./RUNBOOKS.md) | Current | What to do at 02:00. One entry per failure mode that exists in the code today |
+| 15 | [QA-FINDINGS.md](./QA-FINDINGS.md) | Current | A full-surface pass in a real browser against a real database. **Nine defects, three critical, none visible to the test suite.** Its "needs your decision" section is the shortest list of things blocking launch that only you can answer |
 
 > **The admin panel was not in the plan.** PLAN-VIDEO-FIRST §8 lists eleven phases and a staff console is a deliverable in none of them; PLAN.md §5 P4 mentions one in passing and the video-first replan dropped it without saying so. It was built after Phase 10 and is documented in [PHASE-10 §7](./PHASE-10-HARDENING.md). Building it found four review surfaces with a `decide` endpoint and no queue behind them — work that could be acted on and not found.
 

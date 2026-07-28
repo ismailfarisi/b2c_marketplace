@@ -318,13 +318,20 @@ func (s *Service) Advance(ctx context.Context, driverID, fulfillmentID uuid.UUID
 // customer has a code and the fulfillment has its hash, or neither exists —
 // there is no state where a driver arrives at a door holding a code the
 // customer was never sent.
-func (s *Service) Dispatch(ctx context.Context, driverID, fulfillmentID uuid.UUID) error {
+//
+// Returns whether a delivery code was actually sent. Most stops need none — a
+// card-paid delivery is proved by a recipient name and a pickup by a photo —
+// and QA found the handler telling every driver "a delivery code has been sent"
+// regardless. A driver who reads that at a pickup stands at a door asking for a
+// code the customer was never given, with no way to know the message was
+// boilerplate.
+func (s *Service) Dispatch(ctx context.Context, driverID, fulfillmentID uuid.UUID) (codeSent bool, err error) {
 	code, hash, err := GenerateOTP()
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		current, err := lockStop(ctx, tx, driverID, fulfillmentID)
 		if err != nil {
 			return err
@@ -343,13 +350,19 @@ func (s *Service) Dispatch(ctx context.Context, driverID, fulfillmentID uuid.UUI
 			return fmt.Errorf("start route: %w", err)
 		}
 
-		if err := s.sendCode(ctx, tx, current, code); err != nil {
+		sent, err := s.sendCode(ctx, tx, current, code)
+		if err != nil {
 			return err
 		}
+		codeSent = sent
 
 		return transition(ctx, tx, fulfillmentID, current.Status,
 			fulfillment.StatusDispatched, driverID, nil, nil)
 	})
+	if err != nil {
+		return false, err
+	}
+	return codeSent, nil
 }
 
 // sendCode enqueues the delivery code and records which message carried it.
@@ -364,16 +377,16 @@ func (s *Service) Dispatch(ctx context.Context, driverID, fulfillmentID uuid.UUI
 // A stop that needs no OTP skips this entirely — a card-paid delivery is proved
 // by a recipient name, and sending everyone a code they do not need trains
 // people to ignore the ones that matter.
-func (s *Service) sendCode(ctx context.Context, tx pgx.Tx, stop *stopRow, code string) error {
+func (s *Service) sendCode(ctx context.Context, tx pgx.Tx, stop *stopRow, code string) (bool, error) {
 	if RequiredProof(fulfillment.Kind(stop.Kind), stop.CODMinor) != ProofOTP {
-		return nil
+		return false, nil
 	}
 	if s.notify == nil {
-		return fmt.Errorf("%w: no notification provider is configured, so a cash "+
+		return false, fmt.Errorf("%w: no notification provider is configured, so a cash "+
 			"delivery cannot be completed — see docs/PHASE-8 §2", httpx.ErrConflict)
 	}
 	if stop.RecipientPhone == "" {
-		return fmt.Errorf("%w: this stop has no recipient phone and needs a delivery code",
+		return false, fmt.Errorf("%w: this stop has no recipient phone and needs a delivery code",
 			httpx.ErrConflict)
 	}
 
@@ -385,7 +398,7 @@ func (s *Service) sendCode(ctx context.Context, tx pgx.Tx, stop *stopRow, code s
 		Attempt:       stop.AttemptCount,
 	})
 	if err != nil {
-		return fmt.Errorf("send delivery code: %w", err)
+		return false, fmt.Errorf("send delivery code: %w", err)
 	}
 
 	// Recorded on the fulfillment so the dispatch board can distinguish "the
@@ -394,9 +407,9 @@ func (s *Service) sendCode(ctx context.Context, tx pgx.Tx, stop *stopRow, code s
 	if _, err := tx.Exec(ctx, `
 		UPDATE fulfillments SET otp_notification_id = $2, otp_sent_at = now() WHERE id = $1`,
 		stop.FulfillmentID, notificationID); err != nil {
-		return fmt.Errorf("record otp notification: %w", err)
+		return false, fmt.Errorf("record otp notification: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // CompleteInput is what the driver captured at the door.

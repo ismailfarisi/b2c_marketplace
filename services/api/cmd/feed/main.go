@@ -131,8 +131,8 @@ func run() error {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: allowedOrigins(cfg),
 		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders: []string{"Authorization", "Content-Type", "Accept-Language", "X-Request-Id", "X-Device-Id"},
-		ExposedHeaders: []string{"X-Request-Id"},
+		AllowedHeaders: httpx.RequestHeaders,
+		ExposedHeaders: httpx.ResponseHeaders,
 		MaxAge:         300,
 	}))
 

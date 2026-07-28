@@ -259,12 +259,26 @@ type template struct {
 // locale actually used, so the gap is countable.
 func (s *Service) loadTemplate(ctx context.Context, tx pgx.Tx, key string, ch Channel, locale string) (template, error) {
 	var t template
+	// Every use of $3 is cast explicitly, and that is not decoration.
+	//
+	// Without the casts Postgres infers $3 as `locale_code` from its first use
+	// inside the ARRAY constructor, and the ORDER BY then reads as
+	// `text = locale_code` — an operator that does not exist. The statement
+	// fails, the surrounding transaction aborts, and the *next* statement
+	// reports "current transaction is aborted", which points at the wrong line
+	// entirely.
+	//
+	// The effect was that no delivery OTP could ever be sent: `sendCode` runs
+	// inside the dispatch transaction, so the failure took the whole dispatch
+	// with it and cash-on-delivery was unusable — the exact thing Phase 8 was
+	// built to fix. Found in QA against a real database; no Go test touches
+	// Postgres, so nothing in the suite could have caught it.
 	err := tx.QueryRow(ctx, `
 		SELECT id, locale::text, body, coalesce(subject, ''), coalesce(provider_template_name, '')
 		  FROM notification_templates
 		 WHERE key = $1 AND channel = $2 AND is_active
-		   AND locale = ANY (ARRAY[$3, 'en']::locale_code[])
-		 ORDER BY (locale::text = $3) DESC
+		   AND locale = ANY (ARRAY[$3::locale_code, 'en'::locale_code])
+		 ORDER BY (locale = $3::locale_code) DESC
 		 LIMIT 1`, key, string(ch), locale).
 		Scan(&t.id, &t.locale, &t.body, &t.subject, &t.providerTemplate)
 	if err != nil {
@@ -457,6 +471,21 @@ func (s *Service) dispatchOne(ctx context.Context) (claimed bool, sendErr error)
 		 WHERE id = $6 AND created_at = $7`,
 		status, provider.Name(), ref, failureCode, attempts+1, id, createdAt); err != nil {
 		return true, err
+	}
+
+	// Commit, which the first version of this function did not do.
+	//
+	// The deferred Rollback above then undid the UPDATE on every pass, so the
+	// row stayed `pending` with `attempts` at zero and the loop re-sent it on
+	// the next tick — for ever, because the attempt ceiling was never reached.
+	// QA caught it as one delivery code sent a hundred times in ten seconds.
+	//
+	// The consequences are the two worst available: a customer receiving the
+	// same SMS every ten seconds, and a per-message bill that grows without
+	// bound. Nothing in the Go suite could see it — the tests never open a
+	// transaction — and the log line said "sent", truthfully, a hundred times.
+	if err := tx.Commit(ctx); err != nil {
+		return true, fmt.Errorf("notify: commit dispatch: %w", err)
 	}
 
 	return true, sendErr

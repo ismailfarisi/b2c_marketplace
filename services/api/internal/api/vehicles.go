@@ -535,10 +535,21 @@ func (h *VehicleHandlers) FraudQueue(w http.ResponseWriter, r *http.Request) {
 			"severity":     q.Severity,
 			"score":        q.Score,
 			"band":         q.Band,
-			// What this kind is worth before anyone confirms it. A reviewer
-			// deciding without knowing the cost of "confirm" is guessing.
-			"weight_if_confirmed": trust.Weight(q.Kind) * 2,
-			"created_at":          q.CreatedAt,
+			// What confirming actually costs this seller, today — scaled by
+			// the signal's severity and decayed by its age, exactly as the
+			// scorer will apply it.
+			//
+			// This was `trust.Weight(kind) * 2`, the kind's worth at full
+			// severity, which QA found to be more than double the real figure:
+			// 90 shown against 40 applied. A reviewer judging whether a
+			// confirmation crosses a restriction threshold was reading a number
+			// consistently overstating the consequence of their own decision.
+			"cost_if_confirmed": trust.CostOfConfirming(q.Kind, q.Severity, q.CreatedAt, time.Now()),
+			// The score the seller lands on if this is confirmed. The figure a
+			// reviewer actually reasons with — "does this restrict them" is a
+			// question about the total, not about one signal.
+			"score_if_confirmed": max(0, q.Score-trust.CostOfConfirming(q.Kind, q.Severity, q.CreatedAt, time.Now())),
+			"created_at":         q.CreatedAt,
 		})
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})

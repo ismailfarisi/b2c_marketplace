@@ -151,7 +151,12 @@ export interface FraudSignal {
   severity: string;
   score: number;
   band: string;
-  weight_if_confirmed: number;
+  /** What confirming actually takes off this seller today — severity-scaled
+   *  and age-decayed, exactly as the scorer applies it. */
+  cost_if_confirmed: number;
+  /** Where the seller lands if this is confirmed. The figure a reviewer
+   *  reasons with: "does this restrict them" is a question about the total. */
+  score_if_confirmed: number;
   created_at: string;
 }
 

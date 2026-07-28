@@ -314,6 +314,23 @@ that says "ready" is not one.
   has deployed is decoration. The SLOs in §4 are what the rules should be written
   against.
 
+### 5.3a What a full QA pass then found
+
+§5.4 below was written before anything had been driven through a browser. A
+subsequent full-surface pass — [QA-FINDINGS.md](./QA-FINDINGS.md) — found nine
+defects, three of them critical, and **none of them was visible to the test
+suite**: a Postgres parameter-type inference rule that made the delivery OTP
+unsendable, a missing `tx.Commit` that re-sent every message for ever, and a
+CORS allow-list that had drifted between two binaries so no browser could make
+an anonymous call.
+
+The pattern is worth naming rather than filing. Every one of them lived in the
+gap between a unit test and a running system: the Go suite never opens a
+database, `curl` never sends a preflight, and a worker loop that logs "sent"
+truthfully a hundred times looks healthy from every angle except the bill.
+
+That is the argument for §5.2's CI gap being a blocker rather than a nicety.
+
 ### 5.4 What is genuinely ready
 
 Worth stating, because a document that only lists gaps is as unbalanced as one

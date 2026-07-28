@@ -667,11 +667,32 @@ func (s *Service) rank(candidates []candidate, q Query, w ranking.Weights) []Ite
 	byScore(ranked)
 	byScore(explore)
 
-	ranked = capPerAuthor(ranked, maxPerAuthor)
-	explore = capPerAuthor(explore, 1)
+	// One exploration slot per author, so a single new vendor cannot take the
+	// whole reserve. Two ranked slots, because a vendor with a genuinely good
+	// pair should be able to show both.
+	rankedCapped := capPerAuthor(ranked, maxPerAuthor)
+	exploreCapped := capPerAuthor(explore, 1)
 
 	slots := ranking.Slots(q.Limit, ranking.Seed(q.ViewerKey, q.Cursor.Page), w)
-	page := ranking.Interleave(ranked, explore, slots, q.Limit)
+	page := ranking.Interleave(rankedCapped, exploreCapped, slots, q.Limit)
+
+	// Backfill.
+	//
+	// Found in QA and it is the cold-start scenario rather than an edge case. In
+	// a launch district almost everything is low-impression, so almost
+	// everything lands in `explore` — and the one-per-author cap on that bucket
+	// then means a district with one vendor serves a **one-item feed**, however
+	// many reels that vendor has published.
+	//
+	// The cap is right for slot *allocation*: exploration is a scarce reserve
+	// and one author should not own it. It is wrong as a cap on the *page*,
+	// which already has its own limit — `maxPerAuthor` — enforced on the ranked
+	// side and applied here across everything.
+	//
+	// So a short page is topped up in score order from whatever the bucket caps
+	// dropped. The feed can still be exhausted (§10 wants that); what it can no
+	// longer do is claim exhaustion while holding candidates back.
+	page = backfill(page, q.Limit, ranked, explore)
 
 	// Spacing, not filtering — the per-author cap already happened above. Note
 	// that this can move an exploration item off its exact slot; the reserved
@@ -772,4 +793,41 @@ func (s *Service) attachCounters(ctx context.Context, items []Item) error {
 		}
 	}
 	return nil
+}
+
+// backfill tops a short page up from candidates the bucket caps dropped.
+//
+// Only ever *adds*, and only up to `limit`, and never past `maxPerAuthor` for
+// any one author. A full page is returned untouched — this is dead weight on
+// every request in a healthy district and the whole product in a thin one.
+//
+// Exploration items keep their flag when they arrive this way. They were still
+// chosen without having earned it on score, and mislabelling them would put
+// unearned impressions into the measurement of what exploration costs.
+func backfill(page []Item, limit int, buckets ...[]Item) []Item {
+	if len(page) >= limit {
+		return page
+	}
+
+	present := make(map[uuid.UUID]bool, len(page))
+	perAuthor := make(map[uuid.UUID]int, len(page))
+	for _, it := range page {
+		present[it.ID] = true
+		perAuthor[it.AuthorID]++
+	}
+
+	for _, bucket := range buckets {
+		for _, it := range bucket {
+			if len(page) >= limit {
+				return page
+			}
+			if present[it.ID] || perAuthor[it.AuthorID] >= maxPerAuthor {
+				continue
+			}
+			present[it.ID] = true
+			perAuthor[it.AuthorID]++
+			page = append(page, it)
+		}
+	}
+	return page
 }

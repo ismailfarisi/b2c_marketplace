@@ -612,7 +612,7 @@ func feedItemResponse(it feed.Item) map[string]any {
 		})
 	}
 
-	return map[string]any{
+	out := map[string]any{
 		"id": it.ID,
 		"author": map[string]any{
 			"type": it.AuthorType,
@@ -641,5 +641,22 @@ func feedItemResponse(it feed.Item) map[string]any {
 		// an earned one — without that distinction, exploration's cost is
 		// unmeasurable and the first cost-cutting exercise deletes it.
 		"explore": it.Explore,
+
+		// Paid placement. Phase 9 set this flag in the domain and this
+		// serializer never emitted it, which meant a client had no way to label
+		// advertising — a legal requirement in both launch markets, not a
+		// nicety. Found in QA rather than by a test, because every test in the
+		// feed package works on the domain type and stops at the boundary.
+		"sponsored": it.Sponsored,
 	}
+	if it.DeliveryID.Valid {
+		// Only present on sponsored items, and only so a client can echo it on
+		// the view event. Charging does not currently depend on it — `Confirm`
+		// matches the served row on (viewer, reel), which is sound because a
+		// reel already in the organic page is excluded from the auction — but a
+		// client that returns it lets the confirmation stop relying on that
+		// argument holding.
+		out["delivery_id"] = it.DeliveryID.UUID
+	}
+	return out
 }

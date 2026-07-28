@@ -300,3 +300,24 @@ a.metric:hover {
 .admin table td {
   white-space: normal;
 }
+
+/*
+ * The customer feed.
+ *
+ * A browse surface rather than a player — the reel experience is the KMM app
+ * (PLAN-VIDEO-FIRST puts playback performance at the centre of the product, and
+ * a JS bridge could not deliver it). What the web is good for is the part the
+ * app is bad at: a shared link, a search result, a laptop.
+ */
+.reel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cta {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  border-radius: 999px;
+  cursor: pointer;
+}
