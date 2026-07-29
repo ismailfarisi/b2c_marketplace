@@ -262,6 +262,7 @@ func run() error {
 		// when there is none — which disables playback rather than offering a
 		// play button that always errors.
 		handlers.AdminConsole.Media = media.Store
+		handlers.AdminConsole.Feed = media.Feed
 
 		handlers.Reels = &api.ReelHandlers{
 			Reels:       media.Reels,

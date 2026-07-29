@@ -36,6 +36,10 @@ type AdminHandlers struct {
 	// an environment without an object store should refuse to offer playback,
 	// not offer it and then 500.
 	Media MediaSigner
+	// Feed answers what the ranker would return for a point. Nil where there is
+	// no media stack, which disables the inspector rather than offering a page
+	// that always errors.
+	Feed FeedInspector
 }
 
 // caller resolves the staff member and their permission, and logs the read when

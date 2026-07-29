@@ -288,6 +288,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/admin/reels/{reelId}/media", h.AdminConsole.ReelMedia)
 			r.Get("/admin/supply/gaps", h.AdminConsole.SupplyGaps)
 			r.Get("/admin/supply/coverage", h.AdminConsole.Coverage)
+			r.Get("/admin/listings/{listingId}", h.AdminConsole.Listing)
+			r.Get("/admin/listings/{listingId}/timeline", h.AdminConsole.ListingTimeline)
+			r.Get("/admin/drivers/{driverId}", h.AdminConsole.Driver)
+			r.Get("/admin/drivers/{driverId}/timeline", h.AdminConsole.DriverTimeline)
+			// The inspector runs the real retrieval. It cannot serve a page,
+			// record an impression or spend a boost budget, so diagnosing the
+			// feed can never become a source of noise in it.
+			r.Get("/admin/feed/inspect", h.AdminConsole.FeedInspect)
 
 			// Configuration (§4.5) and health (§4.6). Reads need
 			// `health.read`; writes need `config.write`, which is a separate

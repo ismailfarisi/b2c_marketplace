@@ -488,7 +488,13 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		       AND ST_Intersects(r.coverage, v.pt)
 		       AND r.published_at > now() - make_interval(secs => $3)
 		       AND ($4::uuid IS NULL OR r.category_id = $4)
-		       AND NOT (r.id = ANY($5::uuid[]))
+		       -- The coalesce is load-bearing. A nil slice arrives as SQL NULL;
+		       -- id = ANY(NULL) is NULL, NOT NULL is NULL, and every row is
+		       -- filtered out — an empty feed with no error anywhere. The union
+		       -- helper above never returns nil, so the serving path was safe,
+		       -- but it was safe by accident: the first other caller, the admin
+		       -- feed inspector, hit this immediately.
+		       AND NOT (r.id = ANY(coalesce($5::uuid[], ARRAY[]::uuid[])))
 		       AND ($6::uuid IS NULL OR NOT EXISTS (
 		               SELECT 1 FROM user_blocks b
 		                WHERE b.user_id = $6

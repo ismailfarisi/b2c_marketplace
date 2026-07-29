@@ -46,6 +46,7 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
       { href: "/listings", label: "Listings", queues: ["listing", "fraud"] },
       { href: "/campaigns", label: "Campaigns", queues: ["boost"] },
       { href: "/supply", label: "Supply", queues: [] },
+      { href: "/feed", label: "Feed inspector", queues: [] },
     ],
   },
   {
@@ -86,6 +87,7 @@ export const TITLES: Record<string, string> = {
   "/listings": "Listings & fraud",
   "/campaigns": "Campaign review",
   "/supply": "Content supply",
+  "/feed": "Feed inspector",
   "/health": "Platform health",
   "/config": "Configuration",
   "/templates": "Rates, prices & messages",
@@ -208,13 +210,15 @@ function hitHref(locale: string, hit: SearchHit): string {
     case "vendor":
       return `${base}/vendors/${hit.id}`;
     case "listing":
-      return `${base}/listings`;
+      return `${base}/listings/${hit.id}`;
     case "dispute":
       return `${base}/disputes`;
     case "campaign":
       return `${base}/campaigns`;
     case "reel":
       return `${base}/reels/${hit.id}`;
+    case "driver":
+      return `${base}/drivers/${hit.id}`;
     default:
       return `${base}`;
   }

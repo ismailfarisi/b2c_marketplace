@@ -1349,3 +1349,20 @@ table.data .nowrap {
   border-radius: var(--a-radius-sm);
   padding: 6px 8px;
 }
+
+/* The inspector table is eleven columns wide and must scroll inside its panel
+   rather than pushing the page sideways — a horizontally scrolling console is
+   one where the sidebar disappears. */
+.table-wrap {
+  overflow-x: auto;
+  max-inline-size: 100%;
+}
+
+.reel-link {
+  display: inline-block;
+  max-inline-size: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}

@@ -1142,3 +1142,164 @@ export const reviseTemplate = (
     method: "POST",
     data: body,
   });
+
+// ── listing, driver, feed inspector ─────────────────────────────────────────
+
+export interface ListingDetail {
+  id: string;
+  reference_no: string;
+  status: string;
+  seller: {
+    id: string;
+    kind: string;
+    name: string | null;
+    phone: string | null;
+    dealer_id: string | null;
+    dealer: string | null;
+    /** The number that matters most and is invisible from the listing alone: a
+     *  private seller with eleven cars is a dealer who has not said so. */
+    other_listings: number;
+    sold: number;
+  };
+  vehicle: {
+    make: string;
+    model: string;
+    year: number;
+    mileage_km: number;
+    vin: string | null;
+    spec: string | null;
+    body: string | null;
+    fuel: string | null;
+    colour: string | null;
+    registration_expiry: string | null;
+    warranty_until: string | null;
+  };
+  price: Money;
+  emirate: string | null;
+  city: string | null;
+  photos: number;
+  lifecycle: {
+    created_at: string;
+    published_at: string | null;
+    expires_at: string | null;
+    featured_until: string | null;
+    bumped_at: string | null;
+    sold_at: string | null;
+    sold_price: Money | null;
+    removed_at: string | null;
+    rejection: string | null;
+  };
+  /** Severity is 0–100, not a word: the thresholds that decide whether a signal
+   *  blocks publication are numeric, and bucketing here would put the boundary
+   *  in two places. */
+  signals: Array<{
+    kind: string;
+    severity: number;
+    detail: string | null;
+    state: string;
+    at: string;
+  }>;
+  entitlement: {
+    code: string;
+    name: string;
+    purchased_at: string;
+    starts_at: string | null;
+    ends_at: string | null;
+    listing_quota: number;
+    listings_used: number;
+    bump_quota: number;
+    bumps_used: number;
+    status: string;
+  } | null;
+}
+
+export const getListingDetail = (id: string) =>
+  apiFetch<ListingDetail>({ url: `/admin/listings/${id}`, method: "GET" });
+
+export const getListingTimeline = (id: string) =>
+  apiFetch<{ items: TimelineEntry[] }>({ url: `/admin/listings/${id}/timeline`, method: "GET" });
+
+export interface DriverDetail {
+  id: string;
+  user_id: string;
+  name: string;
+  phone: string | null;
+  status: string;
+  vehicle_type: string;
+  plate_no: string | null;
+  vendor_id: string | null;
+  vendor: string | null;
+  max_stops: number;
+  created_at: string;
+  position: { lat: number; lng: number } | null;
+  /** Carried separately from the position. A stale position with a recent ping
+   *  and no position at all are different faults needing different calls. */
+  last_ping_at: string | null;
+  shift: { on: boolean; from: string | null; until: string | null };
+  workload: { open_stops: number; completed_today: number; failed_today: number };
+  cash: { held: Money; stops: number; oldest: string | null };
+  documents: Array<{
+    kind: string;
+    state: string;
+    expires_on: string | null;
+    expired: boolean;
+  }>;
+}
+
+export const getDriverDetail = (id: string) =>
+  apiFetch<DriverDetail>({ url: `/admin/drivers/${id}`, method: "GET" });
+
+export const getDriverTimeline = (id: string) =>
+  apiFetch<{ items: TimelineEntry[] }>({ url: `/admin/drivers/${id}/timeline`, method: "GET" });
+
+export interface FeedInspection {
+  profile: string;
+  /** Before the page limit. Ten drawn from eleven and ten drawn from four
+   *  hundred look identical in the list and are entirely different. */
+  retrieved: number;
+  shown: number;
+  items: Array<{
+    rank: number;
+    reel_id: string;
+    caption: string | null;
+    author: string | null;
+    score: number;
+    terms: {
+      conversion: number;
+      intent: number;
+      engagement: number;
+      author: number;
+      recency: number;
+      affinity: number;
+      followed: number;
+      proximity: number;
+    };
+    features: {
+      impressions: number;
+      views: number;
+      orders: number;
+      lifetime: number;
+      distance_km: number;
+      age_hours: number;
+      affinity: number;
+      followed: boolean;
+    };
+    /** Below the lifetime-impression floor, so it can be interleaved regardless
+     *  of score. The usual explanation for "why is this at position 4", and
+     *  invisible in the score by construction. */
+    explore_eligible: boolean;
+  }>;
+}
+
+export const inspectFeed = (params: {
+  lat: number;
+  lng: number;
+  viewer_id?: string;
+  limit?: number;
+}) =>
+  apiFetch<FeedInspection>({
+    url: `/admin/feed/inspect?lat=${params.lat}&lng=${params.lng}${
+      params.viewer_id ? `&viewer_id=${params.viewer_id}` : ""
+    }${params.limit ? `&limit=${params.limit}` : ""}`,
+    method: "GET",
+  });

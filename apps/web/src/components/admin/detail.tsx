@@ -335,7 +335,10 @@ export function Ref({
   children,
 }: {
   locale: string;
-  kind: "orders" | "users" | "vendors";
+  /** Every entity with a detail page. Adding one here without building the page
+   *  produces a link to a 404, which is worse than plain text — so this list and
+   *  the routes are changed together. */
+  kind: "orders" | "users" | "vendors" | "reels" | "listings" | "drivers";
   id: string;
   children: ReactNode;
 }) {
