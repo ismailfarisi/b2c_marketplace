@@ -485,3 +485,22 @@ type AccessEntry struct {
 	Action string
 	Actor  string
 }
+
+// IsStaff reports whether a user holds any live grant.
+//
+// Used by view-as to refuse impersonating a colleague. Reads the table rather
+// than the permission cache: the cache is keyed on the *caller* and this asks
+// about somebody else, and a cache miss answering "no" would be a security
+// answer derived from a performance structure.
+func (s *Service) IsStaff(ctx context.Context, userID uuid.UUID) (bool, error) {
+	var yes bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM admin_grants
+			 WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > now()))`,
+		userID).Scan(&yes)
+	if err != nil {
+		return false, fmt.Errorf("check staff: %w", err)
+	}
+	return yes, nil
+}

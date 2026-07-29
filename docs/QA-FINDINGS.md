@@ -468,3 +468,90 @@ The grouping was wrong in the same place for a related reason: reels belong to
 *branches*, so aggregating by `author_id` counts per branch, and a vendor with
 two branches looks half as active as they are. Both now join through
 `vendor_branches`.
+
+---
+
+# Third pass — building the deferred work (2026-07-29)
+
+## 17. A context key with no value collided with the user id — **fixed**
+
+Found while testing view-as. `GET /orders/{id}` returned 404 under a view token
+and 200 under the customer's own token, for the same order and the same subject
+claim.
+
+The cause was four characters of Go:
+
+```go
+ctxKeyUserID    ctxKey = "user_id"
+ctxKeyImpersonator
+ctxKeyLocale ctxKey = "locale"
+```
+
+A `const` with no expression repeats the line above it. `ctxKeyImpersonator`
+therefore *was* `ctxKey("user_id")` — the same key — so
+`WithImpersonator(ctx, staffID)` overwrote the acting user, and every read during
+a view-as session ran as the staff member rather than the customer.
+
+That is precisely the disclosure the feature exists to prevent: a support agent
+would have been shown a view built from *their own* permissions while believing
+they were seeing what the customer sees. It compiles, it vets, and it is
+invisible in review.
+
+Fixed with an explicit value and a comment saying why the value cannot be
+omitted. `TestImpersonatorDoesNotDisplaceTheUser` is the regression.
+
+## 18. `retrieve` dropped every candidate on a nil exclusion list — **fixed**
+
+`NOT (r.id = ANY($5::uuid[]))` with a nil slice: pgx sends SQL NULL, `id =
+ANY(NULL)` is NULL, `NOT NULL` is NULL, and every row fails the predicate. An
+empty feed, no error anywhere.
+
+The serving path was safe because its `union` helper always returns a non-nil
+slice — safe by accident. The admin feed inspector was the first other caller
+and hit it immediately. Now coalesced inside the query, which fixes it for every
+caller rather than for the one that noticed.
+
+## 19. SMS segment counting classified every template as UCS-2 — **fixed**
+
+`{` and `}` are not in the GSM-7 basic alphabet, so counting the raw template
+body made any message containing a `{{placeholder}}` count as UCS-2 — reporting
+a 75-character English SMS as two segments when it is one. The braces never
+reach a handset; they are substituted before sending.
+
+Counted on the rendered shape now. The approximation is stated rather than
+hidden: the placeholder *name* stands in for its value, which is the right order
+of magnitude, where inventing sample data per placeholder would be confidently
+wrong instead of roughly right.
+
+The corrected numbers are the argument for showing this at all: 75 English
+characters is one segment, 80 Arabic characters is two, and one en-dash pasted
+from a word processor takes an English message from one to two.
+
+## 20. A swallowed error inside a transaction — **fixed**
+
+The erasure path checked for open disputes and, on error, set the count to zero
+and carried on — reasoning that a check which cannot run should not block a legal
+obligation.
+
+That is invalid inside a transaction. A failed statement aborts it, so every
+statement afterwards fails with `25P02` and the reported error is three
+statements downstream of the real one. The column was also wrong
+(`raised_by` for `raised_by_id`), which is what the swallowed error was hiding.
+
+A check that cannot run is a check that has not run, and an erasure is not the
+place to guess.
+
+## Harness note: the shell was silently destroying Arabic
+
+An early test of the template editor sent Arabic through a bash heredoc into
+`curl` and reported a pass. The stored bytes were `3f3f3f…` — question marks.
+Git Bash on this machine is cp1252, and the text was flattened before it reached
+the API.
+
+The test *looked* correct because ASCII question marks happen to count as one SMS
+segment, which is what an Arabic string under 70 characters counts as. Two wrongs
+producing the expected number.
+
+Re-tested by POSTing from Python with an explicit UTF-8 body, which round-tripped
+intact and produced the *real* answer: two segments, not one. Where a test crosses
+this shell, encoding has to be bypassed rather than trusted.

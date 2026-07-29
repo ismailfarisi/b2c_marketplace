@@ -11,7 +11,9 @@ import {
   getCustomerDetail,
   getCustomerTimeline,
   mergeAccounts,
+  viewAs,
   type MergeResult,
+  type ViewAsSession,
 } from "@/lib/admin-api";
 
 /**
@@ -46,6 +48,7 @@ export default function CustomerPage({
   const [newPhone, setNewPhone] = useState("");
   const [survivor, setSurvivor] = useState("");
   const [merged, setMerged] = useState<MergeResult | null>(null);
+  const [session, setSession] = useState<ViewAsSession | null>(null);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin", "customer", userId] });
@@ -82,6 +85,14 @@ export default function CustomerPage({
       }
       actions={
         <div className="detail-actions">
+          <Action
+            label="View as"
+            verb="Open a read-only session"
+            hint="Fifteen minutes, read-only, and recorded against your name. Every write is refused by the server, not hidden in the interface — if something needs doing on their behalf, do it from here with your own name on it."
+            onConfirm={async (reason) => {
+              setSession(await viewAs(userId, reason));
+            }}
+          />
           <Action
             label="Change number"
             verb="Change it"
@@ -146,6 +157,27 @@ export default function CustomerPage({
         />
       }
     >
+      {session ? (
+        <p className="alarm viewas">
+          A read-only session is open as this customer for{" "}
+          {Math.round(session.expires_in / 60)} minutes, in{" "}
+          <strong>{session.locale === "ar" ? "Arabic" : "English"}</strong> — their language, not
+          yours, because debugging the wrong screen finds the wrong bug. Nothing you do in it can
+          change anything: the refusal is in the server, not in the buttons.
+          <textarea
+            className="mono viewas-token"
+            readOnly
+            rows={2}
+            value={session.access_token}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+          <span className="faint">
+            Paste this as a bearer token in the customer app. It cannot be refreshed — when it
+            expires, ask again, and that second request is another line in the audit log.
+          </span>
+        </p>
+      ) : null}
+
       {merged ? (
         <p className="alarm">
           Merged. {merged.moved.addresses} address(es), {merged.moved.favourites} favourite(s) and{" "}

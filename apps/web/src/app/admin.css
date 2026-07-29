@@ -1366,3 +1366,25 @@ table.data .nowrap {
   white-space: nowrap;
   vertical-align: bottom;
 }
+
+/* A live view-as session. Uses the alarm block rather than a quiet notice
+   because an agent who forgets they are inside somebody else's account is the
+   whole risk — the banner should be uncomfortable to leave on screen. */
+.alarm.viewas {
+  border-color: var(--a-warn);
+  background: var(--a-warn-soft);
+  color: var(--a-warn);
+}
+
+.viewas-token {
+  display: block;
+  inline-size: 100%;
+  margin-block: 8px 4px;
+  font-size: 11px;
+  padding: 6px;
+  border: 1px solid var(--a-warn);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+  color: var(--a-text-muted);
+  resize: vertical;
+}

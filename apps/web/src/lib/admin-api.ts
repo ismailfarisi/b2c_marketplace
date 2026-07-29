@@ -1343,3 +1343,24 @@ export const eraseAccount = (userId: string, reason: string) =>
     method: "POST",
     data: { reason },
   });
+
+// ── view as (§3.7) ──────────────────────────────────────────────────────────
+
+export interface ViewAsSession {
+  access_token: string;
+  expires_in: number;
+  locale: string;
+  subject_id: string;
+  /** Always true, and enforced server-side by middleware on the whole
+   *  authenticated router — not by hiding buttons. Every unsafe method under
+   *  this token is refused before it reaches a handler. */
+  read_only: boolean;
+  note: string;
+}
+
+export const viewAs = (userId: string, reason: string) =>
+  apiFetch<ViewAsSession>({
+    url: `/admin/users/${userId}/view-as`,
+    method: "POST",
+    data: { reason },
+  });

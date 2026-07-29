@@ -580,3 +580,19 @@ func (s *Service) CustomerTimeline(ctx context.Context, id uuid.UUID) ([]Timelin
 	}
 	return out, rows.Err()
 }
+
+// UserLocale is the language this customer reads the app in.
+//
+// Used by view-as so an agent sees the screen the customer sees. Debugging "the
+// text is wrong" in English while the customer reads Arabic is debugging a
+// different screen — and in an RTL layout, a different one in more ways than
+// the words.
+func (s *Service) UserLocale(ctx context.Context, userID uuid.UUID) (string, error) {
+	var locale string
+	err := s.pool.QueryRow(ctx,
+		`SELECT locale::text FROM users WHERE id = $1`, userID).Scan(&locale)
+	if err != nil {
+		return "", notFoundOr("user locale", err)
+	}
+	return locale, nil
+}

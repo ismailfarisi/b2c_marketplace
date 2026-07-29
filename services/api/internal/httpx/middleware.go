@@ -15,7 +15,13 @@ type ctxKey string
 const (
 	ctxKeyRequestID ctxKey = "request_id"
 	ctxKeyUserID    ctxKey = "user_id"
-	ctxKeyLocale    ctxKey = "locale"
+	// Explicit, and it has to be. A const with no expression repeats the line
+	// above it, so declaring this bare made it *the same key* as ctxKeyUserID —
+	// and WithImpersonator then overwrote the acting user with the staff member.
+	// Reads during a view-as session ran as staff, which is exactly the
+	// disclosure the feature is built to prevent.
+	ctxKeyImpersonator ctxKey = "impersonator"
+	ctxKeyLocale       ctxKey = "locale"
 )
 
 // RequestID assigns every request a stable identifier, honouring an inbound
@@ -44,6 +50,27 @@ func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 
 func WithUserID(ctx context.Context, id uuid.UUID) context.Context {
 	return context.WithValue(ctx, ctxKeyUserID, id)
+}
+
+// WithImpersonator marks a request as being made through a view-as session
+// (PLAN-ADMIN-CONSOLE §3.7) and names the staff member behind it.
+//
+// Carried separately from the user id rather than replacing it, because both
+// are true and both matter: every query must run as the customer so the agent
+// sees exactly what the customer sees, and every log line must name the person
+// who was actually there.
+func WithImpersonator(ctx context.Context, actorID uuid.UUID) context.Context {
+	return context.WithValue(ctx, ctxKeyImpersonator, actorID)
+}
+
+// ImpersonatorFromContext returns the staff member behind a view-as session.
+//
+// The second return is the useful one on its own: `ok` being true means this
+// request is impersonation, which is worth knowing anywhere a decision depends
+// on whether a real customer is present — sending them a notification, say.
+func ImpersonatorFromContext(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(ctxKeyImpersonator).(uuid.UUID)
+	return id, ok
 }
 
 // Locale resolves the response language from Accept-Language, defaulting to

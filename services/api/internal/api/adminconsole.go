@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/marketplace/api/internal/auth"
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
@@ -40,6 +41,9 @@ type AdminHandlers struct {
 	// no media stack, which disables the inspector rather than offering a page
 	// that always errors.
 	Feed FeedInspector
+	// Issuer mints view-as tokens. Nil disables impersonation entirely, which is
+	// a perfectly good state for a deployment to be in.
+	Issuer *auth.Issuer
 }
 
 // caller resolves the staff member and their permission, and logs the read when

@@ -33,6 +33,12 @@ type Claims struct {
 	jwt.RegisteredClaims
 	SessionID string `json:"sid"`
 	Locale    string `json:"loc"`
+	// ViewAs marks a read-only impersonation token (§3.7). Absent on every
+	// normal token, so an old token cannot accidentally be one.
+	ViewAs bool `json:"va,omitempty"`
+	// ActorID is the staff member behind a view-as token. The Subject stays the
+	// customer, so every query returns exactly what they would see.
+	ActorID string `json:"act,omitempty"`
 }
 
 type Issuer struct {

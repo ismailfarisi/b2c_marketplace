@@ -70,6 +70,12 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 	// and then read back another user's response.
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Authenticated(issuer))
+		// The read-only half of view-as (§3.7), made structural. Mounted here,
+		// once, on the whole authenticated surface: any unsafe method under a
+		// view token is refused before routing, so a handler that mutates under
+		// impersonation cannot be written. A per-handler check would protect
+		// exactly the handlers somebody remembered.
+		r.Use(auth.ReadOnlyWhenImpersonating(issuer))
 		r.Use(httpx.Idempotency(idem))
 
 		r.Post("/orders", h.CreateOrder)
@@ -232,98 +238,113 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// "is this person staff". The queues above still use the older staff
 		// check; they migrate as each one gains a detail page.
 		if h.AdminConsole != nil {
-			r.Get("/admin/whoami", h.AdminConsole.Whoami)
-			r.Get("/admin/search", h.AdminConsole.Search)
+			// Its own group, so the middleware below can be mounted before any
+			// route is registered — chi refuses Use() afterwards, and it is right
+			// to: middleware added late would silently not apply to what came
+			// first, which for a security guard is the worst possible failure.
+			//
+			// A view-as token can never reach the console. The permission check
+			// would refuse it anyway, since its subject is a customer holding no
+			// grant — but that makes the console safe only for as long as no
+			// customer is ever staff, and an agent viewing as a colleague would
+			// walk straight in.
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RejectImpersonation(issuer))
 
-			r.Get("/admin/orders/{orderId}", h.AdminConsole.Order)
-			r.Get("/admin/orders/{orderId}/timeline", h.AdminConsole.OrderTimeline)
-			r.Get("/admin/users/{userId}", h.AdminConsole.Customer)
-			r.Get("/admin/users/{userId}/timeline", h.AdminConsole.CustomerTimeline)
+				r.Get("/admin/whoami", h.AdminConsole.Whoami)
+				r.Get("/admin/search", h.AdminConsole.Search)
 
-			// Account lifecycle. identity.review, never in a default role with
-			// money.write: changing the number on an account and moving money out
-			// of it should take two people.
-			r.Post("/admin/users/{userId}/phone", h.AdminConsole.ChangePhone)
-			r.Post("/admin/users/{userId}/merge", h.AdminConsole.MergeAccounts)
-			r.Post("/admin/users/{userId}/erase", h.AdminConsole.EraseAccount)
-			r.Get("/admin/vendors/{vendorId}", h.AdminConsole.Vendor)
-			r.Get("/admin/vendors/{vendorId}/timeline", h.AdminConsole.VendorTimeline)
+				r.Get("/admin/orders/{orderId}", h.AdminConsole.Order)
+				r.Get("/admin/orders/{orderId}/timeline", h.AdminConsole.OrderTimeline)
+				r.Get("/admin/users/{userId}", h.AdminConsole.Customer)
+				r.Get("/admin/users/{userId}/timeline", h.AdminConsole.CustomerTimeline)
 
-			// Actions. Separate permissions on purpose (§3.5): refunding money
-			// and cancelling an order are different authorities, and a support
-			// agent who can stop a delivery should not thereby be able to move
-			// funds.
-			r.Post("/admin/orders/{orderId}/refund", h.AdminConsole.RefundOrder)
-			r.Post("/admin/orders/{orderId}/cancel", h.AdminConsole.CancelOrder)
+				// Account lifecycle. identity.review, never in a default role with
+				// money.write: changing the number on an account and moving money out
+				// of it should take two people.
+				r.Post("/admin/users/{userId}/phone", h.AdminConsole.ChangePhone)
+				r.Post("/admin/users/{userId}/merge", h.AdminConsole.MergeAccounts)
+				r.Post("/admin/users/{userId}/erase", h.AdminConsole.EraseAccount)
+				r.Post("/admin/users/{userId}/view-as", h.AdminConsole.ViewAs)
+				r.Get("/admin/vendors/{vendorId}", h.AdminConsole.Vendor)
+				r.Get("/admin/vendors/{vendorId}/timeline", h.AdminConsole.VendorTimeline)
 
-			// Staff administration, and the log of who read what. Both need
-			// staff.admin — the second especially: "who looked at this customer"
-			// is itself a sensitive question.
-			r.Get("/admin/staff", h.AdminConsole.Staff)
-			r.Post("/admin/staff/grants", h.AdminConsole.GrantRole)
-			r.Delete("/admin/staff/{userId}/roles/{role}", h.AdminConsole.RevokeRole)
-			r.Get("/admin/access/{type}/{id}", h.AdminConsole.AccessHistory)
+				// Actions. Separate permissions on purpose (§3.5): refunding money
+				// and cancelling an order are different authorities, and a support
+				// agent who can stop a delivery should not thereby be able to move
+				// funds.
+				r.Post("/admin/orders/{orderId}/refund", h.AdminConsole.RefundOrder)
+				r.Post("/admin/orders/{orderId}/cancel", h.AdminConsole.CancelOrder)
 
-			// Money (§4.3). Every one behind `money.read`, which the moderator
-			// and support roles do not have — a content moderator has no
-			// business knowing what a vendor is owed.
-			r.Get("/admin/ledger", h.AdminConsole.Ledger)
-			r.Get("/admin/ledger/event-types", h.AdminConsole.LedgerEventTypes)
-			r.Get("/admin/trial-balance", h.AdminConsole.TrialBalance)
-			r.Get("/admin/refunds", h.AdminConsole.Refunds)
-			r.Get("/admin/payouts/runs", h.AdminConsole.PayoutRuns)
-			r.Get("/admin/payouts/runs/{runId}/statements", h.AdminConsole.PayoutStatements)
-			r.Get("/admin/payouts/statements", h.AdminConsole.PayoutStatements)
-			// Payout actions. `money.write`, never in a default role with
-			// `identity.review` — approving a bank account and then paying it
-			// is payout fraud in two clicks.
-			r.Post("/admin/payouts/runs/{runId}/approve", h.AdminConsole.ApproveRun)
-			r.Post("/admin/payouts/runs/{runId}/issue", h.AdminConsole.IssueRun)
-			r.Post("/admin/payouts/statements/{statementId}/issue", h.AdminConsole.IssueStatement)
-			r.Post("/admin/payouts/statements/{statementId}/pay", h.AdminConsole.PayStatement)
+				// Staff administration, and the log of who read what. Both need
+				// staff.admin — the second especially: "who looked at this customer"
+				// is itself a sensitive question.
+				r.Get("/admin/staff", h.AdminConsole.Staff)
+				r.Post("/admin/staff/grants", h.AdminConsole.GrantRole)
+				r.Delete("/admin/staff/{userId}/roles/{role}", h.AdminConsole.RevokeRole)
+				r.Get("/admin/access/{type}/{id}", h.AdminConsole.AccessHistory)
 
-			r.Get("/admin/cod/drivers", h.AdminConsole.DriverCash)
-			r.Get("/admin/cod/remittances", h.AdminConsole.Remittances)
-			r.Get("/admin/invoices", h.AdminConsole.Invoices)
+				// Money (§4.3). Every one behind `money.read`, which the moderator
+				// and support roles do not have — a content moderator has no
+				// business knowing what a vendor is owed.
+				r.Get("/admin/ledger", h.AdminConsole.Ledger)
+				r.Get("/admin/ledger/event-types", h.AdminConsole.LedgerEventTypes)
+				r.Get("/admin/trial-balance", h.AdminConsole.TrialBalance)
+				r.Get("/admin/refunds", h.AdminConsole.Refunds)
+				r.Get("/admin/payouts/runs", h.AdminConsole.PayoutRuns)
+				r.Get("/admin/payouts/runs/{runId}/statements", h.AdminConsole.PayoutStatements)
+				r.Get("/admin/payouts/statements", h.AdminConsole.PayoutStatements)
+				// Payout actions. `money.write`, never in a default role with
+				// `identity.review` — approving a bank account and then paying it
+				// is payout fraud in two clicks.
+				r.Post("/admin/payouts/runs/{runId}/approve", h.AdminConsole.ApproveRun)
+				r.Post("/admin/payouts/runs/{runId}/issue", h.AdminConsole.IssueRun)
+				r.Post("/admin/payouts/statements/{statementId}/issue", h.AdminConsole.IssueStatement)
+				r.Post("/admin/payouts/statements/{statementId}/pay", h.AdminConsole.PayStatement)
 
-			// Supply (§4.4). The media endpoint is separate from the detail
-			// page on purpose: opening a reel and watching it are different
-			// events, and only one of them should appear in the answer to "who
-			// looked at this video".
-			r.Get("/admin/reels/{reelId}", h.AdminConsole.Reel)
-			r.Get("/admin/reels/{reelId}/timeline", h.AdminConsole.ReelTimeline)
-			r.Get("/admin/reels/{reelId}/media", h.AdminConsole.ReelMedia)
-			r.Get("/admin/supply/gaps", h.AdminConsole.SupplyGaps)
-			r.Get("/admin/supply/coverage", h.AdminConsole.Coverage)
-			r.Get("/admin/listings/{listingId}", h.AdminConsole.Listing)
-			r.Get("/admin/listings/{listingId}/timeline", h.AdminConsole.ListingTimeline)
-			r.Get("/admin/drivers/{driverId}", h.AdminConsole.Driver)
-			r.Get("/admin/drivers/{driverId}/timeline", h.AdminConsole.DriverTimeline)
-			// The inspector runs the real retrieval. It cannot serve a page,
-			// record an impression or spend a boost budget, so diagnosing the
-			// feed can never become a source of noise in it.
-			r.Get("/admin/feed/inspect", h.AdminConsole.FeedInspect)
+				r.Get("/admin/cod/drivers", h.AdminConsole.DriverCash)
+				r.Get("/admin/cod/remittances", h.AdminConsole.Remittances)
+				r.Get("/admin/invoices", h.AdminConsole.Invoices)
 
-			// Configuration (§4.5) and health (§4.6). Reads need
-			// `health.read`; writes need `config.write`, which is a separate
-			// permission on purpose — being trusted to look at a flag is not
-			// the same as being trusted to flip it during an incident.
-			r.Get("/admin/config/flags", h.AdminConsole.Flags)
-			r.Put("/admin/config/flags/{key}", h.AdminConsole.SetFlag)
-			r.Get("/admin/config/settings", h.AdminConsole.Settings)
-			r.Put("/admin/config/settings/{key}", h.AdminConsole.SetSetting)
-			r.Get("/admin/health", h.AdminConsole.Health)
+				// Supply (§4.4). The media endpoint is separate from the detail
+				// page on purpose: opening a reel and watching it are different
+				// events, and only one of them should appear in the answer to "who
+				// looked at this video".
+				r.Get("/admin/reels/{reelId}", h.AdminConsole.Reel)
+				r.Get("/admin/reels/{reelId}/timeline", h.AdminConsole.ReelTimeline)
+				r.Get("/admin/reels/{reelId}/media", h.AdminConsole.ReelMedia)
+				r.Get("/admin/supply/gaps", h.AdminConsole.SupplyGaps)
+				r.Get("/admin/supply/coverage", h.AdminConsole.Coverage)
+				r.Get("/admin/listings/{listingId}", h.AdminConsole.Listing)
+				r.Get("/admin/listings/{listingId}/timeline", h.AdminConsole.ListingTimeline)
+				r.Get("/admin/drivers/{driverId}", h.AdminConsole.Driver)
+				r.Get("/admin/drivers/{driverId}/timeline", h.AdminConsole.DriverTimeline)
+				// The inspector runs the real retrieval. It cannot serve a page,
+				// record an impression or spend a boost budget, so diagnosing the
+				// feed can never become a source of noise in it.
+				r.Get("/admin/feed/inspect", h.AdminConsole.FeedInspect)
 
-			// Versioned config. These supersede rather than update: the old row is
-			// closed and a new one opened, so an invoice raised last month still
-			// references the rate that was in force when it was raised.
-			r.Get("/admin/config/tax-rates", h.AdminConsole.TaxRates)
-			r.Post("/admin/config/tax-rates/{rateId}/supersede", h.AdminConsole.SupersedeTaxRate)
-			r.Get("/admin/config/rate-cards", h.AdminConsole.RateCards)
-			r.Post("/admin/config/rate-cards/{cardId}/supersede", h.AdminConsole.SupersedeRateCard)
-			r.Get("/admin/config/templates", h.AdminConsole.Templates)
-			r.Post("/admin/config/templates/preview", h.AdminConsole.PreviewSegments)
-			r.Post("/admin/config/templates/{templateId}/revise", h.AdminConsole.ReviseTemplate)
+				// Configuration (§4.5) and health (§4.6). Reads need
+				// `health.read`; writes need `config.write`, which is a separate
+				// permission on purpose — being trusted to look at a flag is not
+				// the same as being trusted to flip it during an incident.
+				r.Get("/admin/config/flags", h.AdminConsole.Flags)
+				r.Put("/admin/config/flags/{key}", h.AdminConsole.SetFlag)
+				r.Get("/admin/config/settings", h.AdminConsole.Settings)
+				r.Put("/admin/config/settings/{key}", h.AdminConsole.SetSetting)
+				r.Get("/admin/health", h.AdminConsole.Health)
+
+				// Versioned config. These supersede rather than update: the old row is
+				// closed and a new one opened, so an invoice raised last month still
+				// references the rate that was in force when it was raised.
+				r.Get("/admin/config/tax-rates", h.AdminConsole.TaxRates)
+				r.Post("/admin/config/tax-rates/{rateId}/supersede", h.AdminConsole.SupersedeTaxRate)
+				r.Get("/admin/config/rate-cards", h.AdminConsole.RateCards)
+				r.Post("/admin/config/rate-cards/{cardId}/supersede", h.AdminConsole.SupersedeRateCard)
+				r.Get("/admin/config/templates", h.AdminConsole.Templates)
+				r.Post("/admin/config/templates/preview", h.AdminConsole.PreviewSegments)
+				r.Post("/admin/config/templates/{templateId}/revise", h.AdminConsole.ReviseTemplate)
+			})
 		}
 
 		// Phase 9 — boosts.
