@@ -1137,3 +1137,130 @@ table.data .nowrap {
 .action.danger .btn:not(.danger) {
   background: var(--a-surface);
 }
+
+/* ── money screens ──────────────────────────────────────────────────────────*/
+
+.filters {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.filters .field,
+.panel-head .field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--a-text-muted);
+}
+
+.filters input,
+.panel-head input,
+.panel-head select {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--a-text);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  padding: 4px 7px;
+}
+
+/* The one thing on any of these pages that must stop someone mid-scroll. Not a
+   Tag, not a coloured cell — a block that takes a paragraph to say what is
+   wrong and what it means, because "out of balance" without an explanation
+   gets escalated to the wrong person. */
+.alarm {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: var(--a-danger-soft);
+  border: 1px solid var(--a-danger);
+  border-radius: var(--a-radius);
+  color: var(--a-danger);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.money-table thead th {
+  padding: 6px 8px;
+  text-align: start;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--a-text-faint);
+  border-block-end: 1px solid var(--a-border-strong);
+  white-space: nowrap;
+}
+
+.money-table thead th.num {
+  text-align: end;
+}
+
+.money-table tr.selected td {
+  background: var(--a-accent-soft);
+}
+
+/* A refund nobody signed for. Tinted rather than badged alone, so it is
+   findable by scrolling rather than by reading every row. */
+.money-table tr.unattributed td {
+  background: var(--a-warn-soft);
+}
+
+.journals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.journals li {
+  padding: 10px 12px;
+  background: var(--a-surface-2);
+  border-radius: var(--a-radius-sm);
+  border-inline-start: 3px solid var(--a-ok);
+}
+
+.journals li.unbalanced {
+  border-inline-start-color: var(--a-danger);
+  background: var(--a-danger-soft);
+}
+
+.journal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-block-end: 4px;
+}
+
+.journal-head .spacer {
+  flex: 1;
+}
+
+.journals .money-table td {
+  border-block-end: none;
+  padding: 3px 8px;
+}
+
+.linkish {
+  font: inherit;
+  font-size: inherit;
+  color: var(--a-accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Journal line headers are repeated per posting, so they must be quiet enough
+   not to compete with the four rows underneath them. */
+.journals .money-table thead th {
+  padding: 2px 8px;
+  font-size: 10px;
+  border-block-end: 1px solid var(--a-border);
+}

@@ -615,3 +615,202 @@ export const getAccessHistory = (type: string, id: string) =>
     url: `/admin/access/${type}/${id}`,
     method: "GET",
   });
+
+// ── money (§4.3) ────────────────────────────────────────────────────────────
+//
+// All of these need `money.read`, which the moderator and support roles do not
+// have. A 403 here is the permission model working, not a bug.
+
+export interface AccountBalance {
+  account_id: string;
+  type: string;
+  name: string;
+  owner_type: string | null;
+  owner_id: string | null;
+  debit: Money;
+  credit: Money;
+  net: Money;
+  entries: number;
+}
+
+export interface TrialBalance {
+  as_of: string;
+  currency: string;
+  accounts: AccountBalance[];
+  total_debit: Money;
+  total_credit: Money;
+  /** Carried from the server rather than compared client-side. A client that
+   *  compares two numbers wrongly reports green on a broken ledger. */
+  balanced: boolean;
+}
+
+export const getTrialBalance = (params: { from?: string; to?: string } = {}) =>
+  apiFetch<TrialBalance>({
+    url: `/admin/trial-balance${query(params)}`,
+    method: "GET",
+  });
+
+export interface JournalLine {
+  account_id: string;
+  account_type: string;
+  account: string;
+  direction: "debit" | "credit";
+  amount: Money;
+}
+
+export interface Journal {
+  id: string;
+  event_type: string;
+  reference_type: string | null;
+  reference_id: string | null;
+  description: string | null;
+  occurred_at: string;
+  reverses_id: string | null;
+  lines: JournalLine[];
+  /** Per journal, so an imbalanced posting is visible at the row that caused it
+   *  rather than only in a total nobody scrolls to. */
+  balanced: boolean;
+}
+
+export const getJournals = (
+  params: { event_type?: string; reference_id?: string; from?: string; to?: string; limit?: number } = {},
+) => apiFetch<{ items: Journal[] }>({ url: `/admin/ledger${query(params)}`, method: "GET" });
+
+export const getLedgerEventTypes = () =>
+  apiFetch<{ items: string[] }>({ url: "/admin/ledger/event-types", method: "GET" });
+
+export interface RefundRow {
+  id: string;
+  order_id: string;
+  order_no: string;
+  customer: string | null;
+  vendor: string | null;
+  amount: Money;
+  provider: string;
+  at: string;
+  reason: string | null;
+  /** Null means no admin action matched — issued by something other than a
+   *  person. That is the row worth asking about, so it is shown, not hidden. */
+  actor: string | null;
+}
+
+export const getRefunds = (params: { from?: string; to?: string; limit?: number } = {}) =>
+  apiFetch<{ items: RefundRow[] }>({ url: `/admin/refunds${query(params)}`, method: "GET" });
+
+export interface PayoutRun {
+  id: string;
+  period_start: string;
+  period_end: string;
+  state: string;
+  statements: number;
+  total: Money;
+  approved_by: string | null;
+  approved_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+}
+
+export const getPayoutRuns = () =>
+  apiFetch<{ items: PayoutRun[] }>({ url: "/admin/payouts/runs", method: "GET" });
+
+export interface PayoutStatement {
+  id: string;
+  run_id: string | null;
+  vendor_id: string;
+  vendor: string;
+  reference_no: string;
+  period_start: string;
+  period_end: string;
+  gross: Money;
+  commission: Money;
+  vat: Money;
+  adjustments: Money;
+  net: Money;
+  state: string;
+  issued_at: string | null;
+  paid_at: string | null;
+  payment_ref: string | null;
+  /** Why this cannot be paid, in words. Null means it can. */
+  blocked: string | null;
+}
+
+export const getStatements = (params: { run_id?: string; vendor_id?: string } = {}) =>
+  apiFetch<{ items: PayoutStatement[] }>({
+    url: params.run_id
+      ? `/admin/payouts/runs/${params.run_id}/statements`
+      : `/admin/payouts/statements${query({ vendor_id: params.vendor_id })}`,
+    method: "GET",
+  });
+
+export interface DriverCash {
+  driver_id: string;
+  driver: string;
+  phone: string | null;
+  /** Collected and not yet remitted — the platform's money in someone else's
+   *  pocket, which is the number this page exists for. */
+  held: Money;
+  held_stops: number;
+  remitted: Money;
+  settled: Money;
+  shortfall: Money;
+  oldest_held: string | null;
+}
+
+export const getDriverCash = () =>
+  apiFetch<{ items: DriverCash[]; total_held: Money }>({
+    url: "/admin/cod/drivers",
+    method: "GET",
+  });
+
+export interface Remittance {
+  id: string;
+  driver_id: string;
+  driver: string;
+  reference_no: string;
+  declared: Money;
+  counted: Money | null;
+  expected: Money;
+  variance: Money;
+  state: string;
+  method: string;
+  declared_at: string;
+  settled_at: string | null;
+  collections: number;
+}
+
+export const getRemittances = (params: { driver_id?: string } = {}) =>
+  apiFetch<{ items: Remittance[] }>({ url: `/admin/cod/remittances${query(params)}`, method: "GET" });
+
+export interface InvoiceRow {
+  id: string;
+  number: string;
+  kind: string;
+  status: string;
+  supplier: string;
+  supplier_trn: string | null;
+  buyer: string | null;
+  buyer_trn: string | null;
+  country: string;
+  net: Money;
+  tax: Money;
+  gross: Money;
+  supply_date: string;
+  issued_at: string;
+  order_id: string | null;
+  order_no: string | null;
+  corrects_id: string | null;
+  corrects_number: string | null;
+  has_pdf: boolean;
+}
+
+export const getInvoices = (params: { q?: string; from?: string; to?: string } = {}) =>
+  apiFetch<{ items: InvoiceRow[] }>({ url: `/admin/invoices${query(params)}`, method: "GET" });
+
+/** Builds a query string, dropping empties so a blank filter is absent rather
+ *  than present-and-empty — the server treats those differently. */
+function query(params: Record<string, string | number | undefined>): string {
+  const parts = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== "")
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`);
+  return parts.length ? `?${parts.join("&")}` : "";
+}

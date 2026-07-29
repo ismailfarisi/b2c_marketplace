@@ -52,6 +52,15 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
     items: [
       { href: "/kyc", label: "KYC", queues: ["kyc", "payout_account"] },
       { href: "/disputes", label: "Disputes", queues: ["dispute"] },
+      // These four have no queue behind them, and the empty badge is honest:
+      // there is no backlog to clear on a ledger. They are here rather than in
+      // their own group because "money & trust" is one person's job, and the
+      // person checking KYC in the morning is the person who checks the trial
+      // balance.
+      { href: "/ledger", label: "Ledger", queues: [] },
+      { href: "/payouts", label: "Payouts", queues: [] },
+      { href: "/cash", label: "Cash", queues: [] },
+      { href: "/refunds", label: "Refunds", queues: [] },
     ],
   },
 ];
@@ -66,12 +75,21 @@ export const TITLES: Record<string, string> = {
   "/campaigns": "Campaign review",
   "/kyc": "Identity & bank accounts",
   "/disputes": "Disputes",
+  "/ledger": "Ledger & trial balance",
+  "/payouts": "Payout runs",
+  "/cash": "Cash reconciliation",
+  "/refunds": "Refunds & invoices",
 };
 
 /** How often the sidebar counts and every queue refetch. */
 export const POLL_MS = 30_000;
 
 function Badge({ depths, queues }: { depths: QueueDepth[]; queues: string[] }) {
+  // No queue means no backlog to show. A permanent grey zero next to "Ledger"
+  // trains the eye to ignore the badge column, which is the one thing it must
+  // not do.
+  if (queues.length === 0) return null;
+
   const mine = depths.filter((d) => queues.includes(d.queue));
   const waiting = mine.reduce((n, d) => n + d.waiting, 0);
   const breached = mine.some((d) => d.sla_breached);
