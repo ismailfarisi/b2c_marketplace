@@ -643,7 +643,12 @@ type Actions struct {
 	Ordering interface {
 		Cancel(ctx context.Context, in ordering.CancelInput) error
 	}
-	Payouts interface {
+	// Accounts carries the identity mutations. Separate from the rest because
+	// they are gated on identity.review rather than commerce or money — the
+	// person who can change a phone number and the person who can move money
+	// out of the account should be two people.
+	Accounts Accounts
+	Payouts  interface {
 		ApproveRun(ctx context.Context, in payouts.ApproveRunInput) error
 		IssueRun(ctx context.Context, runID, actorID uuid.UUID, reason string) (*payouts.IssueRunResult, error)
 		IssueByStaff(ctx context.Context, in payouts.IssueInput) error

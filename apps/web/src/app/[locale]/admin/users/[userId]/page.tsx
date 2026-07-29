@@ -1,11 +1,18 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { use } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { use, useState } from "react";
 
-import { Detail, Facts, Panel, Ref, TimelinePanel, plural } from "@/components/admin/detail";
+import { Action, Detail, Facts, Panel, Ref, TimelinePanel, plural } from "@/components/admin/detail";
 import { Tag, money } from "@/components/admin/table";
-import { getCustomerDetail, getCustomerTimeline } from "@/lib/admin-api";
+import {
+  changePhone,
+  eraseAccount,
+  getCustomerDetail,
+  getCustomerTimeline,
+  mergeAccounts,
+  type MergeResult,
+} from "@/lib/admin-api";
 
 /**
  * The customer page.
@@ -16,11 +23,17 @@ import { getCustomerDetail, getCustomerTimeline } from "@/lib/admin-api";
  * discovers the account has three active strikes has already given away the
  * platform's position.
  *
- * Nothing here is editable, and that is deliberate for now. Every mutation the
- * console offers goes through the service that owns the data, and the customer
- * mutations that matter — merging duplicate accounts, forcing a phone change,
- * deletion under a data request — do not have safe methods behind them yet.
- * A form that half-worked would be worse than no form.
+ * The three account actions live in the header, and each is mostly a refusal.
+ * A merge will not run against an account with an order in flight; an erasure
+ * will not run against one with an open dispute that might owe money; a phone
+ * change will not silently absorb a number that already belongs to someone.
+ * Those refusals are the feature — the happy paths are three UPDATEs.
+ *
+ * A merge deliberately leaves orders and invoices where they are. An invoice
+ * names a buyer, and one whose buyer changed after issue is a different document
+ * from the one the customer holds and the one the tax authority has. The count
+ * of what stayed is shown after the merge rather than hidden, because the
+ * customer will ask.
  */
 
 export default function CustomerPage({
@@ -29,6 +42,15 @@ export default function CustomerPage({
   params: Promise<{ locale: string; userId: string }>;
 }) {
   const { locale, userId } = use(params);
+  const queryClient = useQueryClient();
+  const [newPhone, setNewPhone] = useState("");
+  const [survivor, setSurvivor] = useState("");
+  const [merged, setMerged] = useState<MergeResult | null>(null);
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "customer", userId] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "customer", userId, "timeline"] });
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "customer", userId],
@@ -58,6 +80,65 @@ export default function CustomerPage({
           ) : null}
         </>
       }
+      actions={
+        <div className="detail-actions">
+          <Action
+            label="Change number"
+            verb="Change it"
+            hint="The new number is unverified until they sign in with it, and every existing session is revoked — they will be signed out on every device."
+            extra={(busy) => (
+              <label className="field">
+                <span>New number, international format</span>
+                <input
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="+9715XXXXXXXX"
+                  disabled={busy}
+                  className="mono"
+                />
+              </label>
+            )}
+            onConfirm={async (reason) => {
+              await changePhone(userId, { phone: newPhone.trim(), reason });
+              setNewPhone("");
+              invalidate();
+            }}
+          />
+          <Action
+            label="Merge away"
+            verb="Merge this account into the other"
+            danger
+            hint="This account is the one that stops. Orders and invoices stay with it — only addresses, favourites and saved searches move."
+            extra={(busy) => (
+              <label className="field">
+                <span>Surviving account id</span>
+                <input
+                  value={survivor}
+                  onChange={(e) => setSurvivor(e.target.value)}
+                  placeholder="the account that keeps going"
+                  disabled={busy}
+                  className="mono"
+                />
+              </label>
+            )}
+            onConfirm={async (reason) => {
+              setMerged(await mergeAccounts(userId, { survivor_id: survivor.trim(), reason }));
+              setSurvivor("");
+              invalidate();
+            }}
+          />
+          <Action
+            label="Erase"
+            verb="Erase this person"
+            danger
+            hint="Name, email, phone, addresses and device tokens go and cannot be recovered. Invoices and ledger entries are retained as the law requires, attached to a subject that no longer resolves to a person."
+            onConfirm={async (reason) => {
+              await eraseAccount(userId, reason);
+              invalidate();
+            }}
+          />
+        </div>
+      }
       aside={
         <TimelinePanel
           queryKey={["admin", "customer", userId, "timeline"]}
@@ -65,6 +146,17 @@ export default function CustomerPage({
         />
       }
     >
+      {merged ? (
+        <p className="alarm">
+          Merged. {merged.moved.addresses} address(es), {merged.moved.favourites} favourite(s) and{" "}
+          {merged.moved.searches} saved search(es) moved across.{" "}
+          <strong>
+            {merged.stayed.orders} order(s) and {merged.stayed.invoices} invoice(s) stayed here
+          </strong>{" "}
+          — an invoice whose buyer changed after issue is a different document from the one the
+          customer holds. Their full history is visible in this console, not in the app.
+        </p>
+      ) : null}
       <Panel title="Identity">
         <Facts
           rows={[

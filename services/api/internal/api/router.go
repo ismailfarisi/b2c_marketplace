@@ -239,6 +239,13 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/admin/orders/{orderId}/timeline", h.AdminConsole.OrderTimeline)
 			r.Get("/admin/users/{userId}", h.AdminConsole.Customer)
 			r.Get("/admin/users/{userId}/timeline", h.AdminConsole.CustomerTimeline)
+
+			// Account lifecycle. identity.review, never in a default role with
+			// money.write: changing the number on an account and moving money out
+			// of it should take two people.
+			r.Post("/admin/users/{userId}/phone", h.AdminConsole.ChangePhone)
+			r.Post("/admin/users/{userId}/merge", h.AdminConsole.MergeAccounts)
+			r.Post("/admin/users/{userId}/erase", h.AdminConsole.EraseAccount)
 			r.Get("/admin/vendors/{vendorId}", h.AdminConsole.Vendor)
 			r.Get("/admin/vendors/{vendorId}/timeline", h.AdminConsole.VendorTimeline)
 

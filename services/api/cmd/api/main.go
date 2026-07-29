@@ -138,8 +138,10 @@ func run() error {
 	orderingSvc := ordering.NewService(pool, registries.Verticals, attributionSvc)
 	paymentsSvc := payments.NewService(pool, provider, commissionBP, platformVATBP)
 
+	identitySvc := identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho)
+
 	handlers := &api.Handlers{
-		Identity: identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho),
+		Identity: identitySvc,
 		Ordering: orderingSvc,
 		Payments: paymentsSvc,
 		// The same commission numbers the order path uses. A subscription meal
@@ -216,6 +218,9 @@ func run() error {
 			// console reads with; this one is what staff act with, and it
 			// refuses to act at all without an auditor attached.
 			Payouts: payoutsSvc.WithAuditor(adminSvc),
+			// Likewise auditing. The sign-in path uses handlers.Identity, which
+			// has no auditor and therefore cannot merge or erase anything.
+			Accounts: identitySvc.WithAuditor(adminSvc),
 		},
 	}
 

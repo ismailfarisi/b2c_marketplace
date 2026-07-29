@@ -32,6 +32,9 @@ type Service struct {
 	// devEcho logs the OTP instead of sending it. config.Load rejects this in
 	// production, so it cannot reach a deployed environment.
 	devEcho bool
+	// audit is set only by WithAuditor. Nil on the sign-in path, which has no
+	// actor and must not be able to perform staff actions on accounts.
+	audit Auditor
 }
 
 func NewService(pool *pgxpool.Pool, issuer *auth.Issuer, otpTTL time.Duration, devEcho bool) *Service {

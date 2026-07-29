@@ -1303,3 +1303,43 @@ export const inspectFeed = (params: {
     }${params.limit ? `&limit=${params.limit}` : ""}`,
     method: "GET",
   });
+
+// ── account lifecycle ───────────────────────────────────────────────────────
+//
+// All three need `identity.review`, which is deliberately never in a default
+// role with `money.write`: the person who can change the number on an account
+// and the person who can move money out of it should be two people.
+
+export const changePhone = (userId: string, body: { phone: string; reason: string }) =>
+  apiFetch<{ status: string; note: string }>({
+    url: `/admin/users/${userId}/phone`,
+    method: "POST",
+    data: body,
+  });
+
+export interface MergeResult {
+  status: string;
+  moved: { addresses: number; favourites: number; searches: number };
+  /** What deliberately did not move. Shown rather than buried — an operator who
+   *  does not see this discovers it when the customer asks where their receipts
+   *  went. */
+  stayed: { orders: number; invoices: number };
+  note: string;
+}
+
+export const mergeAccounts = (
+  duplicateId: string,
+  body: { survivor_id: string; reason: string },
+) =>
+  apiFetch<MergeResult>({
+    url: `/admin/users/${duplicateId}/merge`,
+    method: "POST",
+    data: body,
+  });
+
+export const eraseAccount = (userId: string, reason: string) =>
+  apiFetch<{ status: string; note: string }>({
+    url: `/admin/users/${userId}/erase`,
+    method: "POST",
+    data: { reason },
+  });
