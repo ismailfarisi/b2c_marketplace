@@ -253,6 +253,12 @@ func run() error {
 		return err
 	}
 	if media != nil {
+		// Staff playback. Set here rather than in the struct literal above
+		// because the object store is built with the media stack, and left nil
+		// when there is none — which disables playback rather than offering a
+		// play button that always errors.
+		handlers.AdminConsole.Media = media.Store
+
 		handlers.Reels = &api.ReelHandlers{
 			Reels:       media.Reels,
 			Feed:        media.Feed,

@@ -814,3 +814,101 @@ function query(params: Record<string, string | number | undefined>): string {
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`);
   return parts.length ? `?${parts.join("&")}` : "";
 }
+
+// ── supply (§4.4) ───────────────────────────────────────────────────────────
+
+export interface ReelDetail {
+  id: string;
+  state: string;
+  visibility: string;
+  caption: string | null;
+  locale: string | null;
+  author_type: string;
+  author_id: string;
+  author: string;
+  category_id: string | null;
+  duration_ms: number;
+  created_at: string;
+  published_at: string | null;
+  removed_at: string | null;
+  /** The four timestamps and a failure code are the whole "why is this stuck"
+   *  diagnostic. A reel that never probed failed somewhere different to one
+   *  that probed and never transcoded, and a state name cannot tell them
+   *  apart. */
+  pipeline: {
+    bytes_ready_at: string | null;
+    metadata_ready_at: string | null;
+    upload_expires_at: string | null;
+    probed_at: string | null;
+    attempts: number;
+    failure_code: string | null;
+    failure_detail: string | null;
+  };
+  asset: {
+    id: string | null;
+    mime_type: string | null;
+    bytes: number | null;
+    width: number | null;
+    height: number | null;
+    has_source: boolean;
+    has_poster: boolean;
+  };
+  coverage: { kind: string | null; resolved: boolean };
+  renditions: Array<{
+    label: string;
+    width: number;
+    height: number;
+    bitrate_kbps: number;
+    playlist_url: string;
+  }>;
+  reports: number;
+  engagement: { views: number; likes: number; comments: number; shares: number; saves: number };
+}
+
+export const getReelDetail = (id: string) =>
+  apiFetch<ReelDetail>({ url: `/admin/reels/${id}`, method: "GET" });
+
+export const getReelTimeline = (id: string) =>
+  apiFetch<{ items: TimelineEntry[] }>({ url: `/admin/reels/${id}/timeline`, method: "GET" });
+
+/**
+ * A short-lived playback URL for staff.
+ *
+ * Separate from the detail fetch on purpose: opening a reel and *watching* it
+ * are different events, and only the second belongs in the answer to "who
+ * looked at this video". Every call is recorded server-side.
+ */
+export const getReelMedia = (id: string, kind?: "source" | "poster") =>
+  apiFetch<{ url: string; mime_type: string | null; expires_in: number; state: string }>({
+    url: `/admin/reels/${id}/media${kind === "poster" ? "?kind=poster" : ""}`,
+    method: "GET",
+  });
+
+export interface SupplyGap {
+  vendor_id: string;
+  vendor: string;
+  city: string | null;
+  published: number;
+  pending_review: number;
+  last_published: string | null;
+  /** Null means never published — a different and more urgent problem than
+   *  having gone quiet, so it is not flattened into a large number. */
+  days_quiet: number | null;
+}
+
+export const getSupplyGaps = (quietDays?: number) =>
+  apiFetch<{ items: SupplyGap[] }>({
+    url: `/admin/supply/gaps${quietDays ? `?quiet_days=${quietDays}` : ""}`,
+    method: "GET",
+  });
+
+export interface CoverageArea {
+  emirate: string;
+  city: string;
+  reels: number;
+  vendors: number;
+  last_published: string | null;
+}
+
+export const getCoverage = () =>
+  apiFetch<{ items: CoverageArea[] }>({ url: "/admin/supply/coverage", method: "GET" });

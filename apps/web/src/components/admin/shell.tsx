@@ -45,6 +45,7 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
       // two confirmed rollbacks.
       { href: "/listings", label: "Listings", queues: ["listing", "fraud"] },
       { href: "/campaigns", label: "Campaigns", queues: ["boost"] },
+      { href: "/supply", label: "Supply", queues: [] },
     ],
   },
   {
@@ -73,6 +74,7 @@ export const TITLES: Record<string, string> = {
   "/appeals": "Appeals",
   "/listings": "Listings & fraud",
   "/campaigns": "Campaign review",
+  "/supply": "Content supply",
   "/kyc": "Identity & bank accounts",
   "/disputes": "Disputes",
   "/ledger": "Ledger & trial balance",
@@ -198,7 +200,7 @@ function hitHref(locale: string, hit: SearchHit): string {
     case "campaign":
       return `${base}/campaigns`;
     case "reel":
-      return `${base}/reels`;
+      return `${base}/reels/${hit.id}`;
     default:
       return `${base}`;
   }

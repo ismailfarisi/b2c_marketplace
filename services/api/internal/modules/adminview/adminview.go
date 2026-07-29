@@ -20,10 +20,14 @@ package adminview
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/marketplace/api/internal/httpx"
 )
 
 type Service struct{ pool *pgxpool.Pool }
@@ -224,4 +228,16 @@ func (s *Service) searchByID(ctx context.Context, id uuid.UUID) ([]SearchHit, er
 		out = append(out, h)
 	}
 	return out, rows.Err()
+}
+
+// notFoundOr turns a missing row into a 404 and everything else into a 500.
+//
+// The distinction matters more here than in most packages: a console operator
+// following a link from a timeline to a deleted record should be told the record
+// is gone, not shown an internal error that reads like the console is broken.
+func notFoundOr(what string, err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return httpx.ErrNotFound
+	}
+	return wrap(what, err)
 }

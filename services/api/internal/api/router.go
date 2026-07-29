@@ -270,6 +270,16 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/admin/cod/drivers", h.AdminConsole.DriverCash)
 			r.Get("/admin/cod/remittances", h.AdminConsole.Remittances)
 			r.Get("/admin/invoices", h.AdminConsole.Invoices)
+
+			// Supply (§4.4). The media endpoint is separate from the detail
+			// page on purpose: opening a reel and watching it are different
+			// events, and only one of them should appear in the answer to "who
+			// looked at this video".
+			r.Get("/admin/reels/{reelId}", h.AdminConsole.Reel)
+			r.Get("/admin/reels/{reelId}/timeline", h.AdminConsole.ReelTimeline)
+			r.Get("/admin/reels/{reelId}/media", h.AdminConsole.ReelMedia)
+			r.Get("/admin/supply/gaps", h.AdminConsole.SupplyGaps)
+			r.Get("/admin/supply/coverage", h.AdminConsole.Coverage)
 		}
 
 		// Phase 9 — boosts.

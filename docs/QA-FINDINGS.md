@@ -422,3 +422,49 @@ rather than a data change made in a migration, where it would be a lie.
 Verified: the trial balance now reads one row per account type, balanced at
 16830/16830, with gateway receivable netting to zero across a capture and two
 refunds.
+
+## 15. No PII read has ever been audited — **fixed**
+
+The console's §3.4 promise is that reading personal data is itself an event: the
+question after a breach is *who looked at it*, not who changed it. Every detail
+handler calls `RecordAccess`, and the table was empty.
+
+`audit_log.ip` is `inet`. pgx sent the Go string as an untyped parameter and
+Postgres refused the assignment — `column "ip" is of type inet but expression is
+of type text`. Because `RecordAccess` logs its failures rather than returning
+them (deliberately: an audit write must never fail a read), the console reported
+that it was recording who read what, the warning went to a log nobody greps, and
+nothing was written. Every audited read since the feature shipped was lost.
+
+Found by looking for a row that should have been there and was not, which is the
+only way this class of bug is ever found. A feature that fails silently and is
+never read back cannot be discovered any other way — which is an argument for
+the access-history screen existing, not just the writes.
+
+The second cast in the same statement was wrong for the same reason and had not
+bitten yet: `request_id` was cast to `uuid` against a `text` column. It worked
+only because every request id happens to be a uuid today, and the first
+component to set a non-uuid correlation id would have broken auditing again, in
+exactly the same invisible way.
+
+Verified: a PII read and a media read both land in `audit_log` with the caller's
+IP and request id, and the failure count in the log is zero.
+
+## 16. Reel author joins matched nothing — **fixed**
+
+`reels.author_type` is constrained to `'vendor_branch'` or `'user'`. Three
+queries in the new supply read models joined on `author_type = 'vendor'`, which
+matches no row — so the reel detail page showed a blank author, coverage
+reported zero published reels in a district that had two, and the supply-gap
+report listed an active vendor as having never published.
+
+Nothing errored. A LEFT JOIN that matches nothing returns nulls, and every
+number it feeds is plausibly small. Caught by noticing that the vendor page said
+"2 published reels" and the supply page said "0" for the same vendor on the same
+screen — two views disagreeing is the cheapest bug detector there is, and it
+only works if both views exist.
+
+The grouping was wrong in the same place for a related reason: reels belong to
+*branches*, so aggregating by `author_id` counts per branch, and a vendor with
+two branches looks half as active as they are. Both now join through
+`vendor_branches`.

@@ -1264,3 +1264,20 @@ table.data .nowrap {
   font-size: 10px;
   border-block-end: 1px solid var(--a-border);
 }
+
+/* The player. Portrait-shaped because reels are, and capped so a 1080x1920
+   source does not push the pipeline panel below the fold — the two are read
+   together when something is wrong. */
+.player video {
+  display: block;
+  max-block-size: 460px;
+  max-inline-size: 100%;
+  background: #000;
+  border-radius: var(--a-radius-sm);
+  margin-block-end: 8px;
+}
+
+.player p {
+  margin-block: 6px;
+  font-size: 12px;
+}

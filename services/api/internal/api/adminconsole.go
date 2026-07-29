@@ -30,6 +30,11 @@ type AdminHandlers struct {
 	View  *adminview.Service
 	Admin *admin.Service
 	Act   Actions
+	// Media signs short-lived playback URLs for content that is not public.
+	// Nil disables the media endpoint rather than failing it at request time —
+	// an environment without an object store should refuse to offer playback,
+	// not offer it and then 500.
+	Media MediaSigner
 }
 
 // caller resolves the staff member and their permission, and logs the read when

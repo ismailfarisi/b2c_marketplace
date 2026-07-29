@@ -415,10 +415,24 @@ type Role struct {
 // the read just succeeded against, so a failure here means something larger is
 // already wrong.
 func (s *Service) RecordAccess(ctx context.Context, in Access) {
+	// Both casts are load-bearing and both were missing.
+	//
+	// `ip` is `inet`, and pgx sent a Go string as untyped text — Postgres refuses
+	// the assignment, so *every* audited read failed. Silently, because this
+	// function logs rather than returns: the console reported that it was
+	// recording who read what, the warn line went to a log nobody greps, and the
+	// table stayed empty. Found by looking for a row that should have been there
+	// and was not, which is the only way this class of bug is ever found.
+	//
+	// `request_id` was cast to uuid against a `text` column. That worked only
+	// because every request id happens to be a uuid today; the first component
+	// that sets a non-uuid correlation id would have broken auditing again, in
+	// exactly the same invisible way.
 	if _, err := s.pool.Exec(ctx, `
 		INSERT INTO audit_log (actor_type, actor_id, action, target_type, target_id,
 		                       changes, ip, user_agent, request_id)
-		VALUES ('admin', $1, $2, $3, $4, $5, nullif($6, ''), nullif($7, ''), nullif($8, '')::uuid)`,
+		VALUES ('admin', $1, $2, $3, $4, $5,
+		        nullif($6, '')::inet, nullif($7, ''), nullif($8, ''))`,
 		in.ActorID, "read:"+in.Permission, in.TargetType, in.TargetID,
 		nil, in.IP, in.UserAgent, in.RequestID); err != nil {
 		// Logged, not returned. See the doc comment.
