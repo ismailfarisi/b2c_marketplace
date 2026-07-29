@@ -77,6 +77,7 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrNotFound):
 		p.Status = http.StatusNotFound
 		p.Title = "Not found"
+		p.Detail = sentenceFor(err, ErrNotFound)
 
 	case errors.Is(err, ErrUnauthorized):
 		p.Status = http.StatusUnauthorized
@@ -99,7 +100,7 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrConflict):
 		p.Status = http.StatusConflict
 		p.Title = "Conflict"
-		p.Detail = conflictDetail(err)
+		p.Detail = sentenceFor(err, ErrConflict)
 	}
 
 	if p.Status >= 500 {
@@ -114,21 +115,23 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	WriteJSON(w, p.Status, "application/problem+json", p)
 }
 
-// conflictDetail recovers the sentence a conflict was written with.
+// sentenceFor recovers the sentence an error was written with.
 //
-// Fifty places in this codebase build errors as fmt.Errorf("%w: <sentence>",
-// ErrConflict), where the sentence is the whole point — "this order is
-// completed, refund it instead of cancelling" tells the operator what to do
-// next, and a bare 409 tells them to file a ticket. Until now every one of
-// those sentences was written and then dropped here.
+// Dozens of places in this codebase build errors as
+// fmt.Errorf("%w: <sentence>", sentinel), where the sentence is the whole point.
+// "this order is completed, refund it instead of cancelling" tells the operator
+// what to do next; "there is no setting called \"nope\" — settings are declared
+// in a migration so that a typo cannot create one" explains why a request that
+// looks reasonable is being refused. A bare 409 or 404 tells them to file a
+// ticket.
 //
-// Only the outermost wrap is surfaced, and only when ErrConflict is *at* the
-// front of the chain: that is exactly the "%w: sentence" shape and nothing
-// else. An error that picked up ErrConflict deeper down — behind a
-// "load order: …" wrap that might carry a driver message — falls through to the
-// bare title rather than risk putting internals in a response body.
-func conflictDetail(err error) string {
-	const prefix = "conflict: "
+// Only the outermost wrap is surfaced, and only when the sentinel is *at* the
+// front of the chain: that is exactly the "%w: sentence" shape and nothing else.
+// An error that picked up the sentinel deeper down — behind a "load order: …"
+// wrap that might carry a driver message — falls through to the bare title
+// rather than risk putting internals in a response body.
+func sentenceFor(err, sentinel error) string {
+	prefix := sentinel.Error() + ": "
 	msg := err.Error()
 	if !strings.HasPrefix(msg, prefix) {
 		return ""

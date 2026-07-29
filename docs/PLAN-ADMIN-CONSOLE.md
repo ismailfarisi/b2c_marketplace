@@ -414,3 +414,70 @@ Two things block a start, and both are §8:
    unblocks the largest gap in what already exists.
 
 Everything else in Phase A can begin without an answer.
+
+---
+
+# Built — 2026-07-29
+
+All five phases implemented in one pass. What follows is what exists, and
+honestly, what does not.
+
+## Delivered
+
+**A · Support desk.** Migration 20 (11 permissions, 6 roles, expiring grants,
+existing staff migrated across). `adminview` read models. Global search over
+eight identifier shapes. Order, customer and vendor detail pages with merged
+timelines across five history tables. Refund and cancel actions through the
+owning services, each writing `admin_actions` with a required reason. PII reads
+audited.
+
+**B · Money.** Ledger explorer, trial balance, payout runs and statements with
+per-vendor block reasons in words, COD reconciliation, remittances, refunds,
+invoices. Four screens.
+
+**C · Supply.** Signed staff playback for unpublished media — the gap this plan
+called the largest. Reel detail with the pipeline as four timestamps. Coverage
+and supply-gap reporting.
+
+**D · Config.** Feature flags and app settings, each change writing its audit row
+in the same transaction as the change.
+
+**E · Health.** Background-loop staleness, outbox lag, partition headroom,
+notification delivery split three ways, moderation SLA by day.
+
+## Deliberately not built, with reasons
+
+- **Payout issue/approve/pay actions.** `payouts.Service` has no method that
+  takes an actor, records the action, and refuses a vendor whose licence expired
+  yesterday. A button wired to the method that exists would let the console pay a
+  blocked vendor in one click, which is worse than a console that cannot pay
+  anyone. The block reasons are surfaced; the payment is not.
+- **Tax rate, rate card and template editors.** All three are date-ranged or
+  versioned. Editing in place would restate documents already issued under the
+  old value. They need an editor that understands versions, and the template one
+  additionally needs to show Arabic SMS segment cost before a save.
+- **Listing and driver detail, feed inspector.** Phase C's remaining three. The
+  read models follow the same shape as the reel one; nothing blocks them.
+- **Customer mutations** (merge, forced phone change, deletion under a data
+  request). No safe service method exists, and a half-working form is worse than
+  none.
+- **Impersonation (§3.7).** Not started.
+
+## Found while building
+
+Six defects, in `QA-FINDINGS.md` §11–16. Three are worth repeating here because
+they are the argument for the console rather than incidental to it:
+
+- **Card orders never captured.** `payments.Capture` was correct and called by
+  nothing. Card orders never reached the ledger at all; vendor payables were
+  computed from cash and subscriptions only, and looked entirely plausible.
+- **No PII read had ever been audited.** An `inet`/`text` mismatch, failing into
+  a warn log that nothing read. The console reported it was recording who read
+  what, and recorded nothing.
+- **Platform ledger accounts duplicated per posting.** A `UNIQUE` constraint over
+  a nullable column, so `ON CONFLICT` never fired for platform-level accounts.
+  Found on the trial balance's first render.
+
+Each of these was invisible from inside the running system and became obvious the
+moment something read the data back. That is the case for the console, made
+better than the plan made it.

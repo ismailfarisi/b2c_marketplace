@@ -912,3 +912,92 @@ export interface CoverageArea {
 
 export const getCoverage = () =>
   apiFetch<{ items: CoverageArea[] }>({ url: "/admin/supply/coverage", method: "GET" });
+
+// ── configuration and health (§4.5, §4.6) ───────────────────────────────────
+
+export interface FeatureFlag {
+  key: string;
+  description: string;
+  enabled: boolean;
+  rollout_pct: number;
+  enabled_for: number;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export const getFlags = () =>
+  apiFetch<{ items: FeatureFlag[] }>({ url: "/admin/config/flags", method: "GET" });
+
+export const setFlag = (
+  key: string,
+  body: { enabled: boolean; rollout_pct: number; reason: string },
+) =>
+  apiFetch<{ status: string }>({
+    url: `/admin/config/flags/${encodeURIComponent(key)}`,
+    method: "PUT",
+    data: body,
+  });
+
+export interface AppSetting {
+  key: string;
+  value: unknown;
+  description: string;
+  /** A sensitive setting's value is withheld from callers without
+   *  `config.write`; the row itself is not, so nobody creates a duplicate under
+   *  a slightly different name. */
+  sensitive: boolean;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export const getSettings = () =>
+  apiFetch<{ items: AppSetting[] }>({ url: "/admin/config/settings", method: "GET" });
+
+export const setSetting = (key: string, body: { value: unknown; reason: string }) =>
+  apiFetch<{ status: string }>({
+    url: `/admin/config/settings/${encodeURIComponent(key)}`,
+    method: "PUT",
+    data: body,
+  });
+
+export interface Health {
+  outbox: Array<{
+    aggregate_type: string;
+    unpublished: number;
+    /** The number the alarm is set on. Ten thousand events a minute old is a
+     *  busy system; three from yesterday is a dead consumer. */
+    oldest_seconds: number | null;
+    failing: number;
+    max_attempts: number;
+    last_error: string | null;
+  }>;
+  partitions: Array<{
+    parent: string;
+    name: string;
+    bound: string;
+    is_default: boolean;
+    rows: number;
+    /** A DEFAULT partition holding rows: the range it occupies can never be
+     *  attached as a real partition without moving them, so a late partition
+     *  job has become a permanent one. */
+    trapped: boolean;
+  }>;
+  loops: Array<{ loop: string; last_seen: string | null; pending: number; stale: boolean }>;
+  delivery: Array<{
+    channel: string;
+    sent: number;
+    failed: number;
+    suppressed: number;
+    queued: number;
+    last_sent_at: string | null;
+  }>;
+  moderation: Array<{
+    day: string;
+    decided: number;
+    breached: number;
+    median_seconds: number | null;
+  }>;
+  generated_at: string;
+}
+
+export const getHealth = () => apiFetch<Health>({ url: "/admin/health", method: "GET" });

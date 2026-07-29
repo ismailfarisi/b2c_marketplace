@@ -280,6 +280,16 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/admin/reels/{reelId}/media", h.AdminConsole.ReelMedia)
 			r.Get("/admin/supply/gaps", h.AdminConsole.SupplyGaps)
 			r.Get("/admin/supply/coverage", h.AdminConsole.Coverage)
+
+			// Configuration (§4.5) and health (§4.6). Reads need
+			// `health.read`; writes need `config.write`, which is a separate
+			// permission on purpose — being trusted to look at a flag is not
+			// the same as being trusted to flip it during an incident.
+			r.Get("/admin/config/flags", h.AdminConsole.Flags)
+			r.Put("/admin/config/flags/{key}", h.AdminConsole.SetFlag)
+			r.Get("/admin/config/settings", h.AdminConsole.Settings)
+			r.Put("/admin/config/settings/{key}", h.AdminConsole.SetSetting)
+			r.Get("/admin/health", h.AdminConsole.Health)
 		}
 
 		// Phase 9 — boosts.

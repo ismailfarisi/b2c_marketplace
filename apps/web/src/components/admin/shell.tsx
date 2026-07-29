@@ -64,6 +64,16 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
       { href: "/refunds", label: "Refunds", queues: [] },
     ],
   },
+  {
+    // Last, and deliberately not first. These two are checked once a morning
+    // and during an incident; putting them at the top would push the queues —
+    // which are checked every few minutes — below the fold on a laptop.
+    title: "Platform",
+    items: [
+      { href: "/health", label: "Health", queues: [] },
+      { href: "/config", label: "Configuration", queues: [] },
+    ],
+  },
 ];
 
 export const TITLES: Record<string, string> = {
@@ -75,6 +85,8 @@ export const TITLES: Record<string, string> = {
   "/listings": "Listings & fraud",
   "/campaigns": "Campaign review",
   "/supply": "Content supply",
+  "/health": "Platform health",
+  "/config": "Configuration",
   "/kyc": "Identity & bank accounts",
   "/disputes": "Disputes",
   "/ledger": "Ledger & trial balance",
