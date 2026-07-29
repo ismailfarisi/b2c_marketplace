@@ -141,14 +141,30 @@ a question about the total, not about one signal. The panel now says
 "leaving this seller at 40" and marks it when that crosses the threshold. Four
 tests, one of which asserts the shown figure equals the applied one.
 
-### 9. The QA fixture itself, twice
+### 9. Six paths in the contract are not mounted · **low**
+
+Comparing `api/openapi.yaml` against `router.go`: `/me`, `/me/addresses`,
+`/vendors/{vendorId}` and `/auth/logout` are described and do not exist.
+(`/healthz` and `/readyz` are outside `/v1` and are fine.)
+
+Not fixed here — each is a small feature rather than a defect, and inventing
+them to satisfy the document would be the wrong direction. Recorded because
+`api/openapi.yaml` is the cross-language contract now that mobile is Kotlin, and
+a contract that describes four endpoints nobody implemented is one a client
+author will call.
+
+They are the natural first slice of
+[PLAN-ADMIN-CONSOLE](./PLAN-ADMIN-CONSOLE.md) Phase A, which needs `/me` and a
+staff-scoped vendor read anyway.
+
+### 10. The QA fixture itself, twice
 
 Both were `ON CONFLICT DO NOTHING` masking a conflict on a *different* key than
 intended, so an insert silently no-oped and a foreign key failed three
 statements later. Worth recording because it is the same shape as a bug that
 would be invisible in a real migration.
 
-### 10. Verified end to end after fixing
+### 11. Verified end to end after fixing
 
 Re-ran the whole chain against the fixed code:
 
