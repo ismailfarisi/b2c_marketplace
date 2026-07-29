@@ -16,6 +16,15 @@ import (
 	"github.com/marketplace/api/internal/platform/postgres"
 )
 
+// ErrNothingToCapture means the order has no successful authorization.
+//
+// A distinct sentinel rather than a generic conflict, because the capture loop
+// needs to tell two cases apart: a card order whose gateway declined (retry) and
+// a cash order that never had a hold to begin with (normal, and roughly half the
+// orders in this market). Treating the second as a failure fills the outbox with
+// events that will be attempted forever and never succeed.
+var ErrNothingToCapture = fmt.Errorf("%w: no successful authorization", httpx.ErrConflict)
+
 type Service struct {
 	pool     *pgxpool.Pool
 	provider Provider
@@ -172,6 +181,25 @@ func (s *Service) Authorize(ctx context.Context, userID, orderID uuid.UUID, idem
 // because a hold is not a movement of money and booking revenue on one would
 // overstate every reporting period by the value of everything later voided.
 func (s *Service) Capture(ctx context.Context, orderID uuid.UUID, finalAmountMinor int64) error {
+	// Already captured is success, not an error.
+	//
+	// The capture loop retries on gateway failures, and a retry that lands
+	// after a capture that actually succeeded — a timeout on our side, a
+	// response lost, the loop restarting mid-flight — must not charge the
+	// customer twice. Checking first is cheap; discovering it from a
+	// chargeback is not.
+	var already bool
+	if err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM payments
+			 WHERE order_id = $1 AND kind = 'capture' AND status = 'succeeded')`,
+		orderID).Scan(&already); err != nil {
+		return fmt.Errorf("check existing capture: %w", err)
+	}
+	if already {
+		return nil
+	}
+
 	auth, err := s.loadAuthorization(ctx, orderID)
 	if err != nil {
 		return err
@@ -295,7 +323,7 @@ func (s *Service) loadAuthorization(ctx context.Context, orderID uuid.UUID) (aut
 		Scan(&a.PaymentID, &a.QuoteID, &a.UserID, &a.VendorID, &a.ProviderRef,
 			&a.AuthorizedMinor, &a.QuoteTotalMinor, &a.Currency)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return a, fmt.Errorf("%w: no successful authorization for order %s", httpx.ErrConflict, orderID)
+		return a, fmt.Errorf("%w for order %s", ErrNothingToCapture, orderID)
 	}
 	if err != nil {
 		return a, fmt.Errorf("load authorization: %w", err)

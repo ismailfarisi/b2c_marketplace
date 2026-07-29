@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -31,6 +32,7 @@ import (
 	"github.com/marketplace/api/internal/modules/dispatch"
 	"github.com/marketplace/api/internal/modules/invoicing"
 	"github.com/marketplace/api/internal/modules/kyc"
+	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/modules/payouts"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/tax"
@@ -137,10 +139,29 @@ func run() error {
 		Pool:     pool,
 	})
 
+	// Shared with the capture loop below. One instance, so the commission
+	// numbers a capture books are the same ones the API quotes.
+	// The same guard the API makes, made again here rather than trusted.
+	// This process is the one that actually calls capture, so a sandbox gateway
+	// reaching production would settle every delivery against a stub and report
+	// revenue that does not exist.
+	var provider payments.Provider = payments.SandboxProvider{}
+	if cfg.IsProduction() {
+		return fmt.Errorf("no production payment provider is configured — " +
+			"wire a real gateway before deploying")
+	}
+	paymentsSvc := payments.NewService(pool, provider, commissionBP, platformVATBP)
+
 	// The Phase 9 loop. Its fast tick releases budget held by impressions that
 	// were served and never confirmed — without it a campaign's daily cap fills
 	// with holds and it stops serving while reporting zero spend.
 	go runBoostLoop(ctx, boosts.NewService(pool, nil))
+
+	// The capture loop. On its own goroutine like the rest, and on a slower
+	// tick than any of them: it calls a payment gateway, and the delivery it
+	// follows has already happened. Nothing is waiting on this except a number
+	// in a report.
+	go runCaptureLoop(ctx, pool, paymentsSvc)
 
 	// River is wired here once the first job type exists. Until then the loop
 	// below runs the two sweepers that Phase 1 genuinely needs, on a ticker.

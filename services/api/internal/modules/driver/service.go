@@ -487,11 +487,61 @@ func (s *Service) Complete(ctx context.Context, driverID uuid.UUID, in CompleteI
 			fulfillment.StatusCompleted, driverID, in.At, nil); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `
+		if _, err := tx.Exec(ctx, `
 			UPDATE route_stops SET arrived_at = COALESCE(arrived_at, now()), departed_at = now()
-			 WHERE fulfillment_id = $1 AND departed_at IS NULL`, in.FulfillmentID)
-		return err
+			 WHERE fulfillment_id = $1 AND departed_at IS NULL`, in.FulfillmentID); err != nil {
+			return err
+		}
+
+		return announceIfOrderDelivered(ctx, tx, current.OrderID)
 	})
+}
+
+// announceIfOrderDelivered emits `order.delivered` once the last stop is done.
+//
+// Written because of QA finding 13: `payments.Capture` existed, was correct, and
+// was called by *nothing*. Card orders took an authorization at checkout and
+// stopped there — the platform never took the money, and the order never
+// reached the ledger at all, because PostOrderCaptured is only reachable through
+// Capture. Vendor payables looked plausible because cash orders post on
+// collection, and were silently missing every card sale.
+//
+// An event rather than a direct call, for two reasons that both matter.
+//
+// Layering is the smaller one: `driver` would otherwise depend on `payments`,
+// and the delivery path would grow a reason to know about commission splits.
+//
+// The larger one is that capturing means calling a payment gateway, and doing
+// that inside this transaction would hold a row lock on the fulfillment for as
+// long as the gateway takes to answer — with a driver standing in the rain
+// waiting for their app to confirm the stop. Worse, a gateway timeout would
+// roll back a delivery that physically happened. The delivery is a fact; the
+// capture is a consequence, and consequences retry.
+func announceIfOrderDelivered(ctx context.Context, tx pgx.Tx, orderID uuid.UUID) error {
+	var outstanding int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*) FROM fulfillments
+		 WHERE order_id = $1
+		   AND status NOT IN ('completed', 'failed', 'cancelled')`, orderID).
+		Scan(&outstanding); err != nil {
+		return fmt.Errorf("count outstanding stops: %w", err)
+	}
+	if outstanding > 0 {
+		return nil
+	}
+
+	// ON CONFLICT rather than a pre-check. The idempotency key is unique per
+	// order and event type, so a re-delivered stop on an order already
+	// announced is a no-op instead of an error — which is what "the last stop
+	// completed" should mean when a failed stop is later retried and succeeds.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, idempotency_key)
+		VALUES ('order', $1, 'order.delivered', jsonb_build_object('order_id', $1), $2)
+		ON CONFLICT (idempotency_key) DO NOTHING`,
+		orderID, fmt.Sprintf("order:%s:order.delivered", orderID)); err != nil {
+		return fmt.Errorf("announce delivery: %w", err)
+	}
+	return nil
 }
 
 // collectCash records the money and posts it to the ledger.

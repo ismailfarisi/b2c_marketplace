@@ -331,7 +331,7 @@ the sentinel deeper down, behind a `"load order: …"` wrap that might carry a
 driver message, still falls through to the bare title rather than risk putting
 internals in a response body.
 
-## 13. Card payments are authorized and never captured — **open, deferred to Phase B**
+## 13. Card payments are authorized and never captured — **fixed**
 
 `payments.Capture` is written, correct, and **called by nothing**. Not the API,
 not the worker, not the feed binary. Card orders take an authorization at
@@ -347,9 +347,34 @@ Consequences, in order of how much they cost:
 - The admin console's refund action cannot work on a card order, because there
   is no capture to reverse. That is how this was found.
 
-Not fixed here on purpose. The fix is a decision, not a patch: capture on
-delivery of the final fulfillment is the obvious choice, but "final" needs
-defining for a multi-stop order, and a partial delivery should probably capture
-partially. That belongs with the rest of the money work in Phase B of
-`PLAN-ADMIN-CONSOLE.md`, where the ledger and payout screens will make the
-answer checkable rather than assumed.
+Fixed at the start of Phase B, where the ledger screens make the answer
+checkable rather than assumed.
+
+`driver.Complete` now emits `order.delivered` once every stop on the order has
+reached a terminal state, and a worker loop captures against it. An event rather
+than a direct call, for a reason bigger than layering: capturing means calling a
+payment gateway, and doing that inside the delivery transaction would hold a row
+lock on the fulfillment for the length of a gateway round trip — with a driver
+standing in the street waiting for their app — and a gateway timeout would roll
+back a delivery that physically happened. The delivery is a fact; the capture is
+a consequence, and consequences retry.
+
+Three things fall out of that and are worth naming:
+
+- **Already-captured is success, not an error.** The loop retries, and a retry
+  landing after a capture that actually succeeded must not charge twice.
+- **A cash order is not a failure.** `ErrNothingToCapture` is a distinct
+  sentinel so the loop can tell a declined card (retry) from an order that never
+  had a hold (normal, and roughly half of them here). Without the distinction
+  the queue fills with events that will be attempted forever.
+- **The capture loop runs on the slowest tick in the worker**, two minutes.
+  Everything else in that process has someone waiting on it. Nothing waits on a
+  capture.
+
+Verified end to end: an authorized order was delivered, the loop captured 5100
+of the 6630 hold, the quote advanced to `captured`, and the vendor payable moved
+5636 → 9971 — the 5100 less 15% commission, with VAT extracted from the
+commission and the journal balancing to the fils. A partial refund of 1500 then
+reversed 1275/214/11 proportionally, and refunding the remainder returned the
+payable to exactly 5636. Two partial refunds summed back to the original split
+with no drift, which is the property the proportional reversal exists for.
