@@ -447,21 +447,8 @@ notification delivery split three ways, moderation SLA by day.
 
 ## Deliberately not built, with reasons
 
-- **Payout issue/approve/pay actions.** `payouts.Service` has no method that
-  takes an actor, records the action, and refuses a vendor whose licence expired
-  yesterday. A button wired to the method that exists would let the console pay a
-  blocked vendor in one click, which is worse than a console that cannot pay
-  anyone. The block reasons are surfaced; the payment is not.
-- **Tax rate, rate card and template editors.** All three are date-ranged or
-  versioned. Editing in place would restate documents already issued under the
-  old value. They need an editor that understands versions, and the template one
-  additionally needs to show Arabic SMS segment cost before a save.
-- **Listing and driver detail, feed inspector.** Phase C's remaining three. The
-  read models follow the same shape as the reel one; nothing blocks them.
-- **Customer mutations** (merge, forced phone change, deletion under a data
-  request). No safe service method exists, and a half-working form is worse than
-  none.
-- **Impersonation (§3.7).** Not started.
+*(Superseded — everything listed here has since been built. Kept because the
+reasons were the design, and the implementations follow them.)*
 
 ## Found while building
 
@@ -481,3 +468,102 @@ they are the argument for the console rather than incidental to it:
 Each of these was invisible from inside the running system and became obvious the
 moment something read the data back. That is the case for the console, made
 better than the plan made it.
+
+
+---
+
+# Completed — 2026-07-29, second pass
+
+The five items the first pass deferred are built. Each was deferred with a
+reason, and in every case the reason turned out to be the specification.
+
+## Payout actions
+
+Deferred because `payouts.Service` had no method taking an actor that would
+refuse a blocked vendor. It has three now. `Pay` re-checks eligibility at the
+moment money moves rather than trusting the gate that ran at issue — a statement
+is issued days before it is paid and a licence can lapse in between, with nothing
+writing to the vendor's record when the date passes. Verified: a licence expiring
+between the two steps refuses the payment, and the same statement pays cleanly
+once renewed.
+
+Approval is separate from issuing and issues nothing. A run with zero statements
+cannot be approved, because that is the shape a failed generation takes. Bulk
+issue skips blocked vendors and returns the list rather than failing the batch.
+
+## Versioned editors
+
+Deferred because editing a tax rate in place restates every invoice issued under
+it. They supersede: the current row is closed and a new one opened in one
+transaction, and effective dates must be in the future.
+
+Templates version rather than overwrite, and a revision that drops a placeholder
+the old body used is refused — nothing downstream renders a template twice to
+check, so a delivery-code template that loses `{{code}}` sends a blank message
+and the first sign is a driver at a door.
+
+The segment counter is the reason the template editor exists. 75 English
+characters is one SMS; 80 Arabic characters is two, because anything outside
+GSM-7 drops the budget from 160 to 70. One en-dash pasted from a document does
+the same to an English message.
+
+## Listing, driver, feed inspector
+
+The inspector lives in the `feed` package and calls the same `retrieve` the feed
+calls. A copy in a console package would diverge on the first change to either,
+and an inspector inspecting a different feed is worse than none — it is
+confidently wrong.
+
+## Account lifecycle
+
+Deferred because no safe method existed. The design that emerged is that a merge
+**links and freezes rather than moves**: 58 tables reference `users`, and a tax
+invoice whose buyer changed after issue is a different document from the one the
+customer holds. Addresses, favourites and saved searches move; orders and
+invoices stay, and the count of what stayed is returned so the operator knows
+before the customer asks.
+
+Erasure is pseudonymisation for the same reason. The platform must retain
+invoices; a system that pretended to delete them would be lying to the customer
+and breaking the law in one operation.
+
+## Impersonation
+
+The read-only guarantee is one middleware on the whole authenticated router,
+refusing every unsafe method before routing — not a per-handler check, which
+protects exactly the handlers somebody remembered. Fifteen minutes, not
+refreshable, no session row, closed to the console, and refused against a
+colleague.
+
+---
+
+## What is genuinely left
+
+- **`RequireStaff` on the older queues.** The moderation, KYC and dispute queues
+  still use the Phase 2 boolean rather than the §3.5 permissions. Each migrates
+  when it gains a detail page; the console half is done and the queues are not.
+- **A job heartbeat table.** Loop health is inferred from the artefacts each loop
+  produces, and the health page says so. A loop with nothing to do is
+  indistinguishable from one that has stopped until the loops write heartbeats.
+- **Weight tuning from the feed inspector.** It explains the ranking; it does not
+  let anyone change it. Editing `ranking_profiles` needs the same versioned
+  treatment the tax rates got, plus a way to see the effect before committing.
+
+## Defects found across both passes
+
+Twenty, in `QA-FINDINGS.md`. Six are worth repeating because they are the
+argument for the console rather than incidental to it — every one was invisible
+from inside the running system and became obvious the moment something read the
+data back:
+
+- Card orders authorised and never captured, so no card sale ever reached the
+  ledger.
+- No PII read had ever been audited: an `inet`/`text` mismatch failing into a
+  warn log nothing read.
+- Platform ledger accounts duplicating once per posting, because `ON CONFLICT`
+  cannot fire on a nullable column under a plain `UNIQUE`.
+- Cancelling an order never returned the delivery slot.
+- A context key declared with no value, silently aliasing the acting user to the
+  staff member during impersonation.
+- A nil slice turning a `NOT (id = ANY(...))` filter into `NULL` and emptying the
+  feed with no error.
