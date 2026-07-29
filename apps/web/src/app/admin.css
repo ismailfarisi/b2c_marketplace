@@ -1281,3 +1281,71 @@ table.data .nowrap {
   margin-block: 6px;
   font-size: 12px;
 }
+
+/* ── versioned editors ──────────────────────────────────────────────────────*/
+
+/* A closed row is history, kept visible rather than filtered away — "what was
+   the rate in March" is a question that gets asked. Dimmed so the current row
+   is the one the eye lands on. */
+.money-table tr.historic td {
+  opacity: 0.55;
+}
+
+.templates {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.template {
+  padding: 10px 12px;
+  background: var(--a-surface-2);
+  border-radius: var(--a-radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-head,
+.template-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+.template-head .spacer,
+.template-foot .spacer {
+  flex: 1;
+}
+
+.template textarea {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--a-text);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  padding: 8px;
+  resize: vertical;
+}
+
+.template .field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--a-text-muted);
+}
+
+.template .field input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--a-text);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  padding: 6px 8px;
+}

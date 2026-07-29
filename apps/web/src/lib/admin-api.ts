@@ -1046,3 +1046,99 @@ export const payStatement = (
     method: "POST",
     data: body,
   });
+
+// ── versioned configuration ─────────────────────────────────────────────────
+//
+// These supersede rather than update. The old row is closed and a new one
+// opened, so an invoice raised last month still references the rate that was in
+// force when it was raised.
+
+export interface TaxRate {
+  id: string;
+  country: string;
+  region: string | null;
+  category: string;
+  rate_bp: number;
+  label: string;
+  from: string;
+  to: string | null;
+  current: boolean;
+}
+
+export const getTaxRates = () =>
+  apiFetch<{ items: TaxRate[] }>({ url: "/admin/config/tax-rates", method: "GET" });
+
+export const supersedeTaxRate = (
+  id: string,
+  body: { rate_bp: number; label?: string; effective_from: string; reason: string },
+) =>
+  apiFetch<{ status: string; note: string }>({
+    url: `/admin/config/tax-rates/${id}/supersede`,
+    method: "POST",
+    data: body,
+  });
+
+export interface RateCard {
+  id: string;
+  placement: string;
+  country: string;
+  region: string | null;
+  floor: Money;
+  from: string;
+  to: string | null;
+  current: boolean;
+}
+
+export const getRateCards = () =>
+  apiFetch<{ items: RateCard[] }>({ url: "/admin/config/rate-cards", method: "GET" });
+
+export const supersedeRateCard = (
+  id: string,
+  body: { floor_cpm_minor: number; effective_from: string; reason: string },
+) =>
+  apiFetch<{ status: string }>({
+    url: `/admin/config/rate-cards/${id}/supersede`,
+    method: "POST",
+    data: body,
+  });
+
+export interface NotificationTemplate {
+  id: string;
+  key: string;
+  channel: string;
+  locale: string;
+  version: number;
+  category: string;
+  subject: string | null;
+  body: string;
+  active: boolean;
+  /** What one send costs. Arabic sits entirely outside GSM-7, so its budget is
+   *  70 characters rather than 160 — an Arabic message shorter than an English
+   *  one can cost twice as much, and a character count hides that completely. */
+  segments: number;
+  placeholders: string[];
+  updated_at: string;
+}
+
+export const getTemplates = (all = false) =>
+  apiFetch<{ items: NotificationTemplate[] }>({
+    url: `/admin/config/templates${all ? "?all=true" : ""}`,
+    method: "GET",
+  });
+
+export const previewSegments = (body: string) =>
+  apiFetch<{ segments: number; characters: number; placeholders: string[] }>({
+    url: "/admin/config/templates/preview",
+    method: "POST",
+    data: { body },
+  });
+
+export const reviseTemplate = (
+  id: string,
+  body: { subject?: string; body: string; reason: string },
+) =>
+  apiFetch<{ status: string; segments: number; note: string }>({
+    url: `/admin/config/templates/${id}/revise`,
+    method: "POST",
+    data: body,
+  });

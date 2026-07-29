@@ -298,6 +298,17 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/admin/config/settings", h.AdminConsole.Settings)
 			r.Put("/admin/config/settings/{key}", h.AdminConsole.SetSetting)
 			r.Get("/admin/health", h.AdminConsole.Health)
+
+			// Versioned config. These supersede rather than update: the old row is
+			// closed and a new one opened, so an invoice raised last month still
+			// references the rate that was in force when it was raised.
+			r.Get("/admin/config/tax-rates", h.AdminConsole.TaxRates)
+			r.Post("/admin/config/tax-rates/{rateId}/supersede", h.AdminConsole.SupersedeTaxRate)
+			r.Get("/admin/config/rate-cards", h.AdminConsole.RateCards)
+			r.Post("/admin/config/rate-cards/{cardId}/supersede", h.AdminConsole.SupersedeRateCard)
+			r.Get("/admin/config/templates", h.AdminConsole.Templates)
+			r.Post("/admin/config/templates/preview", h.AdminConsole.PreviewSegments)
+			r.Post("/admin/config/templates/{templateId}/revise", h.AdminConsole.ReviseTemplate)
 		}
 
 		// Phase 9 — boosts.

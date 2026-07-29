@@ -72,6 +72,7 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
     items: [
       { href: "/health", label: "Health", queues: [] },
       { href: "/config", label: "Configuration", queues: [] },
+      { href: "/templates", label: "Rates & messages", queues: [] },
     ],
   },
 ];
@@ -87,6 +88,7 @@ export const TITLES: Record<string, string> = {
   "/supply": "Content supply",
   "/health": "Platform health",
   "/config": "Configuration",
+  "/templates": "Rates, prices & messages",
   "/kyc": "Identity & bank accounts",
   "/disputes": "Disputes",
   "/ledger": "Ledger & trial balance",
