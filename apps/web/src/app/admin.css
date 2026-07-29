@@ -677,3 +677,463 @@ table.data .nowrap {
     padding-inline: 0;
   }
 }
+
+/* ── search in the app bar ──────────────────────────────────────────────────
+ *
+ * Sized to hold an order number and a hint, and no wider. It sits next to the
+ * page title rather than centred, because a centred search box reads as the
+ * primary action of the page — and it is not. It is the thing you reach for
+ * when the page you are on is the wrong one.
+ */
+
+.console-search {
+  position: relative;
+  inline-size: min(420px, 38vw);
+}
+
+.console-search input {
+  inline-size: 100%;
+  block-size: 32px;
+  padding-inline: 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--a-text);
+  background: var(--a-surface-2);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+}
+
+.console-search input:focus {
+  outline: none;
+  background: var(--a-surface);
+  border-color: var(--a-accent);
+  box-shadow: 0 0 0 3px var(--a-accent-soft);
+}
+
+.console-results {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline: 0;
+  z-index: 40;
+  max-block-size: 60vh;
+  overflow-y: auto;
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow-lift);
+}
+
+.console-result {
+  display: grid;
+  grid-template-columns: 74px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--a-text);
+  text-decoration: none;
+  border-block-end: 1px solid var(--a-border);
+}
+
+.console-result:last-child {
+  border-block-end: none;
+}
+
+.console-result:hover {
+  background: var(--a-surface-2);
+}
+
+.console-result .kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--a-text-faint);
+}
+
+.console-result .label {
+  font-weight: 560;
+}
+
+.console-result .sub {
+  color: var(--a-text-muted);
+  font-size: 12px;
+}
+
+.console-result.empty {
+  display: block;
+  color: var(--a-text-muted);
+}
+
+/* ── detail pages ───────────────────────────────────────────────────────────
+ *
+ * Two columns, and the narrow one is always the history. Fixing its position
+ * across every detail page means "when did that happen" is answered by looking
+ * in the same place regardless of what is being looked at.
+ *
+ * It collapses below the main column rather than disappearing on narrow
+ * screens. A history that vanishes on a laptop is a history nobody trusts.
+ */
+
+.detail {
+  max-inline-size: 1400px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-block-end: 18px;
+}
+
+.detail-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-head .spacer {
+  flex: 1;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-inline-size: 420px;
+}
+
+.detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .detail-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-inline-size: 0;
+}
+
+.detail-aside {
+  position: sticky;
+  inset-block-start: calc(var(--a-appbar-h) + 16px);
+}
+
+@media (max-width: 1100px) {
+  .detail-aside {
+    position: static;
+  }
+}
+
+/* ── facts ─────────────────────────────────────────────────────────────────
+ *
+ * A two-column definition list. Labels are fixed width so that scanning down
+ * the values is a straight line — an agent reading under time pressure follows
+ * the right-hand edge of the labels, and a ragged one costs a beat per row.
+ */
+
+.facts {
+  margin: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--a-border);
+  border-radius: var(--a-radius-sm);
+  overflow: hidden;
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 10px;
+  background: var(--a-surface);
+  font-size: 13px;
+}
+
+.facts dt {
+  color: var(--a-text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .facts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+/* ── timeline ───────────────────────────────────────────────────────────────
+ *
+ * The source stripe on the inline-start edge is the only place in this
+ * stylesheet where colour is decorative rather than semantic, and it earns the
+ * exception: the eye groups a run of delivery events without reading any of
+ * them, which is what makes a thirteen-event history scannable at all.
+ */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline li {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0 8px 10px;
+  border-inline-start: 2px solid var(--a-border);
+  font-size: 12.5px;
+}
+
+.timeline li.tl-staff {
+  border-inline-start-color: var(--a-accent);
+}
+
+.timeline li.tl-payment,
+.timeline li.tl-ledger {
+  border-inline-start-color: var(--a-ok);
+}
+
+.timeline li.tl-fulfillment {
+  border-inline-start-color: var(--a-warn);
+}
+
+.tl-when {
+  color: var(--a-text-faint);
+  white-space: nowrap;
+}
+
+.tl-kind {
+  font-weight: 560;
+}
+
+.tl-source {
+  margin-inline-start: 6px;
+  color: var(--a-text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tl-detail {
+  color: var(--a-text-muted);
+  margin-block-start: 2px;
+  overflow-wrap: anywhere;
+}
+
+.tl-actor {
+  color: var(--a-text-faint);
+  font-size: 11.5px;
+  margin-block-start: 2px;
+}
+
+/* ── actions ────────────────────────────────────────────────────────────────
+ *
+ * The expanded form gets a tinted panel and, when destructive, a red edge. Two
+ * steps, so a mis-click on a page full of a customer's data cannot move money;
+ * the tint is the signal that the second click is the real one.
+ */
+
+.action {
+  inline-size: 100%;
+  padding: 12px;
+  background: var(--a-surface);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow-lift);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: start;
+}
+
+.action.danger {
+  border-color: var(--a-danger);
+  background: var(--a-danger-soft);
+}
+
+.action-title {
+  font-weight: 620;
+  font-size: 13px;
+}
+
+.action p.muted {
+  margin: 0;
+  font-size: 12px;
+}
+
+.action .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.action .field span {
+  color: var(--a-text-muted);
+}
+
+.action textarea,
+.action input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--a-text);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-done {
+  font-size: 12.5px;
+  color: var(--a-ok);
+  font-weight: 560;
+}
+
+/* ── panels on a detail page ────────────────────────────────────────────────*/
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.lines li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.lines .qty {
+  color: var(--a-text-muted);
+  min-inline-size: 28px;
+}
+
+.note {
+  margin-block-start: 10px;
+  padding: 8px 10px;
+  background: var(--a-surface-2);
+  border-radius: var(--a-radius-sm);
+  font-size: 13px;
+  color: var(--a-text-muted);
+}
+
+/* Amounts are tabular so columns of money line up on the decimal. Reading a
+   settlement report in a proportional font is how a transposed digit survives
+   review. */
+.money-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.money-table td {
+  padding: 6px 8px;
+  border-block-end: 1px solid var(--a-border);
+  vertical-align: baseline;
+}
+
+.money-table tr:last-child td {
+  border-block-end: none;
+}
+
+.money-table td.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.money-table tr.total td {
+  font-weight: 640;
+  border-block-start: 1px solid var(--a-border-strong);
+}
+
+.stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 6px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.addresses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.addresses li > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ref {
+  color: var(--a-accent);
+  text-decoration: none;
+}
+
+.ref:hover {
+  text-decoration: underline;
+}
+
+/* Inside an expanded destructive action the panel is already tinted red, so an
+   outlined red button disappears into it. The confirming button fills; the
+   cancel button stays plain, which is the pair you want when the safe choice
+   should be the easy one to hit and the unsafe one should be the one you have
+   to mean. */
+.action.danger button[type="submit"].btn.danger {
+  background: var(--a-danger);
+  border-color: var(--a-danger);
+  color: #fff;
+}
+
+.action.danger .btn:not(.danger) {
+  background: var(--a-surface);
+}

@@ -3,9 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { getQueues, type QueueDepth } from "@/lib/admin-api";
+import { adminSearch, getQueues, type QueueDepth, type SearchHit } from "@/lib/admin-api";
 
 /**
  * The console frame.
@@ -86,6 +86,115 @@ function Badge({ depths, queues }: { depths: QueueDepth[]; queues: string[] }) {
   );
 }
 
+/**
+ * One box for every identifier the platform has.
+ *
+ * In the app bar rather than on a page, because it is not a destination — the
+ * person using it has a customer on the phone reading out something, and does
+ * not know whether AE-G3CRYK is an order number, a reference, or a code from an
+ * email. Making them pick a category first asks them a question their caller
+ * cannot answer.
+ *
+ * Eight identifier shapes resolve server-side: order numbers, listing and
+ * dispute and campaign and statement references, invoice numbers, VINs, phone
+ * suffixes, vendor names, the last four of an IBAN, and raw uuids. The client
+ * types three characters and waits.
+ */
+function Search({ locale }: { locale: string }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const term = useDebounced(q.trim(), 250);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ["admin", "search", term],
+    queryFn: () => adminSearch(term),
+    // Three characters is where the server starts answering; asking earlier
+    // just returns nothing slower.
+    enabled: term.length >= 3,
+    staleTime: 30_000,
+  });
+
+  const hits = term.length >= 3 ? (data?.items ?? []) : [];
+
+  return (
+    <div className="console-search" onBlur={(e) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+    }}>
+      <input
+        type="search"
+        value={q}
+        placeholder="Order no, phone, VIN, reference, IBAN last 4…"
+        onChange={(event) => {
+          setQ(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        aria-label="Find anything"
+      />
+      {open && term.length >= 3 ? (
+        <div className="console-results">
+          {hits.length === 0 ? (
+            <div className="console-result empty">
+              {isFetching ? "Searching…" : "Nothing matches that."}
+            </div>
+          ) : (
+            hits.map((hit) => (
+              <Link
+                key={`${hit.kind}-${hit.id}`}
+                href={hitHref(locale, hit)}
+                className="console-result"
+                onClick={() => setOpen(false)}
+              >
+                <span className="kind">{hit.kind}</span>
+                <span className="label">{hit.label}</span>
+                <span className="sub">{hit.sub}</span>
+              </Link>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Where a hit goes.
+ *
+ * Kinds without a detail page yet land on their queue rather than a 404. A
+ * search that finds the thing and then refuses to show it is worse than one
+ * that never found it, because the agent now knows it exists.
+ */
+function hitHref(locale: string, hit: SearchHit): string {
+  const base = `/${locale}/admin`;
+  switch (hit.kind) {
+    case "order":
+      return `${base}/orders/${hit.id}`;
+    case "user":
+      return `${base}/users/${hit.id}`;
+    case "vendor":
+      return `${base}/vendors/${hit.id}`;
+    case "listing":
+      return `${base}/listings`;
+    case "dispute":
+      return `${base}/disputes`;
+    case "campaign":
+      return `${base}/campaigns`;
+    case "reel":
+      return `${base}/reels`;
+    default:
+      return `${base}`;
+  }
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [held, setHeld] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setHeld(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return held;
+}
+
 export function ConsoleShell({
   locale,
   children,
@@ -141,6 +250,7 @@ export function ConsoleShell({
       <div className="console-main">
         <header className="console-appbar">
           <h1>{TITLES[section] ?? "Ops"}</h1>
+          <Search locale={locale} />
           <div className="spacer" />
           <div className="meta">
             {error ? (

@@ -319,3 +319,299 @@ export const getPlatformFunnel = () =>
 
 export const getRankingProfile = () =>
   apiFetch<Record<string, unknown>>({ url: "/ranking/profile", method: "GET" });
+
+// ── the console: search, detail, actions ────────────────────────────────────
+//
+// Everything above is a *queue*: a filtered list answering "what needs doing".
+// Everything below is the console proper, answering "what is going on with this
+// thing" — a different question that needs a composed document rather than a
+// row.
+//
+// One call per page, not one per panel. An order detail reads twelve tables
+// server-side and returns one document; the alternative is a browser making
+// twelve requests and assembling a view of the business out of them.
+
+export interface Money {
+  amount: number;
+  currency: string;
+}
+
+export interface Whoami {
+  user_id: string;
+  is_staff: boolean;
+  roles: string[];
+  permissions: string[];
+}
+
+export const getWhoami = () => apiFetch<Whoami>({ url: "/admin/whoami", method: "GET" });
+
+export interface SearchHit {
+  kind: string;
+  id: string;
+  label: string;
+  sub: string;
+}
+
+export const adminSearch = (q: string) =>
+  apiFetch<{ items: SearchHit[] }>({
+    url: `/admin/search?q=${encodeURIComponent(q)}`,
+    method: "GET",
+  });
+
+/** One thing that happened, from whichever of five history tables recorded it. */
+export interface TimelineEntry {
+  at: string;
+  source: string;
+  kind: string;
+  detail: string;
+  /** Null means the system did it — worth showing, because "who cancelled this"
+   *  and "it expired" look identical in a status column and are different
+   *  events. */
+  actor: string | null;
+}
+
+// ── order detail ────────────────────────────────────────────────────────────
+
+export interface OrderDetail {
+  id: string;
+  order_no: string;
+  status: string;
+  kind: string;
+  service_type: string;
+  currency: string;
+  placed_at: string;
+  notes: string | null;
+  customer: { id: string; name: string | null; phone: string | null } | null;
+  branch: { id: string; name: string; vendor: string; vendor_id: string } | null;
+  lines: Array<{ name: string; quantity: number; options: string | null }>;
+  quote: {
+    state: string;
+    tax_inclusive: boolean;
+    subtotal: Money;
+    delivery: Money;
+    surcharge: Money;
+    discount: Money;
+    tax: Money;
+    total: Money;
+    lines: Array<{
+      kind: string;
+      label: string;
+      amount: Money;
+      tax: Money;
+      tax_rate_bp: number;
+    }>;
+  } | null;
+  payments: Array<{
+    id: string;
+    kind: string;
+    status: string;
+    provider: string;
+    amount: Money;
+    created_at: string;
+    settled_at: string | null;
+    failure_code: string | null;
+    three_ds: string | null;
+  }>;
+  stops: Array<{
+    id: string;
+    kind: string;
+    sequence: number;
+    status: string;
+    date: string;
+    window: string;
+    address: string | null;
+    recipient: string | null;
+    phone: string | null;
+    driver_id: string | null;
+    driver_name: string | null;
+    attempts: number;
+    cod_minor: number;
+    /** Issued but not sent is the failure that strands a driver at the door, so
+     *  the pair is carried rather than one "OTP" flag. */
+    otp_issued: boolean;
+    otp_sent: boolean;
+    proof: string | null;
+    completed_at: string | null;
+    failed_at: string | null;
+    failure_reason: string | null;
+  }>;
+  notifications: Array<{
+    at: string;
+    key: string;
+    channel: string;
+    destination: string | null;
+    status: string;
+    suppressed: string | null;
+  }>;
+  invoice: { id: string; number: string; status: string; total: Money } | null;
+  attribution: { model: string; reel_id: string | null } | null;
+}
+
+export const getOrderDetail = (id: string) =>
+  apiFetch<OrderDetail>({ url: `/admin/orders/${id}`, method: "GET" });
+
+export const getOrderTimeline = (id: string) =>
+  apiFetch<{ items: TimelineEntry[] }>({
+    url: `/admin/orders/${id}/timeline`,
+    method: "GET",
+  });
+
+export const refundOrder = (id: string, body: { amount_minor?: number; reason: string }) =>
+  apiFetch<{ refund_id: string; status: string }>({
+    url: `/admin/orders/${id}/refund`,
+    method: "POST",
+    data: body,
+  });
+
+export const cancelOrder = (id: string, reason: string) =>
+  apiFetch<{ status: string; note: string }>({
+    url: `/admin/orders/${id}/cancel`,
+    method: "POST",
+    data: { reason },
+  });
+
+// ── customer detail ─────────────────────────────────────────────────────────
+
+export interface CustomerDetail {
+  id: string;
+  display_name: string | null;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  country: string;
+  locale: string;
+  notification_locale: string | null;
+  created_at: string;
+  blocked_count: number;
+  standing: { active_strikes: number; open_appeals: number };
+  addresses: Array<{
+    id: string;
+    label: string | null;
+    line: string;
+    area: string | null;
+    city: string | null;
+    recipient: string | null;
+    is_default: boolean;
+  }>;
+  orders: Array<{
+    id: string;
+    order_no: string;
+    status: string;
+    branch: string | null;
+    total: Money;
+    placed_at: string;
+  }>;
+  subscriptions: Array<{
+    id: string;
+    status: string;
+    plan: string;
+    next: string | null;
+  }> | null;
+  notifications: Array<{
+    at: string;
+    key: string;
+    channel: string;
+    destination: string | null;
+    status: string;
+    suppressed: string | null;
+  }>;
+}
+
+export const getCustomerDetail = (id: string) =>
+  apiFetch<CustomerDetail>({ url: `/admin/users/${id}`, method: "GET" });
+
+export const getCustomerTimeline = (id: string) =>
+  apiFetch<{ items: TimelineEntry[] }>({
+    url: `/admin/users/${id}/timeline`,
+    method: "GET",
+  });
+
+// ── vendor detail ───────────────────────────────────────────────────────────
+
+export interface VendorDetail {
+  id: string;
+  trade_name: string;
+  legal_name: string | null;
+  slug: string;
+  status: string;
+  country: string;
+  currency: string;
+  rating: number | null;
+  tax_registration: string | null;
+  created_at: string;
+  open_disputes: number;
+  /** Read from ledger_entries at request time, never a cached column. A payable
+   *  that disagrees with the ledger is the one number nobody can afford to have
+   *  wrong. */
+  payable: Money;
+  compliance: { kyc_state: string | null; payout_account: string | null };
+  trade_licence: {
+    number: string | null;
+    expires: string | null;
+    expired: boolean;
+  } | null;
+  reels: { published: number; pending_review: number; last_published: string | null };
+  branches: Array<{
+    id: string;
+    name: string;
+    city: string | null;
+    is_active: boolean;
+    drivers: number;
+  }>;
+  staff: Array<{
+    user_id: string;
+    name: string | null;
+    phone: string | null;
+    role: string;
+  }>;
+  statements: Array<{
+    id: string;
+    reference_no: string;
+    state: string;
+    net: Money;
+    period_end: string;
+  }> | null;
+}
+
+export const getVendorDetail = (id: string) =>
+  apiFetch<VendorDetail>({ url: `/admin/vendors/${id}`, method: "GET" });
+
+export const getVendorTimeline = (id: string) =>
+  apiFetch<{ items: TimelineEntry[] }>({
+    url: `/admin/vendors/${id}/timeline`,
+    method: "GET",
+  });
+
+// ── staff administration ────────────────────────────────────────────────────
+
+export interface StaffMember {
+  user_id: string;
+  name: string | null;
+  phone: string | null;
+  roles: string[];
+  expires_at: string | null;
+}
+
+export const getStaff = () =>
+  apiFetch<{ items: StaffMember[] }>({ url: "/admin/staff", method: "GET" });
+
+export const grantRole = (body: {
+  user_id: string;
+  role: string;
+  reason: string;
+  expires_at?: string;
+}) => apiFetch<{ status: string }>({ url: "/admin/staff/grants", method: "POST", data: body });
+
+export const revokeRole = (userId: string, role: string) =>
+  apiFetch<{ status: string }>({
+    url: `/admin/staff/${userId}/roles/${role}`,
+    method: "DELETE",
+  });
+
+/** Who read this record. After a breach the question is who looked, not who
+ *  changed — so reads are audited, and audits nobody can read are theatre. */
+export const getAccessHistory = (type: string, id: string) =>
+  apiFetch<{ items: Array<{ at: string; actor: string; action: string }> }>({
+    url: `/admin/access/${type}/${id}`,
+    method: "GET",
+  });
