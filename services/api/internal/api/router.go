@@ -256,6 +256,20 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/admin/staff/grants", h.AdminConsole.GrantRole)
 			r.Delete("/admin/staff/{userId}/roles/{role}", h.AdminConsole.RevokeRole)
 			r.Get("/admin/access/{type}/{id}", h.AdminConsole.AccessHistory)
+
+			// Money (§4.3). Every one behind `money.read`, which the moderator
+			// and support roles do not have — a content moderator has no
+			// business knowing what a vendor is owed.
+			r.Get("/admin/ledger", h.AdminConsole.Ledger)
+			r.Get("/admin/ledger/event-types", h.AdminConsole.LedgerEventTypes)
+			r.Get("/admin/trial-balance", h.AdminConsole.TrialBalance)
+			r.Get("/admin/refunds", h.AdminConsole.Refunds)
+			r.Get("/admin/payouts/runs", h.AdminConsole.PayoutRuns)
+			r.Get("/admin/payouts/runs/{runId}/statements", h.AdminConsole.PayoutStatements)
+			r.Get("/admin/payouts/statements", h.AdminConsole.PayoutStatements)
+			r.Get("/admin/cod/drivers", h.AdminConsole.DriverCash)
+			r.Get("/admin/cod/remittances", h.AdminConsole.Remittances)
+			r.Get("/admin/invoices", h.AdminConsole.Invoices)
 		}
 
 		// Phase 9 — boosts.

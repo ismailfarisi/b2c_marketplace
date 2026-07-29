@@ -149,13 +149,24 @@ func (j Journal) validate() error {
 // Lazy creation is why a new vendor needs no provisioning step. The
 // ON CONFLICT handles two concurrent first-orders for the same vendor, which is
 // otherwise a rare and confusing unique-violation.
+//
+// The `WHERE is_active` on the conflict target is load-bearing and names the
+// bug it fixes (migration 22). This upsert used to bind to a plain UNIQUE
+// constraint over the same four columns — and Postgres treats NULLs as distinct
+// in a UNIQUE, so for platform-level accounts, which have no owner_id, the
+// conflict never fired. Every capture, refund and cash collection created a
+// fresh account holding one entry, and platform revenue became unsummable.
+//
+// The index it now targets is `NULLS NOT DISTINCT` and partial on `is_active`,
+// which is the rule stated properly: one live account per identity, and a
+// missing owner is one identity rather than infinitely many.
 func resolveAccount(ctx context.Context, tx pgx.Tx, ref AccountRef) (uuid.UUID, error) {
 	var id uuid.UUID
 
 	err := tx.QueryRow(ctx, `
 		INSERT INTO ledger_accounts (type, owner_type, owner_id, currency, name)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (type, owner_type, owner_id, currency) DO UPDATE
+		ON CONFLICT (type, owner_type, owner_id, currency) WHERE is_active DO UPDATE
 		    SET type = EXCLUDED.type
 		RETURNING id`,
 		ref.Type, ref.OwnerType, ref.OwnerID, ref.Currency, accountName(ref),

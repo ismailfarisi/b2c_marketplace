@@ -378,3 +378,47 @@ commission and the journal balancing to the fils. A partial refund of 1500 then
 reversed 1275/214/11 proportionally, and refunding the remainder returned the
 payable to exactly 5636. Two partial refunds summed back to the original split
 with no drift, which is the property the proportional reversal exists for.
+
+## 14. Platform ledger accounts duplicated, one per posting — **fixed**
+
+Found the first time a trial balance was rendered, which is what a trial balance
+is for.
+
+`resolveAccount` upserts with `ON CONFLICT (type, owner_type, owner_id,
+currency)`, and the constraint behind it was a plain `UNIQUE`. Postgres treats
+NULLs as **distinct** in a `UNIQUE`, so two rows with the same type, owner_type
+and currency but a NULL `owner_id` do not conflict. Platform-level accounts —
+commission revenue, VAT payable, gateway receivable — all carry a NULL owner.
+
+So the conflict never fired for them, and every capture, refund and cash
+collection minted a fresh account holding exactly one entry. Vendor and driver
+accounts were fine, because they have a real owner_id and the constraint did its
+job. That is exactly why it survived: the numbers anyone had looked at were the
+per-vendor ones, and those were correct.
+
+Nothing was lost and nothing was mis-stated. Every entry landed on an account of
+the right type and the books balanced to the fils. But "what is our commission
+revenue this month" was unanswerable without summing an unbounded set of
+identically-named accounts, and that set grew by one row per order.
+
+**The first fix attempt was wrong and the database said so.** Migration 22
+originally repointed entries onto one surviving account per identity; Postgres
+refused:
+
+> `ledger_entries is append-only: UPDATE is not permitted. Post a reversing
+> journal instead.`
+
+Correct, and a better answer than the one being attempted — merging entries
+would have rewritten history to make a report tidier, which is precisely what an
+append-only ledger exists to prevent.
+
+So the duplicates stay. The superseded rows are deactivated and a partial unique
+index (`NULLS NOT DISTINCT`, `WHERE is_active`) makes new ones impossible; the
+upsert now targets that index. The trial balance groups by *identity* rather than
+by row, so the historical rows aggregate into the account the accounting always
+meant. That is a presentation decision made in the read model, where it belongs,
+rather than a data change made in a migration, where it would be a lie.
+
+Verified: the trial balance now reads one row per account type, balanced at
+16830/16830, with gateway receivable netting to zero across a capture and two
+refunds.
