@@ -11,6 +11,7 @@ import (
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
+	"github.com/marketplace/api/internal/modules/payouts"
 )
 
 // The money endpoints — PLAN-ADMIN-CONSOLE §4.3.
@@ -430,4 +431,151 @@ func nilIfBlank(s string) any {
 // means each screen rounds differently and a total disagrees with its own rows.
 func amount(minor int64, currency string) map[string]any {
 	return map[string]any{"amount": minor, "currency": currency}
+}
+
+// ── payout actions ──────────────────────────────────────────────────────────
+//
+// The buttons the first pass refused to build. They exist now because the
+// service methods behind them do: `payouts.IssueByStaff` and `PayByStaff` take
+// an actor, re-check eligibility at the moment money moves rather than trusting
+// a gate that ran days earlier, and write their audit row in the same
+// transaction as the state change.
+//
+// All three need `money.write`, which is deliberately never in the same default
+// role as `identity.review`. Approving a bank account and then paying it is
+// payout fraud in two clicks, and the permission model is where that is
+// prevented rather than in a policy document.
+
+func (h *AdminHandlers) ApproveRun(w http.ResponseWriter, r *http.Request) {
+	grant, ok := h.caller(w, r, admin.PermMoneyWrite)
+	if !ok {
+		return
+	}
+	runID, err := uuid.Parse(chi.URLParam(r, "runId"))
+	if err != nil {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	if err := h.Act.Payouts.ApproveRun(r.Context(), payouts.ApproveRunInput{
+		RunID: runID, ActorID: grant.UserID, Reason: body.Reason,
+	}); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
+		"status": "approved",
+		// Said explicitly because the next click is the one that matters and the
+		// word "approved" reads like it already happened.
+		"note": "nothing has been issued yet. Approval records that a person reviewed the totals.",
+	})
+}
+
+func (h *AdminHandlers) IssueRun(w http.ResponseWriter, r *http.Request) {
+	grant, ok := h.caller(w, r, admin.PermMoneyWrite)
+	if !ok {
+		return
+	}
+	runID, err := uuid.Parse(chi.URLParam(r, "runId"))
+	if err != nil {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	result, err := h.Act.Payouts.IssueRun(r.Context(), runID, grant.UserID, body.Reason)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	skipped := make([]map[string]any, 0, len(result.Skipped))
+	for _, s := range result.Skipped {
+		skipped = append(skipped, map[string]any{
+			"statement_id": s.StatementID,
+			"vendor_id":    s.VendorID,
+			"vendor":       s.Vendor,
+			"reason":       s.Reason,
+		})
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
+		"issued": result.Issued,
+		// Returned rather than swallowed. Eighteen skips that all read the same
+		// is a process problem, and an operator can only see that if they are
+		// given the list rather than a count.
+		"skipped": skipped,
+	})
+}
+
+func (h *AdminHandlers) IssueStatement(w http.ResponseWriter, r *http.Request) {
+	grant, ok := h.caller(w, r, admin.PermMoneyWrite)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "statementId"))
+	if err != nil {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	if err := h.Act.Payouts.IssueByStaff(r.Context(), payouts.IssueInput{
+		StatementID: id, ActorID: grant.UserID, Reason: body.Reason,
+	}); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"status": "issued"})
+}
+
+func (h *AdminHandlers) PayStatement(w http.ResponseWriter, r *http.Request) {
+	grant, ok := h.caller(w, r, admin.PermMoneyWrite)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "statementId"))
+	if err != nil {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	var body struct {
+		PaymentRef string `json:"payment_ref"`
+		Reason     string `json:"reason"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	if err := h.Act.Payouts.PayByStaff(r.Context(), payouts.PayInput{
+		StatementID: id, ActorID: grant.UserID,
+		PaymentRef: body.PaymentRef, Reason: body.Reason,
+	}); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
+		"status": "paid",
+		"note":   "the ledger has been posted. The transfer itself happens in the bank.",
+	})
 }

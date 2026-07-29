@@ -212,6 +212,10 @@ func run() error {
 		Act: api.Actions{
 			Payments: paymentsSvc,
 			Ordering: orderingSvc,
+			// The auditing copy. The bare `payoutsSvc` above is what the vendor
+			// console reads with; this one is what staff act with, and it
+			// refuses to act at all without an auditor attached.
+			Payouts: payoutsSvc.WithAuditor(adminSvc),
 		},
 	}
 

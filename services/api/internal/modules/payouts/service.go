@@ -41,6 +41,10 @@ type Service struct {
 	pool *pgxpool.Pool
 	loc  *time.Location
 	kyc  Eligibility
+	// audit is set only by WithAuditor. Nil on the worker's instance, which runs
+	// Generate on a timer and has no actor — see the comment there for why a
+	// system account in the audit log is worse than an absent one.
+	audit Auditor
 }
 
 // NewService takes the eligibility gate. Nil is permitted and is not a way to

@@ -267,6 +267,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/admin/payouts/runs", h.AdminConsole.PayoutRuns)
 			r.Get("/admin/payouts/runs/{runId}/statements", h.AdminConsole.PayoutStatements)
 			r.Get("/admin/payouts/statements", h.AdminConsole.PayoutStatements)
+			// Payout actions. `money.write`, never in a default role with
+			// `identity.review` — approving a bank account and then paying it
+			// is payout fraud in two clicks.
+			r.Post("/admin/payouts/runs/{runId}/approve", h.AdminConsole.ApproveRun)
+			r.Post("/admin/payouts/runs/{runId}/issue", h.AdminConsole.IssueRun)
+			r.Post("/admin/payouts/statements/{statementId}/issue", h.AdminConsole.IssueStatement)
+			r.Post("/admin/payouts/statements/{statementId}/pay", h.AdminConsole.PayStatement)
+
 			r.Get("/admin/cod/drivers", h.AdminConsole.DriverCash)
 			r.Get("/admin/cod/remittances", h.AdminConsole.Remittances)
 			r.Get("/admin/invoices", h.AdminConsole.Invoices)

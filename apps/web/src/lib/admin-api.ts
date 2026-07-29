@@ -1001,3 +1001,48 @@ export interface Health {
 }
 
 export const getHealth = () => apiFetch<Health>({ url: "/admin/health", method: "GET" });
+
+// ── payout actions ──────────────────────────────────────────────────────────
+//
+// All need `money.write`. Each re-checks vendor eligibility server-side at the
+// moment it runs — a statement issued on Monday and paid on Friday can belong
+// to a vendor whose licence lapsed on Wednesday, and nothing writes to their
+// record when the date passes.
+
+export const approveRun = (runId: string, reason: string) =>
+  apiFetch<{ status: string; note: string }>({
+    url: `/admin/payouts/runs/${runId}/approve`,
+    method: "POST",
+    data: { reason },
+  });
+
+export interface IssueRunResult {
+  issued: number;
+  /** Returned rather than swallowed: eighteen skips that all read the same is a
+   *  process problem, and that is only visible as a list. */
+  skipped: Array<{ statement_id: string; vendor_id: string; vendor: string; reason: string }>;
+}
+
+export const issueRun = (runId: string, reason: string) =>
+  apiFetch<IssueRunResult>({
+    url: `/admin/payouts/runs/${runId}/issue`,
+    method: "POST",
+    data: { reason },
+  });
+
+export const issueStatement = (statementId: string, reason: string) =>
+  apiFetch<{ status: string }>({
+    url: `/admin/payouts/statements/${statementId}/issue`,
+    method: "POST",
+    data: { reason },
+  });
+
+export const payStatement = (
+  statementId: string,
+  body: { payment_ref: string; reason: string },
+) =>
+  apiFetch<{ status: string; note: string }>({
+    url: `/admin/payouts/statements/${statementId}/pay`,
+    method: "POST",
+    data: body,
+  });

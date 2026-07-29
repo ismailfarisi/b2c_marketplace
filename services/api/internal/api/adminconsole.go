@@ -14,6 +14,7 @@ import (
 	"github.com/marketplace/api/internal/modules/adminview"
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
+	"github.com/marketplace/api/internal/modules/payouts"
 )
 
 // AdminHandlers is the admin console's read surface.
@@ -637,6 +638,12 @@ type Actions struct {
 	}
 	Ordering interface {
 		Cancel(ctx context.Context, in ordering.CancelInput) error
+	}
+	Payouts interface {
+		ApproveRun(ctx context.Context, in payouts.ApproveRunInput) error
+		IssueRun(ctx context.Context, runID, actorID uuid.UUID, reason string) (*payouts.IssueRunResult, error)
+		IssueByStaff(ctx context.Context, in payouts.IssueInput) error
+		PayByStaff(ctx context.Context, in payouts.PayInput) error
 	}
 }
 

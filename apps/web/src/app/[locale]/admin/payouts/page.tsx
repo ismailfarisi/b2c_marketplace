@@ -1,11 +1,20 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 
-import { Panel, Ref, plural } from "@/components/admin/detail";
+import { Action, Panel, Ref, plural } from "@/components/admin/detail";
 import { Tag, money } from "@/components/admin/table";
-import { getPayoutRuns, getStatements } from "@/lib/admin-api";
+import {
+  approveRun,
+  getPayoutRuns,
+  getStatements,
+  issueRun,
+  issueStatement,
+  payStatement,
+  type IssueRunResult,
+  type PayoutStatement,
+} from "@/lib/admin-api";
 
 /**
  * Payout runs, and who is not getting paid.
@@ -15,17 +24,28 @@ import { getPayoutRuns, getStatements } from "@/lib/admin-api";
  * a licence expiry date, and nobody performs it at 5pm on a Thursday — so the
  * vendor is told "it's being looked into" and it is not.
  *
- * No issue or pay buttons, and their absence is deliberate. Paying a run moves
- * real money to real bank accounts, and `payouts.Service` has no method today
- * that takes an actor, records the action, and refuses a vendor whose licence
- * expired yesterday. A button wired to the method that exists would give this
- * console the ability to pay a blocked vendor in one click, which is worse than
- * not being able to pay anyone.
+ * The actions come in a deliberate order: approve the run, then issue the
+ * statements, then pay each one. Approval does not issue anything and says so —
+ * it records that a person looked at the totals, which is the review step, and
+ * collapsing it into issuing would mean either reviewing two hundred statements
+ * one at a time or reviewing none of them.
+ *
+ * Every action re-checks eligibility server-side at the moment it runs. A
+ * statement issued on Monday and paid on Friday can belong to a vendor whose
+ * licence lapsed on Wednesday, and nothing writes to their record when the date
+ * passes — so the gate that ran at issue is stale by the time money moves.
  */
 
 export default function PayoutsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = use(params);
   const [runId, setRunId] = useState<string>("");
+  const [lastIssue, setLastIssue] = useState<IssueRunResult | null>(null);
+  const queryClient = useQueryClient();
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "payout-runs"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "statements"] });
+  };
 
   const runs = useQuery({ queryKey: ["admin", "payout-runs"], queryFn: getPayoutRuns });
   const statements = useQuery({
@@ -94,6 +114,29 @@ export default function PayoutsPage({ params }: { params: Promise<{ locale: stri
                     {r.approved_by ? `approved by ${r.approved_by}` : "not approved"}
                   </td>
                   <td className="num">{money(r.total)}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {r.state === "draft" ? (
+                      <Action
+                        label="Approve"
+                        verb="Approve these totals"
+                        hint="Approval issues nothing. It records that a person reviewed the numbers before anything was sent to a vendor."
+                        onConfirm={async (reason) => {
+                          await approveRun(r.id, reason);
+                          invalidate();
+                        }}
+                      />
+                    ) : r.state === "approved" ? (
+                      <Action
+                        label="Issue all"
+                        verb="Issue every eligible statement"
+                        hint="Blocked vendors are skipped and listed rather than failing the batch — holding nineteen vendors because one licence lapsed teaches people to clear blockers carelessly."
+                        onConfirm={async (reason) => {
+                          setLastIssue(await issueRun(r.id, reason));
+                          invalidate();
+                        }}
+                      />
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -105,6 +148,32 @@ export default function PayoutsPage({ params }: { params: Promise<{ locale: stri
           </p>
         ) : null}
       </Panel>
+
+      {lastIssue ? (
+        <Panel
+          title={`Issued ${lastIssue.issued}`}
+          note={lastIssue.skipped.length > 0 ? `${lastIssue.skipped.length} skipped` : "none skipped"}
+        >
+          {lastIssue.skipped.length === 0 ? (
+            <p className="muted">Every draft in the run was issued.</p>
+          ) : (
+            <table className="money-table">
+              <tbody>
+                {lastIssue.skipped.map((sk) => (
+                  <tr key={sk.statement_id}>
+                    <td>
+                      <Ref locale={locale} kind="vendors" id={sk.vendor_id}>
+                        {sk.vendor}
+                      </Ref>
+                    </td>
+                    <td className="danger">{sk.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      ) : null}
 
       <Panel
         title={blocked.length > 0 ? "Blocked" : "Nothing blocked"}
@@ -152,6 +221,7 @@ export default function PayoutsPage({ params }: { params: Promise<{ locale: stri
                 <th className="num">VAT</th>
                 <th className="num">Net</th>
                 <th>State</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -172,6 +242,9 @@ export default function PayoutsPage({ params }: { params: Promise<{ locale: stri
                     <Tag tone={s.state === "paid" ? "ok" : undefined}>{s.state}</Tag>
                     {s.payment_ref ? <span className="faint mono"> {s.payment_ref}</span> : null}
                   </td>
+                  <td>
+                    <StatementActions statement={s} onDone={invalidate} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -180,4 +253,68 @@ export default function PayoutsPage({ params }: { params: Promise<{ locale: stri
       </Panel>
     </div>
   );
+}
+
+/**
+ * The per-statement actions.
+ *
+ * A blocked statement shows no button at all rather than a disabled one. The
+ * reason is already in the row beside it, and a greyed-out Pay next to a stated
+ * reason invites someone to go looking for the override — which is exactly the
+ * behaviour the block exists to prevent.
+ */
+function StatementActions({
+  statement,
+  onDone,
+}: {
+  statement: PayoutStatement;
+  onDone: () => void;
+}) {
+  const [bankRef, setBankRef] = useState("");
+
+  if (statement.blocked) return null;
+
+  if (statement.state === "draft") {
+    return (
+      <Action
+        label="Issue"
+        verb="Issue this statement"
+        hint="The vendor can reconcile against it from this point. Correcting an issued statement means a credit note, not an edit."
+        onConfirm={async (reason) => {
+          await issueStatement(statement.id, reason);
+          onDone();
+        }}
+      />
+    );
+  }
+
+  if (statement.state === "issued") {
+    return (
+      <Action
+        label="Pay"
+        verb="Record this payment"
+        danger
+        hint="This posts the ledger. The transfer itself happens in the bank — record the reference the bank gave you, not one you invent."
+        extra={(busy) => (
+          <label className="field">
+            <span>Bank reference</span>
+            <input
+              value={bankRef}
+              onChange={(e) => setBankRef(e.target.value)}
+              disabled={busy}
+              placeholder="e.g. FTS-99201"
+              className="mono"
+            />
+          </label>
+        )}
+        onConfirm={async (reason) => {
+          await payStatement(statement.id, { payment_ref: bankRef, reason });
+          setBankRef("");
+          onDone();
+        }}
+      />
+    );
+  }
+
+  return null;
 }
