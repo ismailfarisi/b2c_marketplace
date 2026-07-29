@@ -285,3 +285,71 @@ The fixture seeds deliberately broken data — an expired trade licence, a bank
 account whose holder name does not match the vendor, an open fraud signal, an
 overdue appeal. A QA pass against clean data exercises only the happy path, and
 the happy path is not where the bugs were.
+
+---
+
+# Second pass — found while building the admin console (2026-07-29)
+
+Three defects, all found by trying to *use* the system rather than by reading
+it. Two are fixed; one is recorded and deferred with its reason.
+
+## 11. Cancelling an order never gave the delivery slot back — **fixed**
+
+`release_capacity` only releases reservations in state `held`, which is right
+for what it was written for: the sweeper reclaiming abandoned checkouts. But a
+reservation moves to `committed` the moment an order is confirmed, and from
+that point nothing in the system could return it.
+
+So every cancelled order permanently burned its slot. `capacity_buckets.consumed`
+never came down. A branch that took and cancelled ten orders in a morning showed
+as full for the rest of the day with an empty manifest — and nobody would find
+it from the inside, because the counters are self-consistent. It surfaces as a
+vendor asking why the bookings stopped.
+
+Fixed by migration `000021_release_committed_capacity`, a *separate* function
+rather than a new branch in `release_capacity`. That one runs on a timer; giving
+the sweeper the power to un-commit confirmed orders means a bug in it silently
+frees slots that live customers are holding. Different authorities, different
+functions.
+
+Verified: two buckets at `consumed = 1` went to `0` on cancel, reservations to
+`released` with `released_at` set.
+
+## 12. Fifty conflict messages were written and thrown away — **fixed**
+
+The codebase builds errors as `fmt.Errorf("%w: <sentence>", httpx.ErrConflict)`
+in fifty places, and `WriteProblem` set the title to `Conflict` and dropped the
+sentence. Every 409 the API has ever returned was bare.
+
+The sentences are the whole value. *"nothing has been captured on this order,
+so there is nothing to refund — void the authorization instead"* tells an
+operator what to do next; `{"title": "Conflict"}` tells them to file a ticket.
+
+`conflictDetail` now surfaces the message, but only when `ErrConflict` is at the
+front of the chain — exactly the `%w: sentence` shape. An error that picked up
+the sentinel deeper down, behind a `"load order: …"` wrap that might carry a
+driver message, still falls through to the bare title rather than risk putting
+internals in a response body.
+
+## 13. Card payments are authorized and never captured — **open, deferred to Phase B**
+
+`payments.Capture` is written, correct, and **called by nothing**. Not the API,
+not the worker, not the feed binary. Card orders take an authorization at
+checkout and stop there.
+
+Consequences, in order of how much they cost:
+
+- The platform never takes the money for a card order.
+- `ledger.PostOrderCaptured` is unreachable, so a card order never appears in
+  the ledger at all. Vendor payables today come only from COD collection
+  (`driver.collectCash`) and subscription billing — which is why the payable
+  figures look plausible and are silently missing every card sale.
+- The admin console's refund action cannot work on a card order, because there
+  is no capture to reverse. That is how this was found.
+
+Not fixed here on purpose. The fix is a decision, not a patch: capture on
+delivery of the final fulfillment is the obvious choice, but "final" needs
+defining for a multi-stop order, and a partial delivery should probably capture
+partially. That belongs with the rest of the money work in Phase B of
+`PLAN-ADMIN-CONSOLE.md`, where the ledger and payout screens will make the
+answer checkable rather than assumed.

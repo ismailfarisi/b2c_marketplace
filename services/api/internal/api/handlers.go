@@ -67,6 +67,11 @@ type Handlers struct {
 	// Phase 9. The one handler set in this struct whose absence is the normal
 	// state rather than a reduced deployment.
 	BoostOps *BoostHandlers
+
+	// The admin console. Distinct from `Console` above, which is the *vendor*
+	// console — different audience, different authorisation model, and the two
+	// would be confused for each other at exactly the wrong moment.
+	AdminConsole *AdminHandlers
 }
 
 // --- auth -------------------------------------------------------------------

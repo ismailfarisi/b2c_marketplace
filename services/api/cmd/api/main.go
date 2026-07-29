@@ -27,6 +27,7 @@ import (
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/admin"
+	"github.com/marketplace/api/internal/modules/adminview"
 	"github.com/marketplace/api/internal/modules/attribution"
 	"github.com/marketplace/api/internal/modules/boosts"
 	"github.com/marketplace/api/internal/modules/chat"
@@ -130,10 +131,17 @@ func run() error {
 	// its attribution row can never be attributed afterwards.
 	attributionSvc := attribution.NewService(pool)
 
+	// Held in variables because the admin console calls the *same* instances.
+	// A second payments.Service for the console would be a second commission
+	// configuration, and the first time one was tuned the two would disagree
+	// about what a refund owes back.
+	orderingSvc := ordering.NewService(pool, registries.Verticals, attributionSvc)
+	paymentsSvc := payments.NewService(pool, provider, commissionBP, platformVATBP)
+
 	handlers := &api.Handlers{
 		Identity: identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho),
-		Ordering: ordering.NewService(pool, registries.Verticals, attributionSvc),
-		Payments: payments.NewService(pool, provider, commissionBP, platformVATBP),
+		Ordering: orderingSvc,
+		Payments: paymentsSvc,
 		// The same commission numbers the order path uses. A subscription meal
 		// and a one-off meal must not earn the platform different margins, and
 		// two constants would drift the first time one of them was tuned.
@@ -194,6 +202,24 @@ func run() error {
 		Strikes:  moderation.NewStrikeService(pool),
 		Admin:    adminSvc,
 		Vendors:  handlers.Console,
+	}
+
+	// The admin console. `adminview` composes; it owns no tables and cannot
+	// write — see its package comment.
+	handlers.AdminConsole = &api.AdminHandlers{
+		View:  adminview.NewService(pool),
+		Admin: adminSvc,
+		Act: api.Actions{
+			Payments: paymentsSvc,
+			Ordering: orderingSvc,
+		},
+	}
+
+	// The permission vocabulary in Go must match `admin_permissions`. A
+	// mismatch means either a check that can never pass or a grant that means
+	// nothing, and both fail silently — so the process refuses to boot instead.
+	if err := adminSvc.VerifyCatalogue(ctx); err != nil {
+		return err
 	}
 
 	// Phase 9 — boosts.

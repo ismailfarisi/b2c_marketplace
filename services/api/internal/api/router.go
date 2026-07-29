@@ -226,6 +226,38 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/moderation/appeals/{appealId}/decide", h.Compliance.DecideAppeal)
 		}
 
+		// The admin console — PLAN-ADMIN-CONSOLE.
+		//
+		// Everything here is under /admin and checks a *permission* rather than
+		// "is this person staff". The queues above still use the older staff
+		// check; they migrate as each one gains a detail page.
+		if h.AdminConsole != nil {
+			r.Get("/admin/whoami", h.AdminConsole.Whoami)
+			r.Get("/admin/search", h.AdminConsole.Search)
+
+			r.Get("/admin/orders/{orderId}", h.AdminConsole.Order)
+			r.Get("/admin/orders/{orderId}/timeline", h.AdminConsole.OrderTimeline)
+			r.Get("/admin/users/{userId}", h.AdminConsole.Customer)
+			r.Get("/admin/users/{userId}/timeline", h.AdminConsole.CustomerTimeline)
+			r.Get("/admin/vendors/{vendorId}", h.AdminConsole.Vendor)
+			r.Get("/admin/vendors/{vendorId}/timeline", h.AdminConsole.VendorTimeline)
+
+			// Actions. Separate permissions on purpose (§3.5): refunding money
+			// and cancelling an order are different authorities, and a support
+			// agent who can stop a delivery should not thereby be able to move
+			// funds.
+			r.Post("/admin/orders/{orderId}/refund", h.AdminConsole.RefundOrder)
+			r.Post("/admin/orders/{orderId}/cancel", h.AdminConsole.CancelOrder)
+
+			// Staff administration, and the log of who read what. Both need
+			// staff.admin — the second especially: "who looked at this customer"
+			// is itself a sensitive question.
+			r.Get("/admin/staff", h.AdminConsole.Staff)
+			r.Post("/admin/staff/grants", h.AdminConsole.GrantRole)
+			r.Delete("/admin/staff/{userId}/roles/{role}", h.AdminConsole.RevokeRole)
+			r.Get("/admin/access/{type}/{id}", h.AdminConsole.AccessHistory)
+		}
+
 		// Phase 9 — boosts.
 		//
 		// Nil in every deployment that has not switched advertising on, which

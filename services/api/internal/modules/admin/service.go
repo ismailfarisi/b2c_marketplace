@@ -24,6 +24,8 @@ import (
 
 type Service struct {
 	pool *pgxpool.Pool
+	// perms caches resolved grants for grantTTL. See permissions.go.
+	perms permissionCache
 }
 
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
@@ -369,5 +371,29 @@ func (s *Service) Assign(ctx context.Context, disputeID, assigneeID, actorID uui
 			INSERT INTO dispute_events (dispute_id, actor_type, actor_id, kind, to_state)
 			VALUES ($1, 'admin', $2, 'state_change', 'investigating')`, disputeID, actorID)
 		return err
+	})
+}
+
+// RecordOutside writes an audit row on its own, without a caller transaction.
+//
+// The compromise the console makes, and worth naming rather than hiding.
+// `Record` above takes a `pgx.Tx` for a good reason: an audit entry that commits
+// separately from the action it records is worse than no entry, because it looks
+// authoritative while disagreeing with what happened.
+//
+// The console cannot always honour that. Its actions go through service methods
+// — `payments.Refund`, `ordering.Cancel` — which own their own transactions and
+// do not take an auditor. Threading one through nine modules is the right end
+// state and a large refactor; until then the console calls this immediately
+// after the action returns.
+//
+// The exposure is precise: a crash in the microseconds between the action
+// committing and this row landing loses the *record* of something that did
+// happen. That is recoverable — the ledger journal and the outbox event both
+// name the change. The reverse, a recorded action that did not happen, is
+// impossible in this ordering, and that is the direction that would matter.
+func (s *Service) RecordOutside(ctx context.Context, a Action) error {
+	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		return s.Record(ctx, tx, a)
 	})
 }

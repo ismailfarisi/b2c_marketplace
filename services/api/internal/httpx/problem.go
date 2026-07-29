@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 // Problem is RFC 9457 problem details. One error shape for the whole API, so
@@ -98,6 +99,7 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrConflict):
 		p.Status = http.StatusConflict
 		p.Title = "Conflict"
+		p.Detail = conflictDetail(err)
 	}
 
 	if p.Status >= 500 {
@@ -110,6 +112,28 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	WriteJSON(w, p.Status, "application/problem+json", p)
+}
+
+// conflictDetail recovers the sentence a conflict was written with.
+//
+// Fifty places in this codebase build errors as fmt.Errorf("%w: <sentence>",
+// ErrConflict), where the sentence is the whole point — "this order is
+// completed, refund it instead of cancelling" tells the operator what to do
+// next, and a bare 409 tells them to file a ticket. Until now every one of
+// those sentences was written and then dropped here.
+//
+// Only the outermost wrap is surfaced, and only when ErrConflict is *at* the
+// front of the chain: that is exactly the "%w: sentence" shape and nothing
+// else. An error that picked up ErrConflict deeper down — behind a
+// "load order: …" wrap that might carry a driver message — falls through to the
+// bare title rather than risk putting internals in a response body.
+func conflictDetail(err error) string {
+	const prefix = "conflict: "
+	msg := err.Error()
+	if !strings.HasPrefix(msg, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(msg, prefix)
 }
 
 func WriteJSON(w http.ResponseWriter, status int, contentType string, body any) {
