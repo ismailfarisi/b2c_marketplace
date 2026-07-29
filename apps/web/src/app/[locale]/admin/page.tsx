@@ -5,18 +5,20 @@ import Link from "next/link";
 import { use } from "react";
 
 import { getQueues } from "@/lib/admin-api";
-import { POLL_MS, waited } from "@/components/admin/review";
+import { POLL_MS } from "@/components/admin/shell";
+import { waited } from "@/components/admin/table";
 
 /**
  * The screen an ops shift starts on.
  *
- * The design decision here is which number is large. Depth is the obvious
- * choice and it is the wrong one: **a deep and young queue is a busy afternoon,
- * a shallow and old one is a queue nobody is working, and only the second is an
- * incident.** A dashboard that shows depth alone reports them identically.
+ * The design decision here is **which number is large**. Depth is the obvious
+ * choice and it is the wrong one: a deep and *young* queue is a busy afternoon,
+ * a shallow and *old* one is a queue nobody is working, and only the second is
+ * an incident. A dashboard showing depth alone reports them identically.
  *
- * So the oldest wait is the prominent figure, the SLA is rendered next to it
- * from the server's own table, and a breach is a colour rather than a footnote.
+ * So each tile carries the count, the oldest wait, and the promise that queue
+ * makes — the SLA travelling from the server's own table rather than being a
+ * number the client picked. A breach turns the whole tile red.
  *
  * Empty queues are shown too. A tile that disappears when its queue empties is
  * one whose sudden reappearance nobody notices, and "nothing is waiting" is a
@@ -63,87 +65,78 @@ export default function AdminOverview({
     placeholderData: (previous) => previous,
   });
 
-  if (isPending) return <p className="muted">Loading…</p>;
-
   if (error) {
     return (
-      <>
-        <h1>Ops</h1>
-        <p className="bad">
-          Could not load the queues. This account needs a `platform_admins` row —
-          staff access is checked on the server on every call, never carried in a
-          token claim, so granting it takes effect immediately and so does
-          revoking it.
-        </p>
-      </>
+      <div className="panel">
+        <div className="state error">
+          <div className="headline">Could not load the queues.</div>
+          This account needs a <code>platform_admins</code> row. Staff access is
+          checked on the server on every call, never carried in a token claim —
+          so granting it takes effect immediately, and so does revoking it.
+        </div>
+      </div>
     );
   }
 
   const queues = data?.queues ?? [];
   const breached = queues.filter((q) => q.sla_breached);
-  const totalWaiting = queues.reduce((n, q) => n + q.waiting, 0);
+  const waiting = queues.reduce((n, q) => n + q.waiting, 0);
 
   return (
     <>
-      <div className="row spread">
-        <h1>Ops</h1>
-        <span className="muted">refreshes every {POLL_MS / 1000}s</span>
-      </div>
-
-      {breached.length > 0 ? (
-        <p className="bad">
-          {breached.length === 1 ? "One queue is" : `${breached.length} queues are`} past
-          the promise made to the people waiting on it:{" "}
-          {breached.map((q) => LABELS[q.queue] ?? q.queue).join(", ")}.
+      {isPending ? (
+        <p className="console-lede">Loading…</p>
+      ) : breached.length > 0 ? (
+        <p className="console-lede danger">
+          <strong>
+            {breached.length === 1 ? "One queue is" : `${breached.length} queues are`} past
+            the promise made to the people waiting on it
+          </strong>{" "}
+          — {breached.map((q) => LABELS[q.queue] ?? q.queue).join(", ")}.
         </p>
       ) : (
-        <p className="muted">
-          {totalWaiting === 0
+        <p className="console-lede">
+          {waiting === 0
             ? "Nothing is waiting."
-            : `${totalWaiting} item${totalWaiting === 1 ? "" : "s"} waiting, all within SLA.`}
+            : `${waiting} item${waiting === 1 ? "" : "s"} waiting, all within SLA.`}
         </p>
       )}
 
-      <div className="metrics">
-        {queues.map((q) => {
-          const href = `/${locale}/admin${ROUTES[q.queue] ?? ""}`;
-          return (
-            <Link
-              key={q.queue}
-              href={href}
-              className={`metric ${q.sla_breached ? "bad" : q.waiting > 0 ? "warn" : ""}`}
-            >
-              <span className="metric-label">{LABELS[q.queue] ?? q.queue}</span>
-              <span className="metric-value">{q.waiting}</span>
-              <span className="metric-label">
-                {q.waiting === 0 ? (
-                  "clear"
-                ) : (
-                  <>
-                    oldest {waited(q.oldest_seconds)}
-                    {" · "}
-                    <span className={q.sla_breached ? "bad" : "muted"}>
-                      SLA {waited(q.sla_seconds)}
-                    </span>
-                  </>
-                )}
-              </span>
-            </Link>
-          );
-        })}
+      <div className="stats">
+        {queues.map((q) => (
+          <Link
+            key={q.queue}
+            href={`/${locale}/admin${ROUTES[q.queue] ?? ""}`}
+            className={`stat ${q.sla_breached ? "breached" : ""} ${q.waiting === 0 ? "idle" : ""}`}
+          >
+            <span className="k">{LABELS[q.queue] ?? q.queue}</span>
+            <span className="v">{q.waiting}</span>
+            <span className="sub">
+              {q.waiting === 0
+                ? "clear"
+                : `oldest ${waited(q.oldest_seconds)} · SLA ${waited(q.sla_seconds)}`}
+            </span>
+          </Link>
+        ))}
       </div>
 
-      <section className="card">
-        <h2>What this does not show</h2>
-        <p className="muted">
-          Throughput, reviewer productivity and decision-reversal rates. The
-          first two because a moderation team measured on items-per-hour
-          approves faster, which is the exact failure GCC content standards make
-          expensive. The third is worth building and is not built:{" "}
-          <em>the rate at which appeals succeed is the single most useful
-          measure of whether policy is being applied correctly</em>, and voided
-          strikes are retained specifically so it can be computed.
-        </p>
+      <section className="panel">
+        <div className="panel-head">
+          <h2>What this does not show</h2>
+        </div>
+        <div className="panel-body">
+          <p className="console-lede" style={{ margin: 0 }}>
+            Throughput, reviewer productivity and decision-reversal rates. The
+            first two because a moderation team measured on items-per-hour
+            approves faster, which is the exact failure GCC content standards
+            make expensive. The third is worth building and is not built:{" "}
+            <em>
+              the rate at which appeals succeed is the single most useful measure
+              of whether policy is being applied correctly
+            </em>
+            , and voided strikes are retained specifically so it can be computed.
+          </p>
+        </div>
       </section>
     </>
   );

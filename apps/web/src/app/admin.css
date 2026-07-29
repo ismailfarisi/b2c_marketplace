@@ -1,0 +1,679 @@
+/*
+ * The staff console.
+ *
+ * A separate stylesheet from globals.css, imported only by the admin layout, so
+ * a customer's browser never downloads it. That is the same argument
+ * `admin-api.ts` makes about the bindings: the shape of the moderation queue is
+ * not something to ship to everyone.
+ *
+ * Three rules run through everything below.
+ *
+ * **Logical properties only.** `padding-inline`, `border-inline-start`, never
+ * left/right. The chrome here is LTR by decision (see layout.tsx) but the
+ * *content* is `dir="auto"`, so an Arabic caption inside a table cell flips —
+ * and a physical `border-left` on that cell lands on the wrong side of it.
+ *
+ * **Density is a decision per screen, not a global.** A moderator clears sixty
+ * comments in the time it takes to watch four reels. Comments get a table;
+ * reels get cards. `--row-height` is what expresses that.
+ *
+ * **Colour carries one meaning.** Red is "past the promise we made", amber is
+ * "needs attention", and nothing else uses either. A palette where red also
+ * means "delete" or "primary action" is a palette where a breached SLA stops
+ * registering.
+ */
+
+:root {
+  /* Neutral ramp. Slate rather than pure grey — a console that is on screen for
+     eight hours reads better slightly cool than dead neutral. */
+  --a-bg: #f6f7f9;
+  --a-surface: #ffffff;
+  --a-surface-2: #f1f3f6;
+  --a-border: #dfe3ea;
+  --a-border-strong: #c6ccd8;
+  --a-text: #16181d;
+  --a-text-muted: #5b6472;
+  --a-text-faint: #8b95a5;
+
+  /* The sidebar is dark against a light workspace. Not decoration: it is a
+     fixed frame the eye stops re-reading, which is what you want from
+     navigation someone passes forty times an hour. */
+  --a-nav-bg: #171a21;
+  --a-nav-text: #b7bfcc;
+  --a-nav-text-active: #ffffff;
+  --a-nav-hover: #232733;
+  --a-nav-active: #2d3342;
+
+  --a-accent: #2f6df0;
+  --a-accent-soft: #e8f0fe;
+
+  /* Semantics. One meaning each. */
+  --a-danger: #c0392b;
+  --a-danger-soft: #fdecea;
+  --a-warn: #b26a00;
+  --a-warn-soft: #fdf3e3;
+  --a-ok: #1e7a4b;
+  --a-ok-soft: #e7f5ee;
+
+  --a-radius: 8px;
+  --a-radius-sm: 5px;
+  --a-shadow: 0 1px 2px rgb(16 18 24 / 6%), 0 1px 3px rgb(16 18 24 / 4%);
+  --a-shadow-lift: 0 4px 12px rgb(16 18 24 / 10%);
+
+  --a-sidebar-w: 240px;
+  --a-appbar-h: 56px;
+  --a-row-height: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --a-bg: #0f1115;
+    --a-surface: #171a21;
+    --a-surface-2: #1d212a;
+    --a-border: #2a2f3a;
+    --a-border-strong: #3a4150;
+    --a-text: #e8ebf0;
+    --a-text-muted: #9aa4b4;
+    --a-text-faint: #6d7787;
+
+    --a-nav-bg: #0b0d11;
+    --a-nav-hover: #191d26;
+    --a-nav-active: #232936;
+
+    --a-accent: #5b8dff;
+    --a-accent-soft: #182236;
+
+    --a-danger: #ff6b5b;
+    --a-danger-soft: #2a1614;
+    --a-warn: #e0a253;
+    --a-warn-soft: #291f10;
+    --a-ok: #4ec98a;
+    --a-ok-soft: #10261b;
+
+    --a-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+    --a-shadow-lift: 0 4px 14px rgb(0 0 0 / 45%);
+  }
+}
+
+/* ── shell ─────────────────────────────────────────────────────────────────── */
+
+.console {
+  display: grid;
+  grid-template-columns: var(--a-sidebar-w) 1fr;
+  min-block-size: 100vh;
+  background: var(--a-bg);
+  color: var(--a-text);
+  font-size: 14px;
+}
+
+.console-nav {
+  background: var(--a-nav-bg);
+  color: var(--a-nav-text);
+  padding-block: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Sticky rather than fixed, so it scrolls with a very tall viewport instead
+     of clipping the last item behind the fold. */
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 100vh;
+  overflow-y: auto;
+}
+
+.console-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 18px 16px;
+  color: var(--a-nav-text-active);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.console-brand .env {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--a-warn);
+  color: #1b1400;
+}
+
+.console-group {
+  padding: 14px 18px 6px;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--a-text-faint);
+}
+
+.console-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  color: var(--a-nav-text);
+  text-decoration: none;
+  border-inline-start: 3px solid transparent;
+  transition: background 90ms ease;
+}
+
+.console-link:hover {
+  background: var(--a-nav-hover);
+  color: var(--a-nav-text-active);
+}
+
+.console-link.active {
+  background: var(--a-nav-active);
+  color: var(--a-nav-text-active);
+  border-inline-start-color: var(--a-accent);
+  font-weight: 550;
+}
+
+.console-link .label {
+  flex: 1;
+}
+
+/*
+ * Live counts in the navigation.
+ *
+ * The whole reason the sidebar is worth its width: a moderator sees where the
+ * work is without opening anything. A breached queue turns red *here*, which is
+ * the one place they are guaranteed to be looking.
+ */
+.console-count {
+  min-inline-size: 20px;
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--a-nav-hover);
+  color: var(--a-nav-text);
+}
+
+.console-link.active .console-count {
+  background: rgb(255 255 255 / 12%);
+}
+
+.console-count.breached {
+  background: var(--a-danger);
+  color: #fff;
+  font-weight: 600;
+}
+
+.console-count.zero {
+  opacity: 0.35;
+}
+
+.console-main {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0; /* lets wide tables scroll instead of stretching the grid */
+}
+
+/* ── app bar ───────────────────────────────────────────────────────────────── */
+
+.console-appbar {
+  block-size: var(--a-appbar-h);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-inline: 24px;
+  background: var(--a-surface);
+  border-block-end: 1px solid var(--a-border);
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+}
+
+.console-appbar h1 {
+  font-size: 15px;
+  font-weight: 620;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.console-appbar .spacer {
+  flex: 1;
+}
+
+.console-appbar .meta {
+  color: var(--a-text-faint);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A quiet dot that pulses while a refetch is in flight. Enough to answer "is
+   this stale" without a spinner that pulls the eye off the queue. */
+.console-pulse {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--a-ok);
+}
+
+.console-pulse.fetching {
+  background: var(--a-accent);
+  animation: console-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes console-pulse {
+  50% { opacity: 0.25; }
+}
+
+.console-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.console-lede {
+  color: var(--a-text-muted);
+  max-inline-size: 78ch;
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ── panels ────────────────────────────────────────────────────────────────── */
+
+.panel {
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow);
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--a-border);
+  background: var(--a-surface-2);
+}
+
+.panel-head h2 {
+  font-size: 13px;
+  font-weight: 620;
+  margin: 0;
+}
+
+.panel-head .hint {
+  color: var(--a-text-faint);
+  font-size: 12px;
+}
+
+.panel-body {
+  padding: 16px;
+}
+
+/* ── stat tiles ────────────────────────────────────────────────────────────── */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+}
+
+.stat {
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: var(--a-shadow);
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.stat:hover {
+  box-shadow: var(--a-shadow-lift);
+  border-color: var(--a-border-strong);
+}
+
+.stat .k {
+  font-size: 11.5px;
+  color: var(--a-text-muted);
+  font-weight: 550;
+}
+
+.stat .v {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+.stat .sub {
+  font-size: 11.5px;
+  color: var(--a-text-faint);
+}
+
+.stat.breached {
+  border-color: var(--a-danger);
+  background: var(--a-danger-soft);
+}
+
+.stat.breached .v,
+.stat.breached .sub {
+  color: var(--a-danger);
+}
+
+.stat.idle .v {
+  color: var(--a-text-faint);
+}
+
+/* ── tables ────────────────────────────────────────────────────────────────── */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table.data {
+  inline-size: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background: var(--a-surface-2);
+  border-block-end: 1px solid var(--a-border);
+  padding: 9px 14px;
+  text-align: start;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--a-text-muted);
+  white-space: nowrap;
+}
+
+table.data td {
+  padding: 10px 14px;
+  border-block-end: 1px solid var(--a-border);
+  vertical-align: middle;
+  block-size: var(--a-row-height);
+}
+
+table.data tbody tr:hover > td {
+  background: var(--a-surface-2);
+}
+
+table.data tbody tr.open > td {
+  background: var(--a-accent-soft);
+}
+
+table.data tr.detail > td {
+  background: var(--a-surface-2);
+  padding: 0;
+}
+
+/* Numbers right-aligned so magnitudes line up. Money and counts are compared
+   down a column, not read across a row. */
+table.data .num {
+  text-align: end;
+}
+
+/* Text that can be long — a caption, a chat message — is the one thing allowed
+   to wrap, and it gets the slack. */
+table.data .grow {
+  inline-size: 100%;
+  white-space: normal;
+  min-inline-size: 22ch;
+}
+
+table.data .nowrap {
+  white-space: nowrap;
+}
+
+/* ── pills ─────────────────────────────────────────────────────────────────── */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 550;
+  border: 1px solid var(--a-border-strong);
+  color: var(--a-text-muted);
+  background: var(--a-surface);
+  white-space: nowrap;
+}
+
+.tag.danger {
+  border-color: var(--a-danger);
+  color: var(--a-danger);
+  background: var(--a-danger-soft);
+}
+
+.tag.warn {
+  border-color: var(--a-warn);
+  color: var(--a-warn);
+  background: var(--a-warn-soft);
+}
+
+.tag.ok {
+  border-color: var(--a-ok);
+  color: var(--a-ok);
+  background: var(--a-ok-soft);
+}
+
+.tag.code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: -0.01em;
+}
+
+/* ── buttons and inputs ────────────────────────────────────────────────────── */
+
+.btn {
+  font: inherit;
+  font-weight: 550;
+  padding: 7px 14px;
+  border-radius: var(--a-radius-sm);
+  border: 1px solid var(--a-border-strong);
+  background: var(--a-surface);
+  color: var(--a-text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 90ms ease, border-color 90ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--a-text-faint);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--a-accent);
+  border-color: var(--a-accent);
+  color: #fff;
+}
+
+.btn.danger {
+  color: var(--a-danger);
+  border-color: var(--a-danger);
+  background: var(--a-surface);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: var(--a-danger-soft);
+}
+
+.btn.link {
+  border: none;
+  background: none;
+  padding: 4px 6px;
+  color: var(--a-accent);
+}
+
+.field {
+  font: inherit;
+  padding: 7px 10px;
+  border-radius: var(--a-radius-sm);
+  border: 1px solid var(--a-border-strong);
+  background: var(--a-surface);
+  color: var(--a-text);
+  min-inline-size: 22ch;
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--a-accent);
+  outline-offset: -1px;
+}
+
+/* ── the decision row ──────────────────────────────────────────────────────── */
+
+/*
+ * A decision expands *inside* the table rather than opening a modal.
+ *
+ * A modal hides the rest of the queue, which is exactly the context a reviewer
+ * uses — "is this the third message from the same seller this hour" is answered
+ * by the rows above and below. It also costs a dismiss action per decision,
+ * sixty times an hour.
+ */
+.decide {
+  padding: 14px 16px;
+  border-inline-start: 3px solid var(--a-accent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.decide .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.decide .evidence {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  font-size: 13px;
+}
+
+.decide .evidence dt {
+  color: var(--a-text-muted);
+  font-weight: 550;
+}
+
+.decide .evidence dd {
+  margin: 0;
+}
+
+.decide .note {
+  color: var(--a-text-muted);
+  font-size: 12.5px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.decide .note.danger {
+  color: var(--a-danger);
+}
+
+/* ── states ────────────────────────────────────────────────────────────────── */
+
+.state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--a-text-muted);
+}
+
+.state.error {
+  color: var(--a-danger);
+}
+
+.state .headline {
+  font-weight: 600;
+  color: var(--a-text);
+  margin-block-end: 4px;
+}
+
+/* Skeleton rows rather than a spinner. A spinner says "wait"; skeleton rows say
+   "this is a table with about this many rows in it", which is what stops a
+   reviewer navigating away and back. */
+.skeleton {
+  block-size: 10px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--a-surface-2) 25%,
+    var(--a-border) 37%,
+    var(--a-surface-2) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton 1.2s ease infinite;
+}
+
+@keyframes skeleton {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--a-text-muted);
+}
+
+.faint {
+  color: var(--a-text-faint);
+}
+
+.danger {
+  color: var(--a-danger);
+}
+
+/* ── narrow viewports ──────────────────────────────────────────────────────── */
+
+/*
+ * The sidebar collapses to a strip of counts under 1024px.
+ *
+ * Not a hamburger. Ops runs on a laptop or a desk monitor; the tablet case is a
+ * manager glancing at depth, and for that the *counts* are the whole content —
+ * hiding them behind a tap is the wrong trade.
+ */
+@media (max-width: 1024px) {
+  .console {
+    grid-template-columns: 60px 1fr;
+  }
+
+  .console-brand span:not(.env),
+  .console-group,
+  .console-link .label {
+    display: none;
+  }
+
+  .console-link {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}

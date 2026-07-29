@@ -1,17 +1,24 @@
 "use client";
 
 import { decideAppeal, getAppealQueue } from "@/lib/admin-api";
-import { Decide, QueueState, useQueueData } from "@/components/admin/review";
+import {
+  Decide,
+  Evidence,
+  QueuePanel,
+  Tag,
+  since,
+  useQueueData,
+} from "@/components/admin/table";
 
 /**
  * Appeals.
  *
  * The queue shows **overdue appeals only**, and that is the server's choice
- * rather than a filter this page applies. The failure mode of an appeals
- * process is not that appeals are decided wrongly — it is that they are never
- * decided, and a list of every open appeal buries the breached ones among them.
+ * rather than a filter this page applies. The failure mode of an appeals process
+ * is not that appeals are decided wrongly — it is that they are never decided,
+ * and a list of every open appeal buries the breached ones among them.
  *
- * Two things about this screen are not cosmetic:
+ * Two things here are not cosmetic:
  *
  * **An appeal cannot be decided by the person whose decision is being
  * appealed.** Enforced by a database CHECK, not by rota discipline. In a team of
@@ -25,53 +32,70 @@ import { Decide, QueueState, useQueueData } from "@/components/admin/review";
  */
 export default function AppealQueue() {
   const { data, isPending, error } = useQueueData("appeals", getAppealQueue);
-  const items = data?.items ?? [];
+  const rows = data?.items ?? [];
 
   return (
     <>
-      <h1>Appeals</h1>
-      <p className="muted">
-        Overdue only. Seven-day SLA — an appeals process with no deadline is a
-        way of saying no slowly, and the app stores treat &ldquo;users cannot
+      <p className="console-lede">
+        Overdue only. Seven-day SLA — an appeals process with no deadline is a way
+        of saying no slowly, and the app stores treat &ldquo;users cannot
         appeal&rdquo; as a policy violation rather than a product choice.
       </p>
 
-      <QueueState
+      <QueuePanel
+        title="Past their deadline"
+        columns={[
+          { label: "Subject" },
+          { label: "Reference", className: "grow" },
+          { label: "Appellant" },
+          { label: "Opened", className: "num" },
+          { label: "Overdue by", className: "num" },
+        ]}
+        rows={rows}
         isPending={isPending}
         error={error}
-        count={items.length}
         empty="No appeal is past its deadline. Open appeals within SLA are not listed here — this queue exists to surface the ones nobody has reached."
-      />
-
-      <ul className="stack">
-        {items.map((a) => (
-          <li key={a.id} className="card">
-            <div className="row spread">
-              <div className="row">
-                <span className="pill">{a.subject_type}</span>
-                <span className="mono muted">{a.subject_id}</span>
-              </div>
-              <span className="pill bad">{a.overdue_by_hours}h over</span>
-            </div>
-
-            <p className="muted">
-              Opened {new Date(a.created_at).toLocaleString("en-AE")} · due{" "}
-              {new Date(a.due_at).toLocaleString("en-AE")} · appellant{" "}
-              <span className="mono">{a.appellant_id}</span>
+        rowKey={(a) => a.id}
+        renderRow={(a) => (
+          <>
+            <td className="nowrap">
+              <Tag>{a.subject_type}</Tag>
+            </td>
+            <td className="grow mono">{a.subject_id}</td>
+            <td className="mono nowrap">{a.appellant_id.slice(0, 8)}…</td>
+            <td className="num nowrap">{since(a.created_at)}</td>
+            <td className="num nowrap">
+              <Tag tone="danger">{a.overdue_by_hours}h</Tag>
+            </td>
+          </>
+        )}
+        renderDetail={(a, close) => (
+          <Decide
+            approveLabel="Overturn"
+            rejectLabel="Uphold"
+            onDone={close}
+            // A note either way. An upheld appeal is a second refusal and the
+            // author is entitled to know it was read; an overturned one voids a
+            // strike, and the void carries a reason into the record that a
+            // later review of the moderation function reads.
+            onDecide={(overturn, note) => decideAppeal(a.id, overturn, note)}
+          >
+            <p className="note">
+              This appeal cannot be decided by whoever made the original
+              decision — the database refuses it. If this returns 403, hand it to
+              someone else rather than retrying.
             </p>
-
-            <Decide
-              approveLabel="Overturn"
-              rejectLabel="Uphold"
-              // A note either way. An upheld appeal is a second refusal and the
-              // author is entitled to know it was read; an overturned one voids
-              // a strike, and the void carries a reason into the record that a
-              // review of the moderation function later reads.
-              onDecide={(overturn, note) => decideAppeal(a.id, overturn, note)}
+            <Evidence
+              rows={[
+                ["Subject", `${a.subject_type} ${a.subject_id}`],
+                ["Appellant", <span className="mono">{a.appellant_id}</span>],
+                ["Opened", new Date(a.created_at).toLocaleString("en-AE")],
+                ["Due", new Date(a.due_at).toLocaleString("en-AE")],
+              ]}
             />
-          </li>
-        ))}
-      </ul>
+          </Decide>
+        )}
+      />
     </>
   );
 }

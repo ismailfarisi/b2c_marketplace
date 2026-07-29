@@ -1,7 +1,15 @@
 "use client";
 
 import { getCampaignQueue, reviewCampaign } from "@/lib/admin-api";
-import { Decide, QueueState, useQueueData } from "@/components/admin/review";
+import {
+  Decide,
+  Evidence,
+  QueuePanel,
+  Tag,
+  money,
+  since,
+  useQueueData,
+} from "@/components/admin/table";
 
 /**
  * Campaign review.
@@ -12,84 +20,77 @@ import { Decide, QueueState, useQueueData } from "@/components/admin/review";
  * a vendor paying to amplify a reel about something they are licensed to sell,
  * is the targeting sane, is this somebody else's video.
  *
- * The money is prominent because the cost of leaving a campaign here is
+ * The money is a column because the cost of leaving a campaign here is
  * asymmetric. An unreviewed campaign is an advertiser who has *already paid* and
  * whose money is doing nothing — the worst state available, worse than a
  * rejection, because a rejection at least gets refunded.
  */
-function money(m: { amount: number; currency: string }) {
-  return `${(m.amount / 100).toLocaleString("en-AE", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })} ${m.currency}`;
-}
-
 export default function CampaignQueue() {
   const { data, isPending, error } = useQueueData("campaigns", getCampaignQueue);
-  const items = data?.items ?? [];
+  const rows = data?.items ?? [];
 
   return (
     <>
-      <h1>Campaigns</h1>
-      <p className="muted">
-        Twenty-four-hour SLA. Everything here is funded and idle — the
-        advertiser has paid and nothing is running.
+      <p className="console-lede">
+        Twenty-four-hour SLA. Everything here is funded and idle — the advertiser
+        has paid and nothing is running.
       </p>
 
-      <QueueState
+      <QueuePanel
+        title="Awaiting approval"
+        hint="reviewing the campaign, not the reel"
+        columns={[
+          { label: "Advertiser" },
+          { label: "Reference" },
+          { label: "Creative", className: "grow" },
+          { label: "Funded", className: "num" },
+          { label: "Daily cap", className: "num" },
+          { label: "Bid CPM", className: "num" },
+          { label: "Waiting", className: "num" },
+        ]}
+        rows={rows}
         isPending={isPending}
         error={error}
-        count={items.length}
         empty="No campaigns awaiting review."
+        rowKey={(c) => c.id}
+        renderRow={(c) => (
+          <>
+            <td className="nowrap" dir="auto">
+              {c.advertiser_name || <span className="faint">unknown</span>}{" "}
+              <Tag>{c.advertiser_type}</Tag>
+            </td>
+            <td className="mono nowrap">{c.reference}</td>
+            <td className="grow" dir="auto">
+              {c.caption || <span className="faint">no caption</span>}
+            </td>
+            <td className="num nowrap">{money(c.funded)}</td>
+            <td className="num nowrap">{money(c.daily_cap)}</td>
+            <td className="num nowrap">{money(c.bid_cpm)}</td>
+            <td className="num nowrap">{since(c.created_at)}</td>
+          </>
+        )}
+        renderDetail={(c, close) => (
+          <Decide onDone={close} onDecide={(approve, note) => reviewCampaign(c.id, approve, note)}>
+            <Evidence
+              rows={[
+                ["Reel", <span className="mono">{c.reel_id}</span>],
+                ["Caption", <span dir="auto">{c.caption}</span>],
+                ["Starts", c.starts_on],
+                // A sentence, composed server-side. Targeting narrows and never
+                // widens — a 50 km radius does not extend a vendor's reach past
+                // their service area, and the row says so rather than implying
+                // otherwise with a map.
+                ["Targeting", c.targeting],
+              ]}
+            />
+            <p className="note">
+              The reel was moderated before it could be published. What this
+              decision covers is the campaign: is this advertiser entitled to
+              amplify this content, and is the targeting sane.
+            </p>
+          </Decide>
+        )}
       />
-
-      <ul className="stack">
-        {items.map((c) => (
-          <li key={c.id} className="card">
-            <div className="row spread">
-              <strong dir="auto">{c.advertiser_name || c.id}</strong>
-              <span className="pill">{c.reference}</span>
-            </div>
-
-            <p dir="auto">{c.caption || <span className="muted">no caption</span>}</p>
-
-            <div className="scroll">
-              <table>
-                <tbody>
-                  <tr>
-                    <th>Funded</th>
-                    <td>{money(c.funded)}</td>
-                  </tr>
-                  <tr>
-                    <th>Daily cap</th>
-                    <td>{money(c.daily_cap)}</td>
-                  </tr>
-                  <tr>
-                    <th>Bid</th>
-                    <td>{money(c.bid_cpm)} per thousand impressions</td>
-                  </tr>
-                  <tr>
-                    <th>Starts</th>
-                    <td>{c.starts_on}</td>
-                  </tr>
-                  <tr>
-                    <th>Targeting</th>
-                    {/* A sentence, composed server-side. Targeting narrows and
-                        never widens — a 50 km radius does not extend a
-                        vendor's reach past their service area, and the row
-                        says so rather than implying otherwise with a map. */}
-                    <td>{c.targeting}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <p className="mono muted">reel {c.reel_id}</p>
-
-            <Decide onDecide={(approve, note) => reviewCampaign(c.id, approve, note)} />
-          </li>
-        ))}
-      </ul>
     </>
   );
 }
