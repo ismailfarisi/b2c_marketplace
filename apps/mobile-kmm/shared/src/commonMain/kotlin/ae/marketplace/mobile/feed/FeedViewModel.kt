@@ -17,6 +17,34 @@ data class FeedUiState(
     val exhausted: Boolean = false,
     val error: String? = null,
     val rankingProfile: String? = null,
+    /**
+     * The tab the viewer tapped. Highlighted immediately, before the page it
+     * asks for has landed — a tab row that waits for a response feels broken on
+     * a slow connection, and this is the one piece of feed state where being
+     * optimistic is free.
+     */
+    val surface: FeedSurface = FeedSurface.ForYou,
+    /**
+     * The surface the server says it served. Differs from [surface] only when
+     * this build asked for a tab the server has retired, and then it is the
+     * honest label for what is on screen.
+     */
+    val servedSurface: FeedSurface = FeedSurface.ForYou,
+    /**
+     * Why the list is empty, when it is and the server said so.
+     *
+     * Kept apart from [error] on purpose. "Nothing is live right now" is a true
+     * statement about a working product; rendering it through the error path
+     * would tell the viewer the app is broken, and that decides whether they try
+     * the next tab or close it.
+     */
+    val emptyReason: FeedEmptyReason? = null,
+    /**
+     * Server clock minus device clock, sampled once when this surface's first
+     * page landed. Passed to ReelClock.face on every tick; see its note on why
+     * re-sampling per tick freezes every countdown in the feed.
+     */
+    val clockSkewMillis: Long = 0L,
 )
 
 /**
@@ -55,10 +83,43 @@ class FeedViewModel(
         refresh()
     }
 
+    /**
+     * The viewer tapped a tab.
+     *
+     * A surface change is a new feed, not a filter over the current one, so the
+     * pager is reset rather than re-sorted — the cursor carries an exclusion set
+     * built for the surface that produced it, and reusing it would page one feed
+     * with another's memory.
+     *
+     * Playback stops first. Without that, the reel that was on screen keeps
+     * playing under the new tab's first item for as long as the request takes,
+     * which reads as the app having lost track of what it is showing.
+     *
+     * Tapping the tab you are already on is a no-op rather than a refresh. On a
+     * vertical pager the tab row sits under the viewer's thumb, and making an
+     * accidental re-tap throw away their place in the feed is a bad trade for
+     * the one person in a hundred who meant it as a reload.
+     */
+    fun onSurfaceSelected(surface: FeedSurface) {
+        if (_state.value.surface == surface) return
+        playback.onPause()
+        // Highlighted before the page lands. The list below is cleared in the
+        // same update so the viewer never sees the previous surface's reels
+        // sitting under the newly selected tab.
+        _state.value = _state.value.copy(
+            surface = surface,
+            items = emptyList(),
+            emptyReason = null,
+            exhausted = false,
+        )
+        refresh()
+    }
+
     fun refresh() {
+        val surface = _state.value.surface
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            runCatching { pager.refresh(lat, lng, categoryId) }
+            runCatching { pager.refresh(lat, lng, categoryId, surface) }
                 .onSuccess { emit() }
                 .onFailure { e ->
                     _state.value = _state.value.copy(loading = false, error = e.message)
@@ -78,8 +139,9 @@ class FeedViewModel(
         playback.onVisible(index, items)
 
         if (pager.shouldLoadMore(index)) {
+            val surface = _state.value.surface
             viewModelScope.launch {
-                runCatching { pager.loadNext(lat, lng, categoryId) }
+                runCatching { pager.loadNext(lat, lng, categoryId, surface) }
                     .onSuccess { if (it.isNotEmpty()) emit() else emit() }
                     .onFailure { /* Keep the feed on screen. The next swipe retries. */ }
             }
@@ -189,6 +251,9 @@ class FeedViewModel(
             loading = false,
             exhausted = pager.isExhausted(),
             rankingProfile = pager.rankingProfile,
+            servedSurface = pager.servedSurface,
+            emptyReason = pager.emptyReason,
+            clockSkewMillis = pager.clockSkewMillis,
             error = null,
         )
     }

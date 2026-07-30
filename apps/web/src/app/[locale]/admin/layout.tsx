@@ -1,6 +1,6 @@
 import { use, type ReactNode } from "react";
 
-import { ConsoleShell } from "@/components/admin/shell";
+import { AdminAuth } from "@/components/admin/auth";
 import "@/app/admin.css";
 
 /**
@@ -24,6 +24,11 @@ import "@/app/admin.css";
  * The stylesheet is imported here rather than in globals.css so a customer's
  * browser never downloads it — the same argument `admin-api.ts` makes about the
  * bindings.
+ *
+ * `AdminAuth` sits between this layout and the shell rather than inside it: the
+ * sign-in page is a route *under* /admin that must render without the frame,
+ * and the frame itself polls queue depths the moment it mounts. Deciding which
+ * of the two to render is therefore the gate's job, not the shell's.
  */
 export default function AdminLayout({
   children,
@@ -36,7 +41,7 @@ export default function AdminLayout({
 
   return (
     <div dir="ltr">
-      <ConsoleShell locale={locale}>{children}</ConsoleShell>
+      <AdminAuth locale={locale}>{children}</AdminAuth>
     </div>
   );
 }

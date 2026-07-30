@@ -609,6 +609,41 @@ paths:
           in: query
           required: false
           schema: { type: string, format: uuid }
+        - name: surface
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_you, live_now, ending_soon, nearby]
+            default: for_you
+          description: |
+            Which feed. Not a filter over a page the ranker already built — it
+            changes candidate generation, and for two of the four it replaces the
+            ordering:
+
+            | surface | candidates | ordered by |
+            |---|---|---|
+            | `for_you` | the four sources above | predicted engagement × conversion |
+            | `live_now` | time signal open right now | predicted engagement × conversion |
+            | `ending_soon` | closing within 6 hours | soonest first |
+            | `nearby` | eligible | nearest first |
+
+            `nearby` is not redundant with the geo filter every surface already
+            applies. Eligibility means the reel's coverage contains you; a vendor
+            delivering city-wide is eligible from thirty kilometres away. This
+            surface is for the viewer who wants to walk there.
+
+            `ending_soon` and `nearby` reserve no exploration slots. Exploration
+            is a ranking device, and placing a reel closing in five hours above
+            one closing in ten minutes would break the only promise the tab
+            makes. Nothing is lost: on a surface ordered by time or distance a
+            vendor with no engagement history already competes on equal terms.
+
+            **An unrecognised value is served as `for_you` rather than rejected.**
+            This is a view preference from a client that may be older than the
+            server, and a build that has not heard of a tab we retired should get
+            a feed rather than an error. Read `surface` on the response to see
+            what you actually got.
         - $ref: "#/components/parameters/Cursor"
         - name: limit
           in: query
@@ -4267,6 +4302,144 @@ components:
             liked: { type: boolean }
             saved: { type: boolean }
             followed: { type: boolean }
+        time_signal:
+          oneOf:
+            - $ref: "#/components/schemas/TimeSignal"
+            - type: "null"
+        summary:
+          oneOf:
+            - $ref: "#/components/schemas/SubjectSummary"
+            - type: "null"
+
+    TimeSignal:
+      type: object
+      required: [mode, as_of]
+      description: |
+        When the thing this reel is about stops being true.
+
+        **Carries instants, never rendered text.** There is no `label` and there
+        will not be one: a server-rendered "02:04 left" is wrong the moment it is
+        serialised — the page may be cached, the client may background for twenty
+        minutes and come back, and the same bytes are served to an English and an
+        Arabic viewer whose digits differ. The server states when things happen;
+        the client states how long that is from now. Same call the API already
+        makes for money.
+
+        The feed does not compose this and does not branch on it. It comes from
+        the vertical that owns the subject, through `internal/seam/subject`.
+      properties:
+        mode:
+          type: string
+          enum: [countdown, window, freshness, cutoff]
+          description: |
+            How to render the passage of time. Distinguished by what the viewer
+            is being told, not by which fields are set:
+
+            | mode | meaning | reads as |
+            |---|---|---|
+            | `countdown` | this ends and is then gone | "02:04 left" |
+            | `window` | true between two times | "1h 48m of 3h" |
+            | `freshness` | has been true for a while | "listed 3d ago" |
+            | `cutoff` | act before the next boundary | "order by 16:00" |
+
+            `countdown` and `window` carry the same fields and are still two
+            modes: a countdown drains, a window fills. Deriving that in the
+            client from how far away `ends_at` is gets a three-hour auction wrong.
+        starts_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When the interval opened. Present for `window` and `freshness`;
+            optional for `countdown`, where it only gives the bar a denominator.
+        ends_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When it closes. Present for every mode but `freshness`, which has no
+            end — a listing does not expire because it got old.
+
+            For `cutoff` this is the *next* occurrence, already resolved to an
+            instant. See `recurring`.
+        horizon_seconds:
+          type: [integer, "null"]
+          description: |
+            The bar's denominator when the interval does not supply a useful one.
+
+            A plate auction opens nine days before it closes, and a bar drawn
+            across nine days does not visibly move during the two minutes anyone
+            is watching. The vertical picks the span over which urgency is
+            legible; draw across that and saturate before it.
+
+            Always present for `freshness`, where it is the decay span — three
+            days old is fresh for property and stale for a restaurant offer, and
+            only the vertical knows which.
+        timezone:
+          type: [string, "null"]
+          description: |
+            IANA name, present for `cutoff`. Not an offset: "order by 16:00" is a
+            rule in the vendor's wall clock, and an offset is correct only until
+            the first DST boundary in a market that observes one.
+        recurring:
+          type: boolean
+          default: false
+          description: |
+            The boundary comes back. Decides what the client does when the clock
+            runs out — a countdown that expires removes the reel; a cutoff that
+            passes rolls to the next cycle and the CTA stays live. Without this
+            the client picks one behaviour and it is wrong for half the feed.
+        as_of:
+          type: string
+          format: date-time
+          description: |
+            The server's clock when the page was built. **Clients must apply it.**
+
+            Compute `skew = as_of - deviceNow` once per page and offset every
+            countdown on it. Device clocks are wrong: a phone four minutes fast
+            renders a live auction as already closed and the user concludes the
+            app is broken; four minutes slow lets someone tap "bid" into a closed
+            lot and eat a 409.
+
+    SubjectSummary:
+      type: object
+      description: |
+        The badge over the video and the lines above the CTA, composed entirely
+        by the owning vertical. The feed does not know that 64,000 is a kilometre
+        reading or that AED 480 is weekly — the moment it does, adding a vertical
+        means changing the feed.
+      properties:
+        badge:
+          type: string
+          description: |
+            Names the *kind* of thing — "USED CAR · VERIFIED", "MEAL
+            SUBSCRIPTION". This is what lets a viewer parse a reel in the third
+            of a second before deciding to scroll past.
+        badge_ar: { type: string }
+        title:
+          type: string
+          description: What it is. "2021 Nissan Patrol LE".
+        title_ar: { type: string }
+        line:
+          type: string
+          description: |
+            The facts that qualify it — "64,000 km · GCC · Al Quoz". Pre-joined
+            by the vertical, separators included: returned as an array the client
+            would re-join with a middot that is wrong in RTL.
+        line_ar: { type: string }
+        price_minor:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            Minor units, formatted at the edge. Zero with a currency set is free;
+            a null currency means this subject has no price to show, which is not
+            the same thing.
+        currency: { type: [string, "null"], minLength: 3, maxLength: 3 }
+        price_suffix:
+          type: string
+          description: |
+            The unit the price is per — "/wk", "/mo". Separate from the number so
+            it can be rendered smaller, and so a locale that puts the unit first
+            still can.
+        price_suffix_ar: { type: string }
 
     FeedPage:
       type: object
@@ -4275,6 +4448,26 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/FeedItem" }
+        surface:
+          type: string
+          enum: [for_you, live_now, ending_soon, nearby]
+          description: |
+            Which surface actually produced this page. Echoed rather than assumed,
+            because the server defaults an unrecognised request: without it a
+            client that asked for a retired tab would label a For you page as
+            Live now.
+        empty_reason:
+          type: [string, "null"]
+          enum: [nothing_live, nothing_closing, nothing_near, nothing_eligible, null]
+          description: |
+            Why `items` is empty, or null when it is not.
+
+            The client cannot infer this: "no reels" and "no reels *that are
+            live*" are the same empty array, and only the server knows which
+            question was asked. It matters because "nothing is live right now" is
+            a true statement about a working product and the generic empty state
+            reads as a broken one — which decides whether the viewer tries
+            another tab or closes the app.
         next_cursor:
           type: [string, "null"]
           description: |

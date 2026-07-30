@@ -5,16 +5,14 @@ import ae.marketplace.mobile.model.FeedItem
 import ae.marketplace.mobile.model.ResolvedAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,23 +22,33 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * The feed.
  *
- * Small on purpose. Every decision that costs money or corrupts data —
- * which rendition, how far to prefetch, what counts as a view, when to page —
- * lives in `:shared` and is tested there. What is left here is a pager, a
- * surface and some text, which is the part that genuinely has to be written
- * twice because Compose and SwiftUI have nothing in common.
+ * Small on purpose. Every decision that costs money or corrupts data — which
+ * rendition, how far to prefetch, what counts as a view, when to page, and now
+ * how a countdown resolves against a device clock that is wrong — lives in
+ * `:shared` and is tested there. What is left here is a pager, a surface and
+ * some text, which is the part that genuinely has to be written twice because
+ * Compose and SwiftUI have nothing in common.
  */
 @Composable
 fun ReelFeed(viewModel: FeedViewModel) {
     val state by viewModel.state.collectAsState()
-    val pagerState = rememberPagerState(pageCount = { state.items.size })
+
+    val pagerState = rememberPagerState { state.items.size }
+
+    // Back to the top on a tab change. The pager otherwise keeps its scroll
+    // offset across surfaces, so switching to a two-item Live now feed lands the
+    // viewer on page seven and the screen looks blank.
+    //
+    // scrollToPage, not animateScrollToPage: there is nothing to animate between
+    // — the list underneath has been replaced — and animating would flick
+    // through reels from a feed the viewer has already left, each of which would
+    // report an impression on the way past.
+    LaunchedEffect(state.surface) { pagerState.scrollToPage(0) }
 
     // `settledPage`, not `currentPage`. currentPage changes the moment a drag
     // crosses the midpoint, so reporting on it counts a view for every reel a
@@ -51,38 +59,65 @@ fun ReelFeed(viewModel: FeedViewModel) {
             .collect { page -> if (state.items.isNotEmpty()) viewModel.onVisible(page) }
     }
 
-    if (state.items.isEmpty()) {
-        Box(Modifier.fillMaxSize().background(Color.Black), Alignment.Center) {
-            Text(
-                text = state.error ?: "Nothing here yet",
-                color = Color.White.copy(alpha = 0.7f),
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        if (state.items.isEmpty()) {
+            // The empty state sits under the tab row rather than replacing it,
+            // and that is the point of naming *why* a surface is empty: the
+            // message exists to send the viewer to another tab, and a screen
+            // with no tabs on it gives them nowhere to go.
+            Box(Modifier.fillMaxSize(), Alignment.Center) {
+                FeedEmptyState(reason = state.emptyReason, error = state.error)
+            }
+        } else {
+            VerticalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                // One page held either side. The decoder pool in :shared is
+                // sized for more than this; the composition window is smaller
+                // because keeping three surfaces attached costs GPU memory that
+                // the decoders do not.
+                beyondViewportPageCount = 1,
+            ) { page ->
+                ReelPage(
+                    item = state.items[page],
+                    isActive = page == pagerState.settledPage,
+                    skewMillis = state.clockSkewMillis,
+                    viewModel = viewModel,
+                    onLike = { viewModel.toggleLike(state.items[page].id) },
+                    onAction = { action ->
+                        viewModel.onActionClick(action.id, state.items[page].id)
+                    },
+                )
+            }
+        }
+
+        // Drawn last so it sits above the pager, and inside the same Box rather
+        // than in a Scaffold slot because the reel is full-bleed by design — the
+        // video runs behind the tabs and under the status bar, and a top app bar
+        // would cut a letterbox out of it.
+        Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+            FeedTabs(
+                selected = state.surface,
+                onSelect = viewModel::onSurfaceSelected,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
-        return
-    }
-
-    VerticalPager(
-        state = pagerState,
-        modifier = Modifier.fillMaxSize(),
-        // One page held either side. The decoder pool in :shared is sized for
-        // more than this; the composition window is smaller because keeping
-        // three surfaces attached costs GPU memory that the decoders do not.
-        beyondViewportPageCount = 1,
-    ) { page ->
-        ReelPage(
-            item = state.items[page],
-            isActive = page == pagerState.settledPage,
-            viewModel = viewModel,
-            onLike = { viewModel.toggleLike(state.items[page].id) },
-            onAction = { action -> viewModel.onActionClick(action.id, state.items[page].id) },
-        )
     }
 }
+
+/**
+ * The tab row's height, shared by the row itself and by the overlay that has to
+ * clear it. A constant rather than a measurement because the row is a fixed
+ * stack of text and a 2dp rule, and onGloballyPositioned for one number would
+ * add a layout pass to every frame of a video feed.
+ */
+private val TAB_ROW_HEIGHT = 48.dp
 
 @Composable
 private fun ReelPage(
     item: FeedItem,
     isActive: Boolean,
+    skewMillis: Long,
     viewModel: FeedViewModel,
     onLike: () -> Unit,
     onAction: (ResolvedAction) -> Unit,
@@ -96,43 +131,17 @@ private fun ReelPage(
             modifier = Modifier.fillMaxSize(),
         )
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = item.author.name.ifBlank { "—" },
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-            )
-            if (item.caption.isNotBlank()) {
-                Text(text = item.caption, color = Color.White, fontSize = 14.sp, maxLines = 3)
-            }
-
-            item.actions.sortedBy { it.position }.forEach { action ->
-                Button(
-                    onClick = { onAction(action) },
-                    enabled = action.available,
-                    colors = ButtonDefaults.buttonColors(),
-                ) {
-                    // The label comes from the vertical's handler and is
-                    // rendered as given. There is deliberately no
-                    // `when (action.targetType)` anywhere in this app — the
-                    // moment one exists, adding a vertical means shipping a
-                    // mobile release.
-                    Text(action.label)
-                }
-                // Always shown when a CTA is unavailable. A greyed-out button
-                // with no explanation reads as a broken app, and the vendor
-                // gets blamed for a platform decision.
-                if (!action.available && action.reason != null) {
-                    Text(action.reason!!, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
-                }
-            }
-        }
+        // Time bar, badge, time pill, product line, CTAs. One skeleton for every
+        // vertical; only the time signal differs between them.
+        ReelOverlay(
+            item = item,
+            skewMillis = skewMillis,
+            onAction = onAction,
+            modifier = Modifier.fillMaxSize(),
+            // Height of the tab row below. Kept next to the FeedTabs call that
+            // creates it so the two move together.
+            chromeTop = TAB_ROW_HEIGHT,
+        )
 
         Text(
             text = if (item.viewer.liked) "♥ ${item.counters.likes}" else "♡ ${item.counters.likes}",

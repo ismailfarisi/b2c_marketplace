@@ -21,6 +21,7 @@ import (
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/modules/social"
 	"github.com/marketplace/api/internal/seam/action"
+	"github.com/marketplace/api/internal/seam/subject"
 )
 
 // ReelHandlers covers the Phase 2 surface: authoring, the feed, reporting,
@@ -43,6 +44,15 @@ type ReelHandlers struct {
 	Comments  *comments.Service
 	Ranking   *ranking.DBProvider
 	Interests *interests.Service
+
+	// The subject seam. Nil-safe on the same principle as Actions: a feed served
+	// without it renders reels that play, carry their CTAs, and show no badge
+	// and no product line. Smaller, not broken.
+	//
+	// Note that the *time signal* does not come through here — it is read from
+	// the projection by the feed's own query, because the feed sorts by it. Only
+	// the summary needs resolving per page.
+	Subjects *subject.Registry
 
 	// Phase 9. Nil in every deployment that has not switched advertising on —
 	// which PLAN-VIDEO-FIRST §7 says is the correct state until there is enough
@@ -307,12 +317,19 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
+	// An unknown surface is For you rather than a 400. The parameter is a view
+	// preference arriving from a client that may be older than the server, and a
+	// build that has not heard of a tab we removed should get a feed rather than
+	// an error screen.
+	surface := feed.ParseSurface(q.Get("surface"))
+
 	query := feed.Query{
 		Lat:      lat,
 		Lng:      lng,
 		Category: category,
 		Cursor:   cursor,
 		Limit:    limit,
+		Surface:  surface,
 	}
 
 	// Optional auth: a signed-in viewer gets block filtering and a durable
@@ -380,6 +397,36 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Overlay text, one call per provider for the whole page.
+	//
+	// Best-effort in the same way CTA resolution is: a provider that fails costs
+	// its reels their badge and product line, not the viewer their feed. Trading
+	// the product for its subtitle would be a poor exchange.
+	var summaries map[subject.Ref]subject.Summary
+	if h.Subjects != nil {
+		refs := make([]subject.Ref, 0, len(page.Items))
+		for _, it := range page.Items {
+			if it.SubjectType == nil || it.SubjectID == nil {
+				continue
+			}
+			refs = append(refs, subject.Ref{
+				Type: subject.Type(*it.SubjectType),
+				ID:   *it.SubjectID,
+			})
+		}
+		if len(refs) > 0 {
+			summaries, err = h.Subjects.SummarizePage(r.Context(), refs, subject.Viewer{
+				UserID:  viewerID,
+				Locale:  httpx.LocaleFromContext(r.Context()),
+				Country: "AE",
+			})
+			if err != nil {
+				logIfErr(r, "subject summary resolution failed", err)
+				summaries = nil
+			}
+		}
+	}
+
 	items := make([]map[string]any, 0, len(page.Items))
 	for _, it := range page.Items {
 		item := feedItemResponse(it)
@@ -389,15 +436,112 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 			"saved":    state.Saved[it.ID],
 			"followed": state.Followed[it.ID],
 		}
+		item["summary"] = nil
+		if it.SubjectType != nil && it.SubjectID != nil {
+			ref := subject.Ref{Type: subject.Type(*it.SubjectType), ID: *it.SubjectID}
+			if s, ok := summaries[ref]; ok {
+				item["summary"] = summaryResponse(s)
+			}
+		}
 		items = append(items, item)
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
 		"items":       items,
 		"next_cursor": nullable(page.NextCursor),
+		// Which tab produced this page. Echoed rather than assumed: the server
+		// defaults an unknown surface, so a client that asked for one we no
+		// longer serve needs to be told what it actually got — otherwise it
+		// labels a For you page as Live now.
+		"surface": string(surface),
+		// Why the page is empty, when it is. "Nothing is live right now" is a
+		// true statement about a working product; the generic empty state reads
+		// as a broken one, and the difference decides whether the viewer tries
+		// another tab or closes the app.
+		"empty_reason": emptyReason(surface, len(items)),
 		// The ranking configuration that produced this page. Returned so that
 		// "the feed looked wrong at 14:20" is answerable rather than debatable.
 		"ranking_profile": page.Profile,
 	})
+}
+
+// emptyReason names why a page is empty, or "" when it is not.
+//
+// Returned rather than left to the client to infer, because the client cannot:
+// "no reels" and "no reels *that are live*" are the same empty array, and only
+// the server knows which question was asked.
+func emptyReason(s feed.Surface, count int) any {
+	if count > 0 {
+		return nil
+	}
+	return s.EmptyReason()
+}
+
+// summaryResponse serialises the overlay text.
+//
+// Both languages travel together rather than the server picking one. The client
+// already knows its active locale, and a page fetched under one locale and
+// rendered under another is a real sequence on a device that changes language
+// without a cold start.
+func summaryResponse(s subject.Summary) map[string]any {
+	return map[string]any{
+		"badge":           s.Badge,
+		"badge_ar":        s.BadgeAr,
+		"title":           s.Title,
+		"title_ar":        s.TitleAr,
+		"line":            s.Line,
+		"line_ar":         s.LineAr,
+		"price_minor":     nullableInt(s.PriceMinor, s.Currency),
+		"currency":        nullable(s.Currency),
+		"price_suffix":    s.PriceSuffix,
+		"price_suffix_ar": s.PriceSuffixAr,
+	}
+}
+
+// nullableInt keeps "free" distinguishable from "no price".
+//
+// Zero minor units with a currency is free and is a real answer. Zero with no
+// currency means this subject has no price to show, and emitting it as 0 would
+// render every car in the feed at AED 0.00.
+func nullableInt(minor int64, currency string) any {
+	if currency == "" {
+		return nil
+	}
+	return minor
+}
+
+// timeSignalResponse serialises the time bar.
+//
+// Instants only. There is no rendered label here and there must never be one:
+// this response can be cached, the client can background for twenty minutes, and
+// the same bytes serve an English and an Arabic viewer whose digits differ.
+func timeSignalResponse(t *subject.TimeSignal) any {
+	if t == nil {
+		return nil
+	}
+	out := map[string]any{
+		"mode":      string(t.Mode),
+		"recurring": t.Recurring,
+		// The server's clock, stamped once for the whole page by the feed. The
+		// client subtracts its own clock from this to correct skew — without it
+		// a device four minutes fast renders a live auction as already closed
+		// and the viewer concludes the app is broken.
+		"as_of":           t.AsOf.UTC().Format(time.RFC3339),
+		"starts_at":       nullableTime(t.StartsAt),
+		"ends_at":         nullableTime(t.EndsAt),
+		"horizon_seconds": nil,
+		"timezone":        nullable(t.Timezone),
+	}
+	if t.Horizon > 0 {
+		out["horizon_seconds"] = int(t.Horizon.Seconds())
+	}
+	return out
+}
+
+func nullableTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 func actionsResponse(list []actions.Resolved) []map[string]any {
@@ -636,6 +780,11 @@ func feedItemResponse(it feed.Item) map[string]any {
 			"saves":    it.Counters.Saves,
 		},
 		"published_at": it.PublishedAt.Format(time.RFC3339),
+		// Present on every surface, not only the two that filter on it. A reel
+		// that reaches For you with a lot closing in four minutes should say so
+		// — making urgency a property of which tab you opened would be a
+		// rendering accident dressed up as a product decision.
+		"time_signal": timeSignalResponse(it.TimeSignal),
 		// Whether this slot was reserved for exploration rather than earned on
 		// score. Surfaced so the impression it produces can be told apart from
 		// an earned one — without that distinction, exploration's cost is

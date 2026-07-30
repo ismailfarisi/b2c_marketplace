@@ -29,10 +29,15 @@ class FeedApi(private val client: HttpClient) {
         cursor: String? = null,
         categoryId: String? = null,
         limit: Int = 10,
+        surface: FeedSurface = FeedSurface.ForYou,
     ): FeedPage = client.get("feed") {
         parameter("lat", lat)
         parameter("lng", lng)
         parameter("limit", limit)
+        // Always sent, including the default. The server treats an absent and an
+        // unrecognised value identically, so sending it explicitly costs nothing
+        // and makes a request log answer "which tab was this" without inference.
+        parameter("surface", surface.wire)
         cursor?.let { parameter("cursor", it) }
         categoryId?.let { parameter("category", it) }
     }.body()

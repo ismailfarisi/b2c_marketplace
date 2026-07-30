@@ -168,6 +168,51 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, "", tokenPairResponse(session))
 }
 
+// Logout revokes the session behind this token.
+//
+// The access token is a JWT verified locally, so it stays valid until it
+// expires — up to ACCESS_TOKEN_TTL after this call. What is revoked is the
+// refresh token, which is what stops the session outliving the sign-out. That
+// window is the price of not doing a database round-trip per request, and it is
+// bounded rather than open: fifteen minutes by default.
+//
+// `all_devices` exists for the case that matters — a lost phone — where signing
+// out one session is exactly the wrong outcome.
+func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+
+	var body struct {
+		AllDevices bool `json:"all_devices"`
+	}
+	// An absent body is valid per the contract and means "this session".
+	if r.ContentLength > 0 {
+		if err := httpx.DecodeJSON(r, &body); err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+	}
+
+	sessionID, ok := httpx.SessionIDFromContext(r.Context())
+	if !ok {
+		// No usable `sid`, so "this session" cannot be identified. Revoking
+		// everything is the safe reading of a sign-out: the alternative is
+		// telling the caller they are signed out while leaving the session that
+		// can mint new tokens alive.
+		body.AllDevices = true
+	}
+
+	if err := h.Identity.Logout(r.Context(), userID, sessionID, body.AllDevices); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- orders -----------------------------------------------------------------
 
 type createOrderBody struct {

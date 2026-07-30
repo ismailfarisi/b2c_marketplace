@@ -1,0 +1,52 @@
+/*
+   The overlay's words, mirroring androidApp/src/main/res/values/strings.xml.
+
+   Two copies rather than one, and the duplication is the honest cost of the KMM
+   split: strings live in each platform's resource system because that is what
+   gives Android its plurals rules and iOS its stringsdict, and a shared table
+   would reimplement both badly.
+
+   What is *not* duplicated is the arithmetic behind them. The numbers reach
+   these formats from ReelClock in `:shared`, so the two platforms can disagree
+   about wording and never about time.
+
+   Positional specifiers (%1$d) throughout, because the argument order is not the
+   same in every language and a bare %d cannot be reordered by a translator.
+*/
+
+"time_remaining_h" = "%1$dh %2$dm left";
+"time_remaining_ms" = "%1$02d:%2$02d left";
+"time_window" = "%1$dh %2$dm of %3$dh";
+"time_order_by" = "order by %1$02d:%2$02d";
+"time_closed" = "closed";
+
+/* Feed surfaces. Short by necessity: four tabs share one row. */
+"surface_for_you" = "For you";
+"surface_live_now" = "Live now";
+"surface_ending_soon" = "Ending soon";
+"surface_nearby" = "Nearby";
+
+/*
+   Empty states, one per surface.
+
+   Separate strings rather than one generic line, because they are separate
+   facts. "Nothing is live right now" describes a working product; the generic
+   version describes a broken one, and which the viewer believes decides whether
+   they try another tab or close the app.
+*/
+"empty_live" = "Nothing is live right now. Check back this evening.";
+"empty_closing" = "Nothing closes in the next few hours.";
+"empty_near" = "Nothing within walking distance yet.";
+"empty_eligible" = "Nothing is available at this location yet.";
+"feed_failed" = "Could not load the feed.";
+
+/*
+   Freshness. Flat rather than pluralised here: English needs a plural only for
+   the minute case, and the day/week forms are already abbreviated. A locale that
+   needs real plural rules gets a Localizable.stringsdict, which is the iOS
+   mechanism for it — not a second format string.
+*/
+"ago_minutes" = "listed %dm ago";
+"ago_hours" = "listed %dh ago";
+"ago_days" = "listed %dd ago";
+"ago_weeks" = "listed %dw ago";

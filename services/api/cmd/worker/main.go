@@ -36,6 +36,7 @@ import (
 	"github.com/marketplace/api/internal/modules/payouts"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/tax"
+	"github.com/marketplace/api/internal/modules/timesignal"
 	"github.com/marketplace/api/internal/modules/trust"
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/postgres"
@@ -90,7 +91,13 @@ func run() error {
 		defer rdb.Close()
 	}
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb, app.BuildRegistries(pool).Actions)
+	// One registry set for the process. This used to build a second one inline
+	// for BuildMedia; with a third seam on it that is two registries whose
+	// contents merely happen to agree, which is the kind of thing that stays
+	// true until the day someone registers a provider in one place.
+	registries := app.BuildRegistries(pool)
+
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
 	if err != nil {
 		return err
 	}
@@ -98,13 +105,12 @@ func run() error {
 	// The media pipeline runs on its own faster loop, in its own goroutine: it
 	// has a five-minute end-to-end budget (exit criterion #1) and must not
 	// queue behind a 30-second capacity sweep.
-	go runMediaLoop(ctx, pool, media)
+	go runMediaLoop(ctx, pool, media, timesignal.New(pool, registries.Subjects))
 
 	// The recurring loop, likewise separate. Its slowest job walks the
 	// impressions-scale fulfillment table; putting it in line ahead of the
 	// media pipeline would blow the upload-to-feed budget on days when a lot of
 	// subscriptions renew.
-	registries := app.BuildRegistries(pool)
 	go runSubscriptionLoop(ctx, pool, subscriptions.NewService(pool, registries.Verticals,
 		subscriptions.Config{
 			CommissionBP:    commissionBP,

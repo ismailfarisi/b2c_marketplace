@@ -8,14 +8,22 @@ import (
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/seam/action"
 	"github.com/marketplace/api/internal/seam/servicetype"
+	"github.com/marketplace/api/internal/seam/subject"
 	"github.com/marketplace/api/internal/verticals/laundry"
 	"github.com/marketplace/api/internal/verticals/meals"
 )
 
-// Registries holds the two seams, fully wired.
+// Registries holds the seams, fully wired.
 type Registries struct {
 	Actions   *action.Registry
 	Verticals *servicetype.Registry
+	// Subjects is the upstream seam's other half: what a reel is about, as the
+	// overlay is allowed to know it. Separate registry from Actions because the
+	// two answer different questions about the same reel — "what can I do here"
+	// and "when does this stop being true" — and a vertical can reasonably
+	// implement one without the other. A car has a CTA and a freshness signal; a
+	// follow button has a CTA and no time dimension at all.
+	Subjects *subject.Registry
 }
 
 // BuildRegistries registers every vertical and every platform-level action.
@@ -32,6 +40,7 @@ type Registries struct {
 func BuildRegistries(pool *pgxpool.Pool) Registries {
 	actions := action.NewRegistry()
 	verticals := servicetype.NewRegistry()
+	subjects := subject.NewRegistry()
 
 	// Platform-level kinds first — follow, share, open_menu, external. They
 	// belong to no vertical: deleting laundry must not delete the follow button.
@@ -91,5 +100,15 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	actions.Register(action.KindInquireListing, action.TargetListing,
 		vehicles.NewInquiryHandler(pool))
 
-	return Registries{Actions: actions, Verticals: verticals}
+	// The subject seam, same ownership rule: the module that owns the table owns
+	// the provider. Vehicles is the only vertical registered here today, and
+	// that is a statement about what has been built rather than about the
+	// design — a meal plan has a daily cutoff and a restaurant offer has a
+	// window, and both are one line each when their providers land.
+	//
+	// A subject type with no provider is legal and common. Its reels play, carry
+	// their CTAs, and render no badge and no countdown.
+	subjects.Register(subject.TypeListing, vehicles.NewSubjectProvider(pool))
+
+	return Registries{Actions: actions, Verticals: verticals, Subjects: subjects}
 }

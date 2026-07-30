@@ -13,6 +13,7 @@ import (
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/ranking"
+	"github.com/marketplace/api/internal/seam/subject"
 )
 
 // Item is one reel as the feed serves it.
@@ -57,6 +58,24 @@ type Item struct {
 	// to convert a served impression into a charged one; empty on organic
 	// items.
 	DeliveryID uuid.NullUUID
+
+	// TimeSignal is when the thing this reel is about stops being true, read
+	// from the projection the owning vertical writes. Nil for a reel with no
+	// time dimension, which is the majority and is a normal state.
+	//
+	// The feed carries it and never interprets it. There is no branch on Mode
+	// anywhere in this package — the two surfaces that care read EndsAt, which
+	// is an instant and not a vertical's business logic.
+	TimeSignal *subject.TimeSignal
+
+	// DistanceKM is the viewer's distance from the reel's origin point, nil when
+	// the reel has none.
+	//
+	// Already computed for ranking; lifted onto the item because SurfaceNearby
+	// orders by it. Not serialised — the client shows "2.1km" from its own
+	// geometry and a server-rendered distance would be wrong the moment the
+	// viewer walked anywhere.
+	DistanceKM *float64
 }
 
 type Rendition struct {
@@ -84,6 +103,12 @@ type Query struct {
 	Category *uuid.UUID
 	Cursor   Cursor
 	Limit    int
+
+	// Surface is which tab the viewer is on. Zero value is not valid — callers
+	// go through ParseSurface, which defaults rather than fails. Get treats an
+	// empty value as SurfaceForYou so that an internal caller constructing a
+	// Query by hand gets the ranked feed instead of no feed.
+	Surface Surface
 
 	// ViewerID is empty for anonymous browsing, which is supported: putting a
 	// login wall in front of the front door would be fatal to it.
@@ -236,6 +261,9 @@ func (s *Service) Get(ctx context.Context, q Query) (*Page, error) {
 	}
 	if q.Limit > maxLimit {
 		q.Limit = maxLimit
+	}
+	if q.Surface == "" {
+		q.Surface = SurfaceForYou
 	}
 
 	weights := s.weights.Weights(ctx)
@@ -471,6 +499,21 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		viewerKeyArg = q.ViewerKey
 	}
 
+	args := []any{
+		q.Lat, q.Lng, recencyWindow.Seconds(), categoryArg, exclude, viewerArg,
+		eligibleCap, freshQuota, followedQuota,
+		viewerKeyArg, affinityFloor, affinityQuota,
+		w.ExplorationImpressionFloor, exploreQuota,
+	}
+	// $15 appears only inside the ending-soon predicate. pgx prepares the
+	// statement from the SQL it is handed and rejects an argument the statement
+	// never declared, so it is appended exactly when the text that references it
+	// is present. Passing it unconditionally fails every other surface with an
+	// arity error, which is a good failure — loud and immediate — but a failure.
+	if q.Surface == SurfaceEndingSoon {
+		args = append(args, EndingSoonHorizon.Seconds())
+	}
+
 	rows, err := s.pool.Query(ctx, `
 		WITH viewer AS (
 		    SELECT ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography AS pt
@@ -479,9 +522,26 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		    -- The hard filters. Referenced four times below, which makes
 		    -- Postgres materialise it — deliberately: the geo scan is the
 		    -- expensive part and it should run once, not once per source.
-		    SELECT r.id, r.published_at, r.author_type, r.author_id, r.category_id
-		      FROM reels r, viewer v
+		    SELECT r.id, r.published_at, r.author_type, r.author_id, r.category_id,
+		           ts.ends_at
+		      FROM reels r
+		      CROSS JOIN viewer v
+		      -- The surface's narrowing happens here, inside the eligible CTE,
+		      -- rather than in each of the four sources below. One place, so a
+		      -- source added later cannot forget it — and a source that forgot
+		      -- it would leak a closed auction into the Live now tab, which is
+		      -- the single most obviously broken thing this feed could do.
+		      --
+		      -- LEFT rather than INNER even when the surface requires a signal:
+		      -- the predicate is what filters. A reel with no signal row yields
+		      -- NULL for the ends_at comparison, which is not true, so it drops
+		      -- out for Live now and Ending soon and survives for the other two,
+		      -- where the predicate is the constant true.
+		      LEFT JOIN reel_time_signals ts
+		             ON ts.subject_type = r.subject_type
+		            AND ts.subject_id = r.subject_id
 		     WHERE r.state = 'published'
+		       AND (`+q.Surface.candidatePredicate()+`)
 		       AND r.visibility = 'public'
 		       -- One predicate for both service-area polygons and radius
 		       -- listings, because coverage was resolved at publish time.
@@ -500,11 +560,11 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		                WHERE b.user_id = $6
 		                  AND b.blocked_type = r.author_type
 		                  AND b.blocked_id = r.author_id))
-		     ORDER BY r.published_at DESC
+		     ORDER BY `+q.Surface.eligibleOrder()+`
 		     LIMIT $7
 		),
 		fresh AS (
-		    SELECT id FROM eligible ORDER BY published_at DESC LIMIT $8
+		    SELECT id FROM eligible ORDER BY `+q.Surface.freshOrder()+` LIMIT $8
 		),
 		followed AS (
 		    SELECT e.id FROM eligible e
@@ -563,11 +623,22 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		       -- failure makes a pipeline bug look like a ranking decision.
 		       CASE WHEN r.origin_point IS NULL THEN NULL
 		            ELSE (ST_Distance(r.origin_point, v.pt) / 1000.0)::float8 END AS distance_km,
-		       EXTRACT(EPOCH FROM (now() - r.published_at))::float8 AS age_seconds
+		       EXTRACT(EPOCH FROM (now() - r.published_at))::float8 AS age_seconds,
+
+		       -- The time signal, joined for every surface and not only the two
+		       -- that filter on it. A countdown is what the overlay draws; a
+		       -- reel that reaches For you with a lot closing in four minutes
+		       -- should say so, and returning it only on the Live now tab would
+		       -- make urgency a property of which tab you happened to open.
+		       ts.mode, ts.starts_at, ts.ends_at, ts.horizon_seconds,
+		       ts.timezone, ts.recurring
 
 		  FROM candidate c
 		  JOIN reels r ON r.id = c.id
 		  CROSS JOIN viewer v
+		  LEFT JOIN reel_time_signals ts
+		         ON ts.subject_type = r.subject_type
+		        AND ts.subject_id = r.subject_id
 		  LEFT JOIN vendor_branches vb
 		         ON r.author_type = 'vendor_branch' AND vb.id = r.author_id
 		  LEFT JOIN reel_features rf ON rf.reel_id = r.id
@@ -585,11 +656,7 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		                 'bitrate_kbps', rr.bitrate_kbps, 'playlist_url', rr.playlist_url
 		             ) ORDER BY rr.bitrate_kbps), '[]') AS renditions
 		        FROM reel_renditions rr WHERE rr.reel_id = r.id
-		  ) rend ON true`,
-		q.Lat, q.Lng, recencyWindow.Seconds(), categoryArg, exclude, viewerArg,
-		eligibleCap, freshQuota, followedQuota,
-		viewerKeyArg, affinityFloor, affinityQuota,
-		w.ExplorationImpressionFloor, exploreQuota)
+		  ) rend ON true`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("feed retrieval: %w", err)
 	}
@@ -602,6 +669,15 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		var affinity float64
 		var distance *float64
 		var ageSeconds float64
+
+		// The time signal, all six columns nullable together: a reel whose
+		// subject has no projection row yields NULLs across the board, which is
+		// the common case and not an error.
+		var sigMode, sigTimezone *string
+		var sigStartsAt, sigEndsAt *time.Time
+		var sigHorizon *int32
+		var sigRecurring *bool
+
 		f := &c.features
 
 		if err := rows.Scan(&c.ID, &c.AuthorType, &c.AuthorID, &c.AuthorName,
@@ -616,6 +692,8 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 			&f.Author.Orders, &f.Author.Rejected, &f.Author.Takedowns,
 
 			&affinity, &c.Followed, &distance, &ageSeconds,
+			&sigMode, &sigStartsAt, &sigEndsAt, &sigHorizon,
+			&sigTimezone, &sigRecurring,
 		); err != nil {
 			return nil, fmt.Errorf("scan feed candidate: %w", err)
 		}
@@ -627,6 +705,35 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		f.DistanceKM = ranking.UnknownDistance
 		if distance != nil {
 			f.DistanceKM = *distance
+		}
+		c.DistanceKM = distance
+
+		// Mode is the discriminator: it is NOT NULL in the projection, so its
+		// presence is exactly "this subject has a signal". Checking any other
+		// column would be checking an optional one.
+		if sigMode != nil {
+			sig := &subject.TimeSignal{Mode: subject.Mode(*sigMode)}
+			if sigStartsAt != nil {
+				sig.StartsAt = *sigStartsAt
+			}
+			if sigEndsAt != nil {
+				sig.EndsAt = *sigEndsAt
+			}
+			if sigHorizon != nil {
+				sig.Horizon = time.Duration(*sigHorizon) * time.Second
+			}
+			if sigTimezone != nil {
+				sig.Timezone = *sigTimezone
+			}
+			if sigRecurring != nil {
+				sig.Recurring = *sigRecurring
+			}
+			// AsOf is stamped once for the whole page by Get, not here. Reading
+			// the clock per row would hand a page of reels a spread of "server
+			// now" values, and the client subtracts one of them from its own
+			// clock to correct skew — so the correction would differ by reel and
+			// two countdowns on the same page would disagree.
+			c.TimeSignal = sig
 		}
 		out = append(out, c)
 	}
@@ -647,11 +754,24 @@ func (s *Service) rank(candidates []candidate, q Query, w ranking.Weights) []Ite
 		return nil
 	}
 
+	// One clock for the page. Every countdown on it is measured against the same
+	// instant, and the same instant is stamped into every signal's AsOf, so the
+	// skew correction a client computes from any reel is valid for all of them.
+	now := time.Now().UTC()
+
 	var ranked, explore []Item
 	for _, c := range candidates {
 		item := c.Item
 		item.Score = ranking.Score(c.features, w)
-		if ranking.Eligible(c.features, w) {
+		// The surface says what "best" means, and then the existing machinery —
+		// exploration partition, per-author cap, interleave, spread — runs
+		// unchanged on top of it. See Surface.overrideScore for why this is a
+		// score override and not a re-sort of the finished page.
+		q.Surface.overrideScore(&item, now)
+		if item.TimeSignal != nil {
+			item.TimeSignal.AsOf = now
+		}
+		if q.Surface.reservesExploration() && ranking.Eligible(c.features, w) {
 			item.Explore = true
 			explore = append(explore, item)
 		} else {

@@ -20,9 +20,23 @@ configureApiClient({
     // A hard redirect rather than a router push. The refresh token is already
     // gone at this point, so every in-flight query is about to fail too, and
     // tearing the page down is the only state that is definitely consistent.
-    if (typeof window !== "undefined") {
-      window.location.href = "/";
+    if (typeof window === "undefined") return;
+
+    // Staff land on the console's own sign-in rather than the storefront, and
+    // keep where they were going. Sending a moderator whose session expired
+    // mid-shift to the customer home page makes them find the console again by
+    // hand, which for a 15-minute access token is several times a day.
+    const path = window.location.pathname;
+    const admin = /^\/(en|ar)\/admin(\/|$)/.exec(path);
+    if (admin) {
+      const login = `/${admin[1]}/admin/login`;
+      // Already there: the sign-in page's own calls must not bounce it.
+      if (path === login) return;
+      window.location.href = `${login}?next=${encodeURIComponent(path)}`;
+      return;
     }
+
+    window.location.href = "/";
   },
 });
 

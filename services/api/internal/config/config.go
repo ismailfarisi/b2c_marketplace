@@ -47,6 +47,10 @@ type Config struct {
 	OpenSearchURL   string
 	OpenSearchIndex string
 	FFProbeBinary   string
+	// FFmpegBinary is used only by the local transcode provider. Empty means
+	// "ffmpeg on PATH", which is right on a laptop and wrong in a container
+	// where the binary is pinned to a known build.
+	FFmpegBinary    string
 
 	// Phase 4: ranking, social, analytics warehouse.
 	//
@@ -147,6 +151,7 @@ func Load() (Config, error) {
 		OpenSearchURL:   optional("OPENSEARCH_URL", ""),
 		OpenSearchIndex: optional("OPENSEARCH_INDEX", "reels"),
 		FFProbeBinary:   optional("FFPROBE_BINARY", ""),
+		FFmpegBinary:    optional("FFMPEG_BINARY", ""),
 
 		ClickHouseURL:      optional("CLICKHOUSE_URL", ""),
 		ClickHouseDatabase: optional("CLICKHOUSE_DATABASE", "analytics"),

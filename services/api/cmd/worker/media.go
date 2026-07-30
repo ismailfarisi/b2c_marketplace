@@ -14,6 +14,7 @@ import (
 	"github.com/marketplace/api/internal/modules/ranking"
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/modules/search"
+	"github.com/marketplace/api/internal/modules/timesignal"
 )
 
 // mediaSweep advances every reel the pipeline still owes work to.
@@ -241,6 +242,27 @@ func indexReel(ctx context.Context, pool *pgxpool.Pool, indexer search.Indexer, 
 // mobile client that was offline delivers yesterday's batch this morning — and
 // an incremental counter cannot absorb that without double-counting. Yesterday
 // is recomputed every hour for a day so those stragglers land.
+// reconcileTimeSignals brings `reel_time_signals` back in line with the
+// verticals that own its rows: backfills subjects that have never been
+// projected, rolls recurring cutoffs past their instant, and re-projects
+// anything older than a day.
+//
+// Nil-safe. A deployment with no subject providers registered has nothing to
+// reconcile, and that is a coherent state rather than a misconfiguration.
+func reconcileTimeSignals(ctx context.Context, signals *timesignal.Projector) {
+	if signals == nil {
+		return
+	}
+	n, err := signals.Reconcile(ctx, 500)
+	if err != nil {
+		slog.ErrorContext(ctx, "time signal reconcile failed", "error", err)
+		return
+	}
+	if n > 0 {
+		slog.DebugContext(ctx, "time signals reconciled", "subjects", n)
+	}
+}
+
 func rollupFunnel(ctx context.Context, media *app.Media) {
 	if media == nil || media.Attribution == nil {
 		return
@@ -381,7 +403,7 @@ const rankingTick = 5 * time.Minute
 // than that, and the job re-folds a viewer's entire decayed history each run.
 const interestTick = 15 * time.Minute
 
-func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
+func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media, signals *timesignal.Projector) {
 	if media == nil {
 		slog.Info("media pipeline disabled: no object store configured")
 		return
@@ -392,6 +414,11 @@ func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 	startupCtx, cancelStartup := context.WithTimeout(ctx, 5*time.Minute)
 	ensureImpressionPartitions(startupCtx, pool)
 	rollupFunnel(startupCtx, media)
+	// Time signals at startup too, and this one matters most on a fresh
+	// deployment: every reel published before its vertical had a provider has no
+	// projection row, so without a backfill pass the Live now and Ending soon
+	// tabs are empty on a database full of eligible content.
+	reconcileTimeSignals(startupCtx, signals)
 	// Ranking too: a fresh deployment whose reel_features table is empty ranks
 	// every reel on its priors alone, which is a feed that ignores every signal
 	// it has until the first tick fires.
@@ -419,6 +446,11 @@ func runMediaLoop(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 			flushCounters(tickCtx, media)
 			flushAnalytics(tickCtx, media)
 			relayOutbox(tickCtx, pool, media.Indexer)
+			// On the media tick rather than a slower one. A recurring cutoff
+			// that has passed is a CTA the client believes is still open, and
+			// the window between "16:00 came and went" and "the projection says
+			// so" is a window in which the app takes orders it cannot fill.
+			reconcileTimeSignals(tickCtx, signals)
 			cancel()
 
 			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {

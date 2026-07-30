@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { adminSearch, getQueues, type QueueDepth, type SearchHit } from "@/lib/admin-api";
+import { SessionMenu } from "@/components/admin/session";
 
 /**
  * The console frame.
@@ -300,6 +301,12 @@ export function ConsoleShell({
               </>
             )}
           </div>
+
+          {/* Who is acting, next to the sign-out that ends it. Staff tooling is
+              used on machines several people touch across a shift, and a console
+              that never says whose account is open is how a decision gets
+              recorded against whoever logged in that morning. */}
+          <SessionMenu locale={locale} />
         </header>
 
         <div className="console-content">{children}</div>

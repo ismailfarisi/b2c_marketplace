@@ -21,7 +21,16 @@ func Authenticated(issuer *Issuer) func(http.Handler) http.Handler {
 				httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(httpx.WithUserID(r.Context(), userID)))
+			ctx := httpx.WithUserID(r.Context(), userID)
+			// Best-effort, and deliberately not fatal. A token whose `sid` does
+			// not parse is still a validly signed token for a real user, and
+			// refusing it would sign everyone out the moment the claim's shape
+			// changed. Only logout reads this, and it has its own answer for
+			// the claim being absent.
+			if sessionID, err := claims.SessionUUID(); err == nil {
+				ctx = httpx.WithSessionID(ctx, sessionID)
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

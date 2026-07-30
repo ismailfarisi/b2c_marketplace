@@ -78,6 +78,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		r.Use(auth.ReadOnlyWhenImpersonating(issuer))
 		r.Use(httpx.Idempotency(idem))
 
+		// Authenticated, unlike the three /auth routes above, because revoking
+		// a session requires proving you hold it.
+		r.Post("/auth/logout", h.Logout)
+
 		r.Post("/orders", h.CreateOrder)
 		r.Get("/orders/{orderId}", h.GetOrder)
 		r.Post("/orders/{orderId}/payment-intent", h.CreatePaymentIntent)

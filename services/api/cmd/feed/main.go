@@ -80,7 +80,12 @@ func run() error {
 		defer rdb.Close()
 	}
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb, app.BuildRegistries(pool).Actions)
+	// Built once and held: the action registry and the subject registry are both
+	// needed below, and calling BuildRegistries twice would give this process
+	// two registries whose contents happen to agree today.
+	registries := app.BuildRegistries(pool)
+
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
 	if err != nil {
 		return err
 	}
@@ -101,6 +106,11 @@ func run() error {
 		Reels:  media.Reels,
 		Feed:   media.Feed,
 		Boosts: boostSvc,
+		// The same argument as Actions below, one seam over: a feed served here
+		// without the subject registry would render reels with no badge and no
+		// product line, which is a different product from the one cmd/api
+		// serves at the same URL.
+		Subjects: registries.Subjects,
 		// Actions is what makes a feed served here identical to one served by
 		// cmd/api: the same registry, the same handlers, the same CTAs. A feed
 		// without it would render reels with no buttons, which is the whole

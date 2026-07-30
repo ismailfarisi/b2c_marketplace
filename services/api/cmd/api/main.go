@@ -277,6 +277,7 @@ func run() error {
 			Moderation:  media.Moderation,
 			Actions:     media.Actions,
 			Attribution: media.Attribution,
+			Subjects:    registries.Subjects,
 
 			Likes:     media.Likes,
 			Comments:  media.Comments,

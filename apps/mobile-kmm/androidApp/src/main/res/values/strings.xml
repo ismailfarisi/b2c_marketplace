@@ -1,4 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Marketplace</string>
+
+    <!--
+        The overlay's words.
+
+        Numbers reach these as format arguments rather than being concatenated in
+        Kotlin, which is what lets an Arabic translation use Arabic-Indic digits
+        and put the unit on the correct side. A string built as "$hours" + "h" in
+        code cannot be localised at all.
+    -->
+    <string name="time_remaining_h">%1$dh %2$dm left</string>
+    <string name="time_remaining_ms">%1$02d:%2$02d left</string>
+    <string name="time_window">%1$dh %2$dm of %3$dh</string>
+    <string name="time_order_by">order by %1$02d:%2$02d</string>
+    <string name="time_closed">closed</string>
+
+    <!-- Feed surfaces. Short by necessity: four tabs share one row. -->
+    <string name="surface_for_you">For you</string>
+    <string name="surface_live_now">Live now</string>
+    <string name="surface_ending_soon">Ending soon</string>
+    <string name="surface_nearby">Nearby</string>
+
+    <!--
+        Empty states, one per surface.
+
+        Separate strings rather than one generic line, because they are separate
+        facts. "Nothing is live right now" describes a working product; the
+        generic version describes a broken one, and which of those the viewer
+        believes decides whether they try another tab or close the app.
+    -->
+    <string name="empty_live">Nothing is live right now. Check back this evening.</string>
+    <string name="empty_closing">Nothing closes in the next few hours.</string>
+    <string name="empty_near">Nothing within walking distance yet.</string>
+    <string name="empty_eligible">Nothing is available at this location yet.</string>
+    <string name="feed_failed">Could not load the feed.</string>
+
+    <plurals name="ago_minutes">
+        <item quantity="one">listed %d minute ago</item>
+        <item quantity="other">listed %d minutes ago</item>
+    </plurals>
+    <plurals name="ago_hours">
+        <item quantity="one">listed %dh ago</item>
+        <item quantity="other">listed %dh ago</item>
+    </plurals>
+    <plurals name="ago_days">
+        <item quantity="one">listed %dd ago</item>
+        <item quantity="other">listed %dd ago</item>
+    </plurals>
+    <plurals name="ago_weeks">
+        <item quantity="one">listed %dw ago</item>
+        <item quantity="other">listed %dw ago</item>
+    </plurals>
 </resources>

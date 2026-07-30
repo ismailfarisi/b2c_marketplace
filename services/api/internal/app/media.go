@@ -95,7 +95,7 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 	if err != nil {
 		return nil, err
 	}
-	transcoder, err := buildTranscoder(cfg)
+	transcoder, err := buildTranscoder(cfg, store)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func buildProber(cfg config.Config) (media.Prober, error) {
 	return media.FFProbe{Binary: cfg.FFProbeBinary}, nil
 }
 
-func buildTranscoder(cfg config.Config) (media.TranscodeProvider, error) {
+func buildTranscoder(cfg config.Config, store *objectstore.Store) (media.TranscodeProvider, error) {
 	switch cfg.TranscodeVendor {
 	case "stub", "":
 		// The guard is here and not in a comment: a stub transcoder in
@@ -241,6 +241,22 @@ func buildTranscoder(cfg config.Config) (media.TranscodeProvider, error) {
 			return nil, fmt.Errorf("TRANSCODE_VENDOR=stub is not permitted in production")
 		}
 		return media.StubProvider{BaseURL: cfg.MediaCDNBaseURL}, nil
+	case "ffmpeg":
+		// Local encoding. Refused in production for a different reason than the
+		// stub: the output is real, but the job table is an in-memory map, so a
+		// worker restart strands every in-flight reel permanently.
+		if cfg.IsProduction() {
+			return nil, fmt.Errorf("TRANSCODE_VENDOR=ffmpeg is not permitted in production — " +
+				"its job state is in-memory and does not survive a restart")
+		}
+		// Store is attached by the caller, which has one. Returning a provider
+		// with a nil store and letting it fail on the first upload would put the
+		// error four minutes and one upload away from the misconfiguration.
+		return &media.FFmpegProvider{
+			Binary:  cfg.FFmpegBinary,
+			Store:   store,
+			BaseURL: cfg.MediaCDNBaseURL,
+		}, nil
 	default:
 		return nil, fmt.Errorf("transcode vendor %q is not implemented — "+
 			"implement media.TranscodeProvider and register it here", cfg.TranscodeVendor)

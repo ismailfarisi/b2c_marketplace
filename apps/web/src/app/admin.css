@@ -268,11 +268,139 @@
   50% { opacity: 0.25; }
 }
 
+/* Who is signed in, and the way out. Sits after .meta, hard against the inline
+   end — the one place in the bar that is never occupied by a page's own
+   controls, so it stays in the same spot on all seventeen screens. */
+.console-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline-start: 14px;
+  border-inline-start: 1px solid var(--a-border);
+}
+
+.console-session .who {
+  font-size: 12px;
+  color: var(--a-text-muted);
+  text-transform: capitalize;
+  max-inline-size: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .console-content {
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* ── sign-in and the gate ──────────────────────────────────────────────────── */
+
+/*
+ * Everything the console renders *before* it knows who you are: the sign-in
+ * form, the "checking" moment, and the refusal when an account holds no grant.
+ *
+ * One centred card with no sidebar, deliberately. The frame is the part that
+ * polls queue depths, and drawing it around a sign-in form would mean firing
+ * authenticated requests at someone whose whole problem is not being
+ * authenticated.
+ */
+.console-gate {
+  min-block-size: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--a-bg);
+  color: var(--a-text);
+}
+
+.console-gate-card {
+  inline-size: min(100%, 40ch);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px;
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow);
+}
+
+.console-gate-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.console-gate-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* The same brand block as the sidebar, including the environment badge. */
+.console-login-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.console-login-brand .env {
+  font-size: 11px;
+  font-weight: 550;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--a-surface-2);
+  color: var(--a-text-muted);
+}
+
+.console-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.console-login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.console-login-field > span {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--a-text-muted);
+}
+
+.console-login-field .field {
+  inline-size: 100%;
+}
+
+.console-login-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.console-login-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--a-danger);
+  background: var(--a-danger-soft);
+  padding: 8px 10px;
+  border-radius: var(--a-radius-sm);
+}
+
+.console-login-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--a-text-faint);
+  line-height: 1.5;
 }
 
 .console-lede {

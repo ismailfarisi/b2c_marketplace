@@ -22,6 +22,7 @@ const (
 	// disclosure the feature is built to prevent.
 	ctxKeyImpersonator ctxKey = "impersonator"
 	ctxKeyLocale       ctxKey = "locale"
+	ctxKeySessionID    ctxKey = "session_id"
 )
 
 // RequestID assigns every request a stable identifier, honouring an inbound
@@ -50,6 +51,21 @@ func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 
 func WithUserID(ctx context.Context, id uuid.UUID) context.Context {
 	return context.WithValue(ctx, ctxKeyUserID, id)
+}
+
+// WithSessionID names which of a user's sessions made this request.
+//
+// Carried separately from the user id because logout needs to revoke *this*
+// session and leave the others alone. Without it the only implementable
+// sign-out is all-devices, which signs a driver's phone out because someone
+// closed a browser tab in the office.
+func WithSessionID(ctx context.Context, id uuid.UUID) context.Context {
+	return context.WithValue(ctx, ctxKeySessionID, id)
+}
+
+func SessionIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(ctxKeySessionID).(uuid.UUID)
+	return id, ok
 }
 
 // WithImpersonator marks a request as being made through a view-as session

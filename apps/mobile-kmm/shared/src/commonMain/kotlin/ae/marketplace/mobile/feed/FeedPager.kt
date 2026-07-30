@@ -2,6 +2,8 @@ package ae.marketplace.mobile.feed
 
 import ae.marketplace.mobile.model.FeedItem
 import ae.marketplace.mobile.network.ApiException
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 
 /**
  * Cursor paging over the feed.
@@ -22,16 +24,51 @@ import ae.marketplace.mobile.network.ApiException
  *    infinite and irrelevant". A client that loops back to the top on exhaustion
  *    would be quietly rewriting that promise.
  */
+@OptIn(ExperimentalTime::class)
 class FeedPager(
     private val api: FeedApi,
     private val pageSize: Int = 10,
+    /**
+     * The device clock, injected so the skew sample is testable. Reading it
+     * directly here would make "does a fast device close the auction early"
+     * a question only a device can answer.
+     */
+    private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
     private val items = mutableListOf<FeedItem>()
     private var cursor: String? = null
     private var exhausted = false
     private var loading = false
+    private var skewSampled = false
 
     var rankingProfile: String? = null
+        private set
+
+    /**
+     * What the server said it served, and why the page was empty.
+     *
+     * Held here rather than derived by the caller because the pager is what
+     * touches the response. `servedSurface` can differ from the one requested —
+     * the server defaults a surface it does not recognise — and highlighting the
+     * requested tab instead would mislabel the page on any build that outlives a
+     * tab.
+     */
+    var servedSurface: FeedSurface = FeedSurface.ForYou
+        private set
+
+    var emptyReason: FeedEmptyReason? = null
+        private set
+
+    /**
+     * The server clock minus this device's, sampled when the first page of this
+     * surface landed and then held for as long as the surface is on screen.
+     *
+     * Sampled once, deliberately. ReelClock.skew's note has the detail: recompute
+     * it per tick and every countdown in the feed freezes at the value it had
+     * when the page loaded. Re-sampled on refresh, which is the only moment the
+     * device could have resynchronised without the app noticing.
+     */
+    var clockSkewMillis: Long = 0L
         private set
 
     fun snapshot(): List<FeedItem> = items.toList()
@@ -41,11 +78,17 @@ class FeedPager(
     /**
      * Loads the first page, discarding anything already held.
      */
-    suspend fun refresh(lat: Double, lng: Double, categoryId: String? = null): List<FeedItem> {
+    suspend fun refresh(
+        lat: Double,
+        lng: Double,
+        categoryId: String? = null,
+        surface: FeedSurface = FeedSurface.ForYou,
+    ): List<FeedItem> {
         items.clear()
         cursor = null
         exhausted = false
-        return loadNext(lat, lng, categoryId)
+        emptyReason = null
+        return loadNext(lat, lng, categoryId, surface)
     }
 
     /**
@@ -57,22 +100,29 @@ class FeedPager(
      * without the guard the client requests the same page three times and pays
      * for it three times.
      */
-    suspend fun loadNext(lat: Double, lng: Double, categoryId: String? = null): List<FeedItem> {
+    suspend fun loadNext(
+        lat: Double,
+        lng: Double,
+        categoryId: String? = null,
+        surface: FeedSurface = FeedSurface.ForYou,
+    ): List<FeedItem> {
         if (exhausted || loading) return emptyList()
         loading = true
         try {
             val page = try {
-                api.feed(lat, lng, cursor, categoryId, pageSize)
+                api.feed(lat, lng, cursor, categoryId, pageSize, surface)
             } catch (e: ApiException) {
                 if (!e.isStaleCursor) throw e
                 // Drop the cursor and start again rather than surfacing an
                 // error. The viewer's session is old, not broken.
                 cursor = null
                 items.clear()
-                api.feed(lat, lng, null, categoryId, pageSize)
+                api.feed(lat, lng, null, categoryId, pageSize, surface)
             }
 
             rankingProfile = page.rankingProfile
+            servedSurface = FeedSurface.fromWire(page.surface)
+            emptyReason = FeedEmptyReason.fromWire(page.emptyReason)
             cursor = page.nextCursor
             if (page.nextCursor == null || page.items.isEmpty()) exhausted = true
 
@@ -82,6 +132,18 @@ class FeedPager(
             // cost of the check is a set over one page.
             val known = items.mapTo(HashSet()) { it.id }
             val fresh = page.items.filter { known.add(it.id) }
+
+            // Skew from the first page that carried a signal, and only then.
+            // Later pages are ignored: a second sample taken thirty seconds into
+            // a session would shift every countdown already on screen by the
+            // difference between two measurements of the same thing.
+            if (!skewSampled) {
+                fresh.firstOrNull { it.timeSignal != null }?.timeSignal?.let {
+                    clockSkewMillis = ReelClock.skew(it, nowMillis())
+                    skewSampled = true
+                }
+            }
+
             items += fresh
             return fresh
         } finally {

@@ -23,6 +23,71 @@ export interface FeedAction {
   target_id: string;
 }
 
+/**
+ * How a reel's time bar and pill are rendered. Distinguished by what the viewer
+ * is being told, not by which fields are set:
+ *
+ *   countdown  this ends and is then gone      "02:04 left"
+ *   window     true between two times          "1h 48m of 3h"
+ *   freshness  has been true for a while       "listed 3d ago"
+ *   cutoff     act before the next boundary    "order by 16:00"
+ *
+ * A union rather than `string` so that adding a fifth mode is a compile error at
+ * every render site instead of a card that silently draws nothing.
+ */
+export type TimeMode = "countdown" | "window" | "freshness" | "cutoff";
+
+/**
+ * When the thing this reel is about stops being true.
+ *
+ * Instants only — there is no rendered label and there will not be one. A
+ * server-composed "02:04 left" is wrong by the time it is parsed, and the same
+ * response is served to an English and an Arabic reader whose digits differ.
+ *
+ * Render from `mode` alone. A `switch (item.subject_type)` in the overlay is the
+ * leak this shape exists to prevent.
+ */
+export interface TimeSignal {
+  mode: TimeMode;
+  /** Present for window and freshness; on a countdown it only gives the bar a denominator. */
+  starts_at: string | null;
+  /** Present for every mode but freshness. On a cutoff it is the *next* occurrence. */
+  ends_at: string | null;
+  /**
+   * The bar's denominator when the interval doesn't supply a useful one — an
+   * auction open for nine days needs a bar that moves during the two minutes
+   * anyone is watching.
+   */
+  horizon_seconds: number | null;
+  /** IANA name, present on cutoff. Format the wall time in this zone, not the browser's. */
+  timezone: string | null;
+  /** The boundary recurs: a passed cutoff rolls forward, an expired countdown does not. */
+  recurring: boolean;
+  /**
+   * Server clock at page build. Apply it: `skew = as_of - Date.now()`, computed
+   * once per page and added to every countdown on it. A machine four minutes
+   * fast shows a live auction as closed, and that reads as a broken product
+   * rather than a wrong clock.
+   */
+  as_of: string;
+}
+
+/** The badge over the video and the lines above the CTA, composed by the owning vertical. */
+export interface SubjectSummary {
+  badge: string;
+  badge_ar: string;
+  title: string;
+  title_ar: string;
+  /** Pre-joined, separators included. Splitting and re-joining gets the middot wrong in RTL. */
+  line: string;
+  line_ar: string;
+  /** Minor units. A null currency means no price to show — not the same as free. */
+  price_minor: number | null;
+  currency: string | null;
+  price_suffix: string;
+  price_suffix_ar: string;
+}
+
 export interface FeedItem {
   id: string;
   author: { type: string; id: string; name: string };
@@ -37,6 +102,10 @@ export interface FeedItem {
   explore: boolean;
   sponsored: boolean;
   delivery_id?: string;
+  /** Null for a reel with no time dimension. A normal state, not a degraded one. */
+  time_signal: TimeSignal | null;
+  /** Null when the subject type has no registered provider. */
+  summary: SubjectSummary | null;
 }
 
 export interface FeedPage {

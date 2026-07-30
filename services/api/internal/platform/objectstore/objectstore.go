@@ -15,6 +15,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 	"time"
@@ -133,6 +134,30 @@ func (s *Store) PresignDownload(ctx context.Context, key string, ttl time.Durati
 		return "", fmt.Errorf("objectstore: presign get: %w", err)
 	}
 	return req.URL, nil
+}
+
+// Put writes an object directly.
+//
+// The exception to this package's rule, and worth stating why it is allowed.
+// The rule — *the API never touches video bytes* — is about the **request
+// path**: a presigned URL keeps a slow uploader from pinning a handler
+// goroutine, and nothing about that reasoning applies to a worker that has just
+// produced a two-hundred-kilobyte HLS segment on its own disk.
+//
+// So this is for outputs, not inputs. Every caller is in the worker; nothing on
+// the request path may use it, and a handler that does has misread the comment
+// above.
+func (s *Store) Put(ctx context.Context, key, contentType string, body io.Reader) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		Body:        body,
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
+		return fmt.Errorf("objectstore: put %s: %w", key, err)
+	}
+	return nil
 }
 
 // uploadKey lays out `uploads/{ownerType}/{ownerID}/{random}.{ext}`.
