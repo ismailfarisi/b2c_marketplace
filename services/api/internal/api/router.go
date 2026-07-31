@@ -39,6 +39,11 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// feed is: a shared link to a car must open the car, not a login
 			// wall, and the reel is already visible to anyone scrolling.
 			r.Get("/feed/reels/{reelId}", h.Reels.FeedReel)
+			// The bid history. Public for the same reason the lot is: an auction
+			// nobody can see the bidding on is not an auction.
+			if h.Auctions != nil {
+				r.Get("/auctions/{auctionId}/bids", h.Auctions.BidHistory)
+			}
 			// Event ingest is here rather than behind auth for the same reason:
 			// anonymous viewing is a supported mode, and its engagement data is
 			// exactly what Phase 4's ranking needs. Rate limiting, not
@@ -156,6 +161,13 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// comments their own queue in Phase 4.
 			r.Get("/moderation/messages", h.Chat.Queue)
 			r.Post("/moderation/messages/{messageId}/decide", h.Chat.Decide)
+		}
+
+		if h.Auctions != nil {
+			// Bidding is the one action in this product that creates a binding
+			// obligation, so it is authenticated even though the reel it sits on
+			// is public.
+			r.Post("/auctions/{auctionId}/bid", h.Auctions.PlaceBid)
 		}
 
 		// Trust documents — a mulkiya, a Trakheesi permit.

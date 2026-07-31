@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/marketplace/api/internal/modules/auctions"
 	"github.com/marketplace/api/internal/modules/catalog"
 	"github.com/marketplace/api/internal/modules/offers"
 	"github.com/marketplace/api/internal/modules/property"
@@ -141,6 +142,16 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	actions.Register(action.KindClaimOffer, action.TargetFlashOffer,
 		offers.NewClaimHandler(pool))
 	subjects.Register(subject.TypeOffer, offers.NewSubjectProvider(pool))
+
+	// Plate auctions — the fourth time mode, and the last one to arrive.
+	//
+	// ModeCountdown has been in the seam since it was written and unexercised
+	// ever since; every other mode found a vertical first. This is the one its
+	// own Horizon comment was written about.
+	actions.Register(action.KindPlaceBid, action.TargetPlateAuction,
+		auctions.NewBidHandler(pool))
+	subjects.Register(subject.TypeAuction, auctions.NewSubjectProvider(pool))
+	subjects.RegisterOwner(subject.TypeAuction, auctions.NewOwnerCheck(pool))
 
 	// Property.
 	//

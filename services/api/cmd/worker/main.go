@@ -27,6 +27,7 @@ import (
 
 	"github.com/marketplace/api/internal/app"
 	"github.com/marketplace/api/internal/config"
+	"github.com/marketplace/api/internal/modules/auctions"
 	"github.com/marketplace/api/internal/modules/boosts"
 	"github.com/marketplace/api/internal/modules/classifieds"
 	"github.com/marketplace/api/internal/modules/dispatch"
@@ -122,6 +123,10 @@ func run() error {
 	// the three: its fraud detectors are the only jobs in this process where
 	// being late has a victim. Queueing them behind a capacity sweep or a
 	// subscription materialisation run would make the tick interval a fiction.
+	// Auctions run on their own, much tighter, loop. See auctionTick: a lot
+	// that closes late is taking bids after the hammer.
+	go runAuctionLoop(ctx, auctions.NewService(pool))
+
 	go runClassifiedsLoop(ctx, classifiedsJobs{
 		Listings: vehicles.NewRepository(pool),
 		Packages: classifieds.NewService(pool),

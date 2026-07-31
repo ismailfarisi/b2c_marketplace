@@ -58,6 +58,8 @@ const (
 	// TypeProperty is a regulated advertisement, which is what makes it a
 	// separate type rather than a second flavour of listing. See migration 000026.
 	TypeProperty Type = "property_listing"
+	// TypeAuction is a plate lot — the first and only user of ModeCountdown.
+	TypeAuction Type = "plate_auction"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

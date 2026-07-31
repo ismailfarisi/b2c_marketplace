@@ -29,6 +29,11 @@ const (
 	// "yes, before it closes", and a booking flow in front of that would lose the
 	// urgency the format exists to create.
 	KindClaimOffer Kind = "claim_offer"
+	// KindPlaceBid is an auction lot's CTA. Distinct from every other kind
+	// because it is the only one that is *binding* — a tap creates an
+	// obligation to pay, where a booking creates an order somebody still has to
+	// confirm and an enquiry creates a conversation.
+	KindPlaceBid Kind = "place_bid"
 	// KindEnquireProperty is deliberately not KindInquireListing.
 	//
 	// They look like the same verb and they are not the same act: a car enquiry
@@ -50,6 +55,7 @@ const (
 	TargetPlan         TargetType = "meal_plan"
 	TargetListing      TargetType = "vehicle_listing"
 	TargetFlashOffer   TargetType = "flash_offer"
+	TargetPlateAuction TargetType = "plate_auction"
 	TargetProperty     TargetType = "property_listing"
 	TargetVendorBranch TargetType = "vendor_branch"
 	TargetVendor       TargetType = "vendor"

@@ -59,6 +59,9 @@ type Handlers struct {
 	// which is what every deployment did until it existed.
 	Documents *DocumentHandlers
 
+	// Auctions is the plate vertical. Nil-safe like the rest.
+	Auctions *AuctionHandlers
+
 	// Sell is the authoring flow as a phone uses it. Nil until both the media
 	// stack and at least one composer exist — a Sell tab whose tile grid is
 	// empty is a tab that opens a camera and then has nowhere to put the video,

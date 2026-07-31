@@ -29,6 +29,7 @@ import (
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
 	"github.com/marketplace/api/internal/modules/attribution"
+	"github.com/marketplace/api/internal/modules/auctions"
 	"github.com/marketplace/api/internal/modules/boosts"
 	"github.com/marketplace/api/internal/modules/chat"
 	"github.com/marketplace/api/internal/modules/classifieds"
@@ -263,6 +264,7 @@ func run() error {
 	// The sell half of the subject seam, wired only in this process. See
 	// app.RegisterComposers for why cmd/feed and cmd/worker do not get it.
 	propertySvc := property.NewService(pool)
+	auctionSvc := auctions.NewService(pool)
 	app.RegisterComposers(registries, vehicleSvc, propertySvc)
 
 	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)
@@ -326,6 +328,7 @@ func run() error {
 			Chat:       chatSvc,
 			Moderation: media.Moderation,
 		}
+		handlers.Auctions = &api.AuctionHandlers{Auctions: auctionSvc}
 		handlers.Documents = &api.DocumentHandlers{
 			Documents:  documents.NewService(pool, media.Store),
 			Moderation: media.Moderation,
