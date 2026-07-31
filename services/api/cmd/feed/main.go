@@ -85,7 +85,7 @@ func run() error {
 	// two registries whose contents happen to agree today.
 	registries := app.BuildRegistries(pool)
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)
 	if err != nil {
 		return err
 	}

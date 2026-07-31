@@ -357,12 +357,18 @@ type Registry struct {
 	// Provider because being visible in the feed and being sellable from a phone
 	// are independent capabilities. See Composer.
 	composers map[Type]Composer
+	// gates is the publish half — see Gate. A third map for the same reason
+	// composers is a second one: a vertical can be visible, sellable and
+	// separately reviewed in any combination, and folding these into Provider
+	// would force every vertical to implement capabilities two of them have.
+	gates map[Type]Gate
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
 		providers: make(map[Type]Provider),
 		composers: make(map[Type]Composer),
+		gates:     make(map[Type]Gate),
 	}
 }
 

@@ -164,6 +164,12 @@ private fun ReelPage(
             reelId = item.id,
             isActive = isActive,
             viewModel = viewModel,
+            // Drawn under the player until it reports a rendered frame. Without
+            // it a swipe reveals black for as long as a manifest fetch and a
+            // decode take, on the one screen whose whole promise is that the
+            // next thing is already there.
+            posterUrl = item.posterUrl,
+            lqip = item.lqip,
             modifier = Modifier.fillMaxSize(),
         )
 

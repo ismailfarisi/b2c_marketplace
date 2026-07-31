@@ -264,7 +264,7 @@ func run() error {
 	propertySvc := property.NewService(pool)
 	app.RegisterComposers(registries, vehicleSvc, propertySvc)
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)
 	if err != nil {
 		return err
 	}

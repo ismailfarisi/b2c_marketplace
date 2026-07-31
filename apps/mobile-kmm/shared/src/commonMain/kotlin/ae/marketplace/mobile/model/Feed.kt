@@ -54,6 +54,15 @@ data class FeedItem(
     val caption: String = "",
     @SerialName("duration_ms") val durationMs: Int = 0,
     @SerialName("poster_key") val posterKey: String = "",
+    /**
+     * The still, absolute and fetchable.
+     *
+     * Composed server-side rather than derived from [posterKey], which is the
+     * key alone and would need every client to hard-code the object store's
+     * hostname — then get it wrong in exactly one environment. Both are on the
+     * wire; the key is what the moderation tools want.
+     */
+    @SerialName("poster_url") val posterUrl: String = "",
     @SerialName("preview_key") val previewKey: String = "",
     /**
      * BlurHash or a base64 micro-thumb, inline. The feed paints this before any

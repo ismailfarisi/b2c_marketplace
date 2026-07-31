@@ -25,6 +25,7 @@ import (
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/platform/objectstore"
 	"github.com/marketplace/api/internal/platform/postgres"
+	"github.com/marketplace/api/internal/seam/subject"
 )
 
 type Runner struct {
@@ -36,6 +37,10 @@ type Runner struct {
 	prober     media.Prober
 	transcoder media.TranscodeProvider
 	moderator  moderation.Pipeline
+	// subjects answers whether the thing a reel is about is ready to be seen.
+	// Nil-safe: a nil registry answers ReadyNow for everything, which is the
+	// behaviour the pipeline had before publish gates existed.
+	subjects *subject.Registry
 }
 
 type Deps struct {
@@ -46,6 +51,7 @@ type Deps struct {
 	Prober     media.Prober
 	Transcoder media.TranscodeProvider
 	Moderator  moderation.Pipeline
+	Subjects   *subject.Registry
 }
 
 func NewRunner(d Deps) *Runner {
@@ -58,6 +64,7 @@ func NewRunner(d Deps) *Runner {
 		prober:     d.Prober,
 		transcoder: d.Transcoder,
 		moderator:  d.Moderator,
+		subjects:   d.Subjects,
 	}
 }
 
@@ -87,6 +94,11 @@ type asset struct {
 	Caption    string
 	PosterKey  string
 	State      reels.State
+	// SubjectType and SubjectID are what the reel is *about*, and the publish
+	// gate is the only job that reads them. Empty for a reel about nothing in
+	// particular, which is a legal state — the registry answers ReadyNow.
+	SubjectType string
+	SubjectID   uuid.UUID
 }
 
 func (r *Runner) loadAsset(ctx context.Context, reelID uuid.UUID) (asset, error) {
@@ -94,11 +106,14 @@ func (r *Runner) loadAsset(ctx context.Context, reelID uuid.UUID) (asset, error)
 	err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(re.media_asset_id, '00000000-0000-0000-0000-000000000000'::uuid),
 		       re.author_type, re.author_id, COALESCE(ma.s3_key, ''),
-		       COALESCE(re.caption, ''), COALESCE(re.poster_key, ''), re.state::text
+		       COALESCE(re.caption, ''), COALESCE(re.poster_key, ''), re.state::text,
+		       COALESCE(re.subject_type, ''),
+		       COALESCE(re.subject_id, '00000000-0000-0000-0000-000000000000'::uuid)
 		  FROM reels re
 		  LEFT JOIN media_assets ma ON ma.id = re.media_asset_id
 		 WHERE re.id = $1`, reelID,
-	).Scan(&a.AssetID, &a.AuthorType, &a.AuthorID, &a.S3Key, &a.Caption, &a.PosterKey, (*string)(&a.State))
+	).Scan(&a.AssetID, &a.AuthorType, &a.AuthorID, &a.S3Key, &a.Caption, &a.PosterKey, (*string)(&a.State),
+		&a.SubjectType, &a.SubjectID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return asset{}, httpx.ErrNotFound
 	}
@@ -324,6 +339,42 @@ func (r *Runner) Publish(ctx context.Context, reelID uuid.UUID) error {
 	a, err := r.loadAsset(ctx, reelID)
 	if err != nil {
 		return err
+	}
+
+	// Ask the subject before anything else.
+	//
+	// The media pipeline and a vertical's own review desk run independently and
+	// should — a moderator judges the video, a permit desk judges the advert —
+	// but the *publish* is where the two have to agree. Without this the reel
+	// reached the feed with its CTA greyed out and a reason underneath: the
+	// action seam behaving correctly over a reel that should not have been on
+	// screen at all.
+	ready, reason, err := r.subjects.Ready(ctx, subject.Type(a.SubjectType), a.SubjectID)
+	if err != nil {
+		// The gate could not answer. Returning the error leaves the reel at
+		// `approved`, which the sweep retries — the right outcome, because a
+		// database blip is not a decision about a listing.
+		return err
+	}
+	switch ready {
+	case subject.ReadyLater:
+		// Hold. Not a failure and deliberately not recorded as one: the reel is
+		// finished and correct, and the thing it is about will most likely be
+		// approved within the hour. `owedBy` in the worker sweep sees a reel at
+		// `approved` and names JobPublish again, so this is a retry loop with
+		// no extra machinery — the same one that already recovers a reel whose
+		// coverage was not resolvable on the first attempt.
+		slog.InfoContext(ctx, "reel held: its subject is not live yet",
+			"reel_id", reelID, "subject_type", a.SubjectType, "reason", reason)
+		return nil
+
+	case subject.ReadyNever:
+		// Recorded as a failure so the seller sees *why* on the Me screen,
+		// rather than a reel that sits in a state which looks like progress
+		// forever.
+		return postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+			return r.reelRepo.RecordFailure(ctx, tx, reelID, "subject_not_live", reason)
+		})
 	}
 
 	err = postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {

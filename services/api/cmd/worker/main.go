@@ -97,7 +97,7 @@ func run() error {
 	// true until the day someone registers a provider in one place.
 	registries := app.BuildRegistries(pool)
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)
 	if err != nil {
 		return err
 	}

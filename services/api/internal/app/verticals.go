@@ -111,6 +111,13 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	// A subject type with no provider is legal and common. Its reels play, carry
 	// their CTAs, and render no badge and no countdown.
 	subjects.Register(subject.TypeListing, vehicles.NewSubjectProvider(pool))
+	// And the publish gate: a reel about a car waits for the listing desk.
+	//
+	// Registered here rather than beside the composers because the *worker*
+	// runs the publish job and only cmd/api calls RegisterComposers. A gate
+	// registered in the wrong place is a gate that silently never applies,
+	// which is precisely the bug it exists to fix.
+	subjects.RegisterGate(subject.TypeListing, vehicles.NewPublishGate(pool))
 
 	// Meal plans — the first vertical to arrive *after* the subject seam was
 	// finished, and therefore the test of what the seam claimed.
@@ -142,6 +149,10 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	actions.Register(action.KindEnquireProperty, action.TargetProperty,
 		property.NewEnquiryHandler(pool))
 	subjects.Register(subject.TypeProperty, property.NewSubjectProvider(pool))
+	// The gate that matters most: an unpermitted property advert must not
+	// reach the feed, and a reel of a specific flat with its price on it is an
+	// advertisement whatever else it is.
+	subjects.RegisterGate(subject.TypeProperty, property.NewPublishGate(pool))
 
 	return Registries{Actions: actions, Verticals: verticals, Subjects: subjects}
 }

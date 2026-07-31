@@ -30,7 +30,6 @@ import (
 	"github.com/marketplace/api/internal/modules/social"
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/objectstore"
-	"github.com/marketplace/api/internal/seam/action"
 )
 
 // Media is the Phase 2 dependency graph, extended in Phase 3 with the action
@@ -67,7 +66,7 @@ type Media struct {
 // then runs without the media surface rather than failing to boot — a
 // deployment that only serves orders is a legitimate configuration, and the
 // alternative is that a missing bucket name takes down checkout.
-func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client, registry *action.Registry) (*Media, error) {
+func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client, registries Registries) (*Media, error) {
 	if cfg.S3Bucket == "" {
 		slog.Warn("media disabled: S3_BUCKET is not set")
 		return nil, nil
@@ -150,7 +149,7 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 	// The actions service borrows the reels service's branch authorisation
 	// rather than reimplementing it. Two copies of an authorisation rule is one
 	// too many, and the one that drifts is always the one nobody is watching.
-	m.Actions = actions.NewService(pool, registry, reelSvc.Repo())
+	m.Actions = actions.NewService(pool, registries.Actions, reelSvc.Repo())
 	m.Attribution = attribution.NewService(pool)
 
 	m.Likes = social.NewLikes(pool, counterOrNil(counters))
@@ -173,6 +172,9 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 		Prober:     prober,
 		Transcoder: transcoder,
 		Moderator:  moderation.Pipeline{Vision: vision, Text: text},
+		// The publish gate's source. Without this the pipeline publishes a
+		// reel regardless of whether the listing it advertises was approved.
+		Subjects: registries.Subjects,
 	})
 
 	return m, nil
