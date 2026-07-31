@@ -82,6 +82,7 @@ struct RootView: View {
     @State private var meViewModel: MeViewModel?
     @State private var signInViewModel: SignInViewModel?
     @State private var session: Session?
+    @State private var sellViewModel: SellViewModel?
 
     @State private var route: Route = .none
     @State private var focusOpen = false
@@ -208,6 +209,10 @@ struct RootView: View {
             }
         }
         .onChange(of: destination) { _, new in
+            // The sell flow's state holder goes when the tab does, taking the
+            // recorded clip with it.
+            if new != .sell { sellViewModel = nil }
+
             // Video stops when the viewer leaves the feed. Without this the reel
             // keeps decoding — and keeps its audio — under a screen that is not
             // showing it: a battery cost, and watch time credited to a reel
@@ -267,10 +272,24 @@ struct RootView: View {
                     }
                 )
             case .sell:
-                // The recorder is not built for iOS. Said rather than shown as
-                // an empty screen — a tab that silently does nothing reads as a
-                // crash.
-                NotBuiltYet(destination: .sell)
+                // Its state holder is created on entry and released on exit
+                // rather than living for the process: it holds the recorded
+                // clip in memory, and twenty megabytes kept alive after a
+                // seller abandoned the flow is twenty megabytes on the device
+                // class least able to spare it.
+                SellFlow(
+                    viewModel: sellViewModel ?? makeSellViewModel(),
+                    onLeave: { destinationRaw = Destination.feed.rawValue },
+                    onSeeFeed: {
+                        destinationRaw = Destination.feed.rawValue
+                        // The seller's reel is new supply at this location and
+                        // the feed they are returning to was built before it
+                        // existed. Refreshing is the difference between "See it
+                        // in the feed" showing it and sending them to look for
+                        // nothing.
+                        vm.refresh()
+                    }
+                )
             default:
                 EmptyView()
             }
@@ -301,6 +320,15 @@ struct RootView: View {
         case .none:
             EmptyView()
         }
+    }
+
+    /// Built on demand and released when the tab is left — see the note at the
+    /// call site. Returns a fresh one rather than nil so the view never has to
+    /// render an empty Sell tab while a constructor resolves.
+    private func makeSellViewModel() -> SellViewModel {
+        let created = env.sdk!.createSellViewModel()
+        Task { @MainActor in sellViewModel = created }
+        return created
     }
 
     private func handle(action: ResolvedAction, reelId: String, me: MeViewModel, title: String) {
