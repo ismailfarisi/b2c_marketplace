@@ -81,7 +81,9 @@ func (h *BidHandler) Resolve(ctx context.Context, a action.Action, v action.View
 		// Not an error and not a dead end: the viewer should come back. The
 		// clock above the button is already counting to exactly this moment.
 		res.Available = false
-		res.Reason = "Opens " + lot.OpensAt.Format("2 Jan, 15:04")
+		// The seller's wall clock, not the server's. Same reasoning as the
+		// settlement date — see marketZone.
+		res.Reason = "Opens " + lot.OpensAt.In(marketZone).Format("2 Jan, 15:04")
 		return res, nil
 
 	case !lot.Open(now):

@@ -21,6 +21,26 @@ import (
 // it grants is a lie.
 const auctionTick = 15 * time.Second
 
+// unsoldNoticeWindow bounds the unsold-notice scan.
+//
+// An hour: comfortably longer than any plausible outage of a fifteen-second
+// sweep, and short enough that the query stays an index range rather than a
+// scan of every lot the platform has ever run. The dedupe key stops the
+// duplicate messages; nothing but this stops the duplicate work.
+const unsoldNoticeWindow = time.Hour
+
+// auctionCommissionBP and auctionVATBP mirror the order path's numbers.
+//
+// Duplicated from cmd/api rather than shared, matching what the codebase
+// already does with these two constants — and that duplication is exactly why
+// the comment there says the commission model is still an open decision. When
+// it is settled, both move together or the platform earns different margins on
+// a meal and a plate.
+const (
+	auctionCommissionBP = 1_500 // 15%
+	auctionVATBP        = 500   // 5% UAE VAT on the platform's own commission
+)
+
 func runAuctionLoop(ctx context.Context, svc *auctions.Service) {
 	if svc == nil {
 		slog.Info("auctions disabled: no service configured")
@@ -45,8 +65,8 @@ func runAuctionLoop(ctx context.Context, svc *auctions.Service) {
 		case <-ticker.C:
 			// A short budget on purpose. If a sweep cannot finish in ten
 			// seconds something is badly wrong, and the right response is to
-			// let the next tick try rather than to pile ticks on top of a
-			// stuck query.
+			// let the next tick try rather than to pile ticks on top of a stuck
+			// query.
 			tickCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			sweepAuctions(tickCtx, svc)
 			cancel()
@@ -74,5 +94,19 @@ func sweepAuctions(ctx context.Context, svc *auctions.Service) {
 	}
 	if won > 0 || unsold > 0 {
 		slog.InfoContext(ctx, "auction lots closed", "won", won, "unsold", unsold)
+	}
+
+	// Settlement and the unsold notice run after the close and outside its
+	// urgency. A lot that settles a tick late costs nothing; a lot that closes
+	// a tick late is taking bids after the hammer — which is why these are not
+	// inside CloseDue.
+	if settled, err := svc.SettleClosed(ctx, auctionCommissionBP, auctionVATBP, 100); err != nil {
+		slog.ErrorContext(ctx, "auction settlement failed", "error", err)
+	} else if settled > 0 {
+		slog.InfoContext(ctx, "auction lots settled", "count", settled)
+	}
+
+	if _, err := svc.NotifyUnsold(ctx, now.Add(-unsoldNoticeWindow), 100); err != nil {
+		slog.ErrorContext(ctx, "auction unsold notice failed", "error", err)
 	}
 }

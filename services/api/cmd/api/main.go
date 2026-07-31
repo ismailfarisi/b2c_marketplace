@@ -7,6 +7,9 @@
 package main
 
 import (
+	// Embedded tzdata — see the note in cmd/worker.
+	_ "time/tzdata"
+
 	"context"
 	"errors"
 	"fmt"
@@ -264,7 +267,10 @@ func run() error {
 	// The sell half of the subject seam, wired only in this process. See
 	// app.RegisterComposers for why cmd/feed and cmd/worker do not get it.
 	propertySvc := property.NewService(pool)
-	auctionSvc := auctions.NewService(pool)
+	// The notifier matters on *this* side too, not only in the worker: the
+	// outbid message fires inside the bid transaction, which happens here.
+	auctionSvc := auctions.NewService(pool).WithNotifier(
+		app.AuctionNotifier{Notify: notifySvc})
 	app.RegisterComposers(registries, vehicleSvc, propertySvc)
 
 	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)

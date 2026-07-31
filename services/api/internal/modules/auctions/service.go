@@ -11,10 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/money"
 	"github.com/marketplace/api/internal/platform/postgres"
 )
 
-type Service struct{ pool *pgxpool.Pool }
+type Service struct {
+	pool *pgxpool.Pool
+	// notify is nil in a deployment without notifications, and every send site
+	// is guarded. An auction that runs and settles silently is a smaller
+	// product, not a broken one.
+	notify Notifier
+}
 
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
 
@@ -170,6 +177,30 @@ func (s *Service) Bid(ctx context.Context, auctionID, bidderID uuid.UUID, amount
 			auctionID, amountMinor, bidderID, closesAt,
 		); err != nil {
 			return fmt.Errorf("auctions: apply bid: %w", err)
+		}
+
+		// The person who just lost their lead is the one who most needs to
+		// know, and they are only knowable *here* — a moment later the row
+		// says somebody else is winning and the previous leader is gone.
+		//
+		// Inside the transaction, so a bid that rolls back does not announce
+		// itself. The dedupe key is the bid amount rather than the auction, so
+		// a bidder outbid three times is told three times: each one is a
+		// separate, actionable event, unlike a settlement which is one.
+		if a.CurrentBidder != nil && *a.CurrentBidder != bidderID.String() {
+			s.tell(ctx, tx, NotifyMessage{
+				UserID:      *a.CurrentBidder,
+				TemplateKey: "auction.outbid",
+				DedupeKey:   fmt.Sprintf("auction.outbid:%s:%d", auctionID, amountMinor),
+				Params: map[string]string{
+					"plate":  a.Plate(),
+					"amount": money.New(amountMinor, a.Currency).Major(),
+					// The number that would put them back in front, so the
+					// notification is one tap from being acted on.
+					"ask":    money.New(amountMinor+a.IncrementMinor, a.Currency).Major(),
+					"closes": closesAt.In(marketZone).Format("2 Jan, 15:04"),
+				},
+			})
 		}
 
 		a.CurrentMinor = &amountMinor

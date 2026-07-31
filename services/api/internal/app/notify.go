@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/config"
+	"github.com/marketplace/api/internal/modules/auctions"
 	"github.com/marketplace/api/internal/modules/driver"
 	"github.com/marketplace/api/internal/modules/notify"
 )
@@ -82,4 +83,32 @@ func (n DeliveryCodeNotifier) NotifyDeliveryCode(
 		// enqueue, and those share an attempt number.
 		DedupeKey: fmt.Sprintf("delivery-otp:%s:%d", in.FulfillmentID, in.Attempt),
 	})
+}
+
+// AuctionNotifier adapts notify.Service to auctions.Notifier.
+//
+// The same four-line adapter as DeliveryCodeNotifier, for the same reason: the
+// auction module declares the shape it needs and `notify` has never heard of
+// auctions. What crosses the boundary is a user id, a template key and a map of
+// strings — nothing about consent, locale or channel ladders, which are this
+// side's business.
+type AuctionNotifier struct{ Notify *notify.Service }
+
+func (n AuctionNotifier) Enqueue(ctx context.Context, tx pgx.Tx, m auctions.NotifyMessage) error {
+	userID, err := uuid.Parse(m.UserID)
+	if err != nil {
+		return fmt.Errorf("app: auction notify: %w", err)
+	}
+	_, err = n.Notify.Enqueue(ctx, tx, notify.Message{
+		UserID:      userID.String(),
+		TemplateKey: m.TemplateKey,
+		// Transactional throughout, and that is a consent decision rather than
+		// a convenience. Being outbid on a lot you are bidding on is not
+		// marketing — it is the state of a transaction you initiated, and a
+		// bidder who could switch it off would be switching off the auction.
+		Category:  notify.CategoryTransactional,
+		Params:    m.Params,
+		DedupeKey: m.DedupeKey,
+	})
+	return err
 }
