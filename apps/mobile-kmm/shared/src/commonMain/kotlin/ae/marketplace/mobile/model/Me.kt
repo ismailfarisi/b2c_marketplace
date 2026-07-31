@@ -117,6 +117,16 @@ data class SearchResult(
      * worth nothing.
      */
     val promoted: Boolean = false,
+    /**
+     * The listing's published reel, when it has one.
+     *
+     * Null for a listing created through the web form. The client opens the
+     * video when there is one and falls through to a conversation when there is
+     * not — going straight to chat for everything skipped the reel entirely, on
+     * the one surface where a buyer most wants to see the car before they ask
+     * about it.
+     */
+    @SerialName("reel_id") val reelId: String? = null,
 )
 
 @Serializable

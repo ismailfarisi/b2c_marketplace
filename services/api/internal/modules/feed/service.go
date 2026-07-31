@@ -467,6 +467,65 @@ func (s *Service) loadByIDs(ctx context.Context, filled []SponsoredItem) ([]Item
 	return out, nil
 }
 
+// One fetches a single reel by id, for a viewer who already knows which one
+// they want.
+//
+// # Why this is not "the feed with a where clause"
+//
+// The feed's job is to *choose*, and almost all of it — retrieval, ranking,
+// exploration slots, the seen-set, sponsored injection — is about choosing.
+// None of that applies when a viewer taps a row in Saved: they have already
+// chosen, and re-running the ranker over one row would be theatre.
+//
+// What does still apply is eligibility, and that is the whole reason this
+// method exists rather than the handler reading the row itself. A saved reel
+// can have been taken down, its subject can have sold, its author can have been
+// blocked. `published` and not deleted is the floor; anything below it must
+// 404 rather than play, because a reel that is out of the feed for a moderation
+// reason must be out of *every* surface.
+//
+// Deliberately not geo-filtered, which is the one place this differs from the
+// feed. Coverage decides who a reel is *shown* to unprompted; a viewer who
+// saved a car in Dubai and opened the app in Al Ain has not stopped being
+// entitled to look at it. The CTA still resolves against their location and
+// will refuse if the thing genuinely cannot reach them, which is the correct
+// place for that refusal.
+func (s *Service) One(ctx context.Context, reelID uuid.UUID) (Item, bool, error) {
+	items, err := s.loadByIDs(ctx, []SponsoredItem{{ReelID: reelID}})
+	if err != nil {
+		return Item{}, false, err
+	}
+	if len(items) == 0 {
+		return Item{}, false, nil
+	}
+
+	// `state` and `visibility`, which between them are the whole gate. There is
+	// no soft-delete column on reels — removal is the `removed` state, which
+	// `published` already excludes — so checking for one was a wrong guess that
+	// 500'd rather than failing open, which is at least the right direction.
+	var state, visibility string
+	err = s.pool.QueryRow(ctx,
+		`SELECT state::text, COALESCE(visibility, 'public') FROM reels WHERE id = $1`, reelID,
+	).Scan(&state, &visibility)
+	if err != nil {
+		return Item{}, false, fmt.Errorf("feed: reel state: %w", err)
+	}
+	// Visibility is checked here and not in the feed's own query, because the
+	// feed never retrieves a non-public reel in the first place — its candidate
+	// sources filter on it. This endpoint takes an id from a client, so it is
+	// the one path where an unlisted reel could be fetched by guessing.
+	if state != "published" || visibility != "public" {
+		return Item{}, false, nil
+	}
+
+	it := items[0]
+	// loadByIDs stamps a delivery id because its only caller until now was the
+	// sponsored path. This reel was not delivered as an ad, and leaving a
+	// fabricated id on it would attribute an organic view to a campaign.
+	it.DeliveryID = uuid.NullUUID{}
+	return it, true, nil
+}
+
 // candidate is one retrieved reel with its ranking features attached.
 type candidate struct {
 	Item

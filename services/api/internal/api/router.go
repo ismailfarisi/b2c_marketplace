@@ -35,6 +35,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// The feed itself. Anonymous viewers get it keyed by device;
 			// signed-in viewers additionally get block filtering.
 			r.Get("/feed", h.Reels.GetFeed)
+			// One reel, enriched the same way. Public for the same reason the
+			// feed is: a shared link to a car must open the car, not a login
+			// wall, and the reel is already visible to anyone scrolling.
+			r.Get("/feed/reels/{reelId}", h.Reels.FeedReel)
 			// Event ingest is here rather than behind auth for the same reason:
 			// anonymous viewing is a supported mode, and its engagement data is
 			// exactly what Phase 4's ranking needs. Rate limiting, not
@@ -470,6 +474,7 @@ func MountFeed(r chi.Router, h *ReelHandlers, issuer *auth.Issuer) {
 		r.Use(auth.Optional(issuer))
 
 		r.Get("/feed", h.GetFeed)
+		r.Get("/feed/reels/{reelId}", h.FeedReel)
 		r.Post("/events", h.SubmitEvents)
 		r.Get("/reels/{reelId}/comments", h.ListComments)
 		// The click endpoint belongs here too. It is on the same hot path as

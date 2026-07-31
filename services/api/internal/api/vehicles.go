@@ -73,6 +73,11 @@ func (h *VehicleHandlers) Search(w http.ResponseWriter, r *http.Request) {
 			// state, not a loading one.
 			"poster_url": mediaURL(h.MediaBase, v.PosterKey),
 			"lqip":       v.LQIP,
+			// Present only when the listing has a published reel. The client
+			// opens the video when there is one and falls through to a chat
+			// when there is not — a web-form listing with no footage should
+			// still be reachable.
+			"reel_id": nullableUUID(v.ReelID),
 		}
 		if v.DistanceM != nil {
 			item["distance_m"] = int64(*v.DistanceM)
@@ -694,4 +699,16 @@ func (h *VehicleHandlers) ListingQueue(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
+}
+
+// nullableUUID renders a NULL uuid as JSON null rather than as the zero uuid.
+//
+// "00000000-0000-0000-0000-000000000000" is a value a client will happily try
+// to fetch, and the 404 it gets back looks like a broken link rather than an
+// absent one.
+func nullableUUID(v uuid.NullUUID) any {
+	if !v.Valid {
+		return nil
+	}
+	return v.UUID
 }

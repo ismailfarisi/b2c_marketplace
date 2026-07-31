@@ -21,7 +21,6 @@ import (
 	"github.com/marketplace/api/internal/modules/ranking"
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/modules/social"
-	"github.com/marketplace/api/internal/seam/action"
 	"github.com/marketplace/api/internal/seam/subject"
 )
 
@@ -364,31 +363,18 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		reelIDs[i] = it.ID
 	}
 
-	// Resolve the CTAs for the whole page in one batch. This is the seam doing
-	// its job: the feed hands over (kind, target_type, target_id) triples and
-	// gets back labels, availability and routes without ever learning what a
-	// laundry offering is.
-	var resolved map[uuid.UUID][]actions.Resolved
-	if h.Actions != nil && len(reelIDs) > 0 {
-		resolved, err = h.Actions.ResolvePage(r.Context(), reelIDs, action.Viewer{
-			UserID:  viewerID,
-			Lat:     lat,
-			Lng:     lng,
-			Locale:  httpx.LocaleFromContext(r.Context()),
-			Country: "AE",
-		})
-		if err != nil {
-			// A CTA-resolution failure must not blank the feed. Reels still
-			// play; they simply render without buttons this request.
-			logIfErr(r, "action resolution failed", err)
-			resolved = nil
-		}
-	}
-
-	// Record the impression denominator. Phase 2 kept the seen-set in Redis and
-	// out of the serving path, which was right for serving and wrong for
-	// measurement: without a durable impression count, "conversion rate"
-	// quietly becomes orders-per-click — the flattering one.
+	// The impression denominator, which is the one piece of enrichment that
+	// belongs only to the feed.
+	//
+	// Phase 2 kept the seen-set in Redis and out of the serving path, which was
+	// right for serving and wrong for measurement: without a durable impression
+	// count, "conversion rate" quietly becomes orders-per-click — the
+	// flattering one.
+	//
+	// Recorded here rather than inside `enrich`, because an impression means
+	// "served to someone who did not ask for it" and the single-reel endpoint
+	// serves people who did. Counting those would inflate the denominator with
+	// the most engaged traffic on the platform.
 	//
 	// Best-effort. Losing an impression row costs accuracy on a metric; failing
 	// the request to protect that metric would cost the front door.
@@ -397,68 +383,9 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 			h.Actions.Repo().RecordImpressions(r.Context(), viewerKey, viewerID, "feed", reelIDs))
 	}
 
-	// Whether this viewer has already liked, saved or followed each item, in one
-	// query for the page. Rendered by the client as a filled heart, so it is
-	// answered from the relation tables and never from a counter — a counter is
-	// a badge and being 3% low for ten seconds costs nothing, while a heart that
-	// un-fills when you scroll away and back is immediately wrong to the one
-	// person who knows the answer.
-	var state social.ViewerState
-	if h.Likes != nil && len(reelIDs) > 0 {
-		state, err = h.Likes.StateFor(r.Context(), viewerID, reelIDs)
-		if err != nil {
-			logIfErr(r, "viewer state lookup failed", err)
-		}
-	}
-
-	// Overlay text, one call per provider for the whole page.
-	//
-	// Best-effort in the same way CTA resolution is: a provider that fails costs
-	// its reels their badge and product line, not the viewer their feed. Trading
-	// the product for its subtitle would be a poor exchange.
-	var summaries map[subject.Ref]subject.Summary
-	if h.Subjects != nil {
-		refs := make([]subject.Ref, 0, len(page.Items))
-		for _, it := range page.Items {
-			if it.SubjectType == nil || it.SubjectID == nil {
-				continue
-			}
-			refs = append(refs, subject.Ref{
-				Type: subject.Type(*it.SubjectType),
-				ID:   *it.SubjectID,
-			})
-		}
-		if len(refs) > 0 {
-			summaries, err = h.Subjects.SummarizePage(r.Context(), refs, subject.Viewer{
-				UserID:  viewerID,
-				Locale:  httpx.LocaleFromContext(r.Context()),
-				Country: "AE",
-			})
-			if err != nil {
-				logIfErr(r, "subject summary resolution failed", err)
-				summaries = nil
-			}
-		}
-	}
-
-	items := make([]map[string]any, 0, len(page.Items))
-	for _, it := range page.Items {
-		item := feedItemResponse(it, h.MediaBase)
-		item["actions"] = actionsResponse(resolved[it.ID])
-		item["viewer"] = map[string]any{
-			"liked":    state.Liked[it.ID],
-			"saved":    state.Saved[it.ID],
-			"followed": state.Followed[it.ID],
-		}
-		item["summary"] = nil
-		if it.SubjectType != nil && it.SubjectID != nil {
-			ref := subject.Ref{Type: subject.Type(*it.SubjectType), ID: *it.SubjectID}
-			if s, ok := summaries[ref]; ok {
-				item["summary"] = summaryResponse(s)
-			}
-		}
-		items = append(items, item)
-	}
+	// CTAs, viewer state and subject summaries — shared with the single-reel
+	// endpoint so the two cannot drift. See ReelHandlers.enrich.
+	items := h.enrich(r, page.Items, viewerID, lat, lng)
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
 		"items":       items,
 		"next_cursor": nullable(page.NextCursor),

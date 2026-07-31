@@ -68,62 +68,68 @@ fun ReelSurface(
     var painted by remember(reelId) { mutableStateOf(false) }
 
     Box(modifier.background(Color.Black)) {
+        // The player first, the poster *over* it.
+        //
+        // The other order is the intuitive one and it does not work: a
+        // PlayerView's SurfaceView is opaque, so it paints black over anything
+        // drawn beneath it regardless of the shutter colour. The symptom was a
+        // reel whose poster rendered correctly in a list row and as a black
+        // rectangle in the player — and only sometimes, because it depended on
+        // whether the surface had attached yet.
+        //
+        // On top and removed on the first rendered frame is unambiguous: the
+        // poster is visible for exactly as long as there is no video to show.
+        if (player != null) {
+            DisposableEffect(player, reelId) {
+                val listener = object : Player.Listener {
+                    override fun onRenderedFirstFrame() {
+                        painted = true
+                    }
+                }
+                player.addListener(listener)
+                onDispose { player.removeListener(listener) }
+            }
+
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    PlayerView(context).apply {
+                        useController = false
+                        // Fill and crop. A vertical reel on a tall phone
+                        // letterboxed into a 16:9 box is the single most obvious
+                        // sign of a feed built by someone who did not watch it.
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    }
+                },
+                update = { view -> view.player = player },
+                onRelease = { view ->
+                    // Detach, never release. The player belongs to the shared
+                    // pool and is about to be reused for another reel; releasing
+                    // it here would destroy a decoder the coordinator still
+                    // thinks it owns.
+                    view.player = null
+                },
+            )
+        }
+
+        // Covers the surface until there is a frame — and stays forever for a
+        // reel whose renditions 404, which is every seeded row in this dev
+        // stack and, in production, any reel whose CDN is having a bad day. A
+        // still of the car is a far better failure than a black rectangle with
+        // a price floating on it.
         if (!painted) {
             Poster(
                 url = posterUrl.ifEmpty { null },
                 lqip = lqip.ifEmpty { null },
-                // Crop, matching the player's RESIZE_MODE_ZOOM. Any other scale
-                // here makes the poster jump to a different framing at the
-                // moment the first frame lands, which is more distracting than
-                // the black it replaced.
+                // Crop, matching RESIZE_MODE_ZOOM. Any other scale makes the
+                // poster jump to a different framing at the moment the first
+                // frame lands, which is more distracting than the black it
+                // replaced.
                 contentScale = ContentScale.Crop,
                 corner = 0.dp,
                 modifier = Modifier.fillMaxSize(),
             )
         }
-
-        if (player == null) {
-            // Outside the prefetch window. Not creating a decoder here is the
-            // point of the null: a surface that eagerly made its own player
-            // would defeat the pool and the egress policy in one line. The
-            // poster above still draws, so the reel is not a black hole while
-            // the viewer scrolls towards it.
-            return@Box
-        }
-
-        DisposableEffect(player, reelId) {
-            val listener = object : Player.Listener {
-                override fun onRenderedFirstFrame() {
-                    painted = true
-                }
-            }
-            player.addListener(listener)
-            onDispose { player.removeListener(listener) }
-        }
-
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                PlayerView(context).apply {
-                    useController = false
-                    // Fill and crop. A vertical reel on a tall phone letterboxed
-                    // into a 16:9 box is the single most obvious sign of a feed
-                    // built by someone who did not watch it.
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    // Transparent rather than black: the shutter is what covers
-                    // the surface before the first frame, and painting it black
-                    // would hide the poster this whole arrangement exists to
-                    // show.
-                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                }
-            },
-            update = { view -> view.player = player },
-            onRelease = { view ->
-                // Detach, never release. The player belongs to the shared pool
-                // and is about to be reused for another reel; releasing it here
-                // would destroy a decoder the coordinator still thinks it owns.
-                view.player = null
-            },
-        )
     }
 }

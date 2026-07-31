@@ -345,23 +345,50 @@ class MainActivity : ComponentActivity() {
                                     // different order is worse than one that is
                                     // not offered.
                                     hasLocation = feedState.lat != 0.0 || feedState.lng != 0.0,
-                                    // Straight into the conversation. A search
-                                    // result with no way to act on it is a
-                                    // catalogue, and this product's entire
+                                    // The video first when there is one.
+                                    //
+                                    // This went straight to a conversation for
+                                    // every result, which skipped the reel
+                                    // entirely — making the highest-intent
+                                    // surface in the product the one place you
+                                    // could not watch anything. A buyer wants to
+                                    // see the car before they message about it,
+                                    // and the reel carries its own CTA to the
+                                    // same thread.
+                                    //
+                                    // Listings created on the web have no reel,
+                                    // and those still open a conversation: a
+                                    // search result with no way to act on it is
+                                    // a catalogue, and this product's whole
                                     // conversion event is the message.
                                     onOpen = { result ->
-                                        if (authorised) {
-                                            it.inquire(result.id, result.title, null, null)
-                                            route = Route.Thread
-                                        } else {
-                                            destination = Destination.Me
+                                        // The keyboard goes with the screen.
+                                        // Leaving it up over a video is the
+                                        // kind of thing that looks like the tap
+                                        // did not register.
+                                        val reel = result.reelId
+                                        when {
+                                            reel != null -> current.openReel(reel)
+                                            !authorised -> destination = Destination.Me
+                                            else -> {
+                                                it.inquire(result.id, result.title, null, null)
+                                                route = Route.Thread
+                                            }
                                         }
                                     },
                                 )
                             }
 
                             Destination.Saved -> me?.let {
-                                SavedScreen(viewModel = it, onOpen = { destination = Destination.Feed })
+                                SavedScreen(
+                                    viewModel = it,
+                                    // The reel they kept, not the feed in
+                                    // general. This was the dead end that made
+                                    // the whole tab decorative: a bookmark that
+                                    // opens something else is the least useful
+                                    // possible answer to a bookmark.
+                                    onOpen = { saved -> current.openReel(saved.reelId) },
+                                )
                             }
 
                             Destination.Me -> me?.let {
@@ -409,6 +436,35 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        // One reel, over the tabs and under messaging.
+                        //
+                        // Under, because its CTA opens a thread and the thread
+                        // has to be on top of the reel that produced it. Over
+                        // the tabs, because the feed underneath must keep its
+                        // pager position — dismissing this returns the viewer to
+                        // where they were, not to the top of a new page.
+                        ReelDetail(
+                            viewModel = current,
+                            returnToIndex = 0,
+                            onActionPressed = { action, reelId ->
+                                if (action.kind == "inquire_listing" || action.kind == "enquire_property") {
+                                    val targetId = action.targetId ?: return@ReelDetail
+                                    if (!authorised) {
+                                        destination = Destination.Me
+                                        return@ReelDetail
+                                    }
+                                    meVm?.inquire(
+                                        listingId = targetId,
+                                        title = current.focused.value.item?.summary?.title.orEmpty(),
+                                        reelId = reelId,
+                                        actionId = action.id,
+                                    )
+                                    route = Route.Thread
+                                }
+                            },
+                            onClose = {},
+                        )
+
                         // Messaging, over everything.
                         if (me != null && route != Route.None) {
                             when (route) {
@@ -452,7 +508,12 @@ class MainActivity : ComponentActivity() {
                     // nav bar over "Publish" is a mis-tap that either loses the
                     // seller's work or publishes it early. Sell is modal: it
                     // leaves by its own ✕ or Done.
-                    if (destination != Destination.Sell && route == Route.None) {
+                    // Hidden during the sell flow, in messaging, and behind a
+                    // focused reel — all three are modal, and a floating nav bar
+                    // over a modal is a mis-tap that loses whatever the viewer was
+                    // doing.
+                    val focusedOpen = vm?.focused?.collectAsState()?.value?.open == true
+                    if (destination != Destination.Sell && route == Route.None && !focusedOpen) {
                         BottomNav(
                             selected = destination,
                             onSelect = { destination = it },

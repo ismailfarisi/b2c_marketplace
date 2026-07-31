@@ -258,6 +258,7 @@ func (f Filter) Build() (string, []any) {
 			                l.year || ' ' || mk.name || ' ' || md.name) AS title,
 			       l.emirate, l.city, l.published_at, l.bumped_at,
 			       (l.featured_until IS NOT NULL AND l.featured_until > now()) AS is_featured,
+			       rl.id                       AS reel_id,
 			       COALESCE(rl.poster_key, '') AS poster_key,
 			       COALESCE(rl.lqip, '')       AS lqip,
 			       %s AS distance_m
@@ -281,7 +282,7 @@ func (f Filter) Build() (string, []any) {
 			  -- blank the thumbnail of a listing that has a perfectly good older
 			  -- one.
 			  LEFT JOIN LATERAL (
-			      SELECT poster_key, lqip FROM reels
+			      SELECT id, poster_key, lqip FROM reels
 			       WHERE subject_type = 'vehicle_listing' AND subject_id = l.id
 			         AND state = 'published'
 			       ORDER BY published_at DESC NULLS LAST
@@ -307,7 +308,7 @@ func (f Filter) Build() (string, []any) {
 		       COALESCE(l.emirate, ''), COALESCE(l.city, ''),
 		       l.published_at, l.distance_m,
 		       (l.is_featured AND l.featured_rank <= %d) AS promoted,
-		       l.poster_key, l.lqip,
+		       l.poster_key, l.lqip, l.reel_id,
 		       count(*) OVER () AS total
 		  FROM ranked l
 		 ORDER BY (l.is_featured AND l.featured_rank <= %d) DESC, %s, l.id

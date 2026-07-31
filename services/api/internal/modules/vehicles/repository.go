@@ -90,6 +90,14 @@ type Result struct {
 	// client falls back to a flat block rather than a spinner.
 	PosterKey string
 	LQIP      string
+	// ReelID is the video this card is a still from, when there is one.
+	//
+	// Carried so a search result can open the reel rather than only a chat.
+	// Search used to go straight from a row to a conversation, skipping the
+	// video entirely — on a platform whose whole premise is that people decide
+	// by watching, which made the highest-intent surface the one place you
+	// could not watch anything.
+	ReelID uuid.NullUUID
 }
 
 // ResolveTaxonomy turns the slugs a client sends into ids.
@@ -324,7 +332,7 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Result, int64, err
 			&v.Transmission, &v.FuelType, &v.BodyType, &v.RegionalSpec, &v.Colour,
 			&v.PriceMinor, &v.Currency, &v.IsNegotiable, &v.Title,
 			&v.Emirate, &v.City, &v.PublishedAt, &v.DistanceM, &v.Promoted,
-			&v.PosterKey, &v.LQIP, &total,
+			&v.PosterKey, &v.LQIP, &v.ReelID, &total,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan listing: %w", err)
 		}

@@ -2,6 +2,7 @@ package ae.marketplace.mobile.feed
 
 import ae.marketplace.mobile.model.EventBatch
 import ae.marketplace.mobile.model.FeedFilters
+import ae.marketplace.mobile.model.FeedItem
 import ae.marketplace.mobile.model.FeedPage
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -23,6 +24,20 @@ import io.ktor.http.contentType
  * every caller and eventually someone would default them.
  */
 class FeedApi(private val client: HttpClient) {
+
+    /**
+     * One reel, enriched the same way a feed page is.
+     *
+     * The location is optional here, unlike [feed], and the asymmetry is the
+     * point: "what is near me" has no answer without a point, while "show me
+     * the car I saved" has the same answer everywhere. The coordinates only
+     * affect whether the CTA can say it does not reach you.
+     */
+    suspend fun reel(reelId: String, lat: Double?, lng: Double?): FeedItem =
+        client.get("feed/reels/$reelId") {
+            lat?.let { parameter("lat", it) }
+            lng?.let { parameter("lng", it) }
+        }.body()
 
     suspend fun feed(
         lat: Double,

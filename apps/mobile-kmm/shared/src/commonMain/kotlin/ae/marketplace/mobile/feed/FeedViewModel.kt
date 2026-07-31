@@ -1,6 +1,8 @@
 package ae.marketplace.mobile.feed
 
 import ae.marketplace.mobile.model.FeedItem
+import ae.marketplace.mobile.network.Failure
+import ae.marketplace.mobile.network.toFailure
 import ae.marketplace.mobile.model.Vertical
 import ae.marketplace.mobile.model.ClientEvent
 import ae.marketplace.mobile.events.EventQueue
@@ -67,6 +69,22 @@ data class FeedUiState(
 )
 
 /**
+ * One reel, opened deliberately rather than served.
+ *
+ * [reelId] outlives [item] on purpose: it is set the moment the viewer taps,
+ * before anything has been fetched, so a late response for a reel they have
+ * since dismissed can be recognised and dropped.
+ */
+data class FocusedReelState(
+    val reelId: String? = null,
+    val item: FeedItem? = null,
+    val loading: Boolean = false,
+    val error: Failure? = null,
+) {
+    val open: Boolean get() = reelId != null
+}
+
+/**
  * The feed's state, shared.
  *
  * `androidx.lifecycle.ViewModel` is multiplatform as of 2.8, so this class and
@@ -89,6 +107,17 @@ class FeedViewModel(
 
     private val _state = MutableStateFlow(FeedUiState())
     val state: StateFlow<FeedUiState> = _state.asStateFlow()
+
+    private val _focused = MutableStateFlow(FocusedReelState())
+
+    /**
+     * A single reel opened over the feed, or nothing.
+     *
+     * Separate from [state] rather than a nullable field on it, because every
+     * consumer of the feed's list state would otherwise recompose whenever this
+     * changed — including the pager, which has no interest in it.
+     */
+    val focused: StateFlow<FocusedReelState> = _focused.asStateFlow()
 
     private var lat: Double = 0.0
     private var lng: Double = 0.0
@@ -308,6 +337,76 @@ class FeedViewModel(
      * ever appears in common code.
      */
     fun playerFor(reelId: String) = playback.playerFor(reelId)
+
+    // ── One reel, on its own ─────────────────────────────────────────────────
+
+    /**
+     * Opens a single reel over the feed — the destination for a Saved row or a
+     * search result.
+     *
+     * # Why this lives on the feed's state holder
+     *
+     * It could have been its own view model, and that was the first instinct.
+     * It would also have meant a second [PlaybackCoordinator], which owns a
+     * pool of hardware decoders. On a mid-range Android device those are a
+     * genuinely scarce resource: a second pool held open behind the first is
+     * how the *next* video anywhere in the app fails to start, with no error
+     * that names the cause.
+     *
+     * So the focused reel borrows this coordinator. It is the same machinery,
+     * one item long, and the feed list underneath is untouched — which is the
+     * other half of the requirement, because a viewer who dismisses this must
+     * come back to where they were rather than to the top.
+     */
+    fun openReel(reelId: String) {
+        if (_focused.value.reelId == reelId && _focused.value.item != null) return
+
+        // The list is paused before the fetch, not after it. The coordinator
+        // would otherwise keep the feed's current reel playing — audio and all
+        // — underneath a screen that has already visually replaced it.
+        playback.onPause()
+
+        _focused.value = FocusedReelState(reelId = reelId, loading = true)
+        viewModelScope.launch {
+            runCatching { api.reel(reelId, lat.takeIf { it != 0.0 }, lng.takeIf { it != 0.0 }) }
+                .onSuccess { item ->
+                    // Guarded against a stale response: a viewer can dismiss
+                    // and open a different reel while the first is in flight,
+                    // and without this the first one wins by arriving second.
+                    if (_focused.value.reelId != reelId) return@onSuccess
+                    _focused.value = FocusedReelState(reelId = reelId, item = item)
+                    playback.onVisible(0, listOf(item))
+                }
+                .onFailure { e ->
+                    if (_focused.value.reelId != reelId) return@onFailure
+                    _focused.value = FocusedReelState(reelId = reelId, error = e.toFailure())
+                }
+        }
+    }
+
+    /**
+     * Closes it and hands playback back to the list.
+     *
+     * `onVisible` with the pager's own index rather than `onForeground`,
+     * because the coordinator's notion of "current" was moved to the focused
+     * reel and has to be moved back explicitly — otherwise the feed resumes
+     * with the wrong reel considered active and credits its watch time to a
+     * reel nobody is looking at.
+     */
+    fun closeReel(returnToIndex: Int) {
+        _focused.value = FocusedReelState()
+        val items = _state.value.items
+        if (items.isNotEmpty()) {
+            playback.onVisible(returnToIndex.coerceIn(0, items.lastIndex), items)
+        }
+    }
+
+    /** Retries a failed fetch, keeping the same target. */
+    fun retryReel() {
+        val id = _focused.value.reelId ?: return
+        _focused.value = FocusedReelState()
+        openReel(id)
+    }
 
     fun onAppBackgrounded() {
         playback.onPause()

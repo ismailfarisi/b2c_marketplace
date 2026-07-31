@@ -246,7 +246,13 @@ fun SearchScreen(
                     )
                 }
                 items(state.items, key = { it.id }) { result ->
-                    SearchRow(result) { onOpen(result) }
+                    SearchRow(result) {
+                        // Dismissed before navigating rather than after. A
+                        // keyboard left up over the destination reads as the
+                        // tap not having registered.
+                        keyboard?.hide()
+                        onOpen(result)
+                    }
                 }
                 if (state.loadingMore) {
                     item { LoadingBlock(inline = true) }
