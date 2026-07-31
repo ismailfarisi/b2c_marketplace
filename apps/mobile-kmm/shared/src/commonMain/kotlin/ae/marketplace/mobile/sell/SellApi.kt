@@ -105,6 +105,30 @@ class SellApi(
 
     suspend fun status(reelId: String): SellStatus =
         client.get("sell/reels/$reelId").body()
+
+    // ── Trust documents ──────────────────────────────────────────────────────
+
+    suspend fun requestDocumentUpload(
+        subjectType: String,
+        subjectId: String,
+        kind: String,
+        contentType: String,
+    ): DocumentUpload = client.post("documents/uploads") {
+        contentType(ContentType.Application.Json)
+        setBody(DocumentUploadRequest(subjectType, subjectId, kind, contentType))
+    }.body()
+
+    // Shares uploadVideo's client and its reasoning about presigned PUTs; only
+    // the name differs, and it differs because a caller reading `uploadVideo`
+    // for a mulkiya would reasonably wonder what it was doing.
+    suspend fun uploadDocument(url: String, headers: Map<String, String>, bytes: ByteArray) =
+        uploadVideo(url, headers, bytes)
+
+    suspend fun confirmDocument(documentId: String): TrustDocument =
+        client.post("documents/$documentId/confirm").body()
+
+    suspend fun documentsFor(subjectType: String, subjectId: String): TrustDocuments =
+        client.get("subjects/$subjectType/$subjectId/documents").body()
 }
 
 @Serializable
@@ -126,4 +150,41 @@ data class SellDraftRequest(
     val region: String = "",
     val place: String = "",
     @SerialName("content_type") val contentType: String = "video/mp4",
+)
+
+/**
+ * A presigned PUT for a trust document, and the row it belongs to.
+ *
+ * Deliberately the same shape as [SellDraft]'s upload fields. A document and a
+ * reel are both "here is a URL, put bytes at it, then tell us" — and the
+ * headers matter for the same reason in both: a presigned URL signs the headers
+ * it was created with, so omitting Content-Type produces a signature mismatch
+ * that reads like an auth failure and is not one.
+ */
+@Serializable
+data class DocumentUpload(
+    @SerialName("document_id") val documentId: String,
+    @SerialName("upload_url") val uploadUrl: String,
+    @SerialName("upload_headers") val uploadHeaders: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class TrustDocument(
+    val id: String,
+    val kind: String = "",
+    /** pending | uploaded | approved | rejected */
+    val status: String = "",
+    /** Why it was refused. Shown to the uploader, who otherwise re-sends the same photograph. */
+    val reason: String? = null,
+)
+
+@Serializable
+data class TrustDocuments(val items: List<TrustDocument> = emptyList())
+
+@Serializable
+private data class DocumentUploadRequest(
+    @SerialName("subject_type") val subjectType: String,
+    @SerialName("subject_id") val subjectId: String,
+    val kind: String,
+    @SerialName("content_type") val contentType: String,
 )

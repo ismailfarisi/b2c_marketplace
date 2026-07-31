@@ -1,5 +1,7 @@
 package ae.marketplace.mobile.sell
 
+import ae.marketplace.mobile.network.Failure
+import ae.marketplace.mobile.network.toFailure
 import ae.marketplace.mobile.model.ClockOption
 import ae.marketplace.mobile.model.SellForm
 import ae.marketplace.mobile.model.SellOption
@@ -105,6 +107,14 @@ data class SellUiState(
     val reviewNote: String = "",
     val upload: UploadPhase = UploadPhase.Idle,
     val status: SellStatus? = null,
+
+    // What the seller is selling, kept after the draft is created so the trust
+    // document has something to attach to. A document cannot be uploaded before
+    // this exists — there is no subject to attach it to — which is why the
+    // affordance lives on the Live screen and not on the form.
+    val subjectId: String? = null,
+    val subjectType: String = "",
+    val trust: TrustState = TrustState(),
 ) {
     /** The chosen clock, or the default the server marked. */
     val activeClock: ClockOption?
@@ -350,6 +360,11 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
             _state.value = _state.value.copy(
                 reelId = draft.reelId,
                 reviewNote = draft.reviewNote,
+                // Kept so the Live screen can attach a trust document. Until
+                // the draft exists there is no subject to attach one to, which
+                // is why the affordance is there and not on the form.
+                subjectId = draft.subjectId,
+                subjectType = draft.subjectType,
             )
 
             runCatching { api.uploadVideo(draft.uploadUrl, draft.uploadHeaders, bytes) }
@@ -494,7 +509,105 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
         super.onCleared()
     }
 
+    // ── The trust document ───────────────────────────────────────────────────
+
+    /**
+     * Uploads the mulkiya, the permit scan, whatever the vertical asked for.
+     *
+     * Three calls in the order the reel upload uses and for the same reasons:
+     * presign, PUT, confirm. The confirm is what makes the row real, and the
+     * server checks the object's size rather than believing the client —
+     * because a PUT that 403'd on a signature mismatch looks like a completed
+     * request from here.
+     *
+     * Only reachable once a draft exists. There is no subject to attach a
+     * document to before that, which is why the affordance is on the Live
+     * screen rather than beside the form that asks for it.
+     */
+    fun attachDocument(kind: String, contentType: String, bytes: ByteArray) {
+        val subjectId = _state.value.subjectId ?: return
+        val subjectType = _state.value.subjectType
+        if (subjectType.isEmpty()) return
+        if (_state.value.trust.phase == DocumentPhase.Uploading) return
+
+        _state.value = _state.value.copy(trust = TrustState(phase = DocumentPhase.Uploading))
+        viewModelScope.launch {
+            runCatching {
+                val up = api.requestDocumentUpload(subjectType, subjectId, kind, contentType)
+                api.uploadDocument(up.uploadUrl, up.uploadHeaders, bytes)
+                api.confirmDocument(up.documentId)
+            }
+                .onSuccess {
+                    // Submitted, not Done. A person still has to look at it, and
+                    // telling the seller their listing is Verified before that
+                    // happens is the same mistake as calling a reel live while
+                    // it is with a moderator.
+                    _state.value = _state.value.copy(
+                        trust = TrustState(phase = DocumentPhase.Submitted),
+                    )
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        trust = TrustState(phase = DocumentPhase.Failed, error = e.toFailure()),
+                    )
+                }
+        }
+    }
+
+    /**
+     * The picker returned something that could not be read.
+     *
+     * Its own entry point rather than a generic error setter, because the cause
+     * is specific and so is the remedy: a provider revoked access to the URI,
+     * usually after a rotation, and picking the file again fixes it.
+     */
+    fun onDocumentUnreadable() {
+        _state.value = _state.value.copy(
+            trust = TrustState(phase = DocumentPhase.Failed, error = Failure.Unknown),
+        )
+    }
+
+    /** Re-reads the document's state, so a decision shows up without a reinstall. */
+    fun refreshDocuments() {
+        val subjectId = _state.value.subjectId ?: return
+        val subjectType = _state.value.subjectType
+        if (subjectType.isEmpty()) return
+        viewModelScope.launch {
+            runCatching { api.documentsFor(subjectType, subjectId) }
+                .onSuccess { page ->
+                    // The newest that has not been superseded. The list carries
+                    // every attempt, because a reviewer looking at a second
+                    // document wants to know there was a first — but the seller
+                    // only cares about the live one.
+                    val live = page.items.firstOrNull {
+                        it.reason != SUPERSEDED
+                    } ?: return@onSuccess
+
+                    _state.value = _state.value.copy(
+                        trust = TrustState(
+                            phase = when (live.status) {
+                                "approved" -> DocumentPhase.Approved
+                                "rejected" -> DocumentPhase.Rejected
+                                "uploaded" -> DocumentPhase.Submitted
+                                else -> DocumentPhase.Idle
+                            },
+                            reason = live.reason,
+                        ),
+                    )
+                }
+        }
+    }
+
     private companion object {
+        /**
+         * The reason the server records when a seller re-uploads.
+         *
+         * Matched rather than parsed, and the string is the server's — a change
+         * on that side makes a superseded document reappear as a rejection with
+         * a confusing reason, which is a visible bug rather than a silent one.
+         */
+        const val SUPERSEDED = "replaced by a newer upload"
+
         const val LOOKUP_DEBOUNCE_MS = 220L
         const val POLL_INTERVAL_MS = 3_000L
         /**
@@ -513,3 +626,29 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
         )
     }
 }
+
+/**
+ * The trust document's own small state machine.
+ *
+ * Separate from [UploadPhase], which belongs to the video, because the two run
+ * at different times and fail independently: the video is uploading while the
+ * seller is still on the Live screen, and the mulkiya is picked afterwards. One
+ * enum for both would mean a failed document reporting itself as a failed reel.
+ */
+enum class DocumentPhase {
+    /** Nothing offered yet, or the seller has not picked a file. */
+    Idle,
+    Uploading,
+    /** Bytes are in, a reviewer has it. This is the resting state, not Done. */
+    Submitted,
+    Approved,
+    Rejected,
+    Failed,
+}
+
+data class TrustState(
+    val phase: DocumentPhase = DocumentPhase.Idle,
+    /** The refusal, in the reviewer's words. */
+    val reason: String? = null,
+    val error: Failure? = null,
+)

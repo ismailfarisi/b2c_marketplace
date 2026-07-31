@@ -30,6 +30,7 @@ fun SellFlow(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.start() }
 
@@ -68,6 +69,16 @@ fun SellFlow(
             )
 
             SellStep.Live -> LiveStep(
+                // The picker hands back a content:// URI; the bytes are read
+                // here because a ContentResolver is an Android type and the
+                // view model is shared code.
+                //
+                // Read whole rather than streamed. A document is capped at
+                // twenty megabytes server-side and is usually a phone
+                // photograph of one A4 page — streaming it would mean holding
+                // an InputStream across a suspend boundary for no saving, and
+                // the same call already reads a sixty-second video this way.
+                onPickDocument = { uri -> viewModel.attachPickedDocument(context, uri) },
                 state = state,
                 onRetry = viewModel::retryUpload,
                 onRetryPublish = viewModel::retryPublish,

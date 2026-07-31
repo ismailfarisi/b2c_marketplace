@@ -2,8 +2,16 @@ package ae.marketplace.mobile.android.sell
 
 import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.R
+import ae.marketplace.mobile.android.ui.Space
+import ae.marketplace.mobile.android.ui.words
+import ae.marketplace.mobile.model.TrustUpload
+import ae.marketplace.mobile.sell.DocumentPhase
 import ae.marketplace.mobile.sell.SellUiState
+import ae.marketplace.mobile.sell.TrustState
 import ae.marketplace.mobile.sell.UploadPhase
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -43,6 +52,7 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun LiveStep(
+    onPickDocument: (String) -> Unit,
     state: SellUiState,
     onRetry: () -> Unit,
     onRetryPublish: () -> Unit,
@@ -137,6 +147,27 @@ fun LiveStep(
                     color = Color.White.copy(alpha = 0.35f),
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 24.dp),
+                )
+            }
+
+            // The trust document, offered here rather than on the form.
+            //
+            // It could not be anywhere else: a document attaches to a subject,
+            // and the subject does not exist until the draft is created — which
+            // happens when the seller taps Publish. Asking earlier would mean
+            // holding the bytes in memory through three screens to attach them
+            // to a row that might never exist.
+            //
+            // It also happens to be the right moment. The seller has just
+            // finished and is looking at a screen that says their listing is
+            // with a reviewer; "add your mulkiya and earn Verified" is a useful
+            // thing to do with that minute, and it is the only minute they will
+            // ever be this engaged.
+            state.form?.trust?.let { trust ->
+                TrustDocumentRow(
+                    trust = trust,
+                    state = state.trust,
+                    onPick = onPickDocument,
                 )
             }
         }
@@ -249,5 +280,114 @@ private fun phaseOf(state: SellUiState): Phase {
             stringResource(R.string.sell_processing),
             stringResource(R.string.sell_processing_detail),
         )
+    }
+}
+
+/**
+ * "Add mulkiya to earn Verified", and a way to actually do it.
+ *
+ * This row existed from the first build of the sell flow and did nothing. It
+ * said so — "Document upload is not built yet" — which is better than a control
+ * that silently fails, and is still the product asking for something it cannot
+ * receive.
+ *
+ * # Why the states are what they are
+ *
+ * Five, and none of them says "Verified". The badge is the reviewer's to grant;
+ * this screen reports what has happened to the document, which is a different
+ * fact. Telling a seller they are Verified the moment bytes land is the same
+ * mistake as calling a reel live while it is with a moderator — and this one
+ * would be worse, because the badge is the thing a buyer trusts.
+ */
+@Composable
+private fun TrustDocumentRow(
+    trust: TrustUpload,
+    state: TrustState,
+    onPick: (String) -> Unit,
+) {
+    // The picker constrains itself to what the vertical accepts, which the
+    // server declared. No `image/*` wildcard: the reviewer's tooling cannot
+    // open a HEIC, and letting one through produces a document nobody can look
+    // at and a seller who is told, days later, to send it again.
+    val mimes = trust.accept.ifEmpty { listOf("image/jpeg", "image/png", "application/pdf") }
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { onPick(it.toString()) } }
+
+    Column(
+        Modifier
+            .padding(top = 24.dp)
+            .fillMaxWidth()
+            .border(1.dp, Line, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+    ) {
+        Text(trust.label, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+
+        when (state.phase) {
+            DocumentPhase.Uploading -> Text(
+                text = stringResource(R.string.trust_uploading),
+                color = Color.White.copy(alpha = 0.45f),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            DocumentPhase.Submitted -> Text(
+                text = stringResource(R.string.trust_submitted),
+                color = Color.White.copy(alpha = 0.45f),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            DocumentPhase.Approved -> Text(
+                // The only place the promised badge is named, and only once it
+                // is real.
+                text = stringResource(R.string.trust_approved, trust.earns),
+                color = Palette.Good,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            DocumentPhase.Rejected -> {
+                Text(
+                    // The reviewer's own words. A document refused with no
+                    // explanation is a seller who sends the same photograph
+                    // again, and then a third time.
+                    text = state.reason ?: stringResource(R.string.trust_rejected),
+                    color = Palette.Bad,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                TrustButton(R.string.trust_try_again) { picker.launch(mimes.toTypedArray()) }
+            }
+
+            DocumentPhase.Failed -> {
+                Text(
+                    text = state.error?.words() ?: stringResource(R.string.err_unknown),
+                    color = Palette.Bad,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                TrustButton(R.string.trust_try_again) { picker.launch(mimes.toTypedArray()) }
+            }
+
+            DocumentPhase.Idle ->
+                TrustButton(R.string.trust_choose) { picker.launch(mimes.toTypedArray()) }
+        }
+    }
+}
+
+@Composable
+private fun TrustButton(@StringRes label: Int, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .padding(top = 10.dp)
+            .border(1.dp, Accent.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .defaultMinSize(minHeight = Space.Touch)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(stringResource(label), color = Accent, fontSize = 13.sp)
     }
 }

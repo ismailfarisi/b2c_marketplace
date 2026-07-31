@@ -158,6 +158,25 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/moderation/messages/{messageId}/decide", h.Chat.Decide)
 		}
 
+		// Trust documents — a mulkiya, a Trakheesi permit.
+		//
+		// Authenticated throughout, including the read: a mulkiya carries a
+		// chassis number, an owner's name and an address, and the only people
+		// who ever see one are its uploader and a reviewer.
+		if h.Documents != nil {
+			r.Post("/documents/uploads", h.Documents.RequestDocumentUpload)
+			r.Post("/documents/{documentId}/confirm", h.Documents.ConfirmDocument)
+			r.Get("/subjects/{subjectType}/{subjectId}/documents", h.Documents.SubjectDocuments)
+
+			// A fourth review queue, beside reels, listings and messages. Its
+			// own for the reason each of the others is: judging whether a
+			// registration card matches a listing is a different skill from
+			// judging whether a video breaks the rules, and interleaving them
+			// buries the queue with a publish SLA on it.
+			r.Get("/moderation/documents", h.Documents.DocumentQueue)
+			r.Post("/moderation/documents/{documentId}/decide", h.Documents.DecideDocument)
+		}
+
 		// Phase 7 — logistics.
 		//
 		// The driver routes carry no branch or vendor in the path. Every one of

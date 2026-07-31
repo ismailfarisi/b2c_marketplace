@@ -118,6 +118,8 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	// registered in the wrong place is a gate that silently never applies,
 	// which is precisely the bug it exists to fix.
 	subjects.RegisterGate(subject.TypeListing, vehicles.NewPublishGate(pool))
+	// And who is allowed to attach a mulkiya to it.
+	subjects.RegisterOwner(subject.TypeListing, vehicles.NewOwnerCheck(pool))
 
 	// Meal plans — the first vertical to arrive *after* the subject seam was
 	// finished, and therefore the test of what the seam claimed.
@@ -153,6 +155,9 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	// reach the feed, and a reel of a specific flat with its price on it is an
 	// advertisement whatever else it is.
 	subjects.RegisterGate(subject.TypeProperty, property.NewPublishGate(pool))
+	// Sharper here than for a car: the permit is what makes an advert
+	// publishable, so attaching one to a stranger's advert would push it live.
+	subjects.RegisterOwner(subject.TypeProperty, property.NewOwnerCheck(pool))
 
 	return Registries{Actions: actions, Verticals: verticals, Subjects: subjects}
 }

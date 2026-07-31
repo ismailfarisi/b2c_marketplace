@@ -362,6 +362,10 @@ type Registry struct {
 	// separately reviewed in any combination, and folding these into Provider
 	// would force every vertical to implement capabilities two of them have.
 	gates map[Type]Gate
+	// owners answers "does this person own this thing" — see Owner. A fourth
+	// map on the same principle: visible, sellable, separately reviewed and
+	// attachable-to are four independent capabilities.
+	owners map[Type]Owner
 }
 
 func NewRegistry() *Registry {
@@ -369,6 +373,7 @@ func NewRegistry() *Registry {
 		providers: make(map[Type]Provider),
 		composers: make(map[Type]Composer),
 		gates:     make(map[Type]Gate),
+		owners:    make(map[Type]Owner),
 	}
 }
 

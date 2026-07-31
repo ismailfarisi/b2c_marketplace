@@ -92,6 +92,27 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 			// hosting would require wildcard DNS for `bucket.localhost`, which does
 			// not resolve.
 			o.UsePathStyle = cfg.ForcePathStyle
+
+			// Checksums only when the operation requires them, not whenever
+			// they are supported.
+			//
+			// aws-sdk-go-v2 changed this default in early 2025, and the effect
+			// on *presigned* URLs is that the signature starts covering a
+			// `x-amz-sdk-checksum-algorithm` header the SDK would have added
+			// itself. Nothing else sends that header — not a browser, not an
+			// Android upload, not curl — so every presigned PUT minted after
+			// the bump comes back 403 AccessDenied while the same credentials
+			// keep working for the API's own writes, which do send it.
+			//
+			// The symptom is genuinely misleading: uploads had worked, nothing
+			// in this file changed, and the only visible difference is a
+			// dependency version. It cost an hour of looking at hostnames and
+			// clock skew.
+			//
+			// WhenRequired keeps checksums on the operations that mandate them
+			// and off the presigned path.
+			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+			o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 		})
 	}
 
@@ -253,6 +274,23 @@ func extensionFor(contentType string) string {
 		return ".mov"
 	case "video/webm":
 		return ".webm"
+
+	// Documents — a mulkiya, a Trakheesi permit. Added when the trust slot
+	// gained somewhere to put one; before this, a document presign was refused
+	// here with "unsupported content type" and the caller had no idea the
+	// allow-list it tripped over was a video allow-list.
+	//
+	// Note what is still absent. `image/heic` is what an iPhone produces by
+	// default and is deliberately not here: the reviewer tooling cannot open
+	// one, so accepting it would produce documents nobody can look at. The
+	// client converts. `image/svg+xml` is not here because an SVG is a script.
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "application/pdf":
+		return ".pdf"
+
 	default:
 		return ""
 	}

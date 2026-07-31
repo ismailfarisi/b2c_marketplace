@@ -105,6 +105,20 @@
          the photograph is what cannot be attached yet. -->
     <string name="sell_trust_doc_later">You can attach the document later. The number above is enough to submit.</string>
 
+    <!--
+        The trust document, on the Live screen.
+        None of these says "Verified". The badge is the reviewer's to grant, and
+        naming it before that has happened is the same mistake as calling a reel
+        live while it is with a moderator — worse, because the badge is the one
+        thing a buyer trusts.
+    -->
+    <string name="trust_choose">Choose a file</string>
+    <string name="trust_uploading">Uploading…</string>
+    <string name="trust_submitted">Received. A person checks it before it counts.</string>
+    <string name="trust_approved">Approved — you have %1$s</string>
+    <string name="trust_rejected">Not accepted.</string>
+    <string name="trust_try_again">Choose another file</string>
+
     <!-- Field-level problems. The bound arrives as a number; the sentence is here
          so a translator can reach it. -->
     <string name="sell_field_required">Needed before you can publish.</string>

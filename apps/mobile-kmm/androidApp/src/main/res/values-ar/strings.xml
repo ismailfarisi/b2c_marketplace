@@ -96,6 +96,13 @@
     <string name="sell_trust_not_built">رفع المستندات غير متاح بعد.</string>
     <string name="sell_trust_doc_later">يمكنك إرفاق المستند لاحقاً. الرقم أعلاه كافٍ للإرسال.</string>
 
+    <string name="trust_choose">اختر ملفاً</string>
+    <string name="trust_uploading">جارٍ الرفع…</string>
+    <string name="trust_submitted">تم الاستلام. يراجعه شخص قبل اعتماده.</string>
+    <string name="trust_approved">تمت الموافقة — حصلت على %1$s</string>
+    <string name="trust_rejected">لم يُقبل.</string>
+    <string name="trust_try_again">اختر ملفاً آخر</string>
+
     <string name="sell_field_required">مطلوب قبل النشر.</string>
     <string name="sell_field_number">أرقام فقط.</string>
     <string name="sell_field_option">اختر أحد الخيارات.</string>

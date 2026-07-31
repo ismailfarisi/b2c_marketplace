@@ -199,7 +199,30 @@ func WriteJSON(w http.ResponseWriter, status int, contentType string, body any) 
 	if body == nil {
 		return
 	}
-	if err := json.NewEncoder(w).Encode(body); err != nil {
+
+	enc := json.NewEncoder(w)
+	// HTML escaping off.
+	//
+	// Go's encoder escapes `<`, `>` and `&` as `<`, `>` and `&`
+	// by default, so that a JSON document can be embedded in a <script> block
+	// without closing it. Nothing this API returns is ever embedded in HTML —
+	// it is consumed by two mobile clients and a fetch() call, all of which
+	// parse JSON properly — and the escaping actively costs something.
+	//
+	// The visible case is presigned URLs. Every one of them has five or six
+	// `&` separators, and they go out as `&`. Any real JSON parser decodes
+	// that correctly; anything that does not — a shell script, a log grep, a
+	// person copying a URL out of a response to reproduce a bug — gets a URL
+	// that 400s with "MissingFields" because the whole query string arrived as
+	// one parameter. That cost real time to diagnose *in this repository*, and
+	// the diagnosis was a wrong turn through clock skew and SDK checksums first.
+	//
+	// Turning it off is safe precisely because the reason for it does not apply.
+	// If a response ever does need to be inlined into a page, that page escapes
+	// it — which is where the decision belongs anyway.
+	enc.SetEscapeHTML(false)
+
+	if err := enc.Encode(body); err != nil {
 		// Headers are already out; the only thing left is to record it.
 		slog.Error("failed to encode response body", "error", err)
 	}

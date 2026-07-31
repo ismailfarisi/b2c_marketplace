@@ -34,6 +34,7 @@ import (
 	"github.com/marketplace/api/internal/modules/classifieds"
 	"github.com/marketplace/api/internal/modules/console"
 	"github.com/marketplace/api/internal/modules/dispatch"
+	"github.com/marketplace/api/internal/modules/documents"
 	"github.com/marketplace/api/internal/modules/driver"
 	"github.com/marketplace/api/internal/modules/identity"
 	"github.com/marketplace/api/internal/modules/invoicing"
@@ -324,6 +325,11 @@ func run() error {
 		handlers.Chat = &api.ChatHandlers{
 			Chat:       chatSvc,
 			Moderation: media.Moderation,
+		}
+		handlers.Documents = &api.DocumentHandlers{
+			Documents:  documents.NewService(pool, media.Store),
+			Moderation: media.Moderation,
+			Subjects:   registries.Subjects,
 		}
 		handlers.Me = &api.MeHandlers{
 			Actions:   media.Actions,
