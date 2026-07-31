@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -234,6 +235,20 @@ func (p *FFmpegProvider) run(ctx context.Context, args []string, stage string) e
 func (p *FFmpegProvider) upload(ctx context.Context, work, jobID string, rends []Rendition) (Result, error) {
 	prefix := path.Join("hls", jobID)
 
+	// The placeholder, from the poster ffmpeg just wrote.
+	//
+	// Best-effort: a failure here costs a blurred thumbnail, and failing the
+	// whole transcode over a decorative string would take down a video that is
+	// otherwise finished and correct. The client treats an empty hash as "no
+	// placeholder" and paints a flat block, which is what it did for every reel
+	// before this existed.
+	lqip, hashErr := EncodeBlurHash(filepath.Join(work, "poster.jpg"), PosterComponentsX, PosterComponentsY)
+	if hashErr != nil {
+		slog.WarnContext(ctx, "media: could not derive a placeholder from the poster",
+			"error", hashErr, "job", jobID)
+		lqip = ""
+	}
+
 	err := filepath.WalkDir(work, func(fullPath string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -273,11 +288,10 @@ func (p *FFmpegProvider) upload(ctx context.Context, work, jobID string, rends [
 		// nobody has scrolled to yet is bandwidth spent on a maybe. Left empty
 		// rather than faked so that "the preview is missing" stays visible.
 		PreviewKey: "",
-		// A real BlurHash needs the poster's pixels and a BlurHash encoder,
-		// neither of which belongs in a dev transcoder. Empty, so the client
-		// paints its own placeholder rather than decoding a string that is not
-		// one.
-		LQIP:       "",
+		// Derived from the poster above. Empty if that failed, which the client
+		// reads as "no placeholder" rather than trying to decode a string that
+		// is not one.
+		LQIP:       lqip,
 		DurationMS: 0,
 	}, nil
 }

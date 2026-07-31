@@ -148,9 +148,20 @@ func TestRestrictedListingsAreFilteredNotDemoted(t *testing.T) {
 	if !strings.Contains(sql, "trust_scores") {
 		t.Fatal("search must exclude restricted and blocked listings")
 	}
+	// LastIndex, not Index. The query now contains a correlated subquery for the
+	// poster that has an ORDER BY of its own, and the first one in the string is
+	// no longer the one this test is about — it was asserting that the trust
+	// filter appears before a subquery's ordering, which is a fact about nothing.
+	//
+	// The claim being made is that the trust check is a predicate rather than a
+	// ranking term, so what it must precede is the *outer* ORDER BY. Same
+	// reasoning as TestOrderingIsStable below, which already reads the tail.
 	idx := strings.Index(sql, "trust_scores")
-	if idx > strings.Index(sql, "ORDER BY") {
+	if idx > strings.LastIndex(sql, "ORDER BY") {
 		t.Fatal("the trust check belongs in WHERE, not in the ordering")
+	}
+	if strings.Contains(sql[strings.LastIndex(sql, "ORDER BY"):], "trust_scores") {
+		t.Fatal("trust appears in the ordering, where it would demote rather than exclude")
 	}
 }
 

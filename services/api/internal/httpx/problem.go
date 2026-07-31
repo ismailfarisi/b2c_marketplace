@@ -15,10 +15,25 @@ import (
 // Problem is RFC 9457 problem details. One error shape for the whole API, so
 // clients write one error handler instead of one per endpoint.
 type Problem struct {
-	Type      string       `json:"type"`
-	Title     string       `json:"title"`
-	Status    int          `json:"status"`
-	Detail    string       `json:"detail,omitempty"`
+	Type   string `json:"type"`
+	Title  string `json:"title"`
+	Status int    `json:"status"`
+	Detail string `json:"detail,omitempty"`
+	// Code is a stable machine-readable reason, for the cases where the status
+	// alone does not say enough to act on.
+	//
+	// Added for OTP verification, which is the clearest example of the problem:
+	// a wrong digit, a challenge that aged out, and a challenge whose attempts
+	// are exhausted are all 401, and a client that cannot tell them apart shows
+	// "wrong code" to someone who will never be allowed another guess. They are
+	// three different screens.
+	//
+	// Deliberately not a general-purpose enum. Most errors in this API are
+	// adequately described by their status plus, for a 422, their field errors —
+	// and a `code` on every response invites clients to branch on strings where
+	// a status would do. It is set only where a caller must genuinely behave
+	// differently, and every value is documented at the site that produces it.
+	Code      string       `json:"code,omitempty"`
 	Instance  string       `json:"instance,omitempty"`
 	RequestID string       `json:"request_id,omitempty"`
 	Errors    []FieldError `json:"errors,omitempty"`
@@ -48,6 +63,31 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string { return "validation failed" }
+
+// CodedError attaches a machine-readable [Problem.Code] to one of the sentinels
+// above, without changing which status that sentinel maps to.
+//
+// Wrapping rather than replacing, so `errors.Is(err, ErrUnauthorized)` keeps
+// working everywhere it already does — including in middleware and tests that
+// have no idea this type exists.
+type CodedError struct {
+	// Err must be, or wrap, one of the sentinels. It chooses the status.
+	Err error
+	// Code is the stable reason string. Keep these short, lowercase and
+	// snake_cased, and never reword one once a shipped client reads it.
+	Code string
+	// Detail is a sentence for a human, and is subject to the same rule as
+	// everywhere else here: never internals.
+	Detail string
+}
+
+func (e *CodedError) Error() string { return e.Code + ": " + e.Err.Error() }
+func (e *CodedError) Unwrap() error { return e.Err }
+
+// Coded wraps err with a reason code.
+func Coded(err error, code, detail string) error {
+	return &CodedError{Err: err, Code: code, Detail: detail}
+}
 
 // WriteProblem renders err as problem details, choosing the status from the
 // error's identity.
@@ -101,6 +141,17 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 		p.Status = http.StatusConflict
 		p.Title = "Conflict"
 		p.Detail = sentenceFor(err, ErrConflict)
+	}
+
+	// Applied after the switch, so the code rides along with whatever status the
+	// wrapped sentinel already chose rather than needing a case of its own for
+	// each combination.
+	var coded *CodedError
+	if errors.As(err, &coded) {
+		p.Code = coded.Code
+		if coded.Detail != "" {
+			p.Detail = coded.Detail
+		}
 	}
 
 	if p.Status >= 500 {

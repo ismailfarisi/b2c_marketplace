@@ -8,7 +8,13 @@ import ae.marketplace.mobile.android.me.ThreadScreen
 import ae.marketplace.mobile.android.sell.SellFlow
 import ae.marketplace.mobile.android.sell.SignInGate
 import ae.marketplace.mobile.feed.FeedViewModel
+import ae.marketplace.mobile.identity.Session
+import ae.marketplace.mobile.identity.SessionEnded
+import ae.marketplace.mobile.identity.SessionState
 import ae.marketplace.mobile.identity.SignInViewModel
+import ae.marketplace.mobile.identity.isAuthenticated
+import ae.marketplace.mobile.identity.isSettled
+import kotlinx.coroutines.flow.MutableStateFlow
 import ae.marketplace.mobile.me.MeViewModel
 import ae.marketplace.mobile.sell.SellViewModel
 import android.Manifest
@@ -159,11 +165,7 @@ class MainActivity : ComponentActivity() {
                 // re-fetch.
                 var meVm by remember { mutableStateOf<MeViewModel?>(null) }
                 var signInVm by remember { mutableStateOf<SignInViewModel?>(null) }
-                // Hoisted out of the Sell tab, where it started. Three of the
-                // five destinations need an account, and a gate that lives
-                // inside one of them makes the other two either duplicate it or
-                // 401 silently.
-                var authorised by rememberSaveable { mutableStateOf(false) }
+                var session by remember { mutableStateOf<Session?>(null) }
 
                 // Messaging is an overlay rather than a tab. It is reached from
                 // two places that are not each other — the Me screen and a CTA
@@ -178,6 +180,48 @@ class MainActivity : ComponentActivity() {
                         it.setLocation(fallback.lat, fallback.lng)
                     }
                     signInVm = sdk.createSignInViewModel()
+                    session = sdk.session
+                }
+
+                // The one answer to "is there an account behind this session".
+                //
+                // Replaces a `rememberSaveable` boolean that started `false`,
+                // which asked every returning viewer to sign in again while
+                // their refresh token sat unread on disk. Session.Unknown is
+                // why this is not simply a Boolean — see that class.
+                val sessionState by (session?.state ?: remember {
+                    MutableStateFlow<SessionState>(SessionState.Unknown)
+                }).collectAsState()
+                val authorised = sessionState.isAuthenticated
+
+                // A session that ends underneath the viewer takes its screens
+                // with it. Without the `forget`, the next person to sign in on
+                // this device saw the previous account's inbox — the state
+                // holder outlives the session by design, and its `loaded` flags
+                // meant it would never re-fetch to correct itself.
+                val ended by (session?.ended ?: remember {
+                    MutableStateFlow<SessionEnded?>(null)
+                }).collectAsState()
+
+                LaunchedEffect(ended) {
+                    val why = ended ?: return@LaunchedEffect
+                    meVm?.forget()
+                    if (why == SessionEnded.Expired) {
+                        // Only for the involuntary case. Telling someone who
+                        // just tapped Sign out that they have been signed out is
+                        // noise; telling someone whose token was revoked
+                        // mid-scroll is the difference between understanding and
+                        // assuming the app is broken.
+                        Toast.makeText(
+                            this@MainActivity,
+                            R.string.session_expired,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        if (destination != Destination.Feed && destination != Destination.Search) {
+                            destination = Destination.Feed
+                        }
+                    }
+                    session?.clearEnded()
                 }
 
                 Box(
@@ -263,10 +307,19 @@ class MainActivity : ComponentActivity() {
                         val needsAccount = destination in
                             setOf(Destination.Sell, Destination.Saved, Destination.Me)
 
-                        if (needsAccount && !authorised && gate != null) {
+                        if (needsAccount && !sessionState.isSettled) {
+                            // The token store is still being read. Neither the
+                            // gate nor the account screen is the right thing to
+                            // draw yet, and picking one produces a frame of the
+                            // wrong screen for a returning viewer. It is a few
+                            // milliseconds; a spinner is the honest answer.
+                            CircularProgressIndicator()
+                        } else if (needsAccount && !authorised && gate != null) {
                             SignInGate(
                                 viewModel = gate,
-                                onSignedIn = { authorised = true },
+                                // Nothing to set. The gate reports to Session,
+                                // and this composition is already observing it —
+                                // a local flag here is what let the two disagree.
                                 onCancel = { destination = Destination.Feed },
                             )
                         } else when (destination) {
@@ -299,7 +352,13 @@ class MainActivity : ComponentActivity() {
                                     viewModel = it,
                                     onOpenInbox = { route = Route.Inbox },
                                     onSignOut = {
-                                        authorised = false
+                                        // Clears the token store, which the old
+                                        // flag-flip did not — the credential
+                                        // stayed on the device and a relaunch
+                                        // would have handed the next person a
+                                        // live session. `forget` happens in the
+                                        // `ended` effect, for both exits.
+                                        lifecycleScope.launch { session?.signOut() }
                                         destination = Destination.Feed
                                     },
                                 )
@@ -357,6 +416,17 @@ class MainActivity : ComponentActivity() {
                                     },
                                 )
                                 Route.None -> Unit
+                            }
+                        }
+
+                        // Search measures distance from wherever the feed is
+                        // pointed. One source of truth for "where the viewer
+                        // is", pushed rather than read, because MeViewModel is
+                        // shared code and must not depend on the feed's.
+                        val feedState by current.state.collectAsState()
+                        LaunchedEffect(feedState.lat, feedState.lng, me) {
+                            if (feedState.lat != 0.0 || feedState.lng != 0.0) {
+                                me?.setLocation(feedState.lat, feedState.lng)
                             }
                         }
 

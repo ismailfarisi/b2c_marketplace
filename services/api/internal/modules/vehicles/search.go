@@ -258,6 +258,8 @@ func (f Filter) Build() (string, []any) {
 			                l.year || ' ' || mk.name || ' ' || md.name) AS title,
 			       l.emirate, l.city, l.published_at, l.bumped_at,
 			       (l.featured_until IS NOT NULL AND l.featured_until > now()) AS is_featured,
+			       COALESCE(rl.poster_key, '') AS poster_key,
+			       COALESCE(rl.lqip, '')       AS lqip,
 			       %s AS distance_m
 			  FROM vehicle_listings l
 			  -- Inner joins, matching the schema: make_id and model_id are both
@@ -265,6 +267,26 @@ func (f Filter) Build() (string, []any) {
 			  -- predicate can reach the taxonomy — see the note on f.Text.
 			  JOIN vehicle_makes mk ON mk.id = l.make_id
 			  JOIN vehicle_models md ON md.id = l.model_id
+			  -- The card's picture: the newest *published* reel for this
+			  -- listing.
+			  --
+			  -- LATERAL rather than a plain join, for the reason MyListings
+			  -- gives: a relisted car legitimately has several reels, and a join
+			  -- would return the listing once per reel — silently inflating both
+			  -- the page and the count(*) OVER () total.
+			  --
+			  -- Restricted to published rather than taking the newest of any
+			  -- state. A seller who is midway through replacing their video has
+			  -- a fresher reel that is still transcoding, and preferring it would
+			  -- blank the thumbnail of a listing that has a perfectly good older
+			  -- one.
+			  LEFT JOIN LATERAL (
+			      SELECT poster_key, lqip FROM reels
+			       WHERE subject_type = 'vehicle_listing' AND subject_id = l.id
+			         AND state = 'published'
+			       ORDER BY published_at DESC NULLS LAST
+			       LIMIT 1
+			  ) rl ON true
 			 WHERE %s
 		),
 		ranked AS (
@@ -285,6 +307,7 @@ func (f Filter) Build() (string, []any) {
 		       COALESCE(l.emirate, ''), COALESCE(l.city, ''),
 		       l.published_at, l.distance_m,
 		       (l.is_featured AND l.featured_rank <= %d) AS promoted,
+		       l.poster_key, l.lqip,
 		       count(*) OVER () AS total
 		  FROM ranked l
 		 ORDER BY (l.is_featured AND l.featured_rank <= %d) DESC, %s, l.id

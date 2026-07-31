@@ -5,6 +5,7 @@ import ae.marketplace.mobile.events.EventSender
 import ae.marketplace.mobile.feed.FeedApi
 import ae.marketplace.mobile.feed.FeedPager
 import ae.marketplace.mobile.feed.FeedViewModel
+import ae.marketplace.mobile.identity.Session
 import ae.marketplace.mobile.identity.SignInApi
 import ae.marketplace.mobile.me.MeApi
 import ae.marketplace.mobile.me.MeViewModel
@@ -46,6 +47,15 @@ import kotlin.time.ExperimentalTime
 class MarketplaceSdk private constructor(
     val identity: ViewerIdentity,
     val tokens: TokenStore,
+    /**
+     * Whether there is an account behind this session.
+     *
+     * Owned here rather than by a view model, because three view models and the
+     * shell all need the same answer and a session that ends must end for all
+     * of them at once. See [Session] for what the per-screen boolean it replaced
+     * got wrong.
+     */
+    val session: Session,
     private val context: PlatformContext,
     private val api: FeedApi,
     private val sell: SellApi,
@@ -64,13 +74,23 @@ class MarketplaceSdk private constructor(
             val store = tokenStore(context)
             val deviceId = deviceIdProvider(context).deviceId()
             val identity = ViewerIdentity(deviceId = deviceId, locale = locale)
+            val session = Session(store)
 
-            val client = ApiClientFactory.create(baseUrl, store, identity)
+            val client = ApiClientFactory.create(
+                baseUrl, store, identity,
+                onAuthLost = session::expired,
+            )
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+            // Read the store before returning, so the first composition already
+            // knows. Doing it lazily would put the shell back where it was: a
+            // frame of the sign-in gate in front of a viewer who is signed in.
+            session.restore()
 
             return MarketplaceSdk(
                 identity = identity,
                 tokens = store,
+                session = session,
                 context = context,
                 api = FeedApi(client),
                 // Two clients, and the second one is not a duplicate — see
@@ -137,7 +157,7 @@ class MarketplaceSdk private constructor(
      * never need this — and asking a visitor for a phone number before they have
      * seen a single reel is how a discovery app loses the visit.
      */
-    fun createSignInViewModel(): SignInViewModel = SignInViewModel(signIn)
+    fun createSignInViewModel(): SignInViewModel = SignInViewModel(signIn, session)
 
     /**
      * Saved, Me, Search and messaging.

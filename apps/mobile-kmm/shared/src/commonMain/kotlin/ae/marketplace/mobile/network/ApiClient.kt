@@ -62,11 +62,25 @@ object ApiClientFactory {
      * recovery worked while testing a client that could not produce the error it
      * recovers from.
      */
+    /**
+     * [onAuthLost] fires when a refresh token is rejected — spent, revoked, or
+     * belonging to an account that has been erased.
+     *
+     * It exists because clearing the store is only half of handling that. The
+     * client recovers correctly on its own: the next request goes out
+     * unauthenticated and public endpoints keep working. But nothing above it
+     * knows, so the shell keeps drawing the account tabs, every request to them
+     * 401s, and the viewer is told their network is unreliable. A callback here
+     * is the only point that sees the event at all — by design, since it is the
+     * one place that knows a refresh was attempted and failed rather than a
+     * request merely being unauthorised.
+     */
     fun create(
         baseUrl: String,
         tokens: TokenStore,
         identity: ViewerIdentity,
         engine: HttpClientEngine? = null,
+        onAuthLost: () -> Unit = {},
     ): HttpClient {
         val config: HttpClientConfig<*>.() -> Unit = {
         expectSuccess = true
@@ -106,6 +120,7 @@ object ApiClientFactory {
                         // an anonymous viewer — which is a working state — instead
                         // of retrying a dead token on every request.
                         tokens.clear()
+                        onAuthLost()
                         null
                     }
                 }

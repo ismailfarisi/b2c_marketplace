@@ -62,6 +62,9 @@ data class MyListing(
     @SerialName("reel_id") val reelId: String? = null,
     /** Empty for a listing with no reel, which is normal for the web form. */
     @SerialName("reel_state") val reelState: String = "",
+    /** The reel's still, absolute. Empty while it is still transcoding. */
+    @SerialName("poster_url") val posterUrl: String = "",
+    val lqip: String = "",
     @SerialName("published_at") val publishedAt: String? = null,
     @SerialName("expires_at") val expiresAt: String? = null,
     @SerialName("sold_at") val soldAt: String? = null,
@@ -97,6 +100,15 @@ data class SearchResult(
     val emirate: String = "",
     val city: String = "",
     @SerialName("distance_m") val distanceM: Long? = null,
+    /**
+     * The card's picture, from the listing's newest published reel.
+     *
+     * Empty for a listing created through the web form, which has no video.
+     * That is permanent rather than pending, so the client draws a flat block
+     * rather than waiting.
+     */
+    @SerialName("poster_url") val posterUrl: String = "",
+    val lqip: String = "",
     /**
      * Paid placement, always labelled.
      *
@@ -148,6 +160,15 @@ data class Message(
     /** sent | held | redacted | blocked */
     val state: String = "sent",
     @SerialName("sender_id") val senderId: String? = null,
+    /**
+     * Whether the viewer wrote it.
+     *
+     * Computed server-side. The client has no idea which uuid is its own — the
+     * token exchange never tells it — so without this every bubble rendered
+     * identically and the thread was a transcript with the speaker labels torn
+     * off.
+     */
+    val mine: Boolean = false,
     @SerialName("created_at") val createdAt: String = "",
 )
 

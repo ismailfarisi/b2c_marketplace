@@ -78,6 +78,18 @@ type Result struct {
 	PublishedAt  *time.Time
 	DistanceM    *float64
 	Promoted     bool
+	// PosterKey and LQIP come from the listing's newest published reel.
+	//
+	// A search result is a card, not a reel, and this is the only picture on it.
+	// Without one the results list is a column of text rows for a product whose
+	// entire premise is that people choose things by looking at them — and every
+	// competing site in this market shows a photograph.
+	//
+	// Empty for a listing created through the web form, which has no video. That
+	// is a real and permanent state rather than a loading one, which is why the
+	// client falls back to a flat block rather than a spinner.
+	PosterKey string
+	LQIP      string
 }
 
 // ResolveTaxonomy turns the slugs a client sends into ids.
@@ -311,7 +323,8 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Result, int64, err
 			&v.MakeID, &v.ModelID, &v.TrimID, &v.Year, &v.MileageKM,
 			&v.Transmission, &v.FuelType, &v.BodyType, &v.RegionalSpec, &v.Colour,
 			&v.PriceMinor, &v.Currency, &v.IsNegotiable, &v.Title,
-			&v.Emirate, &v.City, &v.PublishedAt, &v.DistanceM, &v.Promoted, &total,
+			&v.Emirate, &v.City, &v.PublishedAt, &v.DistanceM, &v.Promoted,
+			&v.PosterKey, &v.LQIP, &total,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan listing: %w", err)
 		}

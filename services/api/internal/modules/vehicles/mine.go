@@ -29,7 +29,16 @@ type MyListing struct {
 	// ReelState is that reel's pipeline state — the seller's answer to "why is
 	// my car not showing up", which is far more often about the video than the
 	// listing.
-	ReelState   string
+	ReelState string
+	// PosterKey and LQIP are the reel's still and its blurhash placeholder.
+	//
+	// On this screen they matter for a reason they do not on the feed: a
+	// seller scanning their own listings is looking for one specific car, and
+	// four rows of identical grey rectangles is the slowest possible way to
+	// find it. Empty while the reel is still transcoding, which is exactly the
+	// row the seller is most likely to be looking for.
+	PosterKey   string
+	LQIP        string
 	PublishedAt *string
 	ExpiresAt   *string
 	SoldAt      *string
@@ -59,6 +68,7 @@ func (s *Service) MyListings(ctx context.Context, sellerID uuid.UUID, limit int)
 		       l.year, l.mileage_km, l.price_minor, l.currency,
 		       COALESCE(l.city, l.emirate, ''),
 		       r.id, COALESCE(r.state::text, ''),
+		       COALESCE(r.poster_key, ''), COALESCE(r.lqip, ''),
 		       to_char(l.published_at, 'YYYY-MM-DD"T"HH24:MI:SSOF:00'),
 		       to_char(l.expires_at,   'YYYY-MM-DD"T"HH24:MI:SSOF:00'),
 		       to_char(l.sold_at,      'YYYY-MM-DD"T"HH24:MI:SSOF:00')
@@ -69,7 +79,7 @@ func (s *Service) MyListings(ctx context.Context, sellerID uuid.UUID, limit int)
 		  -- because a relisted car legitimately has several, and a join would
 		  -- return the listing once per reel.
 		  LEFT JOIN LATERAL (
-		      SELECT id, state FROM reels
+		      SELECT id, state, poster_key, lqip FROM reels
 		       WHERE subject_type = 'vehicle_listing' AND subject_id = l.id
 		         AND state <> 'removed'
 		       ORDER BY created_at DESC
@@ -98,7 +108,7 @@ func (s *Service) MyListings(ctx context.Context, sellerID uuid.UUID, limit int)
 		var status string
 		if err := rows.Scan(&m.ID, &m.ReferenceNo, &status, &m.Title,
 			&m.Year, &m.MileageKM, &m.PriceMinor, &m.Currency, &m.City,
-			&m.ReelID, &m.ReelState,
+			&m.ReelID, &m.ReelState, &m.PosterKey, &m.LQIP,
 			&m.PublishedAt, &m.ExpiresAt, &m.SoldAt); err != nil {
 			return nil, fmt.Errorf("vehicles: scan my listing: %w", err)
 		}

@@ -284,6 +284,7 @@ func run() error {
 			Actions:     media.Actions,
 			Attribution: media.Attribution,
 			Subjects:    registries.Subjects,
+			MediaBase:   cfg.MediaCDNBaseURL,
 
 			Likes:     media.Likes,
 			Comments:  media.Comments,
@@ -318,6 +319,7 @@ func run() error {
 			Packages:   packagesSvc,
 			Trust:      trustSvc,
 			Moderation: media.Moderation,
+			MediaBase:  cfg.MediaCDNBaseURL,
 		}
 		handlers.Chat = &api.ChatHandlers{
 			Chat:       chatSvc,

@@ -30,6 +30,10 @@ androidxSecurity = "1.1.0"
 # CameraX, for the recorder. The Sell tab opens straight into a viewfinder, so
 # this is on the launch path of a tab rather than a corner of the app.
 camerax = "1.5.0"
+# Poster loading. Coil 3 rather than 2: it is Kotlin Multiplatform, so when the
+# iOS shell needs the same thumbnails the loader is already shared rather than
+# being a second implementation with its own cache policy.
+coil = "3.3.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -65,6 +69,9 @@ camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cam
 camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 camera-video = { module = "androidx.camera:camera-video", version.ref = "camerax" }
 camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

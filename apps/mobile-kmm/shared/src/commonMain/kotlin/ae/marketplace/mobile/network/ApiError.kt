@@ -18,6 +18,12 @@ data class Problem(
     val status: Int = 0,
     val detail: String? = null,
     val instance: String? = null,
+    /**
+     * A stable machine-readable reason, present only where the status alone is
+     * not enough to act on. See `httpx.Problem.Code` for the rule about when the
+     * server sets it.
+     */
+    val code: String? = null,
     @SerialName("request_id") val requestId: String? = null,
     val errors: List<FieldError> = emptyList(),
 )
@@ -34,6 +40,9 @@ class ApiException(
     val problem: Problem?,
     val requestId: String?,
 ) : Exception(problem?.title ?: "Request failed with status $status") {
+
+    /** The server's reason code, when it gave one. */
+    val code: String? get() = problem?.code
 
     /** Field-level detail, keyed by field name, for form binding. */
     val fieldErrors: Map<String, String>

@@ -7,6 +7,8 @@ import ae.marketplace.mobile.model.SavedItem
 import ae.marketplace.mobile.model.SearchResult
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ae.marketplace.mobile.network.Failure
+import ae.marketplace.mobile.network.toFailure
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,14 +20,14 @@ data class SavedUiState(
     val items: List<SavedItem> = emptyList(),
     val loading: Boolean = false,
     val loaded: Boolean = false,
-    val error: String? = null,
+    val error: Failure? = null,
 )
 
 data class MyListingsUiState(
     val items: List<MyListing> = emptyList(),
     val loading: Boolean = false,
     val loaded: Boolean = false,
-    val error: String? = null,
+    val error: Failure? = null,
 )
 
 data class SearchUiState(
@@ -35,13 +37,13 @@ data class SearchUiState(
     val loading: Boolean = false,
     /** True once a search has actually run, so "no results" can be told from "not searched yet". */
     val searched: Boolean = false,
-    val error: String? = null,
+    val error: Failure? = null,
 )
 
 data class InboxUiState(
     val items: List<Conversation> = emptyList(),
     val loading: Boolean = false,
-    val error: String? = null,
+    val error: Failure? = null,
 )
 
 data class ThreadUiState(
@@ -51,7 +53,7 @@ data class ThreadUiState(
     val draft: String = "",
     val loading: Boolean = false,
     val sending: Boolean = false,
-    val error: String? = null,
+    val error: Failure? = null,
 )
 
 /**
@@ -87,10 +89,45 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
     private var lat: Double? = null
     private var lng: Double? = null
 
-    /** Where the viewer is, so search can sort by distance. Optional. */
+    /**
+     * Where the viewer is, so search can sort by distance.
+     *
+     * Must be called again whenever the feed's location changes. It was called
+     * once at launch with the hard-coded fallback and never again, which meant
+     * someone who moved the feed to Abu Dhabi still got "412 km away" measured
+     * from Dubai Marina on every search result — a wrong number rendered with
+     * total confidence, which is worse than no number.
+     *
+     * Re-runs the current search rather than waiting for the next keystroke. A
+     * results list whose distances refer to a place the viewer has just left is
+     * stale in the one column they are using to choose.
+     */
     fun setLocation(lat: Double, lng: Double) {
+        if (this.lat == lat && this.lng == lng) return
         this.lat = lat
         this.lng = lng
+        if (_search.value.searched && _search.value.query.isNotBlank()) submitSearch()
+    }
+
+    /**
+     * Drops everything belonging to the account that just left.
+     *
+     * Not housekeeping. Saved, My listings and the inbox are all *this person's*,
+     * and the view model outlives the session by design — it is created once for
+     * the shell so that flicking between tabs does not re-fetch. Without this,
+     * signing out and signing in as someone else showed the first account's
+     * conversations to the second one, and the `loaded` flag meant it would
+     * never re-fetch to correct itself.
+     */
+    fun forget() {
+        searchJob?.cancel()
+        _saved.value = SavedUiState()
+        _listings.value = MyListingsUiState()
+        _inbox.value = InboxUiState()
+        _thread.value = ThreadUiState()
+        // Search survives. It is the one surface here that is public — no
+        // account is needed to run it — so clearing a query someone is midway
+        // through typing would be destroying work for no reason.
     }
 
     // ── Saved ────────────────────────────────────────────────────────────────
@@ -101,7 +138,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         viewModelScope.launch {
             runCatching { api.saves() }
                 .onSuccess { _saved.value = SavedUiState(items = it.items, loaded = true) }
-                .onFailure { e -> _saved.value = _saved.value.copy(loading = false, error = e.message) }
+                .onFailure { e -> _saved.value = _saved.value.copy(loading = false, error = e.toFailure()) }
         }
     }
 
@@ -113,7 +150,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         viewModelScope.launch {
             runCatching { api.myListings() }
                 .onSuccess { _listings.value = MyListingsUiState(items = it.items, loaded = true) }
-                .onFailure { e -> _listings.value = _listings.value.copy(loading = false, error = e.message) }
+                .onFailure { e -> _listings.value = _listings.value.copy(loading = false, error = e.toFailure()) }
         }
     }
 
@@ -160,7 +197,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
                 )
             }
             .onFailure { e ->
-                _search.value = _search.value.copy(loading = false, searched = true, error = e.message)
+                _search.value = _search.value.copy(loading = false, searched = true, error = e.toFailure())
             }
     }
 
@@ -171,7 +208,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         viewModelScope.launch {
             runCatching { api.inbox() }
                 .onSuccess { _inbox.value = InboxUiState(items = it.items) }
-                .onFailure { e -> _inbox.value = _inbox.value.copy(loading = false, error = e.message) }
+                .onFailure { e -> _inbox.value = _inbox.value.copy(loading = false, error = e.toFailure()) }
         }
     }
 
@@ -180,7 +217,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         viewModelScope.launch {
             runCatching { api.thread(conversationId) }
                 .onSuccess { _thread.value = _thread.value.copy(messages = it.items, loading = false) }
-                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.message) }
+                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.toFailure()) }
             // Marking read is fire-and-forget: a failure costs an unread badge,
             // and blocking the thread on it would be a worse trade.
             runCatching { api.markRead(conversationId) }
@@ -200,7 +237,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         viewModelScope.launch {
             runCatching { api.inquire(listingId, reelId, actionId) }
                 .onSuccess { openThread(it.conversationId, title) }
-                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.message) }
+                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.toFailure()) }
         }
     }
 
@@ -236,7 +273,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
                     // The draft stays in the box. Losing what someone typed
                     // because the network dropped is the single most annoying
                     // failure a messaging screen has.
-                    _thread.value = _thread.value.copy(sending = false, error = e.message)
+                    _thread.value = _thread.value.copy(sending = false, error = e.toFailure())
                 }
         }
     }

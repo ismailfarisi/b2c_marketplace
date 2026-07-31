@@ -57,6 +57,16 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui.tooling.preview)
 
+    // Posters and thumbnails.
+    //
+    // The feed is video, so this is not the app's main pixel path — it is the
+    // *first* frame of it. Without a poster, every reel opens on black while
+    // the manifest is fetched and the first segment decoded, and every list of
+    // saved or searched items draws grey rectangles where the thing being
+    // chosen between should be.
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+
     // The view that hosts a surface. The player itself comes from :shared —
     // this module never constructs an ExoPlayer.
     implementation(libs.media3.ui)

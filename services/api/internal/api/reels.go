@@ -33,6 +33,11 @@ type ReelHandlers struct {
 	Ingest     *engagement.Ingest
 	Moderation *moderation.Service
 
+	// MediaBase prefixes poster keys into fetchable URLs. Empty yields no
+	// poster rather than a URL resolved against the API host, which would 404
+	// for every reel in a deployment with no media stack.
+	MediaBase string
+
 	// Phase 3. Nil-safe: a feed served without them renders reels with no CTAs,
 	// which is what Phase 2 did and is still a coherent product.
 	Actions     *actions.Service
@@ -438,7 +443,7 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]map[string]any, 0, len(page.Items))
 	for _, it := range page.Items {
-		item := feedItemResponse(it)
+		item := feedItemResponse(it, h.MediaBase)
 		item["actions"] = actionsResponse(resolved[it.ID])
 		item["viewer"] = map[string]any{
 			"liked":    state.Liked[it.ID],
@@ -798,7 +803,10 @@ func authorReelResponse(r *reels.Reel) map[string]any {
 	return out
 }
 
-func feedItemResponse(it feed.Item) map[string]any {
+// mediaBase is threaded in rather than read from a package global: the handler
+// owns the configuration, and a package-level base would make this function
+// untestable and its behaviour dependent on process start-up order.
+func feedItemResponse(it feed.Item, mediaBase string) map[string]any {
 	renditions := make([]map[string]any, 0, len(it.Renditions))
 	for _, r := range it.Renditions {
 		renditions = append(renditions, map[string]any{
@@ -824,8 +832,20 @@ func feedItemResponse(it feed.Item) map[string]any {
 		"duration_ms":  it.DurationMS,
 		"poster_key":   it.PosterKey,
 		"preview_key":  it.PreviewKey,
-		"lqip":         it.LQIP,
-		"renditions":   renditions,
+		// The absolute form, which is what a client can actually fetch.
+		//
+		// `poster_key` alone has been on the wire since Phase 2 and no client
+		// ever resolved it, because doing so means every client hard-coding the
+		// object store's hostname — and then getting it wrong in exactly one
+		// environment. /me/saves already composes the URL server-side; this is
+		// the same decision, applied to the surface that needs it most.
+		//
+		// Both are sent. The key is what an admin tool and the moderation queue
+		// want, and dropping it would be a breaking change for a saving of
+		// forty bytes.
+		"poster_url": mediaURL(mediaBase, it.PosterKey),
+		"lqip":       it.LQIP,
+		"renditions": renditions,
 		"counters": map[string]any{
 			"views":    it.Counters.Views,
 			"likes":    it.Counters.Likes,

@@ -141,7 +141,12 @@ func (h *MeHandlers) MyListings(w http.ResponseWriter, r *http.Request) {
 			// Empty when there is no reel. The client renders the listing's own
 			// status in that case, which is the correct thing to show for a car
 			// listed through the web form.
-			"reel_state":   l.ReelState,
+			"reel_state": l.ReelState,
+			// Empty while the reel is still transcoding — which is precisely
+			// the row a worried seller is most likely to be looking for, so the
+			// client must not treat a missing poster as a broken listing.
+			"poster_url":   h.mediaURL(l.PosterKey),
+			"lqip":         l.LQIP,
 			"published_at": l.PublishedAt,
 			"expires_at":   l.ExpiresAt,
 			"sold_at":      l.SoldAt,
@@ -150,12 +155,24 @@ func (h *MeHandlers) MyListings(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": items})
 }
 
-func (h *MeHandlers) mediaURL(key string) string {
-	if key == "" || h.MediaBase == "" {
+func (h *MeHandlers) mediaURL(key string) string { return mediaURL(h.MediaBase, key) }
+
+// mediaURL turns a stored object key into something a client can fetch.
+//
+// Shared rather than a method, because three handlers now need it and the
+// second copy had already drifted. An empty base returns an empty string rather
+// than a relative path: a deployment with no CDN configured should render no
+// image, not a URL resolved against the API host that will 404 for every reel.
+//
+// A key that is already absolute is passed through, which is what makes a
+// migration to signed URLs a change in one place rather than at every call
+// site.
+func mediaURL(base, key string) string {
+	if key == "" || base == "" {
 		return ""
 	}
 	if strings.HasPrefix(key, "http://") || strings.HasPrefix(key, "https://") {
 		return key
 	}
-	return strings.TrimSuffix(h.MediaBase, "/") + "/" + strings.TrimPrefix(key, "/")
+	return strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(key, "/")
 }
