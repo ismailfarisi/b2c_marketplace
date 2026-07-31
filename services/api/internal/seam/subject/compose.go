@@ -138,6 +138,39 @@ func (c Composition) Validate() error {
 	if defaults != 1 {
 		return fmt.Errorf("subject: expected exactly one default clock, got %d", defaults)
 	}
+
+	if t := c.Trust; t != nil {
+		if t.Key == "" {
+			return fmt.Errorf("subject: the trust upload needs a key")
+		}
+		if t.Label == "" {
+			return fmt.Errorf("subject: trust upload %q needs a label", t.Key)
+		}
+		if ref := t.Reference; ref != nil {
+			if ref.Key == "" {
+				return fmt.Errorf("subject: the trust reference needs a key")
+			}
+			// Checked against the field keys, not only against itself: the
+			// reference posts back through the same Values map, so a collision
+			// would have one silently overwrite the other. That is the kind of
+			// bug that shows up as a permit number stored in the price column.
+			if seen[ref.Key] {
+				return fmt.Errorf("subject: trust reference %q collides with a field key", ref.Key)
+			}
+			if ref.Label == "" {
+				return fmt.Errorf("subject: trust reference %q needs a label", ref.Key)
+			}
+			if err := ref.Kind.valid(); err != nil {
+				return fmt.Errorf("subject: trust reference %q: %w", ref.Key, err)
+			}
+			// A typeahead against a catalogue makes no sense for the identifier
+			// of a document the seller is holding, and a select would mean the
+			// platform already knows every permit number ever issued.
+			if ref.Kind == FieldSelect || ref.Kind == FieldLookup {
+				return fmt.Errorf("subject: trust reference %q cannot be a %s", ref.Key, ref.Kind)
+			}
+		}
+	}
 	return nil
 }
 
@@ -273,6 +306,33 @@ type TrustUpload struct {
 
 	// Accept is the MIME allow-list, as the client should constrain its picker.
 	Accept []string
+
+	// Reference is an identifier that travels with the document, when the trust
+	// artefact has one.
+	//
+	// # Why this is in the trust slot rather than being a fifth field
+	//
+	// Property needs a Trakheesi or DARI permit number, and it is not optional:
+	// a listing cannot go live without it, so nothing in this vertical can be
+	// published without asking. But MaxFields is four and property's four are
+	// all load-bearing, so on the face of it the cap and the requirement are in
+	// conflict.
+	//
+	// They are not, because a permit number is not an attribute of the
+	// property. It is the identifier *of the document*, in exactly the way a
+	// mulkiya has a chassis number on it. Putting it in the trust slot says
+	// what it is; putting it in Fields would say a permit is a fact about a
+	// flat, which is how you end up with a "permit" column on a table that
+	// describes buildings.
+	//
+	// It also keeps the promise the cap encodes. The seller still answers four
+	// questions about the thing they are selling; the trust row is one more
+	// interaction, in the place the client already draws one, and the client
+	// already knows to render that row differently.
+	//
+	// Nil for a vertical whose trust artefact is just a document — the mulkiya
+	// has no number this product needs.
+	Reference *Field
 }
 
 // DraftInput is the seller's answers, as posted.

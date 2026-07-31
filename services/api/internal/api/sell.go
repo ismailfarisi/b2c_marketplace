@@ -89,32 +89,7 @@ func (h *SellHandlers) SellForm(w http.ResponseWriter, r *http.Request) {
 func compositionResponse(c subject.Composition) map[string]any {
 	fields := make([]map[string]any, 0, len(c.Fields))
 	for _, f := range c.Fields {
-		out := map[string]any{
-			"key":      f.Key,
-			"label":    f.Label,
-			"label_ar": f.LabelAr,
-			"kind":     f.Kind,
-			"required": f.Required,
-			"unit":     f.Unit,
-			"unit_ar":  f.UnitAr,
-			"hint":     f.Hint,
-			"hint_ar":  f.HintAr,
-			// Always present, empty when unset. A client that has to distinguish
-			// absent from empty for a placeholder is a client with a branch it
-			// does not need.
-			"placeholder": f.Placeholder,
-			"source":      f.Source,
-			"min":         f.Min,
-			"max":         f.Max,
-		}
-		opts := make([]map[string]any, 0, len(f.Options))
-		for _, o := range f.Options {
-			opts = append(opts, map[string]any{
-				"value": o.Value, "label": o.Label, "label_ar": o.LabelAr,
-			})
-		}
-		out["options"] = opts
-		fields = append(fields, out)
+		fields = append(fields, fieldResponse(f))
 	}
 
 	clocks := make([]map[string]any, 0, len(c.Clocks))
@@ -139,15 +114,59 @@ func compositionResponse(c subject.Composition) map[string]any {
 		"trust":  nil,
 	}
 	if c.Trust != nil {
-		out["trust"] = map[string]any{
+		trust := map[string]any{
 			"key":      c.Trust.Key,
 			"label":    c.Trust.Label,
 			"label_ar": c.Trust.LabelAr,
 			"earns":    c.Trust.Earns,
 			"earns_ar": c.Trust.EarnsAr,
 			"accept":   c.Trust.Accept,
+			// The identifier that travels with the document, when the artefact
+			// has one. Rendered by the same code that draws a field, because it
+			// is one — see subject.TrustUpload.Reference for why it lives here
+			// rather than among the four.
+			"reference": nil,
 		}
+		if c.Trust.Reference != nil {
+			trust["reference"] = fieldResponse(*c.Trust.Reference)
+		}
+		out["trust"] = trust
 	}
+	return out
+}
+
+// fieldResponse renders one input.
+//
+// Extracted so the trust slot's reference goes over the wire in exactly the
+// same shape as the four fields above it. The client already knows how to draw
+// this object; giving the permit number a shape of its own would have meant a
+// second renderer for a text box.
+func fieldResponse(f subject.Field) map[string]any {
+	out := map[string]any{
+		"key":      f.Key,
+		"label":    f.Label,
+		"label_ar": f.LabelAr,
+		"kind":     f.Kind,
+		"required": f.Required,
+		"unit":     f.Unit,
+		"unit_ar":  f.UnitAr,
+		"hint":     f.Hint,
+		"hint_ar":  f.HintAr,
+		// Always present, empty when unset. A client that has to distinguish
+		// absent from empty for a placeholder is a client with a branch it
+		// does not need.
+		"placeholder": f.Placeholder,
+		"source":      f.Source,
+		"min":         f.Min,
+		"max":         f.Max,
+	}
+	opts := make([]map[string]any, 0, len(f.Options))
+	for _, o := range f.Options {
+		opts = append(opts, map[string]any{
+			"value": o.Value, "label": o.Label, "label_ar": o.LabelAr,
+		})
+	}
+	out["options"] = opts
 	return out
 }
 

@@ -113,10 +113,16 @@ data class ClockOption(
 )
 
 /**
- * The optional document that earns a badge.
+ * The document that earns a badge, and the identifier that travels with it.
  *
- * Optional in the strong sense: skipping it publishes normally. The listing is
+ * Optional for a car: skipping the mulkiya publishes normally, the listing is
  * worth less, and that is the whole incentive.
+ *
+ * Not optional for a property advert, where the permit is a legal precondition
+ * — but the *client* is told that by [reference] being required rather than by
+ * knowing what a permit is. That distinction is the seam: this screen renders a
+ * document row and possibly a text box, and has no idea one vertical's row is a
+ * nice-to-have and another's is a regulator.
  */
 @Serializable
 data class TrustUpload(
@@ -127,6 +133,14 @@ data class TrustUpload(
     val earns: String = "",
     @SerialName("earns_ar") val earnsAr: String = "",
     val accept: List<String> = emptyList(),
+    /**
+     * An identifier that belongs to the document, when it has one.
+     *
+     * Drawn with the same code as the four fields above, because it is one —
+     * it posts back through the same values map under its own key. Null for a
+     * vertical whose trust artefact is just a photograph.
+     */
+    val reference: SellField? = null,
 )
 
 /** What the server posts back when the subject and the reel draft exist. */

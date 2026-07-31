@@ -53,6 +53,14 @@ object SellValidation {
         for (field in form.fields) {
             issueFor(field, values[field.key].orEmpty())?.let(issues::add)
         }
+        // The trust slot's identifier is validated exactly like a field,
+        // because it is one. Checking it here rather than at the publish call
+        // means a property advertiser is told the permit number is needed while
+        // the box is still on screen, instead of getting a 422 after tapping
+        // Publish on a form that looked complete.
+        form.trust?.reference?.let { ref ->
+            issueFor(ref, values[ref.key].orEmpty())?.let(issues::add)
+        }
         return issues
     }
 

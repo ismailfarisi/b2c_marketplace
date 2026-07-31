@@ -85,6 +85,10 @@
     <string name="sell_place_required">Pick where it is. Buyers only ever see listings that can reach them.</string>
     <string name="sell_only_term">The only listing term available for this today.</string>
     <string name="sell_trust_not_built">Document upload is not built yet.</string>
+    <!-- Shown under the trust row. Phrased so an advertiser who has just typed a
+         permit number does not read it as "that was wasted": the number lands,
+         the photograph is what cannot be attached yet. -->
+    <string name="sell_trust_doc_later">You can attach the document later. The number above is enough to submit.</string>
 
     <!-- Field-level problems. The bound arrives as a number; the sentence is here
          so a translator can reach it. -->

@@ -205,27 +205,60 @@ fun DetailsStep(
         }
 
         form.trust?.let { trust ->
-            // Drawn as a dashed invitation rather than a filled button, matching
-            // the mock, because it is genuinely optional and a solid control
-            // beside four required ones reads as a fifth requirement.
+            // Bordered rather than filled, because for a car this is genuinely
+            // optional and a solid control beside four required ones reads as a
+            // fifth requirement.
             //
-            // Tapping it does nothing yet. That is stated on the row rather than
-            // discovered by tapping — see the note in the summary; the document
-            // upload endpoint does not exist.
+            // For property it is not optional at all — but this composable does
+            // not know that and must not. What it knows is that the trust slot
+            // may carry an identifier, and that the identifier may be required.
+            // The vertical decides; the screen renders.
             Column(
                 Modifier
                     .padding(top = 6.dp)
                     .fillMaxWidth()
                     .border(1.dp, Line, RoundedCornerShape(10.dp))
-                    .padding(vertical = 16.dp, horizontal = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                    .padding(vertical = 14.dp, horizontal = 14.dp),
             ) {
-                Text(trust.label, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
                 Text(
-                    text = stringResource(R.string.sell_trust_not_built),
+                    text = trust.label,
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 13.sp,
+                )
+
+                trust.reference?.let { ref ->
+                    // The same input the four fields use. A permit number is a
+                    // text box; giving it a bespoke one here would be a second
+                    // renderer to keep in step for no gain.
+                    Box(Modifier.padding(top = 10.dp)) {
+                        FieldInput(
+                            field = ref,
+                            value = state.values[ref.key].orEmpty(),
+                            display = null,
+                            issue = state.issues.firstOrNull { it.key == ref.key },
+                            lookupResults = emptyList(),
+                            // A reference is never a typeahead — the seam refuses a lookup
+                            // kind for it, because a catalogue of every permit number ever
+                            // issued is not a thing this platform has.
+                            lookupOpen = false,
+                            onValue = { onValue(ref.key, it) },
+                            onLookupQuery = {},
+                            onLookupPick = {},
+                        )
+                    }
+                }
+
+                // The document itself is still not collectable — there is no
+                // upload endpoint for anything that is not a video. Said on the
+                // row rather than discovered by tapping a control that does
+                // nothing, and phrased so it is clear the number above *did*
+                // land: an advertiser who reads "not built" next to a box they
+                // just filled will assume they wasted their time.
+                Text(
+                    text = stringResource(R.string.sell_trust_doc_later),
                     color = Color.White.copy(alpha = 0.35f),
                     fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }

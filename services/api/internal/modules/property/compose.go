@@ -146,6 +146,52 @@ func (c *Composer) Compose() subject.Composition {
 			LabelAr: "رقم التصريح — مطلوب قبل النشر",
 			Earns:   "Published", EarnsAr: "منشور",
 			Accept: []string{"image/jpeg", "image/png", "application/pdf"},
+
+			// The number itself, which until now this flow had no way to
+			// collect at all.
+			//
+			// Draft read `Values["permit_number"]` and Compose never asked for
+			// it, so every property advert created from the app carried an
+			// empty permit — and Submit refuses those, correctly. The result
+			// was a vertical that was sellable from the phone right up to the
+			// last tap and then always refused. The comment above this
+			// composer describes drafting on site and submitting when the
+			// paperwork arrives, which is the right shape; there was simply no
+			// screen for the second half.
+			//
+			// A photograph of the permit is still the thing a reviewer wants,
+			// but the number is what goes in the advert, what a regulator
+			// searches for, and what the duplicate check compares. Asking for
+			// it here means an agent who already has it can finish in one
+			// sitting.
+			Reference: &subject.Field{
+				Key:   fieldPermit,
+				Label: "Permit number", LabelAr: "رقم التصريح",
+				Kind: subject.FieldText,
+				// Required, which is a change of position from the comment at
+				// the top of this file and worth being explicit about.
+				//
+				// That comment describes the real sequence — an agent films the
+				// flat while DET processes the application — and concludes the
+				// advert should be draftable without a permit and submitted
+				// later. The *model* still supports exactly that: Draft accepts
+				// an empty permit and only Submit refuses one.
+				//
+				// What does not exist is the second visit. The app's sell flow
+				// is one sitting that ends in Publish, and there is no screen
+				// anywhere that opens an existing draft to finish it. So an
+				// optional permit here does not mean "come back later", it
+				// means "reach the last step and be refused" — which is the
+				// worst version of both options.
+				//
+				// Required until a resume-a-draft screen exists. At that point
+				// this becomes optional again and the flow the comment above
+				// describes finally works.
+				Required:    true,
+				Placeholder: "7128394",
+				Hint:        "Trakheesi in Dubai, DARI in Abu Dhabi.",
+				HintAr:      "تصريح في دبي، داري في أبوظبي.",
+			},
 		},
 	}
 }
@@ -216,6 +262,18 @@ func (c *Composer) Draft(ctx context.Context, in subject.DraftInput) (subject.Dr
 			Currency:     "AED",
 			RentPeriod:   rentPeriod,
 			PermitNumber: strings.TrimSpace(in.Values[fieldPermit]),
+			// Derived from where the property is, not asked for.
+			//
+			// The authority is a fact about the emirate — Dubai issues
+			// Trakheesi, Abu Dhabi issues DARI — so asking an agent standing in
+			// the flat to pick one is asking them to restate the address. It is
+			// also the field they would get wrong: the permit in their hand says
+			// neither word on it.
+			//
+			// Validate still checks the number against the issuer's format, so
+			// a Dubai number typed for an Abu Dhabi property is caught rather
+			// than silently accepted under a guessed authority.
+			PermitIssuer: issuerFor(in.Region),
 			Emirate:      in.Region,
 			Community:    in.Place,
 			Lat:          in.Lat,
@@ -241,6 +299,26 @@ func (c *Composer) Draft(ctx context.Context, in subject.DraftInput) (subject.Dr
 // silently left with a draft they think is live.
 func (c *Composer) Publish(ctx context.Context, advertiserID, listingID uuid.UUID) error {
 	return c.svc.Submit(ctx, advertiserID, listingID)
+}
+
+// issuerFor maps an emirate to the authority that licenses adverts there.
+//
+// Only two of the seven have their own register today. IssuerOther is the
+// honest answer for the rest rather than defaulting to Trakheesi, which would
+// apply Dubai's number format to a Sharjah advert and reject a valid permit for
+// looking wrong.
+//
+// An empty region also lands on IssuerOther, which keeps the format check
+// permissive rather than refusing a draft because the client sent no emirate.
+func issuerFor(emirate string) string {
+	switch strings.ToLower(strings.TrimSpace(emirate)) {
+	case "dubai", "دبي":
+		return string(IssuerTrakheesi)
+	case "abu dhabi", "abudhabi", "أبوظبي", "ابوظبي":
+		return string(IssuerDARI)
+	default:
+		return string(IssuerOther)
+	}
 }
 
 func parseInt(v string) (int, error) {
