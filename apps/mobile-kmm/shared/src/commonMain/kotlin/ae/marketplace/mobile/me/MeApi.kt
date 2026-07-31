@@ -43,20 +43,42 @@ class MeApi(private val client: HttpClient) {
      * point, while a search for a specific car is a question someone will
      * happily answer nationwide. Passing them sorts by distance instead.
      */
+    /**
+     * The classifieds index.
+     *
+     * [filters] is passed whole rather than as a dozen parameters, so adding a
+     * facet is a change in one data class instead of a change to this
+     * signature, its call site, the view model and the screen.
+     */
     suspend fun search(
         query: String,
         lat: Double? = null,
         lng: Double? = null,
-        priceMaxMinor: Long? = null,
-        sort: String? = null,
+        filters: SearchFilters = SearchFilters(),
         limit: Int = 20,
         offset: Int = 0,
     ): SearchPage = client.get("listings") {
         if (query.isNotBlank()) parameter("q", query)
         lat?.let { parameter("lat", it) }
         lng?.let { parameter("lng", it) }
-        priceMaxMinor?.let { parameter("price_max_minor", it) }
-        sort?.let { parameter("sort", it) }
+
+        filters.priceMinMinor?.let { parameter("price_min_minor", it) }
+        filters.priceMaxMinor?.let { parameter("price_max_minor", it) }
+        filters.yearMin?.let { parameter("year_min", it) }
+        filters.yearMax?.let { parameter("year_max", it) }
+        filters.mileageMax?.let { parameter("mileage_max", it) }
+        // Comma-separated, matching the server's csv() parsing. Empty sets are
+        // omitted entirely rather than sent as an empty string, which the
+        // server would read as a one-element list containing "".
+        filters.regionalSpecs.takeIf { it.isNotEmpty() }
+            ?.let { parameter("regional_spec", it.joinToString(",")) }
+        filters.bodyTypes.takeIf { it.isNotEmpty() }
+            ?.let { parameter("body_type", it.joinToString(",")) }
+        filters.transmissions.takeIf { it.isNotEmpty() }
+            ?.let { parameter("transmission", it.joinToString(",")) }
+        filters.sellerKind?.let { parameter("seller_kind", it) }
+        filters.sort?.let { parameter("sort", it) }
+
         parameter("limit", limit)
         parameter("offset", offset)
     }.body()

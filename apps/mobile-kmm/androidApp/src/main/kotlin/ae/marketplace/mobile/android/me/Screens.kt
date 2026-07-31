@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -43,6 +44,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,46 +99,111 @@ private fun bottomInset(): PaddingValues {
 fun SearchScreen(
     viewModel: MeViewModel,
     onOpen: (SearchResult) -> Unit,
+    hasLocation: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.search.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
+    val listState = rememberLazyListState()
+
+    // Fetch the next page a few rows before the bottom rather than at it.
+    //
+    // Triggering on the last visible item means the viewer reaches the end of
+    // the list and waits; four rows of lead time is roughly one flick, which is
+    // usually enough for the request to land before they get there.
+    val nearEnd by remember {
+        derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            last >= listState.layoutInfo.totalItemsCount - 4
+        }
+    }
+    LaunchedEffect(nearEnd, state.hasMore) {
+        if (nearEnd && state.hasMore) viewModel.loadMore()
+    }
+
+    state.draftFilters?.let { draft ->
+        SearchFilterSheet(
+            viewModel = viewModel,
+            draft = draft,
+            hasLocation = hasLocation,
+            onDismiss = viewModel::cancelFilters,
+        )
+    }
 
     Column(modifier.fillMaxSize().background(Palette.Ink).statusBarsPadding()) {
-        Box(
+        Row(
             Modifier
                 .padding(horizontal = Space.Large, vertical = Space.Medium)
-                .fillMaxWidth()
-                .border(1.dp, Palette.Line, RoundedCornerShape(Shape.Field))
-                .padding(horizontal = 14.dp, vertical = 13.dp),
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Space.Small),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (state.query.isEmpty()) {
-                Text(
-                    stringResource(R.string.search_hint),
-                    color = Palette.TextGhost,
-                    fontSize = Type.Body,
+            Box(
+                Modifier
+                    .weight(1f)
+                    .border(1.dp, Palette.Line, RoundedCornerShape(Shape.Field))
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
+            ) {
+                if (state.query.isEmpty()) {
+                    Text(
+                        stringResource(R.string.search_hint),
+                        color = Palette.TextGhost,
+                        fontSize = Type.Body,
+                    )
+                }
+                BasicTextField(
+                    value = state.query,
+                    onValueChange = viewModel::onQueryChanged,
+                    singleLine = true,
+                    textStyle = TextStyle(color = Palette.Text, fontSize = Type.Body),
+                    cursorBrush = SolidColor(Palette.Accent),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Search,
+                    ),
+                    // Search on the IME key, which the field advertised and did
+                    // not honour. Someone who types a query and presses the
+                    // magnifier expects it to run now rather than 280ms later,
+                    // and the debounce is for typing, not for a deliberate
+                    // submit.
+                    keyboardActions = KeyboardActions(onSearch = {
+                        keyboard?.hide()
+                        viewModel.submitSearch()
+                    }),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            BasicTextField(
-                value = state.query,
-                onValueChange = viewModel::onQueryChanged,
-                singleLine = true,
-                textStyle = TextStyle(color = Palette.Text, fontSize = Type.Body),
-                cursorBrush = SolidColor(Palette.Accent),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Search,
-                ),
-                // Search on the IME key, which the field advertised and did not
-                // honour. Someone who types a query and presses the magnifier
-                // expects it to run now rather than 280ms later, and the debounce
-                // is for typing, not for a deliberate submit.
-                keyboardActions = KeyboardActions(onSearch = {
-                    keyboard?.hide()
-                    viewModel.submitSearch()
-                }),
-                modifier = Modifier.fillMaxWidth(),
-            )
+
+            // The count is on the button, always, and that is the point of it.
+            //
+            // A filter still applied from three searches ago is the commonest
+            // way a search screen lies: someone sets a price cap, searches
+            // something else, gets nothing, and concludes the thing does not
+            // exist. A number here is the cheapest possible fix.
+            val active = state.filters.activeCount
+            Box(
+                Modifier
+                    .border(
+                        1.dp,
+                        if (active > 0) Palette.Accent else Palette.Line,
+                        RoundedCornerShape(Shape.Field),
+                    )
+                    .clickable(onClick = viewModel::openFilters)
+                    .defaultMinSize(minWidth = Space.Touch, minHeight = Space.Touch)
+                    .padding(horizontal = Space.Medium),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (active > 0) {
+                        stringResource(R.string.search_filters_n, active)
+                    } else {
+                        stringResource(R.string.search_filters)
+                    },
+                    color = if (active > 0) Palette.Accent else Palette.TextMuted,
+                    fontSize = Type.Secondary,
+                    fontWeight = if (active > 0) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
         }
 
         when {
@@ -160,7 +228,7 @@ fun SearchScreen(
                     hint = stringResource(R.string.search_none_hint),
                 )
 
-            else -> LazyColumn(contentPadding = bottomInset()) {
+            else -> LazyColumn(state = listState, contentPadding = bottomInset()) {
                 // A failed *refresh* over results that are still on screen is a
                 // strip, not a replacement. The list the viewer is reading is
                 // still the best information available, and throwing it away to
@@ -179,6 +247,9 @@ fun SearchScreen(
                 }
                 items(state.items, key = { it.id }) { result ->
                     SearchRow(result) { onOpen(result) }
+                }
+                if (state.loadingMore) {
+                    item { LoadingBlock(inline = true) }
                 }
             }
         }

@@ -216,6 +216,25 @@
     <string name="search_none_hint">Check the spelling, or widen the year.</string>
     <string name="search_count">%1$d results</string>
     <string name="search_promoted">PROMOTED</string>
+    <string name="search_filters">Filters</string>
+    <!-- The count is always on the button. A filter still applied from three
+         searches ago is the commonest way a search screen lies. -->
+    <string name="search_filters_n">Filters · %1$d</string>
+    <string name="filters_title">Narrow it down</string>
+    <string name="filters_clear">Clear</string>
+    <string name="filters_apply">Show results</string>
+    <string name="filters_price">Price (AED)</string>
+    <string name="filters_min">No minimum</string>
+    <string name="filters_max">No maximum</string>
+    <string name="filters_year">Year</string>
+    <string name="filters_from">From</string>
+    <string name="filters_to">To</string>
+    <string name="filters_mileage">Mileage</string>
+    <string name="filters_mileage_hint">Up to … km</string>
+    <string name="filters_spec">Regional spec</string>
+    <string name="filters_body">Body type</string>
+    <string name="filters_seller">Seller</string>
+    <string name="filters_sort">Sort</string>
 
     <string name="saved_empty">Nothing saved yet.</string>
     <string name="saved_empty_hint">Tap the bookmark on a reel to keep it here.</string>

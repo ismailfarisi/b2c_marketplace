@@ -304,6 +304,17 @@ class MainActivity : ComponentActivity() {
                         // a login wall there converts a motivated buyer into a
                         // bounce. The same argument the API makes by leaving
                         // GET /listings public.
+                        // Where the feed is pointed. Read here rather than in
+                        // each screen so there is one source of truth for "where
+                        // the viewer is" — search measures distance from it, and
+                        // the Nearest sort is only offered when it exists.
+                        val feedState by current.state.collectAsState()
+                        LaunchedEffect(feedState.lat, feedState.lng, me) {
+                            if (feedState.lat != 0.0 || feedState.lng != 0.0) {
+                                me?.setLocation(feedState.lat, feedState.lng)
+                            }
+                        }
+
                         val needsAccount = destination in
                             setOf(Destination.Sell, Destination.Saved, Destination.Me)
 
@@ -328,6 +339,12 @@ class MainActivity : ComponentActivity() {
                             Destination.Search -> me?.let {
                                 SearchScreen(
                                     viewModel = it,
+                                    // Gates the "Nearest" sort. The server falls
+                                    // back to newest without a point, and a sort
+                                    // that looks selected while producing a
+                                    // different order is worse than one that is
+                                    // not offered.
+                                    hasLocation = feedState.lat != 0.0 || feedState.lng != 0.0,
                                     // Straight into the conversation. A search
                                     // result with no way to act on it is a
                                     // catalogue, and this product's entire
@@ -416,17 +433,6 @@ class MainActivity : ComponentActivity() {
                                     },
                                 )
                                 Route.None -> Unit
-                            }
-                        }
-
-                        // Search measures distance from wherever the feed is
-                        // pointed. One source of truth for "where the viewer
-                        // is", pushed rather than read, because MeViewModel is
-                        // shared code and must not depend on the feed's.
-                        val feedState by current.state.collectAsState()
-                        LaunchedEffect(feedState.lat, feedState.lng, me) {
-                            if (feedState.lat != 0.0 || feedState.lng != 0.0) {
-                                me?.setLocation(feedState.lat, feedState.lng)
                             }
                         }
 

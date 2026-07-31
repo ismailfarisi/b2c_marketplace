@@ -38,6 +38,22 @@ data class SearchUiState(
     /** True once a search has actually run, so "no results" can be told from "not searched yet". */
     val searched: Boolean = false,
     val error: Failure? = null,
+    val filters: SearchFilters = SearchFilters(),
+    /**
+     * A filter set the viewer is editing but has not applied.
+     *
+     * Held apart from [filters] so the sheet can be cancelled. Editing the live
+     * set directly would re-run the search on every checkbox — four requests to
+     * tick four body types — and leave no way back if they change their mind.
+     */
+    val draftFilters: SearchFilters? = null,
+    /**
+     * True when there is more to fetch. Derived from [total] rather than from
+     * an empty page, so the last page does not require an extra round trip to
+     * discover it is the last page.
+     */
+    val hasMore: Boolean = false,
+    val loadingMore: Boolean = false,
 )
 
 data class InboxUiState(
@@ -168,6 +184,16 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         _search.value = _search.value.copy(query = query)
         searchJob?.cancel()
         if (query.isBlank()) {
+            // Clearing the box with filters still set is not "nothing to
+            // search" — "every GCC-spec car under 200,000 near me" is a
+            // complete question. Only a query *and* no filters is empty.
+            if (!_search.value.filters.isEmpty) {
+                searchJob = viewModelScope.launch {
+                    delay(SEARCH_DEBOUNCE_MS)
+                    runSearch("")
+                }
+                return
+            }
             _search.value = _search.value.copy(items = emptyList(), total = 0, searched = false)
             return
         }
@@ -186,7 +212,13 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
 
     private suspend fun runSearch(query: String) {
         _search.value = _search.value.copy(loading = true, error = null)
-        runCatching { api.search(query = query, lat = lat, lng = lng) }
+        runCatching {
+            api.search(
+                query = query, lat = lat, lng = lng,
+                filters = _search.value.filters,
+                limit = PAGE,
+            )
+        }
             .onSuccess {
                 // The query is re-read from state rather than closed over, so a
                 // result that lands after the box was cleared does not repopulate
@@ -194,11 +226,93 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
                 _search.value = _search.value.copy(
                     items = it.items, total = it.total,
                     loading = false, searched = true, error = null,
+                    hasMore = it.items.size.toLong() < it.total,
                 )
             }
             .onFailure { e ->
                 _search.value = _search.value.copy(loading = false, searched = true, error = e.toFailure())
             }
+    }
+
+    /**
+     * The next page.
+     *
+     * Offset paging rather than a cursor, matching what the endpoint offers.
+     * That is the wrong primitive for a feed — it double-counts and skips when
+     * rows are inserted between pages, which is why the feed uses a cursor —
+     * and acceptable here: a classifieds index changes over hours, and a buyer
+     * scrolling page three is not going to notice one car appearing twice.
+     * Worth revisiting if search ever sorts by anything that moves.
+     */
+    fun loadMore() {
+        val s = _search.value
+        if (s.loadingMore || s.loading || !s.hasMore || s.query.isBlank()) return
+        _search.value = s.copy(loadingMore = true)
+        viewModelScope.launch {
+            runCatching {
+                api.search(
+                    query = s.query, lat = lat, lng = lng,
+                    filters = s.filters, limit = PAGE, offset = s.items.size,
+                )
+            }
+                .onSuccess { page ->
+                    val merged = _search.value.items + page.items
+                    _search.value = _search.value.copy(
+                        items = merged,
+                        total = page.total,
+                        loadingMore = false,
+                        // Compared against the *merged* length, and guarded on
+                        // the page being non-empty. A server that returns
+                        // nothing while claiming a higher total would otherwise
+                        // spin this loop forever at the bottom of the list.
+                        hasMore = page.items.isNotEmpty() && merged.size.toLong() < page.total,
+                    )
+                }
+                .onFailure { e ->
+                    // The rows already on screen stay. A failed *next* page is
+                    // a strip at the bottom, never a replacement of results the
+                    // viewer is reading.
+                    _search.value = _search.value.copy(loadingMore = false, error = e.toFailure())
+                }
+        }
+    }
+
+    // ── Search filters ───────────────────────────────────────────────────────
+
+    /** Opens the sheet on a copy of what is currently applied. */
+    fun openFilters() {
+        _search.value = _search.value.copy(draftFilters = _search.value.filters)
+    }
+
+    fun editFilters(block: (SearchFilters) -> SearchFilters) {
+        val draft = _search.value.draftFilters ?: _search.value.filters
+        _search.value = _search.value.copy(draftFilters = block(draft))
+    }
+
+    fun cancelFilters() {
+        _search.value = _search.value.copy(draftFilters = null)
+    }
+
+    /**
+     * Applies the draft and re-runs.
+     *
+     * Runs even with an empty query, unlike [submitSearch]. "Every GCC-spec car
+     * under 200,000 near me" is a complete question with no text in it, and
+     * requiring a word before filters do anything would make the sheet useless
+     * for exactly the buyer who knows what they want.
+     */
+    fun applyFilters() {
+        val draft = _search.value.draftFilters ?: return
+        searchJob?.cancel()
+        _search.value = _search.value.copy(filters = draft, draftFilters = null)
+        searchJob = viewModelScope.launch { runSearch(_search.value.query) }
+    }
+
+    fun clearFilters() {
+        if (_search.value.filters.isEmpty && _search.value.filters.sort == null) return
+        searchJob?.cancel()
+        _search.value = _search.value.copy(filters = SearchFilters(), draftFilters = null)
+        searchJob = viewModelScope.launch { runSearch(_search.value.query) }
     }
 
     // ── Messaging ────────────────────────────────────────────────────────────
@@ -284,5 +398,6 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 280L
+        const val PAGE = 20
     }
 }
