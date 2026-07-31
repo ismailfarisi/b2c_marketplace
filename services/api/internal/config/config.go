@@ -28,7 +28,7 @@ type Config struct {
 	OTPDevEcho bool
 	OTPTTL     time.Duration
 
-	S3Endpoint       string
+	S3Endpoint string
 	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
 	// object store somewhere this process does not. Empty means the same host.
 	// See objectstore.Config.PublicEndpoint — getting this wrong produces an

@@ -152,7 +152,7 @@ const (
 	// FieldMoney is minor units on the wire and a major-unit keypad on screen.
 	// Distinct from FieldInteger because the client has to divide by 100 in one
 	// case and not the other, and getting that wrong prices a car at 1,890 AED.
-	FieldMoney FieldKind = "money"
+	FieldMoney  FieldKind = "money"
 	FieldSelect FieldKind = "select"
 	// FieldLookup is a typeahead against a catalogue the vertical serves. The
 	// client GETs Source with ?q= and posts back the chosen option's value; it

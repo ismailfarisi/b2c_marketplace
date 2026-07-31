@@ -196,6 +196,13 @@ private fun labelText(label: ReelClock.Label): String = when (label) {
         label.totalMinutes / 60,
     )
 
+    is ReelClock.Label.Opens ->
+        if (label.hours > 0) {
+            stringResource(R.string.time_opens_h, label.hours, label.minutes)
+        } else {
+            stringResource(R.string.time_opens_m, label.minutes)
+        }
+
     is ReelClock.Label.Ago -> {
         val unit = when (label.unit) {
             ReelClock.Label.Unit.MINUTE -> R.plurals.ago_minutes

@@ -6,6 +6,8 @@ import ae.marketplace.mobile.feed.FeedApi
 import ae.marketplace.mobile.feed.FeedPager
 import ae.marketplace.mobile.feed.FeedViewModel
 import ae.marketplace.mobile.identity.SignInApi
+import ae.marketplace.mobile.me.MeApi
+import ae.marketplace.mobile.me.MeViewModel
 import ae.marketplace.mobile.identity.SignInViewModel
 import ae.marketplace.mobile.identity.ViewerIdentity
 import ae.marketplace.mobile.identity.deviceIdProvider
@@ -48,6 +50,7 @@ class MarketplaceSdk private constructor(
     private val api: FeedApi,
     private val sell: SellApi,
     private val signIn: SignInApi,
+    private val me: MeApi,
     private val scope: CoroutineScope,
     private val network: NetworkStatus,
 ) {
@@ -76,6 +79,7 @@ class MarketplaceSdk private constructor(
                 // not leak an engine each time.
                 sell = SellApi(client, ApiClientFactory.createUploader()),
                 signIn = SignInApi(client, store),
+                me = MeApi(client),
                 scope = scope,
                 network = networkStatus(context),
             ).also { it.sessionId = sessionId }
@@ -134,4 +138,12 @@ class MarketplaceSdk private constructor(
      * seen a single reel is how a discovery app loses the visit.
      */
     fun createSignInViewModel(): SignInViewModel = SignInViewModel(signIn)
+
+    /**
+     * Saved, Me, Search and messaging.
+     *
+     * One instance for the life of the shell rather than one per tab, because
+     * its whole design is that flicking between those tabs does not re-fetch.
+     */
+    fun createMeViewModel(): MeViewModel = MeViewModel(me)
 }

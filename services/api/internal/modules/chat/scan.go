@@ -413,7 +413,14 @@ func stripRedactions(s string) string {
 // and for the fraud detectors to aggregate over.
 func (s Scan) Kinds() []string {
 	seen := map[FindingKind]bool{}
-	var out []string
+	// Empty and non-nil, which is the whole point of this line.
+	//
+	// `var out []string` is nil for a clean message, pgx encodes a nil slice as
+	// SQL NULL, and `messages.findings` is NOT NULL with a `'{}'` default — so
+	// every message that had *nothing* wrong with it failed to insert, while
+	// every message carrying a phone number went through. Chat worked only for
+	// the messages it was supposed to redact.
+	out := []string{}
 	for _, f := range s.Findings {
 		if seen[f.Kind] {
 			continue

@@ -1,9 +1,15 @@
 package ae.marketplace.mobile.android
 
+import ae.marketplace.mobile.android.me.InboxScreen
+import ae.marketplace.mobile.android.me.MeScreen
+import ae.marketplace.mobile.android.me.SavedScreen
+import ae.marketplace.mobile.android.me.SearchScreen
+import ae.marketplace.mobile.android.me.ThreadScreen
 import ae.marketplace.mobile.android.sell.SellFlow
 import ae.marketplace.mobile.android.sell.SignInGate
 import ae.marketplace.mobile.feed.FeedViewModel
 import ae.marketplace.mobile.identity.SignInViewModel
+import ae.marketplace.mobile.me.MeViewModel
 import ae.marketplace.mobile.sell.SellViewModel
 import android.Manifest
 import android.annotation.SuppressLint
@@ -39,6 +45,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
+
+/**
+ * What is drawn *over* the tabs.
+ *
+ * Messaging is not a destination. It is reached from the Me screen and from a
+ * CTA press three swipes into the feed, and making it a sixth tab would turn
+ * the second one into a context switch out of the reel the viewer is watching.
+ */
+private enum class Route { None, Inbox, Thread }
 
 class MainActivity : ComponentActivity() {
 
@@ -138,6 +153,33 @@ class MainActivity : ComponentActivity() {
                 var destination by rememberSaveable { mutableStateOf(Destination.Feed) }
                 var filtersOpen by remember { mutableStateOf(false) }
 
+                // Saved, Me, Search and messaging share one state holder — see
+                // MeViewModel. Created once here rather than per tab, because
+                // its whole design is that flicking between those tabs does not
+                // re-fetch.
+                var meVm by remember { mutableStateOf<MeViewModel?>(null) }
+                var signInVm by remember { mutableStateOf<SignInViewModel?>(null) }
+                // Hoisted out of the Sell tab, where it started. Three of the
+                // five destinations need an account, and a gate that lives
+                // inside one of them makes the other two either duplicate it or
+                // 401 silently.
+                var authorised by rememberSaveable { mutableStateOf(false) }
+
+                // Messaging is an overlay rather than a tab. It is reached from
+                // two places that are not each other — the Me screen and a CTA
+                // press three swipes into the feed — and a tab would make the
+                // second one a context switch out of the feed the viewer is
+                // still watching.
+                var route by remember { mutableStateOf(Route.None) }
+
+                LaunchedEffect(Unit) {
+                    val sdk = (application as MarketplaceApp).sdk.await()
+                    meVm = sdk.createMeViewModel().also {
+                        it.setLocation(fallback.lat, fallback.lng)
+                    }
+                    signInVm = sdk.createSignInViewModel()
+                }
+
                 Box(
                     modifier = Modifier.fillMaxSize().background(Color.Black),
                     contentAlignment = Alignment.Center,
@@ -153,7 +195,50 @@ class MainActivity : ComponentActivity() {
                         // and a viewer who lost their place — and the feed is the
                         // one screen where losing your place is the whole cost.
                         Box(Modifier.fillMaxSize().alpha(if (destination == Destination.Feed) 1f else 0f)) {
-                            ReelFeed(viewModel = current, onOpenFilters = { filtersOpen = true })
+                            ReelFeed(
+                                viewModel = current,
+                                onOpenFilters = { filtersOpen = true },
+                                onActionPressed = { action, reelId ->
+                                    // The branch is on `kind`, never on
+                                    // `target_type`. That distinction is the
+                                    // whole action seam: a vertical adding a
+                                    // new *target* costs nothing here, and the
+                                    // set of things a client can physically do
+                                    // — open a chat, start a checkout, follow
+                                    // someone — is genuinely closed and shipped
+                                    // in the app.
+                                    //
+                                    // Anything unrecognised falls through
+                                    // having recorded the click, which is what
+                                    // the app did for every CTA until now. A
+                                    // newer server's action must not crash an
+                                    // older build.
+                                    when (action.kind) {
+                                        "inquire_listing" -> {
+                                            val listingId = action.targetId
+                                            if (listingId == null) return@ReelFeed
+                                            if (!authorised) {
+                                                // A message needs an account,
+                                                // and this is the first moment
+                                                // it genuinely does. Asking here
+                                                // rather than at launch is the
+                                                // same call the Sell tab makes.
+                                                destination = Destination.Me
+                                                return@ReelFeed
+                                            }
+                                            meVm?.inquire(
+                                                listingId = listingId,
+                                                title = current.state.value.items
+                                                    .firstOrNull { it.id == reelId }
+                                                    ?.summary?.title.orEmpty(),
+                                                reelId = reelId,
+                                                actionId = action.id,
+                                            )
+                                            route = Route.Thread
+                                        }
+                                    }
+                                },
+                            )
                         }
 
                         if (filtersOpen) {
@@ -166,50 +251,113 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = { filtersOpen = false },
                             )
                         }
-                        // The Sell tab is its own flow with its own state
-                        // holder, created on first entry rather than at launch:
-                        // it holds a recorded clip in memory, and most sessions
-                        // never open it.
-                        if (destination == Destination.Sell) {
-                            var sellVm by remember { mutableStateOf<SellViewModel?>(null) }
-                            var signInVm by remember { mutableStateOf<SignInViewModel?>(null) }
-                            // Held here rather than read from the sign-in state
-                            // each recomposition, so that completing the gate
-                            // moves the seller on exactly once.
-                            var authorised by rememberSaveable { mutableStateOf(false) }
+                        val me = meVm
+                        val gate = signInVm
 
-                            LaunchedEffect(Unit) {
-                                val sdk = (application as MarketplaceApp).sdk.await()
-                                signInVm = sdk.createSignInViewModel()
-                                sellVm = sdk.createSellViewModel()
-                            }
+                        // Three of the five need an account. Search does not —
+                        // it is the highest-intent surface in the product and
+                        // the one most likely to arrive from a shared link, and
+                        // a login wall there converts a motivated buyer into a
+                        // bounce. The same argument the API makes by leaving
+                        // GET /listings public.
+                        val needsAccount = destination in
+                            setOf(Destination.Sell, Destination.Saved, Destination.Me)
 
-                            val gate = signInVm
-                            if (!authorised && gate != null) {
-                                SignInGate(
-                                    viewModel = gate,
-                                    onSignedIn = { authorised = true },
-                                    onCancel = { destination = Destination.Feed },
-                                )
-                            }
-                            sellVm?.takeIf { authorised }?.let { vm ->
-                                SellFlow(
-                                    viewModel = vm,
-                                    onLeave = { destination = Destination.Feed },
-                                    onSeeFeed = {
-                                        destination = Destination.Feed
-                                        // The seller's own reel is new supply at
-                                        // this location, and the feed they are
-                                        // looking at was built before it existed.
-                                        // Refreshing is the difference between
-                                        // "See it in the feed" showing it and
-                                        // sending them to look for nothing.
-                                        current.refresh()
+                        if (needsAccount && !authorised && gate != null) {
+                            SignInGate(
+                                viewModel = gate,
+                                onSignedIn = { authorised = true },
+                                onCancel = { destination = Destination.Feed },
+                            )
+                        } else when (destination) {
+                            Destination.Feed -> Unit // drawn above, always composed
+
+                            Destination.Search -> me?.let {
+                                SearchScreen(
+                                    viewModel = it,
+                                    // Straight into the conversation. A search
+                                    // result with no way to act on it is a
+                                    // catalogue, and this product's entire
+                                    // conversion event is the message.
+                                    onOpen = { result ->
+                                        if (authorised) {
+                                            it.inquire(result.id, result.title, null, null)
+                                            route = Route.Thread
+                                        } else {
+                                            destination = Destination.Me
+                                        }
                                     },
                                 )
                             }
-                        } else if (destination != Destination.Feed) {
-                            NotBuiltYet(destination)
+
+                            Destination.Saved -> me?.let {
+                                SavedScreen(viewModel = it, onOpen = { destination = Destination.Feed })
+                            }
+
+                            Destination.Me -> me?.let {
+                                MeScreen(
+                                    viewModel = it,
+                                    onOpenInbox = { route = Route.Inbox },
+                                    onSignOut = {
+                                        authorised = false
+                                        destination = Destination.Feed
+                                    },
+                                )
+                            }
+
+                            // The Sell tab holds a recorded clip in memory, so
+                            // its state holder is created on entry and released
+                            // on exit rather than living for the process.
+                            Destination.Sell -> {
+                                var sellVm by remember { mutableStateOf<SellViewModel?>(null) }
+                                LaunchedEffect(Unit) {
+                                    sellVm = (application as MarketplaceApp).sdk.await().createSellViewModel()
+                                }
+                                sellVm?.let { vm ->
+                                    SellFlow(
+                                        viewModel = vm,
+                                        onLeave = { destination = Destination.Feed },
+                                        onSeeFeed = {
+                                            destination = Destination.Feed
+                                            // The seller's own reel is new supply
+                                            // at this location, and the feed they
+                                            // are looking at was built before it
+                                            // existed. Refreshing is the
+                                            // difference between "See it in the
+                                            // feed" showing it and sending them
+                                            // to look for nothing.
+                                            current.refresh()
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        // Messaging, over everything.
+                        if (me != null && route != Route.None) {
+                            when (route) {
+                                Route.Inbox -> InboxScreen(
+                                    viewModel = me,
+                                    onOpen = { c ->
+                                        me.openThread(c.id, c.listingTitle)
+                                        route = Route.Thread
+                                    },
+                                    onBack = { route = Route.None },
+                                )
+                                Route.Thread -> ThreadScreen(
+                                    viewModel = me,
+                                    onBack = {
+                                        me.closeThread()
+                                        // Back to the inbox rather than to
+                                        // wherever the thread was opened from.
+                                        // A buyer who messaged from the feed has
+                                        // just acquired an inbox, and this is the
+                                        // moment they learn it exists.
+                                        route = Route.Inbox
+                                    },
+                                )
+                                Route.None -> Unit
+                            }
                         }
 
                         // Video stops when the viewer leaves the feed. Without
@@ -228,7 +376,7 @@ class MainActivity : ComponentActivity() {
                     // nav bar over "Publish" is a mis-tap that either loses the
                     // seller's work or publishes it early. Sell is modal: it
                     // leaves by its own ✕ or Done.
-                    if (destination != Destination.Sell) {
+                    if (destination != Destination.Sell && route == Route.None) {
                         BottomNav(
                             selected = destination,
                             onSelect = { destination = it },

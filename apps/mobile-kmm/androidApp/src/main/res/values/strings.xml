@@ -14,6 +14,10 @@
     <string name="time_remaining_ms">%1$02d:%2$02d left</string>
     <string name="time_window">%1$dh %2$dm of %3$dh</string>
     <string name="time_order_by">order by %1$02d:%2$02d</string>
+    <!-- A window that has not opened yet. The opposite instruction to
+         time_remaining, so it is a separate string rather than a reuse. -->
+    <string name="time_opens_h">opens in %1$dh %2$dm</string>
+    <string name="time_opens_m">opens in %1$dm</string>
     <string name="time_closed">closed</string>
 
     <!-- Feed surfaces. Short by necessity: four tabs share one row. -->
@@ -141,6 +145,68 @@
     <string name="sell_stat_comments">Comments</string>
     <string name="sell_see_in_feed">See it in the feed</string>
     <string name="sell_done">Done</string>
+
+    <!--
+        Search, Saved, Me and messaging.
+
+        Three separate empty states for search rather than one "No results":
+        "type something", "nothing matched" and "that failed" are three
+        different facts, and collapsing them reports a working search as broken
+        to the person who has not searched yet.
+    -->
+    <string name="search_hint">Search cars</string>
+    <string name="search_prompt">Search by make, model or year.</string>
+    <string name="search_none">Nothing matched “%1$s”.</string>
+    <string name="search_count">%1$d results</string>
+    <string name="search_promoted">PROMOTED</string>
+
+    <string name="saved_empty">Nothing saved yet. Tap the bookmark on a reel to keep it.</string>
+    <string name="saved_untitled">Saved reel</string>
+    <string name="saved_gone">No longer available</string>
+
+    <string name="me_messages">Messages</string>
+    <string name="me_your_listings">YOUR LISTINGS</string>
+    <string name="me_no_listings">You have not listed anything yet.</string>
+    <string name="me_sign_out">Sign out</string>
+
+    <!-- Listing states, as a seller reads them. -->
+    <string name="status_active">Live</string>
+    <string name="status_review">In review</string>
+    <string name="status_draft">Draft</string>
+    <string name="status_rejected">Rejected</string>
+    <string name="status_sold">Sold</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_expired">Expired</string>
+
+    <!--
+        The reel's state, when that is what is holding a listing up.
+
+        A seller whose listing says "in review" while the video is still
+        transcoding is being told the wrong reason, and will wait for the wrong
+        thing.
+    -->
+    <string name="reel_note_processing">Video still processing.</string>
+    <string name="reel_note_review">Video is with a reviewer.</string>
+    <string name="reel_note_rejected">Video was not approved.</string>
+    <string name="reel_note_expired">Video upload never finished.</string>
+    <string name="reel_note_failed">Video could not be processed.</string>
+
+    <string name="inbox_empty">No messages yet. They start when a buyer taps the CTA on one of your reels.</string>
+    <string name="inbox_untitled">Conversation</string>
+    <string name="thread_empty">Say hello. Keep it here — we can only help if something goes wrong on the platform.</string>
+    <string name="thread_hint">Message</string>
+    <string name="thread_send">Send</string>
+
+    <!--
+        Message states, said plainly under the bubble.
+
+        A silently altered or silently withheld message is the most alienating
+        thing a messaging product can do: the sender assumes they are being
+        ignored, and goes looking for a phone number.
+    -->
+    <string name="msg_held">Being reviewed — not delivered yet.</string>
+    <string name="msg_redacted">Contact details were removed.</string>
+    <string name="msg_blocked">Not delivered.</string>
 
     <plurals name="ago_minutes">
         <item quantity="one">listed %d minute ago</item>

@@ -51,6 +51,13 @@ const (
 	TypeOffering Type = "service_offering"
 	TypePlan     Type = "meal_plan"
 	TypeListing  Type = "vehicle_listing"
+	// TypeOffer is a vendor's time-boxed sale — the first user of ModeWindow.
+	// Named for the mechanic rather than the hour: the same rule is a midnight
+	// clear-out, a midday lull filler and a Friday brunch window.
+	TypeOffer Type = "flash_offer"
+	// TypeProperty is a regulated advertisement, which is what makes it a
+	// separate type rather than a second flavour of listing. See migration 000026.
+	TypeProperty Type = "property_listing"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

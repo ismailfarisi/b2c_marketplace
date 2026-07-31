@@ -801,7 +801,27 @@ func (q Query) seenKey() string {
 		sort.Strings(types)
 		key += "|" + strings.Join(types, ",")
 	}
-	return key
+	return key + "|" + geoCell(q.Lat, q.Lng)
+}
+
+// geoCell buckets a point so the seen-set is scoped to *where* the feed was
+// served, without resetting on GPS jitter.
+//
+// Location belongs in the key for the same reason the vertical does, and it was
+// missed the first time: moving the feed to another district is a new question,
+// not a filter over the old answer — which is what the client already says in
+// as many words ("this is not a filter over the current results, it is a
+// different feed"). Without it, a kitchen seen at Dubai Marina is silently
+// excluded from a feed the viewer deliberately moved to Al Barsha to find, and
+// the empty screen reads as "nothing here" rather than "you already saw it".
+//
+// Two decimal places is roughly a kilometre at this latitude. Finer would make
+// a stationary phone's GPS wander mint a new key every few pages and forget
+// what it had shown; coarser would merge districts that are genuinely different
+// feeds. Rounded rather than truncated so that points either side of a boundary
+// do not land in cells further apart than they are.
+func geoCell(lat, lng float64) string {
+	return fmt.Sprintf("%.2f,%.2f", lat, lng)
 }
 
 // subjectTypesArg normalises the filter for SQL.

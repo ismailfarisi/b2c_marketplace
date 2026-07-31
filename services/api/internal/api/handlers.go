@@ -50,6 +50,10 @@ type Handlers struct {
 	Vehicles *VehicleHandlers
 	Chat     *ChatHandlers
 
+	// Me is the viewer's own two lists — what they kept and what they sell.
+	// Nil without the media stack, because saves are reels.
+	Me *MeHandlers
+
 	// Sell is the authoring flow as a phone uses it. Nil until both the media
 	// stack and at least one composer exist — a Sell tab whose tile grid is
 	// empty is a tab that opens a camera and then has nowhere to put the video,

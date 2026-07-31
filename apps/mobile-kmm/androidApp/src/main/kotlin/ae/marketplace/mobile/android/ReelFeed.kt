@@ -36,7 +36,19 @@ import androidx.compose.ui.unit.dp
  * Compose and SwiftUI have nothing in common.
  */
 @Composable
-fun ReelFeed(viewModel: FeedViewModel, onOpenFilters: () -> Unit = {}) {
+fun ReelFeed(
+    viewModel: FeedViewModel,
+    onOpenFilters: () -> Unit = {},
+    /**
+     * Where a CTA press goes once it has been recorded.
+     *
+     * Hoisted out of this composable because the destination is a different
+     * screen and the feed must not know how to build one. The host decides —
+     * see MainActivity, where the branch is on the action's *kind* and never on
+     * its target type, which is the line this whole seam is drawn along.
+     */
+    onActionPressed: (ResolvedAction, String) -> Unit = { _, _ -> },
+) {
     val state by viewModel.state.collectAsState()
 
     val pagerState = rememberPagerState { state.items.size }
@@ -86,7 +98,13 @@ fun ReelFeed(viewModel: FeedViewModel, onOpenFilters: () -> Unit = {}) {
                     viewModel = viewModel,
                     onLike = { viewModel.toggleLike(state.items[page].id) },
                     onAction = { action ->
+                        // Recorded first, always — including when the target
+                        // turns out to be unavailable. Phase 3 built the funnel
+                        // with action_click as conversion's denominator, and a
+                        // client that only reports successful navigations
+                        // flatters the rate by exactly the number of dead CTAs.
                         viewModel.onActionClick(action.id, state.items[page].id)
+                        onActionPressed(action, state.items[page].id)
                     },
                 )
             }

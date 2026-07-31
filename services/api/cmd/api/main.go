@@ -42,6 +42,7 @@ import (
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/modules/payouts"
+	"github.com/marketplace/api/internal/modules/property"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/tax"
 	"github.com/marketplace/api/internal/modules/trust"
@@ -260,7 +261,8 @@ func run() error {
 
 	// The sell half of the subject seam, wired only in this process. See
 	// app.RegisterComposers for why cmd/feed and cmd/worker do not get it.
-	app.RegisterComposers(registries, vehicleSvc)
+	propertySvc := property.NewService(pool)
+	app.RegisterComposers(registries, vehicleSvc, propertySvc)
 
 	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
 	if err != nil {
@@ -320,6 +322,12 @@ func run() error {
 		handlers.Chat = &api.ChatHandlers{
 			Chat:       chatSvc,
 			Moderation: media.Moderation,
+		}
+		handlers.Me = &api.MeHandlers{
+			Actions:   media.Actions,
+			Subjects:  registries.Subjects,
+			Listings:  vehicleSvc,
+			MediaBase: cfg.MediaCDNBaseURL,
 		}
 		// The sell flow needs the media stack (a reel has to go somewhere) and
 		// at least one registered composer. Both are checked rather than

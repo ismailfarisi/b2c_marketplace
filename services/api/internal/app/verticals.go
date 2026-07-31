@@ -4,6 +4,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/modules/catalog"
+	"github.com/marketplace/api/internal/modules/offers"
+	"github.com/marketplace/api/internal/modules/property"
 	"github.com/marketplace/api/internal/modules/social"
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/seam/action"
@@ -110,6 +112,37 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	// their CTAs, and render no badge and no countdown.
 	subjects.Register(subject.TypeListing, vehicles.NewSubjectProvider(pool))
 
+	// Meal plans — the first vertical to arrive *after* the subject seam was
+	// finished, and therefore the test of what the seam claimed.
+	//
+	// This line and one Go file are the whole of it. Both clients gain a "Meals"
+	// filter chip, a MEAL SUBSCRIPTION badge and a recurring daily cutoff — the
+	// fourth and last time mode, and the first one in production — without a
+	// line changing in the feed, the ranker, the overlay or either app. If that
+	// had required a mobile release, the seam would have failed.
+	//
+	// Ownership follows the table, so it lives in catalog beside the plan CTA
+	// rather than in verticals/meals: `subscription_plans` is a catalogue row
+	// several verticals write into.
+	subjects.Register(subject.TypePlan, catalog.NewPlanSubjectProvider(pool))
+
+	// Flash offers — a vendor's time-boxed sale, and the first user of
+	// ModeWindow. The seam has carried that mode unexercised since it was
+	// written; this is the vertical it was written for.
+	actions.Register(action.KindClaimOffer, action.TargetFlashOffer,
+		offers.NewClaimHandler(pool))
+	subjects.Register(subject.TypeOffer, offers.NewSubjectProvider(pool))
+
+	// Property.
+	//
+	// A separate kind from a car enquiry rather than a reuse of
+	// inquire_listing, because the two produce different things: one opens a
+	// thread between private parties, the other creates a regulated lead against
+	// a permit. See property.EnquiryHandler.
+	actions.Register(action.KindEnquireProperty, action.TargetProperty,
+		property.NewEnquiryHandler(pool))
+	subjects.Register(subject.TypeProperty, property.NewSubjectProvider(pool))
+
 	return Registries{Actions: actions, Verticals: verticals, Subjects: subjects}
 }
 
@@ -123,6 +156,18 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 //
 // This is where the "adding a vertical is a Go file and a registration line"
 // claim is either true or it is not, for the sell half. Today it is one line.
-func RegisterComposers(r Registries, vehicleSvc *vehicles.Service) {
+func RegisterComposers(r Registries, vehicleSvc *vehicles.Service, propertySvc *property.Service) {
 	r.Subjects.RegisterComposer(subject.TypeListing, vehicles.NewComposer(vehicleSvc))
+
+	// Property is sellable from the app, and the flow is deliberately different
+	// in one place: its trust upload is a gate rather than a badge. See
+	// property.Composer — the permit arrives days after the video does.
+	r.Subjects.RegisterComposer(subject.TypeProperty, property.NewComposer(propertySvc))
+
+	// Flash offers are absent, and that is the seam working rather than a gap.
+	// An offer is authored by a restaurant through a vendor console against its
+	// own branch — there is no consumer standing outside a kitchen filming a
+	// discount they are entitled to publish. Being visible in the feed and being
+	// sellable from a phone are separate capabilities, which is exactly why
+	// Composer is a separate optional interface from Provider.
 }

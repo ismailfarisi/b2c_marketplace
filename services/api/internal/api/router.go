@@ -375,6 +375,13 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/moderation/boosts/{campaignId}/decide", h.BoostOps.Review)
 		}
 
+		// The viewer's own lists. Mounted before the reels nil-check for the
+		// same reason the sell routes are: its nil condition is its own.
+		if h.Me != nil {
+			r.Get("/me/saves", h.Me.Saves)
+			r.Get("/me/listings", h.Me.MyListings)
+		}
+
 		// The sell flow. Mounted before the reels nil-check below because it is
 		// its own handler set with its own nil condition — it needs a registered
 		// composer as well as the media stack, and a deployment with media but

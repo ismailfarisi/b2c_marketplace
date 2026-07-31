@@ -24,10 +24,23 @@ const (
 	KindBookService    Kind = "book_service"
 	KindSubscribePlan  Kind = "subscribe_plan"
 	KindInquireListing Kind = "inquire_listing"
-	KindOpenMenu       Kind = "open_menu"
-	KindFollow         Kind = "follow"
-	KindShare          Kind = "share"
-	KindExternal       Kind = "external"
+	// KindClaimOffer is a flash offer's CTA. Distinct from booking because there
+	// is nothing to schedule and nothing to configure — the whole interaction is
+	// "yes, before it closes", and a booking flow in front of that would lose the
+	// urgency the format exists to create.
+	KindClaimOffer Kind = "claim_offer"
+	// KindEnquireProperty is deliberately not KindInquireListing.
+	//
+	// They look like the same verb and they are not the same act: a car enquiry
+	// opens a thread between two private parties, while a property enquiry is a
+	// regulated lead handed to a licensed broker and logged against a permit.
+	// Sharing the kind would mean one handler doing both, and the compliance
+	// obligations of the second leaking into the first.
+	KindEnquireProperty Kind = "enquire_property"
+	KindOpenMenu        Kind = "open_menu"
+	KindFollow          Kind = "follow"
+	KindShare           Kind = "share"
+	KindExternal        Kind = "external"
 )
 
 type TargetType string
@@ -36,6 +49,8 @@ const (
 	TargetOffering     TargetType = "service_offering"
 	TargetPlan         TargetType = "meal_plan"
 	TargetListing      TargetType = "vehicle_listing"
+	TargetFlashOffer   TargetType = "flash_offer"
+	TargetProperty     TargetType = "property_listing"
 	TargetVendorBranch TargetType = "vendor_branch"
 	TargetVendor       TargetType = "vendor"
 	TargetURL          TargetType = "url"

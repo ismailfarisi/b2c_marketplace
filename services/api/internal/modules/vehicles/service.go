@@ -341,6 +341,15 @@ type InquireInput struct {
 	SourceActionID *uuid.UUID
 }
 
+// leadSources mirrors the CHECK on listing_leads.source.
+//
+// Duplicated deliberately, in the same spirit as Draft.Validate: the database
+// is the authority, and re-stating it here is what turns a constraint violation
+// into a field error the caller can act on.
+var leadSources = map[string]bool{
+	"reel_action": true, "listing_page": true, "search": true, "saved_search": true,
+}
+
 type Inquiry struct {
 	LeadID         uuid.UUID
 	ConversationID uuid.UUID
@@ -369,6 +378,22 @@ func (s *Service) Inquire(ctx context.Context, in InquireInput) (*Inquiry, error
 	source := in.Source
 	if source == "" {
 		source = "listing_page"
+	}
+	// Checked here rather than left to the column.
+	//
+	// `listing_leads.source` has a CHECK on it, so an unrecognised value from a
+	// client came back as a 500 with a constraint name in the log and nothing
+	// the caller could act on — which is exactly what happened the first time a
+	// client sent "feed" instead of "reel_action". A field error names the field.
+	//
+	// It is not silently defaulted, either: the source is the attribution, and
+	// quietly filing a reel-driven lead as a listing-page one would understate
+	// the number the whole video bet is measured by.
+	if !leadSources[source] {
+		return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "source", Code: "invalid",
+			Message: "one of reel_action, listing_page, search, saved_search",
+		}}}
 	}
 
 	var out Inquiry
