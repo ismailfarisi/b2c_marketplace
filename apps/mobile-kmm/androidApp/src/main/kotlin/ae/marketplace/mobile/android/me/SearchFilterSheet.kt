@@ -102,7 +102,7 @@ fun SearchFilterSheet(
                         color = Palette.Accent,
                         fontSize = Type.Secondary,
                         modifier = Modifier
-                            .clickable { viewModel.editFilters { SearchFilters(sort = it.sort) } }
+                            .clickable { viewModel.editFilters { it.cleared() } }
                             .defaultMinSize(minHeight = Space.Touch)
                             .padding(vertical = Space.Medium, horizontal = Space.Small),
                     )
@@ -118,12 +118,12 @@ fun SearchFilterSheet(
                     value = draft.priceMinMinor?.let { (it / 100).toString() }.orEmpty(),
                     placeholder = stringResource(R.string.filters_min),
                     modifier = Modifier.weight(1f),
-                ) { v -> viewModel.editFilters { it.copy(priceMinMinor = v?.times(100)) } }
+                ) { v -> viewModel.editFilters { it.withPriceMin(v?.times(100)) } }
                 NumberBox(
                     value = draft.priceMaxMinor?.let { (it / 100).toString() }.orEmpty(),
                     placeholder = stringResource(R.string.filters_max),
                     modifier = Modifier.weight(1f),
-                ) { v -> viewModel.editFilters { it.copy(priceMaxMinor = v?.times(100)) } }
+                ) { v -> viewModel.editFilters { it.withPriceMax(v?.times(100)) } }
             }
 
             SectionLabel(stringResource(R.string.filters_year))
@@ -132,12 +132,12 @@ fun SearchFilterSheet(
                     value = draft.yearMin?.toString().orEmpty(),
                     placeholder = stringResource(R.string.filters_from),
                     modifier = Modifier.weight(1f),
-                ) { v -> viewModel.editFilters { it.copy(yearMin = v?.toInt()) } }
+                ) { v -> viewModel.editFilters { it.withYearMin(v?.toInt()) } }
                 NumberBox(
                     value = draft.yearMax?.toString().orEmpty(),
                     placeholder = stringResource(R.string.filters_to),
                     modifier = Modifier.weight(1f),
-                ) { v -> viewModel.editFilters { it.copy(yearMax = v?.toInt()) } }
+                ) { v -> viewModel.editFilters { it.withYearMax(v?.toInt()) } }
             }
 
             SectionLabel(stringResource(R.string.filters_mileage))
@@ -145,16 +145,16 @@ fun SearchFilterSheet(
                 value = draft.mileageMax?.toString().orEmpty(),
                 placeholder = stringResource(R.string.filters_mileage_hint),
                 modifier = Modifier.fillMaxWidth(),
-            ) { v -> viewModel.editFilters { it.copy(mileageMax = v?.toInt()) } }
+            ) { v -> viewModel.editFilters { it.withMileageMax(v?.toInt()) } }
 
             SectionLabel(stringResource(R.string.filters_spec))
             ChipRow(SPECS, draft.regionalSpecs) { value ->
-                viewModel.editFilters { it.copy(regionalSpecs = it.toggle(it.regionalSpecs, value)) }
+                viewModel.editFilters { it.toggleSpec(value) }
             }
 
             SectionLabel(stringResource(R.string.filters_body))
             ChipRow(BODY_TYPES, draft.bodyTypes) { value ->
-                viewModel.editFilters { it.copy(bodyTypes = it.toggle(it.bodyTypes, value)) }
+                viewModel.editFilters { it.toggleBodyType(value) }
             }
 
             SectionLabel(stringResource(R.string.filters_seller))
@@ -164,7 +164,7 @@ fun SearchFilterSheet(
             ) { value ->
                 // Single-select: tapping the active one clears it back to
                 // "both", which is what a chip that is already on should do.
-                viewModel.editFilters { it.copy(sellerKind = if (it.sellerKind == value) null else value) }
+                viewModel.editFilters { it.toggleSellerKind(value) }
             }
 
             SectionLabel(stringResource(R.string.filters_sort))
@@ -176,7 +176,7 @@ fun SearchFilterSheet(
                 options = sortOptions(hasLocation),
                 selected = setOf(draft.sort ?: SearchSort.Newest.wire),
             ) { value ->
-                viewModel.editFilters { it.copy(sort = value) }
+                viewModel.editFilters { it.withSort(value) }
             }
 
             Box(Modifier.padding(top = Space.XL, bottom = Space.Large)) {

@@ -52,6 +52,13 @@ struct MarketplaceApp: App {
     }
 }
 
+/// What is drawn *over* the tabs.
+///
+/// Messaging is not a destination. It is reached from the Me screen and from a
+/// CTA press three swipes into the feed, and making it a sixth tab would turn
+/// the second into a context switch out of the reel the viewer is watching.
+private enum Route: Equatable { case none, inbox, thread }
+
 /// The tab host.
 ///
 /// Deliberately not a `TabView`. TabView owns its own bar, and the bar it draws
@@ -66,18 +73,55 @@ struct RootView: View {
     @SceneStorage("destination") private var destinationRaw: String = Destination.feed.rawValue
 
     /// One view model for the process. Created once and held, because the feed
-    /// stays alive across tab changes — see the comment on the ZStack below.
+    /// stays alive across tab changes — see the ZStack below.
     @State private var feedViewModel: FeedViewModel?
+
+    /// Saved, Me, Search and messaging share one state holder, created once
+    /// here rather than per tab: its whole design is that flicking between
+    /// those tabs does not re-fetch.
+    @State private var meViewModel: MeViewModel?
+    @State private var signInViewModel: SignInViewModel?
+    @State private var session: Session?
+
+    @State private var route: Route = .none
+    @State private var focusOpen = false
+    @State private var focusTitle = ""
+
+    /// The one answer to "is there an account behind this session".
+    ///
+    /// Three states, not two. Reading the Keychain is asynchronous, and a
+    /// boolean has to pick a side while that read is in flight: `false` flashes
+    /// the sign-in gate at a signed-in returning viewer, `true` flashes their
+    /// empty Saved list. Neither is fixable with a spinner *inside* the gate,
+    /// because the gate itself is the wrong screen.
+    @State private var sessionState: SessionState = SessionStateUnknown()
+
+    /// Where the feed is pointed, so search measures distance from it and the
+    /// Nearest sort knows whether to appear.
+    @State private var lat: Double = 0
+    @State private var lng: Double = 0
 
     private var destination: Destination {
         Destination(rawValue: destinationRaw) ?? .feed
+    }
+
+    private var authorised: Bool { sessionState is SessionStateAuthenticated }
+    private var settled: Bool { !(sessionState is SessionStateUnknown) }
+
+    /// Three of the five need an account. Search does not — it is the
+    /// highest-intent surface in the product and the one most likely to arrive
+    /// from a shared link, and a login wall there converts a motivated buyer
+    /// into a bounce. The same call the API makes by leaving GET /listings
+    /// public.
+    private var needsAccount: Bool {
+        destination == .sell || destination == .saved || destination == .me
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
 
-            if let vm = feedViewModel {
+            if let vm = feedViewModel, let me = meViewModel {
                 // The feed stays composed across tab changes rather than being
                 // rebuilt. Recreating it would drop the scroll position, the
                 // loaded pages and the decoder pool, so returning from Saved
@@ -88,18 +132,79 @@ struct RootView: View {
                     .opacity(destination == .feed ? 1 : 0)
 
                 if destination != .feed {
-                    NotBuiltYet(destination: destination)
+                    tab(vm: vm, me: me)
+                }
+
+                // One reel, over the tabs and under messaging. Under, because
+                // its CTA opens a thread and the thread has to be on top of the
+                // reel that produced it.
+                if focusOpen {
+                    ReelDetail(
+                        viewModel: vm,
+                        returnToIndex: 0,
+                        onAction: { action, reelId in
+                            handle(action: action, reelId: reelId, me: me, title: focusTitle)
+                        },
+                        onClose: { focusOpen = false }
+                    )
+                    .ignoresSafeArea()
+                }
+
+                if route != .none {
+                    messaging(me: me)
                 }
             } else {
                 ProgressView().tint(.white)
             }
 
-            BottomNav(selected: destination) { destinationRaw = $0.rawValue }
+            // Hidden behind anything modal. A floating bar over a modal is a
+            // mis-tap that loses whatever the viewer was doing.
+            if destination != .sell && route == .none && !focusOpen {
+                BottomNav(selected: destination) { destinationRaw = $0.rawValue }
+            }
         }
         .task {
             await env.start()
-            if feedViewModel == nil, let sdk = env.sdk {
-                feedViewModel = sdk.createFeedViewModel()
+            guard let sdk = env.sdk else { return }
+            if feedViewModel == nil { feedViewModel = sdk.createFeedViewModel() }
+            if meViewModel == nil { meViewModel = sdk.createMeViewModel() }
+            if signInViewModel == nil { signInViewModel = sdk.createSignInViewModel() }
+            session = sdk.session
+        }
+        .task(id: session != nil) {
+            guard let session else { return }
+            for await state in session.state { sessionState = state }
+        }
+        .task(id: session != nil) {
+            guard let session, let me = meViewModel else { return }
+            // A session that ends underneath the viewer takes its screens with
+            // it. Without the `forget`, the next person to sign in on this
+            // device sees the previous account's inbox — the state holder
+            // outlives the session by design, and its `loaded` flags mean it
+            // would never re-fetch to correct itself.
+            for await ended in session.ended {
+                guard let ended else { continue }
+                me.forget()
+                if ended == .expired && destination != .feed && destination != .search {
+                    destinationRaw = Destination.feed.rawValue
+                }
+                session.clearEnded()
+            }
+        }
+        .task(id: feedViewModel != nil) {
+            guard let vm = feedViewModel else { return }
+            for await state in vm.state {
+                lat = state.lat
+                lng = state.lng
+                meViewModel?.setLocation(lat: state.lat, lng: state.lng)
+            }
+        }
+        .task(id: feedViewModel != nil) {
+            guard let vm = feedViewModel else { return }
+            // The title travels with the focused reel so a CTA press from it
+            // can name the thing in the conversation it opens.
+            for await focused in vm.focused {
+                focusTitle = focused.item?.summary.map { localised($0.title, $0.titleAr) } ?? ""
             }
         }
         .onChange(of: destination) { _, new in
@@ -109,6 +214,113 @@ struct RootView: View {
             // nobody is watching.
             guard let vm = feedViewModel else { return }
             if new == .feed { vm.onAppForegrounded() } else { vm.onAppBackgrounded() }
+        }
+    }
+
+    // ── the tabs ─────────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func tab(vm: FeedViewModel, me: MeViewModel) -> some View {
+        if needsAccount && !settled {
+            // The token store is still being read. Neither the gate nor the
+            // account screen is right yet, and picking one shows the wrong
+            // screen to a returning viewer for a frame.
+            ProgressView().tint(.white)
+        } else if needsAccount && !authorised, let gate = signInViewModel {
+            SignInGate(viewModel: gate) { destinationRaw = Destination.feed.rawValue }
+        } else {
+            switch destination {
+            case .search:
+                SearchScreen(
+                    viewModel: me,
+                    hasLocation: lat != 0 || lng != 0,
+                    onOpenReel: { reelId in
+                        vm.openReel(reelId: reelId)
+                        focusOpen = true
+                    },
+                    onInquire: { result in
+                        guard authorised else {
+                            destinationRaw = Destination.me.rawValue
+                            return
+                        }
+                        me.inquire(listingId: result.id, title: result.title,
+                                   reelId: nil, actionId: nil)
+                        route = .thread
+                    }
+                )
+            case .saved:
+                SavedScreen(viewModel: me) { reelId in
+                    vm.openReel(reelId: reelId)
+                    focusOpen = true
+                }
+            case .me:
+                MeScreen(
+                    viewModel: me,
+                    onOpenInbox: { route = .inbox },
+                    onSignOut: {
+                        // Clears the token store, which a flag-flip would not:
+                        // the credential would stay on the device and a relaunch
+                        // would hand the next person a live session. `forget`
+                        // happens in the `ended` task, for both exits.
+                        Task { try? await session?.signOut() }
+                        destinationRaw = Destination.feed.rawValue
+                    }
+                )
+            case .sell:
+                // The recorder is not built for iOS. Said rather than shown as
+                // an empty screen — a tab that silently does nothing reads as a
+                // crash.
+                NotBuiltYet(destination: .sell)
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func messaging(me: MeViewModel) -> some View {
+        switch route {
+        case .inbox:
+            InboxScreen(
+                viewModel: me,
+                onOpen: { c in
+                    me.openThread(conversationId: c.id, title: c.listingTitle)
+                    route = .thread
+                },
+                onBack: { route = .none }
+            )
+        case .thread:
+            ThreadScreen(viewModel: me) {
+                me.closeThread()
+                // Back to the inbox rather than to wherever the thread was
+                // opened from. A buyer who messaged from the feed has just
+                // acquired an inbox, and this is the moment they learn it
+                // exists.
+                route = .inbox
+            }
+        case .none:
+            EmptyView()
+        }
+    }
+
+    private func handle(action: ResolvedAction, reelId: String, me: MeViewModel, title: String) {
+        // The branch is on `kind`, never on `target_type`. That distinction is
+        // the whole action seam: a vertical adding a new *target* costs nothing
+        // here, and the set of things a client can physically do is genuinely
+        // closed and shipped in the app. Anything unrecognised falls through
+        // having recorded the click — a newer server's action must not break an
+        // older build.
+        switch action.kind {
+        case "inquire_listing", "enquire_property":
+            guard let targetId = action.targetId else { return }
+            guard authorised else {
+                destinationRaw = Destination.me.rawValue
+                return
+            }
+            me.inquire(listingId: targetId, title: title, reelId: reelId, actionId: action.id)
+            route = .thread
+        default:
+            break
         }
     }
 }

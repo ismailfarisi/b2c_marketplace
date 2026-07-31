@@ -178,6 +178,36 @@ func Load() (Config, error) {
 		if strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
 			problems = append(problems, "DATABASE_URL must not disable TLS in production")
 		}
+		// `auto` resolves to this machine's LAN address, which in a deployment
+		// is a private container address. A presigned URL built on one resolves
+		// for nobody and the symptom is every upload failing with no mention of
+		// a hostname — so it is refused here rather than resolved.
+		for name, value := range map[string]string{
+			"S3_PUBLIC_ENDPOINT": cfg.S3PublicEndpoint,
+			"MEDIA_CDN_BASE_URL": cfg.MediaCDNBaseURL,
+		} {
+			if strings.Contains(value, AutoHost) {
+				problems = append(problems,
+					name+" cannot be \""+AutoHost+"\" in production — name a real host")
+			}
+		}
+	} else {
+		// Development. Both of these are rendered on a *device*, so they cannot
+		// say localhost — and they cannot say 10.0.2.2 either, because the web
+		// admin has to reach the same objects from a browser on the host. The
+		// only address that works for all of them is this machine's on the LAN,
+		// and it changes with the DHCP lease.
+		//
+		// Resolved here rather than written into .env, where it goes stale and
+		// takes every image and every upload with it.
+		for _, target := range []*string{&cfg.S3PublicEndpoint, &cfg.MediaCDNBaseURL} {
+			resolved, err := resolveAuto(*target)
+			if err != nil {
+				problems = append(problems, err.Error())
+				continue
+			}
+			*target = resolved
+		}
 	}
 
 	if len(problems) > 0 {

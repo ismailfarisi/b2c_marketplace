@@ -35,6 +35,13 @@ camerax = "1.5.0"
 # being a second implementation with its own cache policy.
 coil = "3.3.0"
 
+# SKIE generates the Swift half of the interop the iOS code was already written
+# against: a Kotlin StateFlow becomes a real AsyncSequence, and a sealed
+# interface becomes a Swift enum the compiler can check exhaustively. Without it
+# `for await state in viewModel.state` does not compile and `Failure` arrives as
+# a set of unrelated classes.
+skie = "0.10.7"
+
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
@@ -80,3 +87,4 @@ androidLibrary = { id = "com.android.library", version.ref = "agp" }
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+skie = { id = "co.touchlab.skie", version.ref = "skie" }

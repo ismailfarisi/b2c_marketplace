@@ -157,3 +157,12 @@ build: ## Build API, worker and feed binaries
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/api ./cmd/api
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/worker ./cmd/worker
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/feed ./cmd/feed
+
+.PHONY: ios-strings
+## Regenerate the iOS .strings tables from the Android string resources.
+##
+## Run after touching either values/strings.xml or values-ar/strings.xml. The
+## script warns when the two languages disagree in count, which is the shape
+## every missing translation takes.
+ios-strings:
+	bash apps/mobile-kmm/tools/gen-ios-strings.sh

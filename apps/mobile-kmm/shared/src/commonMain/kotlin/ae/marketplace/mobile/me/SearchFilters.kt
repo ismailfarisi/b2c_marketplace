@@ -64,6 +64,44 @@ data class SearchFilters(
 
     fun toggle(set: Set<String>, value: String): Set<String> =
         if (value in set) set - value else set + value
+
+    // ── Named mutators ───────────────────────────────────────────────────────
+    //
+    // Kotlin has `copy`, so on the Compose side these save little. They exist
+    // for Swift, where `copy` on a data class exports as a `doCopy` taking
+    // *every* property — so changing one facet from SwiftUI means restating the
+    // other nine, and the compiler cannot tell you when you restate one wrongly.
+    // The first version of the iOS filter sheet did exactly that and it was
+    // forty lines of transcription with a bug in it.
+    //
+    // Named methods are also just better at the call site on both platforms:
+    // `filters.withPriceMax(200_000_00)` says what is happening and
+    // `filters.copy(priceMaxMinor = 200_000_00)` says how.
+
+    fun withPriceMin(minor: Long?) = copy(priceMinMinor = minor)
+    fun withPriceMax(minor: Long?) = copy(priceMaxMinor = minor)
+    fun withYearMin(year: Int?) = copy(yearMin = year)
+    fun withYearMax(year: Int?) = copy(yearMax = year)
+    fun withMileageMax(km: Int?) = copy(mileageMax = km)
+
+    fun toggleSpec(value: String) = copy(regionalSpecs = toggle(regionalSpecs, value))
+    fun toggleBodyType(value: String) = copy(bodyTypes = toggle(bodyTypes, value))
+    fun toggleTransmission(value: String) = copy(transmissions = toggle(transmissions, value))
+
+    /** Single-select: choosing the active one clears it back to "both". */
+    fun toggleSellerKind(value: String) =
+        copy(sellerKind = if (sellerKind == value) null else value)
+
+    fun withSort(value: String?) = copy(sort = value)
+
+    /**
+     * Everything off, except the sort.
+     *
+     * Sort survives a Clear because it is not a filter — it reorders, it never
+     * hides — and resetting it would silently undo a choice the viewer did not
+     * ask to undo.
+     */
+    fun cleared() = SearchFilters(sort = sort)
 }
 
 /**
