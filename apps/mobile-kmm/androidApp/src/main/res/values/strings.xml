@@ -36,6 +36,112 @@
     <string name="empty_eligible">Nothing is available at this location yet.</string>
     <string name="feed_failed">Could not load the feed.</string>
 
+    <!--
+        The filter sheet.
+
+        "Show" rather than "Category": there is no category taxonomy in this
+        product, and calling the vertical filter a category would promise a
+        browse tree that does not exist.
+    -->
+    <string name="filter_show">SHOW</string>
+    <string name="filter_all">All</string>
+    <string name="filter_location">LOCATION</string>
+    <string name="filter_use_my_location">Use my location</string>
+    <string name="filter_nearby_you">Near you</string>
+    <string name="filter_reach_note">There is no distance filter. The feed only ever shows what can actually reach the location you pick.</string>
+    <string name="filter_location_denied">Location permission declined — showing Dubai Marina.</string>
+
+    <!--
+        Bottom navigation. One word each, because five labels share a phone
+        width and Arabic runs longer than English for most of them.
+    -->
+    <string name="nav_feed">Feed</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_sell">Sell</string>
+    <string name="nav_saved">Saved</string>
+    <string name="nav_me">Me</string>
+    <string name="nav_not_built">This screen has not been built yet. The tab is here so the shape of the product is visible.</string>
+
+    <!--
+        The sell flow.
+
+        Note what is absent: any word about cars. Every label the seller reads on
+        the form itself — "Car", "KM", "Price", "Spec", "Open listing · 30 days",
+        "Add mulkiya to earn Verified" — comes from the server, because the field
+        list is the vertical's and hard-coding it here would mean shipping an app
+        release to launch property. What is here is only the chrome around it.
+    -->
+    <string name="sell_what_listing">What are you listing?</string>
+    <string name="sell_nothing_sellable">Nothing can be listed from the app yet.</string>
+    <string name="sell_three_fields">A few details, then you\'re live</string>
+    <string name="sell_next_clock">Next · set the clock</string>
+    <string name="sell_how_long">How long should it run?</string>
+    <string name="sell_emirate_area">EMIRATE &amp; AREA</string>
+    <string name="sell_publish">Publish</string>
+    <string name="sell_place_required">Pick where it is. Buyers only ever see listings that can reach them.</string>
+    <string name="sell_only_term">The only listing term available for this today.</string>
+    <string name="sell_trust_not_built">Document upload is not built yet.</string>
+
+    <!-- Field-level problems. The bound arrives as a number; the sentence is here
+         so a translator can reach it. -->
+    <string name="sell_field_required">Needed before you can publish.</string>
+    <string name="sell_field_number">Digits only.</string>
+    <string name="sell_field_option">Pick one of the options.</string>
+    <string name="sell_field_min">At least %1$s %2$s.</string>
+    <string name="sell_field_max">At most %1$s %2$s.</string>
+
+    <!--
+        Sign-in, which appears only in front of the Sell tab.
+
+        The reason is stated rather than assumed. A wall with no explanation
+        reads as a data grab; this one is the seller's own benefit, because the
+        phone number is how a buyer reaches them and it never becomes public.
+    -->
+    <string name="signin_title">Sign in to list</string>
+    <string name="signin_why">Your listing belongs to an account, and buyers message you here. Your number is never shown to them.</string>
+    <string name="signin_phone_hint">+971 50 000 0000</string>
+    <string name="signin_send_code">Send code</string>
+    <string name="signin_code_hint">6-digit code</string>
+    <string name="signin_verify">Verify</string>
+    <string name="signin_change_number">Change number</string>
+
+    <!-- The recorder. -->
+    <string name="sell_camera_needed">The camera is how you list</string>
+    <string name="sell_camera_why">This product only lists things people have filmed. There is no photo upload.</string>
+    <string name="sell_camera_allow">Allow camera</string>
+
+    <!--
+        The live screen.
+
+        Separate strings per pipeline state rather than one "Done". A reel in
+        review is not live, and telling the seller it is produces the worst
+        sequence there is: they share the link, their friend sees nothing, and
+        they conclude the platform is broken.
+    -->
+    <string name="sell_uploading">Uploading your video</string>
+    <string name="sell_uploading_detail">Keep the app open until this finishes.</string>
+    <string name="sell_upload_failed">The upload did not finish</string>
+    <string name="sell_upload_failed_detail">Your listing is saved. Retry the video.</string>
+    <string name="sell_retry_upload">Retry upload</string>
+    <string name="sell_publish_refused">Your video is up, the listing was not accepted</string>
+    <string name="sell_publish_refused_detail">Nothing is lost. Try publishing again.</string>
+    <string name="sell_retry_publish">Try publishing again</string>
+    <string name="sell_processing">Processing</string>
+    <string name="sell_processing_detail">Converting the video for playback.</string>
+    <string name="sell_processing_failed">The video could not be processed</string>
+    <string name="sell_processing_failed_detail">Record it again — nothing else is lost.</string>
+    <string name="sell_in_review">With a reviewer</string>
+    <string name="sell_in_review_detail">A person checks every first listing. It appears in the feed once they pass it.</string>
+    <string name="sell_live_in">You\'re live in %1$s</string>
+    <string name="sell_live_detail">Buyers near you can see it now.</string>
+    <string name="sell_rejected">Not published</string>
+    <string name="sell_rejected_detail">This one did not pass review.</string>
+    <string name="sell_stat_views">Views</string>
+    <string name="sell_stat_saves">Saves</string>
+    <string name="sell_stat_comments">Comments</string>
+    <string name="sell_see_in_feed">See it in the feed</string>
+    <string name="sell_done">Done</string>
+
     <plurals name="ago_minutes">
         <item quantity="one">listed %d minute ago</item>
         <item quantity="other">listed %d minutes ago</item>

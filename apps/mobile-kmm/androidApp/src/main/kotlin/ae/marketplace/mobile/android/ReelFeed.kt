@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.VerticalPager
@@ -35,7 +36,7 @@ import androidx.compose.ui.unit.dp
  * Compose and SwiftUI have nothing in common.
  */
 @Composable
-fun ReelFeed(viewModel: FeedViewModel) {
+fun ReelFeed(viewModel: FeedViewModel, onOpenFilters: () -> Unit = {}) {
     val state by viewModel.state.collectAsState()
 
     val pagerState = rememberPagerState { state.items.size }
@@ -101,17 +102,34 @@ fun ReelFeed(viewModel: FeedViewModel) {
                 onSelect = viewModel::onSurfaceSelected,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            // Its own line, under the surfaces rather than beside them. Sharing
+            // the row cost "Nearby" its last three characters: four tab labels
+            // and a filter summary do not fit across a phone, and the tab row
+            // scrolls, so the casualty was silent.
+            //
+            // Under rather than over, because the two controls are not
+            // alternatives — a surface reorders the eligible set, a filter
+            // changes what is eligible — and stacking them says that more
+            // clearly than one row of mixed chips would.
+            FilterButton(
+                state = state,
+                onClick = onOpenFilters,
+                modifier = Modifier.padding(start = 22.dp, top = 2.dp),
+            )
         }
     }
 }
 
 /**
- * The tab row's height, shared by the row itself and by the overlay that has to
- * clear it. A constant rather than a measurement because the row is a fixed
- * stack of text and a 2dp rule, and onGloballyPositioned for one number would
- * add a layout pass to every frame of a video feed.
+ * The height of the whole top chrome — surface tabs plus the filter summary
+ * under them — shared by the rows themselves and by the overlay that has to
+ * clear them.
+ *
+ * A constant rather than a measurement because both rows are fixed stacks of
+ * text, and an onGloballyPositioned for one number would add a layout pass to
+ * every frame of a video feed.
  */
-private val TAB_ROW_HEIGHT = 48.dp
+private val TAB_ROW_HEIGHT = 86.dp
 
 @Composable
 private fun ReelPage(
@@ -141,6 +159,7 @@ private fun ReelPage(
             // Height of the tab row below. Kept next to the FeedTabs call that
             // creates it so the two move together.
             chromeTop = TAB_ROW_HEIGHT,
+            chromeBottom = NAV_BAR_HEIGHT,
         )
 
         Text(

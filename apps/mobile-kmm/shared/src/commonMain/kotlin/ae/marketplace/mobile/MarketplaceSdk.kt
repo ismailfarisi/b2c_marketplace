@@ -5,6 +5,8 @@ import ae.marketplace.mobile.events.EventSender
 import ae.marketplace.mobile.feed.FeedApi
 import ae.marketplace.mobile.feed.FeedPager
 import ae.marketplace.mobile.feed.FeedViewModel
+import ae.marketplace.mobile.identity.SignInApi
+import ae.marketplace.mobile.identity.SignInViewModel
 import ae.marketplace.mobile.identity.ViewerIdentity
 import ae.marketplace.mobile.identity.deviceIdProvider
 import ae.marketplace.mobile.network.ApiClientFactory
@@ -13,6 +15,8 @@ import ae.marketplace.mobile.network.tokenStore
 import ae.marketplace.mobile.playback.PlaybackCoordinator
 import ae.marketplace.mobile.playback.ReelPlayerPool
 import ae.marketplace.mobile.playback.createReelPlayer
+import ae.marketplace.mobile.sell.SellApi
+import ae.marketplace.mobile.sell.SellViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +46,8 @@ class MarketplaceSdk private constructor(
     val tokens: TokenStore,
     private val context: PlatformContext,
     private val api: FeedApi,
+    private val sell: SellApi,
+    private val signIn: SignInApi,
     private val scope: CoroutineScope,
     private val network: NetworkStatus,
 ) {
@@ -64,6 +70,12 @@ class MarketplaceSdk private constructor(
                 tokens = store,
                 context = context,
                 api = FeedApi(client),
+                // Two clients, and the second one is not a duplicate — see
+                // ApiClientFactory.createUploader. Built once here rather than
+                // per sell session so a seller who abandons and restarts does
+                // not leak an engine each time.
+                sell = SellApi(client, ApiClientFactory.createUploader()),
+                signIn = SignInApi(client, store),
                 scope = scope,
                 network = networkStatus(context),
             ).also { it.sessionId = sessionId }
@@ -103,4 +115,23 @@ class MarketplaceSdk private constructor(
             api = api,
         )
     }
+
+    /**
+     * Builds the sell flow's state holder.
+     *
+     * A factory for a reason the feed's comment already gives in a different
+     * form: this one holds the recorded clip in memory. A singleton would keep
+     * twenty megabytes alive for the life of the process after a seller
+     * abandoned the flow, on the device class least able to spare it.
+     */
+    fun createSellViewModel(): SellViewModel = SellViewModel(sell)
+
+    /**
+     * The sign-in gate.
+     *
+     * Not created at launch. The feed is browsable signed out, so most sessions
+     * never need this — and asking a visitor for a phone number before they have
+     * seen a single reel is how a discovery app loses the visit.
+     */
+    fun createSignInViewModel(): SignInViewModel = SignInViewModel(signIn)
 }

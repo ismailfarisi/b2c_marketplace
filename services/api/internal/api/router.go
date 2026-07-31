@@ -49,6 +49,9 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// an anonymous comment cannot be struck, rate-limited across
 			// sessions, or held against a reputation.
 			r.Get("/reels/{reelId}/comments", h.Reels.ListComments)
+			// Anonymous, like the feed itself: the filter row is drawn before a
+			// viewer has done anything, including sign in.
+			r.Get("/feed/filters", h.Reels.GetFeedFilters)
 		}
 
 		// Phase 6 — classifieds browse.
@@ -117,6 +120,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Put("/listings/{listingId}/favourite", h.Vehicles.Favourite)
 			r.Delete("/listings/{listingId}/favourite", h.Vehicles.Favourite)
 			r.Post("/listings/{listingId}/report", h.Vehicles.ReportListing)
+			// The car picker behind the sell form's lookup field. Authenticated
+			// rather than public: it is an authoring control, and the browse
+			// surface has its own facets.
+			r.Get("/vehicles/models", h.Vehicles.SuggestModels)
 
 			// Monetisation. Paid placement is bought here and labelled in the
 			// search response — see VehicleHandlers.Search.
@@ -366,6 +373,21 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// before it could be published — but a review of the campaign.
 			r.Get("/moderation/boosts", h.BoostOps.ReviewQueue)
 			r.Post("/moderation/boosts/{campaignId}/decide", h.BoostOps.Review)
+		}
+
+		// The sell flow. Mounted before the reels nil-check below because it is
+		// its own handler set with its own nil condition — it needs a registered
+		// composer as well as the media stack, and a deployment with media but
+		// no sellable vertical should serve the feed and not the Sell tab.
+		if h.Sell != nil {
+			r.Get("/sell/verticals", h.Sell.SellVerticals)
+			r.Get("/sell/verticals/{vertical}/form", h.Sell.SellForm)
+			// One call for the whole form step: subject row, reel draft,
+			// presigned PUT and CTA. Composed server-side to close a race the
+			// client cannot win — see SellHandlers.
+			r.Post("/sell/drafts", h.Sell.CreateSellDraft)
+			r.Post("/sell/drafts/{reelId}/publish", h.Sell.PublishSellDraft)
+			r.Get("/sell/reels/{reelId}", h.Sell.SellReelStatus)
 		}
 
 		if h.Reels == nil {

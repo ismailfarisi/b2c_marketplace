@@ -20,6 +20,14 @@
 "time_order_by" = "order by %1$02d:%2$02d";
 "time_closed" = "closed";
 
+/* Bottom navigation. One word each: five labels share a phone width. */
+"nav_feed" = "Feed";
+"nav_search" = "Search";
+"nav_sell" = "Sell";
+"nav_saved" = "Saved";
+"nav_me" = "Me";
+"nav_not_built" = "This screen has not been built yet. The tab is here so the shape of the product is visible.";
+
 /* Feed surfaces. Short by necessity: four tabs share one row. */
 "surface_for_you" = "For you";
 "surface_live_now" = "Live now";

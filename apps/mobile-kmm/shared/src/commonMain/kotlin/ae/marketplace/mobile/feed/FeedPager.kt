@@ -83,12 +83,13 @@ class FeedPager(
         lng: Double,
         categoryId: String? = null,
         surface: FeedSurface = FeedSurface.ForYou,
+        subjectType: String? = null,
     ): List<FeedItem> {
         items.clear()
         cursor = null
         exhausted = false
         emptyReason = null
-        return loadNext(lat, lng, categoryId, surface)
+        return loadNext(lat, lng, categoryId, surface, subjectType)
     }
 
     /**
@@ -105,19 +106,20 @@ class FeedPager(
         lng: Double,
         categoryId: String? = null,
         surface: FeedSurface = FeedSurface.ForYou,
+        subjectType: String? = null,
     ): List<FeedItem> {
         if (exhausted || loading) return emptyList()
         loading = true
         try {
             val page = try {
-                api.feed(lat, lng, cursor, categoryId, pageSize, surface)
+                api.feed(lat, lng, cursor, categoryId, pageSize, surface, subjectType)
             } catch (e: ApiException) {
                 if (!e.isStaleCursor) throw e
                 // Drop the cursor and start again rather than surfacing an
                 // error. The viewer's session is old, not broken.
                 cursor = null
                 items.clear()
-                api.feed(lat, lng, null, categoryId, pageSize, surface)
+                api.feed(lat, lng, null, categoryId, pageSize, surface, subjectType)
             }
 
             rankingProfile = page.rankingProfile

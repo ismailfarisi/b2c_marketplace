@@ -77,6 +77,7 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 		Region:         cfg.S3Region,
 		Bucket:         cfg.S3Bucket,
 		Endpoint:       cfg.S3Endpoint,
+		PublicEndpoint: cfg.S3PublicEndpoint,
 		AccessKeyID:    cfg.S3AccessKeyID,
 		SecretKey:      cfg.S3SecretKey,
 		ForcePathStyle: cfg.S3ForcePathStyle,

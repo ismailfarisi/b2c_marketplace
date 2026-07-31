@@ -112,3 +112,17 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 
 	return Registries{Actions: actions, Verticals: verticals, Subjects: subjects}
 }
+
+// RegisterComposers attaches the sell flows.
+//
+// Separate from BuildRegistries and called only by cmd/api, because a composer
+// needs a *Service — quota, threads and fraud signals wired — where a provider
+// needs only a pool. cmd/feed and cmd/worker build no such service and have no
+// business accepting a listing anyway: the feed process serves reads, and a
+// write path mounted there would be a second, unaudited way to create supply.
+//
+// This is where the "adding a vertical is a Go file and a registration line"
+// claim is either true or it is not, for the sell half. Today it is one line.
+func RegisterComposers(r Registries, vehicleSvc *vehicles.Service) {
+	r.Subjects.RegisterComposer(subject.TypeListing, vehicles.NewComposer(vehicleSvc))
+}

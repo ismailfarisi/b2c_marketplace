@@ -28,6 +28,15 @@ type (
 		// is done, so a seller out of credit is told at submit rather than
 		// after a moderator has spent two minutes on the listing.
 		CheckListingQuota(ctx context.Context, sellerID uuid.UUID) error
+		// ClaimFreeListing hands a seller with an empty wallet whatever the
+		// catalogue offers at zero price, and reports whether it found
+		// anything.
+		//
+		// Called by Submit before giving up, because "your first listing is
+		// free" is a decision the catalogue has already recorded and making the
+		// seller navigate a checkout to accept it is a step that exists only to
+		// be completed. Vehicles asks; packages decides what free means.
+		ClaimFreeListing(ctx context.Context, sellerID uuid.UUID) (bool, error)
 		// ConsumeListing spends a credit. Called at activation, because a
 		// rejected listing must not cost the seller anything.
 		ConsumeListing(ctx context.Context, tx pgx.Tx, sellerID uuid.UUID) error
@@ -181,7 +190,30 @@ func (s *Service) Submit(ctx context.Context, userID, listingID uuid.UUID) error
 	}
 	if s.quota != nil {
 		if err := s.quota.CheckListingQuota(ctx, userID); err != nil {
-			return err
+			// One retry, and only after claiming a free package the seller was
+			// already entitled to. Without this every seller's *first* listing
+			// fails with "buy a package" — including the free one sitting in the
+			// catalogue with their name on it.
+			//
+			// The original error is returned if there was nothing to claim, so a
+			// seller who has genuinely run out still gets told to buy one.
+			claimed, claimErr := s.quota.ClaimFreeListing(ctx, userID)
+			if claimErr != nil || !claimed {
+				return err
+			}
+			// No re-check, and that is the fix for a bug this line originally
+			// had. Re-asking CheckListingQuota immediately after the claim
+			// compares an entitlement whose `starts_at` came from Postgres's
+			// `now()` against a `time.Now()` read in this process — and if the
+			// database clock is even a few tens of milliseconds ahead, the
+			// credit that was just granted has not started yet. The seller gets
+			// "no listing credit" while holding one, and tapping Publish again
+			// a second later works, which is the worst kind of bug to be handed
+			// a report of.
+			//
+			// A successful claim is the answer. The credit is spent at
+			// activation, through ConsumeListing, which re-checks in the
+			// UPDATE's own WHERE clause against the same clock that wrote it.
 		}
 	}
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {

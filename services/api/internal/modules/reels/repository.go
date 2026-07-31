@@ -203,6 +203,30 @@ func (r *Repository) recordTransition(ctx context.Context, tx pgx.Tx, reelID uui
 	return nil
 }
 
+// Asset is the reel's upload target, as ConfirmBytes needs it.
+type Asset struct {
+	ID         uuid.UUID
+	S3Key      string
+	BytesReady bool
+}
+
+// Asset resolves the object key a reel's bytes were presigned to.
+func (r *Repository) Asset(ctx context.Context, reelID uuid.UUID) (Asset, error) {
+	var a Asset
+	err := r.pool.QueryRow(ctx, `
+		SELECT a.id, a.s3_key, r.bytes_ready_at IS NOT NULL
+		  FROM reels r
+		  JOIN media_assets a ON a.id = r.media_asset_id
+		 WHERE r.id = $1`, reelID).Scan(&a.ID, &a.S3Key, &a.BytesReady)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Asset{}, httpx.ErrNotFound
+	}
+	if err != nil {
+		return Asset{}, fmt.Errorf("load reel asset: %w", err)
+	}
+	return a, nil
+}
+
 // MarkBytesReady is called from the S3 event handler. The event is the trigger
 // of record: it fires whether or not the client that uploaded is still alive.
 func (r *Repository) MarkBytesReady(ctx context.Context, tx pgx.Tx, assetID uuid.UUID, bytes int64) (uuid.UUID, error) {

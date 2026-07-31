@@ -61,4 +61,13 @@ dependencies {
     // this module never constructs an ExoPlayer.
     implementation(libs.media3.ui)
     implementation(libs.media3.exoplayer)
+
+    // The recorder. `camera-view` brings PreviewView, which is what makes a
+    // viewfinder five lines instead of a SurfaceHolder callback and a rotation
+    // matrix.
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.video)
+    implementation(libs.camera.view)
 }

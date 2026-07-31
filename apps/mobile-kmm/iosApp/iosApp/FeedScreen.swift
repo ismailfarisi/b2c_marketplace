@@ -191,7 +191,9 @@ private struct ReelPage: View {
 
             // Time bar, badge, time pill, product line, CTAs. One skeleton for
             // every vertical; only the time signal differs between them.
-            ReelOverlay(item: item, skewMillis: skewMillis) { action in
+            // navBarHeight is added by the overlay itself; the bar is drawn by
+            // RootView over this view and neither knows about the other.
+            ReelOverlay(item: item, skewMillis: skewMillis, chromeBottom: navBarHeight) { action in
                 viewModel.onActionClick(actionId: action.id, reelId: item.id)
             }
         }

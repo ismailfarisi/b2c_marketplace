@@ -84,6 +84,28 @@ data class FeedItem(
 )
 
 /**
+ * The verticals this feed can be filtered by, as the server lists them.
+ *
+ * Served rather than compiled in. A vertical registers a provider and its chip
+ * appears here on the next request — which is the same rule [ResolvedAction]
+ * follows for CTA labels, and for the same reason: a hard-coded list means
+ * shipping real estate requires shipping an app release to name it.
+ */
+@Serializable
+data class FeedFilters(
+    val verticals: List<Vertical> = emptyList(),
+)
+
+@Serializable
+data class Vertical(
+    /** Sent back as `subject_type`. An opaque wire value — never rendered. */
+    val key: String,
+    /** The vertical's own word for itself. "Cars", not "vehicle_listing". */
+    val label: String,
+    @SerialName("label_ar") val labelAr: String = "",
+)
+
+/**
  * The time bar and the pill beside it.
  *
  * Note what is absent: any rendered string. The server sends instants and this

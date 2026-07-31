@@ -141,19 +141,20 @@ func (r *Repository) Insert(ctx context.Context, tx pgx.Tx, in CreateInput) (uui
 			make_id, model_id, year, mileage_km,
 			transmission, fuel_type, body_type, regional_spec, vin,
 			price_minor, currency, title, description,
-			point, radius_m, status)
+			point, radius_m, emirate, city, status)
 		VALUES (
 			generate_listing_reference(), $1, $2, $3,
 			$4, $5, $6, $7,
 			NULLIF($8, ''), NULLIF($9, ''), NULLIF($10, ''), $11, NULLIF($12, ''),
 			$13, $14, NULLIF($15, ''), NULLIF($16, ''),
-			ST_SetSRID(ST_MakePoint($17, $18), 4326)::geography, $19, 'draft')
+			ST_SetSRID(ST_MakePoint($17, $18), 4326)::geography, $19,
+			NULLIF($20, ''), NULLIF($21, ''), 'draft')
 		RETURNING id, reference_no`,
 		in.SellerID, in.SellerKind, in.DealerID,
 		in.MakeID, in.ModelID, d.Year, d.MileageKM,
 		d.Transmission, d.FuelType, d.BodyType, d.RegionalSpec, vin,
 		d.PriceMinor, currency, d.Title, d.Description,
-		d.Lng, d.Lat, radius,
+		d.Lng, d.Lat, radius, d.Emirate, d.City,
 	).Scan(&id, &ref)
 	if err != nil {
 		return uuid.Nil, "", fmt.Errorf("insert listing: %w", err)

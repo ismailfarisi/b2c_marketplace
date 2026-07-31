@@ -29,6 +29,11 @@ type Config struct {
 	OTPTTL     time.Duration
 
 	S3Endpoint       string
+	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
+	// object store somewhere this process does not. Empty means the same host.
+	// See objectstore.Config.PublicEndpoint — getting this wrong produces an
+	// upload URL the phone cannot reach, or a HEAD the server cannot make.
+	S3PublicEndpoint string
 	S3Region         string
 	S3Bucket         string
 	S3AccessKeyID    string
@@ -50,7 +55,7 @@ type Config struct {
 	// FFmpegBinary is used only by the local transcode provider. Empty means
 	// "ffmpeg on PATH", which is right on a laptop and wrong in a container
 	// where the binary is pinned to a known build.
-	FFmpegBinary    string
+	FFmpegBinary string
 
 	// Phase 4: ranking, social, analytics warehouse.
 	//
@@ -130,6 +135,7 @@ func Load() (Config, error) {
 		OTPTTL:     duration("OTP_TTL", "5m"),
 
 		S3Endpoint:       optional("S3_ENDPOINT", ""),
+		S3PublicEndpoint: optional("S3_PUBLIC_ENDPOINT", ""),
 		S3Region:         optional("S3_REGION", "me-central-1"),
 		S3Bucket:         optional("S3_BUCKET", ""),
 		S3AccessKeyID:    optional("S3_ACCESS_KEY_ID", ""),

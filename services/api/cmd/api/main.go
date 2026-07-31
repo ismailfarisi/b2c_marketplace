@@ -258,6 +258,10 @@ func run() error {
 	packagesSvc := classifieds.NewService(pool)
 	vehicleSvc := vehicles.NewService(pool, packagesSvc, chatSvc, trustSvc)
 
+	// The sell half of the subject seam, wired only in this process. See
+	// app.RegisterComposers for why cmd/feed and cmd/worker do not get it.
+	app.RegisterComposers(registries, vehicleSvc)
+
 	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
 	if err != nil {
 		return err
@@ -316,6 +320,18 @@ func run() error {
 		handlers.Chat = &api.ChatHandlers{
 			Chat:       chatSvc,
 			Moderation: media.Moderation,
+		}
+		// The sell flow needs the media stack (a reel has to go somewhere) and
+		// at least one registered composer. Both are checked rather than
+		// assumed: mounting it with an empty registry would give the app a Sell
+		// tab that lists no verticals, which reads as a broken build.
+		if len(registries.Subjects.Sellable()) > 0 {
+			handlers.Sell = &api.SellHandlers{
+				Reels:    media.Reels,
+				Actions:  media.Actions,
+				Subjects: registries.Subjects,
+				Counters: media.Counters,
+			}
 		}
 	}
 

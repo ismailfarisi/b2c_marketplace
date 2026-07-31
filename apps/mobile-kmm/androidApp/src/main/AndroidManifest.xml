@@ -13,6 +13,21 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!--
+      The recorder.
+
+      Asked for at the Sell tab, not at launch. A camera prompt on first open is
+      the single most declined permission in a consumer app, and this one only
+      matters to the fraction of viewers who are also sellers.
+
+      RECORD_AUDIO is here because a walkaround with no engine note is a worse
+      listing — but the recorder treats a denial as mute rather than as a
+      failure, so a seller who refuses it still publishes.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <application
         android:name=".MarketplaceApp"
         android:allowBackup="false"

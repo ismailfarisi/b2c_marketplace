@@ -79,6 +79,13 @@ fun ReelOverlay(
      * "Nearby".
      */
     chromeTop: Dp = 0.dp,
+    /**
+     * Space reserved at the bottom for the navigation bar, which is drawn by the
+     * activity over this overlay. Same reasoning as [chromeTop]: the two are laid
+     * out independently and nothing else makes them agree — without it the price
+     * and the CTA sit underneath "Sell".
+     */
+    chromeBottom: Dp = 0.dp,
 ) {
     Box(modifier.fillMaxWidth()) {
         Column(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
@@ -104,6 +111,7 @@ fun ReelOverlay(
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .padding(bottom = chromeBottom)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {

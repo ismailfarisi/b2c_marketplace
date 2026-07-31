@@ -1,6 +1,7 @@
 package ae.marketplace.mobile.feed
 
 import ae.marketplace.mobile.model.FeedItem
+import ae.marketplace.mobile.model.Vertical
 import ae.marketplace.mobile.model.ClientEvent
 import ae.marketplace.mobile.events.EventQueue
 import ae.marketplace.mobile.playback.PlaybackCoordinator
@@ -45,6 +46,24 @@ data class FeedUiState(
      * re-sampling per tick freezes every countdown in the feed.
      */
     val clockSkewMillis: Long = 0L,
+    /**
+     * The verticals the server says this feed can be filtered by, in the order
+     * it gave them. Empty until the first fetch lands, and empty forever in a
+     * deployment with no providers registered — in which case the filter row
+     * should not be drawn at all rather than drawn with one "All" chip.
+     */
+    val verticals: List<Vertical> = emptyList(),
+    /** The selected vertical's key, or null for all of them. */
+    val selectedVertical: String? = null,
+    /** Where the feed is being served for. Never null — see LocationChoice. */
+    val lat: Double = 0.0,
+    val lng: Double = 0.0,
+    /**
+     * A label for the current point, when it came from a named place. Empty when
+     * it came from the device, because the client has no reverse geocoder and
+     * "25.08, 55.14" is not a location a person recognises.
+     */
+    val locationLabel: String = "",
 )
 
 /**
@@ -75,11 +94,71 @@ class FeedViewModel(
     private var lng: Double = 0.0
     private var categoryId: String? = null
 
-    fun start(lat: Double, lng: Double, categoryId: String? = null) {
+    fun start(lat: Double, lng: Double, categoryId: String? = null, locationLabel: String = "") {
         this.lat = lat
         this.lng = lng
         this.categoryId = categoryId
+        _state.value = _state.value.copy(lat = lat, lng = lng, locationLabel = locationLabel)
         events.start()
+        loadFilters()
+        refresh()
+    }
+
+    /**
+     * Fetches the filter row once.
+     *
+     * Failure is silent and the row simply does not appear. A filter list is
+     * navigation furniture — surfacing its failure as an error over a feed that
+     * loaded perfectly well would report a broken app to someone holding a
+     * working one.
+     */
+    private fun loadFilters() {
+        viewModelScope.launch {
+            runCatching { api.filters() }
+                .onSuccess { _state.value = _state.value.copy(verticals = it.verticals) }
+        }
+    }
+
+    /**
+     * The viewer picked a vertical, or cleared it by passing null.
+     *
+     * A new filter is a new feed, so the pager resets — same reasoning as
+     * [onSurfaceSelected]: the cursor carries an exclusion set built for the
+     * query that produced it, and reusing it would page one feed with another's
+     * memory.
+     */
+    fun onVerticalSelected(key: String?) {
+        if (_state.value.selectedVertical == key) return
+        playback.onPause()
+        _state.value = _state.value.copy(
+            selectedVertical = key,
+            items = emptyList(),
+            emptyReason = null,
+            exhausted = false,
+        )
+        refresh()
+    }
+
+    /**
+     * The viewer moved the feed somewhere else.
+     *
+     * The whole product is local discovery, so this is not a filter over the
+     * current results — it is a different feed, and every candidate source is
+     * geo-scoped. Hence the same reset.
+     */
+    fun onLocationSelected(lat: Double, lng: Double, label: String) {
+        if (this.lat == lat && this.lng == lng) return
+        this.lat = lat
+        this.lng = lng
+        playback.onPause()
+        _state.value = _state.value.copy(
+            lat = lat,
+            lng = lng,
+            locationLabel = label,
+            items = emptyList(),
+            emptyReason = null,
+            exhausted = false,
+        )
         refresh()
     }
 
@@ -117,9 +196,10 @@ class FeedViewModel(
 
     fun refresh() {
         val surface = _state.value.surface
+        val vertical = _state.value.selectedVertical
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            runCatching { pager.refresh(lat, lng, categoryId, surface) }
+            runCatching { pager.refresh(lat, lng, categoryId, surface, vertical) }
                 .onSuccess { emit() }
                 .onFailure { e ->
                     _state.value = _state.value.copy(loading = false, error = e.message)
@@ -140,8 +220,9 @@ class FeedViewModel(
 
         if (pager.shouldLoadMore(index)) {
             val surface = _state.value.surface
+            val vertical = _state.value.selectedVertical
             viewModelScope.launch {
-                runCatching { pager.loadNext(lat, lng, categoryId, surface) }
+                runCatching { pager.loadNext(lat, lng, categoryId, surface, vertical) }
                     .onSuccess { if (it.isNotEmpty()) emit() else emit() }
                     .onFailure { /* Keep the feed on screen. The next swipe retries. */ }
             }

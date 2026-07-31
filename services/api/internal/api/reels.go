@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -323,6 +324,12 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 	// an error screen.
 	surface := feed.ParseSurface(q.Get("surface"))
 
+	// Repeatable *and* comma-separated. Both spellings are in the wild — Ktor
+	// emits repeats, a hand-written URL uses commas — and accepting one and
+	// silently ignoring the other produces an unfiltered feed that looks like a
+	// filter bug on whichever client picked the other form.
+	subjectTypes := parseSubjectTypes(q["subject_type"])
+
 	query := feed.Query{
 		Lat:      lat,
 		Lng:      lng,
@@ -330,6 +337,8 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		Cursor:   cursor,
 		Limit:    limit,
 		Surface:  surface,
+
+		SubjectTypes: subjectTypes,
 	}
 
 	// Optional auth: a signed-in viewer gets block filtering and a durable
@@ -462,6 +471,51 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		// "the feed looked wrong at 14:20" is answerable rather than debatable.
 		"ranking_profile": page.Profile,
 	})
+}
+
+// parseSubjectTypes flattens the filter values.
+//
+// Not validated against the registered set. An unknown vertical matches no rows
+// and yields an empty page, which is the same answer as a real vertical with
+// nothing near you — and rejecting it would turn a client that is one release
+// ahead of the server into an error screen rather than a thin feed.
+func parseSubjectTypes(values []string) []string {
+	var out []string
+	for _, v := range values {
+		for _, part := range strings.Split(v, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
+}
+
+// GetFeedFilters lists the verticals the feed can be filtered by.
+//
+// Served rather than hard-coded in each client, which is the same rule the CTA
+// labels follow and is the whole reason the subject seam exists: registering a
+// vertical makes its chip appear in both apps on the next request, and shipping
+// real estate does not mean shipping an app release to name it.
+//
+// Only registered verticals appear. A chip that can never return a result is
+// worse than an absent one — the viewer reads the empty page as "nothing near
+// me" rather than "not built yet".
+func (h *ReelHandlers) GetFeedFilters(w http.ResponseWriter, r *http.Request) {
+	out := make([]map[string]any, 0)
+	if h.Subjects != nil {
+		for _, f := range h.Subjects.Facets() {
+			out = append(out, map[string]any{
+				"key":      string(f.Key),
+				"label":    f.Label,
+				"label_ar": f.LabelAr,
+			})
+		}
+	}
+	// Surfaces are not listed here. They are a fixed set the clients are built
+	// against and they change the *ordering*, not the contents — mixing them
+	// into a facet list would invite a client to render them as more chips.
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"verticals": out})
 }
 
 // emptyReason names why a page is empty, or "" when it is not.

@@ -217,6 +217,72 @@ func (s *Service) CheckListingQuota(ctx context.Context, sellerID uuid.UUID) err
 	return nil
 }
 
+// ClaimFreeListing gives a seller with nothing the zero-price package, if one
+// exists for their audience.
+//
+// # Why this is not a shop
+//
+// The catalogue already contains a package called "Free listing", priced at
+// zero, quota one, audience private. That is a product decision that has already
+// been made: a private seller's first listing costs nothing. What was missing is
+// anyone claiming it — the entitlement wallet starts empty, so the very first
+// publish a new seller ever attempts fails with "no listing credit, buy a
+// package", and the app has no store to send them to.
+//
+// Sending them to one would be the wrong fix. A checkout for a free thing is a
+// step that exists only to be completed, on the screen where a marketplace can
+// least afford one, in a flow whose entire premise is publishing in under ninety
+// seconds.
+//
+// The bounds are deliberately narrow. Only a package priced at zero, only when
+// the seller has no usable credit at all, and only their own audience — a dealer
+// does not get a private seller's freebie, and nobody accumulates free credits
+// by tapping Publish twice, because the second call finds the first one in the
+// wallet.
+//
+// Returns false when there is nothing to claim, which is a normal answer and not
+// an error: a deployment can simply have no free tier.
+func (s *Service) ClaimFreeListing(ctx context.Context, sellerID uuid.UUID) (bool, error) {
+	ents, err := s.wallet(ctx, s.pool, sellerID)
+	if err != nil {
+		return false, err
+	}
+	if _, ok := SelectForListing(ents, s.nowFn()); ok {
+		return false, nil
+	}
+
+	dealerID, err := s.dealerFor(ctx, sellerID)
+	if err != nil {
+		return false, err
+	}
+	audience := "private"
+	if dealerID.Valid {
+		audience = "dealer"
+	}
+
+	var packageID uuid.UUID
+	err = s.pool.QueryRow(ctx, `
+		SELECT id FROM listing_packages
+		 WHERE is_active AND price_minor = 0 AND audience = $1 AND listing_quota > 0
+		 ORDER BY listing_quota, created_at
+		 LIMIT 1`, audience).Scan(&packageID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("find free package: %w", err)
+	}
+
+	// Through Buy rather than by inserting an entitlement directly, so a free
+	// claim produces the same purchase row, the same audit trail and the same
+	// revenue recognition path as a paid one. A second insert site for the same
+	// concept is how the two drift.
+	if _, err := s.Buy(ctx, sellerID, packageID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // ConsumeListing spends one credit, inside the caller's transaction.
 //
 // The UPDATE re-checks the quota in its WHERE clause rather than trusting the

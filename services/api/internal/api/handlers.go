@@ -50,6 +50,12 @@ type Handlers struct {
 	Vehicles *VehicleHandlers
 	Chat     *ChatHandlers
 
+	// Sell is the authoring flow as a phone uses it. Nil until both the media
+	// stack and at least one composer exist — a Sell tab whose tile grid is
+	// empty is a tab that opens a camera and then has nowhere to put the video,
+	// and the seller finds that out after filming.
+	Sell *SellHandlers
+
 	// Phase 7. Logistics is the first surface in this system with no customer
 	// on it at all — every route below is used by a driver, a vendor or ops —
 	// which is why it gets its own handler sets rather than joining the order

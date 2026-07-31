@@ -30,7 +30,7 @@ import (
 // without coordinating.
 func mediaSweep(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 	rows, err := pool.Query(ctx, `
-		SELECT id, state::text
+		SELECT id, state::text, now() - updated_at > $1::interval AS stuck
 		  FROM reels
 		 WHERE state IN ('draft', 'uploaded', 'probing', 'transcoding', 'moderating', 'approved')
 		   -- Leave freshly-touched reels alone: the request that just moved one
@@ -38,7 +38,7 @@ func mediaSweep(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 		   -- would mean two workers doing the same transcode.
 		   AND updated_at < now() - interval '10 seconds'
 		 ORDER BY updated_at
-		 LIMIT 100`)
+		 LIMIT 100`, stuckAfter.String())
 	if err != nil {
 		slog.ErrorContext(ctx, "media sweep query failed", "error", err)
 		return
@@ -47,11 +47,12 @@ func mediaSweep(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 	type target struct {
 		id    uuid.UUID
 		state string
+		stuck bool
 	}
 	var targets []target
 	for rows.Next() {
 		var t target
-		if err := rows.Scan(&t.id, &t.state); err != nil {
+		if err := rows.Scan(&t.id, &t.state, &t.stuck); err != nil {
 			rows.Close()
 			slog.ErrorContext(ctx, "media sweep scan failed", "error", err)
 			return
@@ -66,6 +67,15 @@ func mediaSweep(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 			slog.WarnContext(ctx, "advance failed", "reel_id", t.id, "error", err)
 			continue
 		}
+		if job == reels.JobNone && t.stuck {
+			// Advance names a job only when it *moves* a reel, and this sweep's
+			// whole purpose is reels that are not moving. See owedBy.
+			job = owedBy(reels.State(t.state))
+			if job != reels.JobNone {
+				slog.WarnContext(ctx, "recovering a stalled reel",
+					"reel_id", t.id, "state", t.state, "job", job)
+			}
+		}
 		if job == reels.JobNone {
 			continue
 		}
@@ -74,6 +84,61 @@ func mediaSweep(ctx context.Context, pool *pgxpool.Pool, media *app.Media) {
 				"reel_id", t.id, "job", job, "error", err)
 		}
 	}
+}
+
+// stuckAfter is how long a reel may sit in one processing state before the
+// sweep assumes the job that owns it is not coming.
+//
+// Two minutes, not ten seconds. The sweep's ordinary tick must not re-trigger a
+// transcode that is simply *slow* — a job in flight does not touch updated_at,
+// so a short threshold would start a second ffmpeg run over the same asset every
+// tick, and the cost of that lands on the one operation in the pipeline that is
+// genuinely expensive.
+//
+// Not an hour either, which is what the original stuck-job note proposed. That
+// is the right number for paging a human; it is the wrong one for a seller
+// watching a live screen, and the recovery is idempotent, so the only thing a
+// shorter window risks is doing correct work slightly early.
+const stuckAfter = 2 * time.Minute
+
+// owedBy is the job a reel sitting in a state is waiting on.
+//
+// It exists because Advance and this sweep answer different questions, and
+// relying on the first to answer the second silently strands reels.
+//
+// Advance returns the job unlocked by a *transition*. A reel that is not
+// transitioning — because the thing it is waiting for has not happened — returns
+// JobNone, which is correct. But the reason it is waiting is almost always that
+// the job which was supposed to make it happen never ran: the transition that
+// named that job happened inside some other process, which discarded the return
+// value because it has no pipeline to run it on. Both the API's moderation
+// decide and its sell publish do exactly that.
+//
+// The failure is silent and total. A human approves a reel, moderating →
+// approved names JobPublish, the API drops it, and the sweep then finds a reel
+// in `approved` whose Advance says "waiting on coverage" — coverage that only
+// JobPublish resolves. Nothing ever runs it. Every user-authored reel, all of
+// which go to a human by definition of author_trust, stops one state short of
+// the feed.
+//
+// Mapping state to the job that owns it makes the sweep an actual recovery
+// mechanism rather than a second opinion, which is what its own doc comment
+// claims it is.
+// A reel in `draft` is deliberately absent: it is waiting on bytes and metadata,
+// both of which come from outside the pipeline, and running a probe against an
+// asset with no object behind it would turn a patient draft into a failure.
+func owedBy(state reels.State) reels.JobKind {
+	switch state {
+	case reels.StateUploaded, reels.StateProbing:
+		return reels.JobProbe
+	case reels.StateTranscoding:
+		return reels.JobTranscode
+	case reels.StateModerating:
+		return reels.JobModerate
+	case reels.StateApproved:
+		return reels.JobPublish
+	}
+	return reels.JobNone
 }
 
 // expireDrafts sweeps uploads that never arrived.

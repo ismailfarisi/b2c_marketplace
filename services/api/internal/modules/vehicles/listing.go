@@ -214,6 +214,17 @@ type Draft struct {
 	Description  string
 	Lat, Lng     float64
 	RadiusM      int
+
+	// Emirate and City are the seller's own words for where the car is, kept
+	// alongside the point rather than derived from it.
+	//
+	// The point is what the geo filter uses; these are what the overlay prints
+	// and what a buyer says out loud. Reverse-geocoding a coordinate would give
+	// an administrative name — "Al Quoz Industrial Area 3" — where the seller
+	// and the buyer both say "Al Quoz", and the difference reads as a listing
+	// written by a machine.
+	Emirate string
+	City    string
 }
 
 var regionalSpecs = map[string]bool{

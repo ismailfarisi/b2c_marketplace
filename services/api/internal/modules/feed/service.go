@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,6 +110,18 @@ type Query struct {
 	// empty value as SurfaceForYou so that an internal caller constructing a
 	// Query by hand gets the ranked feed instead of no feed.
 	Surface Surface
+
+	// SubjectTypes narrows the feed to one or more verticals — the filter row.
+	//
+	// A slice rather than a single value because "Cars and Meals" is a coherent
+	// thing to ask for and a single value would force the client to fetch twice
+	// and interleave two ranked pages by hand, which is not ranking.
+	//
+	// Empty means every vertical, and that includes reels with no subject at
+	// all. That default is load-bearing: most reels today have no subject, and a
+	// filter that silently excluded them would make "All" show less than the
+	// unfiltered feed.
+	SubjectTypes []string
 
 	// ViewerID is empty for anonymous browsing, which is supported: putting a
 	// login wall in front of the front door would be fatal to it.
@@ -272,7 +285,7 @@ func (s *Service) Get(ctx context.Context, q Query) (*Page, error) {
 	// impressions across every session. The cursor is the narrow one and the
 	// authoritative one for pagination: without it a deployment with no Redis
 	// returns page 1 forever.
-	seenIDs, err := s.seen.Recent(ctx, q.ViewerKey, seenCap)
+	seenIDs, err := s.seen.Recent(ctx, q.seenKey(), seenCap)
 	if err != nil {
 		slog.WarnContext(ctx, "seen-set unavailable, paginating from the cursor alone", "error", err)
 		seenIDs = nil
@@ -314,7 +327,7 @@ func (s *Service) Get(ctx context.Context, q Query) (*Page, error) {
 		// cost of being slightly wrong (marking a reel the user swiped past
 		// without watching) is a repeat they do not get; the cost of the other
 		// direction is a feed stuck in a loop.
-		if err := s.seen.Mark(ctx, q.ViewerKey, served); err != nil {
+		if err := s.seen.Mark(ctx, q.seenKey(), served); err != nil {
 			slog.WarnContext(ctx, "failed to mark seen", "error", err)
 		}
 	}
@@ -510,9 +523,21 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 	// never declared, so it is appended exactly when the text that references it
 	// is present. Passing it unconditionally fails every other surface with an
 	// arity error, which is a good failure — loud and immediate — but a failure.
+	// The ending-soon horizon is $15, but only on that surface — its predicate
+	// is the only text that mentions it. So the subject filter, which every
+	// surface carries, is $15 or $16 depending on whether the horizon is there.
+	//
+	// Numbered rather than padded. Passing a nil placeholder to keep the indexes
+	// fixed looks tidier and does not work: Postgres infers parameter types from
+	// where they are used, and a parameter the statement never references is
+	// `could not determine data type of parameter $15` at prepare time — a 500
+	// on every request, which is how this was found.
+	subjParam := "$15"
 	if q.Surface == SurfaceEndingSoon {
 		args = append(args, EndingSoonHorizon.Seconds())
+		subjParam = "$16"
 	}
+	args = append(args, subjectTypesArg(q.SubjectTypes))
 
 	rows, err := s.pool.Query(ctx, `
 		WITH viewer AS (
@@ -543,6 +568,13 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		     WHERE r.state = 'published'
 		       AND (`+q.Surface.candidatePredicate()+`)
 		       AND r.visibility = 'public'
+		       -- The filter row. NULL-safe by construction: cardinality(NULL) is
+		       -- NULL, so the coalesce is what makes "no filter" mean "keep
+		       -- everything" rather than "keep nothing" — the same trap the
+		       -- exclusion list below documents, and it has bitten this query
+		       -- once already.
+		       AND (coalesce(cardinality(`+subjParam+`::text[]), 0) = 0
+		            OR r.subject_type = ANY(`+subjParam+`))
 		       -- One predicate for both service-area polygons and radius
 		       -- listings, because coverage was resolved at publish time.
 		       AND ST_Intersects(r.coverage, v.pt)
@@ -738,6 +770,51 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// seenKey namespaces the seen-set per *view*, not per viewer.
+//
+// Found the moment the filter row was first used, and it is worth stating
+// plainly because the naive key looks obviously right: the viewer scrolls the
+// unfiltered feed, every reel is marked seen, they tap "Cars" — and the one car
+// they just scrolled past is excluded, so the tab they deliberately narrowed to
+// comes back empty. The filter looks broken while working perfectly.
+//
+// The seen-set exists to stop *one feed* repeating itself as it pages. It was
+// never meant to be a memory that follows the viewer across a change of intent,
+// and narrowing to a vertical is exactly that: a new question, which deserves
+// the best answer rather than the leftovers of the previous one.
+//
+// The cost is that a reel seen in For you can appear again under Cars. That is
+// the correct trade — a viewer who asks for cars wants the cars, including one
+// they half-watched a minute ago — and it is bounded, because within any single
+// view paging still excludes properly.
+func (q Query) seenKey() string {
+	if q.ViewerKey == "" {
+		return ""
+	}
+	key := q.ViewerKey + "|" + string(q.Surface)
+	if len(q.SubjectTypes) > 0 {
+		// Sorted, so ?subject_type=a&subject_type=b and the reverse are one
+		// view rather than two half-remembered ones.
+		types := append([]string(nil), q.SubjectTypes...)
+		sort.Strings(types)
+		key += "|" + strings.Join(types, ",")
+	}
+	return key
+}
+
+// subjectTypesArg normalises the filter for SQL.
+//
+// A nil slice rather than an empty one: cardinality of an empty array is 0 and
+// of NULL is NULL, and the predicate coalesces either to "no filter". Passing
+// nil keeps the intent visible in a query log — an empty array reads like a
+// filter that matched nothing.
+func subjectTypesArg(types []string) any {
+	if len(types) == 0 {
+		return nil
+	}
+	return types
 }
 
 // rank turns a candidate set into a page.

@@ -23,6 +23,11 @@ struct ReelOverlay: View {
     /// Objective-C — a Duration-typed parameter would simply be missing from the
     /// generated framework. The shared API is shaped around that.
     let skewMillis: Int64
+    /// Space reserved for the bottom navigation bar, which RootView draws over
+    /// this overlay. Same reasoning as the tab row on the other edge: the two are
+    /// laid out independently and nothing else makes them agree — without it the
+    /// price and the CTA sit underneath "Sell".
+    var chromeBottom: CGFloat = 0
     let onAction: (ResolvedAction) -> Void
 
     private static let accent = Color(red: 0.706, green: 0.396, blue: 0.165)
@@ -48,6 +53,7 @@ struct ReelOverlay: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
+            .padding(.bottom, chromeBottom)
         }
     }
 }
