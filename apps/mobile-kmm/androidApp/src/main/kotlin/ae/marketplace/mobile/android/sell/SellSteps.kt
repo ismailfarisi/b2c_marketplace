@@ -572,7 +572,7 @@ fun ClockStep(
                         .padding(4.dp)
                 )
                 Text(
-                    text = place.label,
+                    text = stringResource(place.labelRes),
                     color = if (active) Color.White else Color.White.copy(alpha = 0.75f),
                     fontSize = 15.sp,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,

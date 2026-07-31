@@ -129,8 +129,19 @@ func (p *SubjectProvider) Summarize(
 			// wrote one. The generated form is what buyers scan for; a headline
 			// like "STUNNING UPGRADED UNIT!!" tells them nothing and is most of
 			// what this market's adverts are titled.
-			Title:      titleOr(title, bedrooms, propertyType),
-			TitleAr:    titleOr(title, bedrooms, propertyType),
+			Title: titleOr(title, bedrooms, propertyType),
+			// Genuinely Arabic, not a copy of the English.
+			//
+			// It was the same call twice, so an Arabic reader got "2 bed
+			// apartment" — and in a right-to-left paragraph the bidirectional
+			// algorithm moves the leading number to the far end, so it
+			// rendered as "bed apartment 2". The string is not corrupt and no
+			// amount of staring at it shows the bug; the only fix is to not be
+			// showing English.
+			//
+			// A seller-written headline passes through in both, because
+			// translating someone else's words is not this function's job.
+			TitleAr:    titleArFor(title, bedrooms, propertyType),
 			Line:       joinLine(location(community, tower), sqft(size), baths(bathrooms), furnish(furnishing)),
 			LineAr:     joinLine(location(community, tower), sqftAr(size), bathsAr(bathrooms), furnishAr(furnishing)),
 			PriceMinor: priceMinor,
@@ -170,6 +181,57 @@ func titleOr(title string, bedrooms int, propertyType string) string {
 		return capitalise(kind)
 	}
 	return fmt.Sprintf("%d bed %s", bedrooms, kind)
+}
+
+// propertyTypeAr is the Arabic for the nine values the type column allows.
+//
+// A map rather than a translation call: these are a closed CHECK constraint, so
+// a missing key is a schema change that should show up as an English word in an
+// Arabic build rather than as a blank line — which is what returning "" would
+// give.
+var propertyTypeAr = map[string]string{
+	"apartment": "شقة",
+	"villa":     "فيلا",
+	"townhouse": "تاون هاوس",
+	"studio":    "استوديو",
+	"penthouse": "بنتهاوس",
+	"office":    "مكتب",
+	"shop":      "محل",
+	"warehouse": "مستودع",
+	"land":      "أرض",
+}
+
+func titleArFor(title string, bedrooms int, propertyType string) string {
+	if strings.TrimSpace(title) != "" {
+		return title
+	}
+	kind, ok := propertyTypeAr[propertyType]
+	if !ok {
+		return titleOr(title, bedrooms, propertyType)
+	}
+	if bedrooms == 0 {
+		return kind
+	}
+	// "شقة غرفتين" — the noun first, then the count, which is the order Arabic
+	// uses. Composing it the English way and translating word by word gives
+	// "٢ غرفة شقة", which is not a phrase.
+	return fmt.Sprintf("%s %s", kind, bedroomsAr(bedrooms))
+}
+
+// bedroomsAr uses the dual for two, which Arabic has and English does not.
+//
+// "غرفتين" rather than "2 غرف". Getting this wrong is not a rounding error in
+// grammar — it is the single most common tell that a listing was machine
+// translated, on the attribute buyers filter by first.
+func bedroomsAr(n int) string {
+	switch n {
+	case 1:
+		return "غرفة واحدة"
+	case 2:
+		return "غرفتين"
+	default:
+		return fmt.Sprintf("%d غرف", n)
+	}
 }
 
 func capitalise(s string) string {

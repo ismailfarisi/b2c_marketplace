@@ -58,9 +58,7 @@ func (h *BookingHandler) Resolve(ctx context.Context, a action.Action, v action.
 	// The author's own words win over the vertical's default. A vendor who
 	// wrote "Get tonight's biryani" knows their audience better than a table of
 	// generic verbs does.
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 
 	res := action.Resolved{
 		Label:     label,

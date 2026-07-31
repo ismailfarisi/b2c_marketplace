@@ -32,9 +32,7 @@ func NewClaimHandler(pool *pgxpool.Pool) *ClaimHandler { return &ClaimHandler{po
 // would tell a viewer their offer is dead when it opens again in two hours.
 func (h *ClaimHandler) Resolve(ctx context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Claim offer", "احصل على العرض"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 
 	res := action.Resolved{
 		Label:     label,

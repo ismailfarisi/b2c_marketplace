@@ -39,9 +39,7 @@ func NewInquiryHandler(pool *pgxpool.Pool) *InquiryHandler { return &InquiryHand
 // whole feed, because a sold car looks identical to a scam.
 func (h *InquiryHandler) Resolve(ctx context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Message seller", "راسل البائع"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 
 	res := action.Resolved{
 		Label:     label,

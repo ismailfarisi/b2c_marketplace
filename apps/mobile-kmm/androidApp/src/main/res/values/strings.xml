@@ -3,6 +3,21 @@
     <string name="app_name">Marketplace</string>
 
     <!--
+        District names, for display only.
+        The canonical English form in Place.label is what travels to the server
+        and what a listing is stored under; these are what a person reads. If
+        the two were the same string, an Arabic seller's listing would be filed
+        under a different place name from an English seller's in the same
+        building, and every geo-grouped report would split down the middle.
+    -->
+    <string name="place_dubai_marina">Dubai Marina</string>
+    <string name="place_downtown_dubai">Downtown Dubai</string>
+    <string name="place_business_bay">Business Bay</string>
+    <string name="place_al_quoz">Al Quoz</string>
+    <string name="place_al_barsha">Al Barsha</string>
+    <string name="place_deira">Deira</string>
+
+    <!--
         The overlay's words.
 
         Numbers reach these as format arguments rather than being concatenated in

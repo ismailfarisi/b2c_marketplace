@@ -136,3 +136,24 @@ object Shape {
     val Pill = 4.dp
     val Thumb = 6.dp
 }
+
+/**
+ * Whether this build is being read in Arabic.
+ *
+ * The server puts both language forms of every vertical-supplied string on the
+ * wire — see `model/Localised.kt` for why — so the client has to choose, and
+ * this is the choice.
+ *
+ * Read from the configuration rather than from `LocalLayoutDirection`. The two
+ * agree today, because Arabic is the only RTL language this app ships and the
+ * only non-English one. They would stop agreeing the day Urdu or Farsi is added
+ * — both RTL, neither Arabic — and the failure would be silent: Arabic content
+ * served to a Farsi reader, which is worse than the English fallback.
+ */
+@androidx.compose.runtime.Composable
+fun rememberArabic(): Boolean {
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    return androidx.compose.runtime.remember(config) {
+        ae.marketplace.mobile.model.isArabic(config.locales[0].language)
+    }
+}

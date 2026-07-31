@@ -35,9 +35,7 @@ func NewEnquiryHandler(pool *pgxpool.Pool) *EnquiryHandler { return &EnquiryHand
 // advert the platform is not currently entitled to be running.
 func (h *EnquiryHandler) Resolve(ctx context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Enquire", "استفسر"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 
 	res := action.Resolved{
 		Label:     label,

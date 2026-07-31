@@ -2,6 +2,7 @@ package ae.marketplace.mobile.android
 
 import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.feed.FeedUiState
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,17 +43,43 @@ private val Sheet = Palette.Surface
  *
  * When a places table lands this list is deleted and the sheet reads it from the
  * server, the same way the vertical chips already do.
+ *
+ * [label] is what the district is *called*, and it travels to the server as the
+ * `place` on a sell draft — so it is data as well as a caption and must not
+ * change with the device language.
+ *
+ * [labelRes] is what a person reads. Splitting the two is what stops an Arabic
+ * seller's listing being stored under a different place name from an English
+ * seller's listing in the same building, which would quietly split every
+ * geo-grouped report in the product down the middle.
  */
-data class Place(val label: String, val lat: Double, val lng: Double)
+data class Place(
+    val label: String,
+    val lat: Double,
+    val lng: Double,
+    @StringRes val labelRes: Int,
+)
 
 val PLACES = listOf(
-    Place("Dubai Marina", 25.0805, 55.1403),
-    Place("Downtown Dubai", 25.1972, 55.2744),
-    Place("Business Bay", 25.1857, 55.2766),
-    Place("Al Quoz", 25.1420, 55.2330),
-    Place("Al Barsha", 25.1120, 55.1960),
-    Place("Deira", 25.2710, 55.3120),
+    Place("Dubai Marina", 25.0805, 55.1403, R.string.place_dubai_marina),
+    Place("Downtown Dubai", 25.1972, 55.2744, R.string.place_downtown_dubai),
+    Place("Business Bay", 25.1857, 55.2766, R.string.place_business_bay),
+    Place("Al Quoz", 25.1420, 55.2330, R.string.place_al_quoz),
+    Place("Al Barsha", 25.1120, 55.1960, R.string.place_al_barsha),
+    Place("Deira", 25.2710, 55.3120, R.string.place_deira),
 )
+
+/**
+ * The name to show for a point, given whatever label came back with it.
+ *
+ * Matches on the canonical [Place.label] rather than on the displayed one,
+ * because the value stored on a listing and echoed by the feed is always the
+ * canonical form. Anything unrecognised — a district that arrived from the
+ * server, or a raw coordinate label — renders as itself.
+ */
+@Composable
+fun displayPlace(label: String): String =
+    PLACES.firstOrNull { it.label == label }?.let { stringResource(it.labelRes) } ?: label
 
 /**
  * The filter sheet.
@@ -123,7 +150,7 @@ fun FilterSheet(
             )
             PLACES.forEach { place ->
                 PlaceRow(
-                    label = place.label,
+                    label = stringResource(place.labelRes),
                     active = state.locationLabel == place.label,
                     onClick = { onPlace(place) },
                 )
@@ -211,7 +238,11 @@ private fun PlaceRow(label: String, active: Boolean, onClick: () -> Unit) {
 @Composable
 fun FilterButton(state: FeedUiState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val vertical = state.verticals.firstOrNull { it.key == state.selectedVertical }?.label
+    // Through displayPlace, so the chip reads "دبي مارينا" in an Arabic build.
+    // The value in state is the canonical English form, because that is what a
+    // listing is stored under — see Place.
     val place = state.locationLabel.ifEmpty { stringResource(R.string.filter_nearby_you) }
+        .let { if (state.locationLabel.isEmpty()) it else displayPlace(state.locationLabel) }
     val summary = listOfNotNull(vertical, place).joinToString(" · ")
 
     Box(

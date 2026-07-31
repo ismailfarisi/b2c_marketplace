@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
      * more honest than a silent nationwide feed, and the filter sheet always
      * shows which one is in use.
      */
-    private val fallback = Place("Dubai Marina", 25.0805, 55.1403)
+    private val fallback = Place("Dubai Marina", 25.0805, 55.1403, R.string.place_dubai_marina)
 
     /**
      * Registered here rather than inside composition: a permission result can
