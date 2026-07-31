@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.sell
 
+import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.PLACES
 import ae.marketplace.mobile.android.Place
 import ae.marketplace.mobile.android.R
@@ -46,9 +47,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-internal val Accent = Color(0xFFB4652A)
-internal val Ink = Color(0xFF0E0E10)
-internal val Line = Color(0xFF2A2A2E)
+// The sell flow's copies, now references. See ui.Palette for why one set.
+internal val Accent = Palette.Accent
+internal val Ink = Palette.Ink
+internal val Line = Palette.Line
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2 · What are you listing?
@@ -443,7 +445,7 @@ private fun LookupRow(
                 // pushes the Next button off the screen and the seller cannot
                 // reach it without dismissing the keyboard first.
                 .heightIn(max = 200.dp)
-                .background(Color(0xFF17171A), RoundedCornerShape(8.dp)),
+                .background(Palette.Surface, RoundedCornerShape(8.dp)),
         ) {
             items(results) { option ->
                 Text(

@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android
 
+import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.feed.ReelClock
 import ae.marketplace.mobile.model.FeedItem
 import ae.marketplace.mobile.model.ResolvedAction
@@ -50,7 +51,9 @@ import kotlinx.coroutines.delay
  * a timer, which is the part that genuinely has to be written twice.
  */
 
-private val Accent = Color(0xFFB4652A)
+// Was a private copy of the same hex in four files, two of which had drifted.
+// See ae.marketplace.mobile.android.ui.Palette.
+private val Accent = Palette.Accent
 private val Scrim = Color.Black.copy(alpha = 0.55f)
 
 /**

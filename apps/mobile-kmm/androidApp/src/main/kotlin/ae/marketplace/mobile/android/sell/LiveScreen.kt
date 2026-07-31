@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.sell
 
+import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.sell.SellUiState
 import ae.marketplace.mobile.sell.UploadPhase
@@ -63,7 +64,7 @@ fun LiveStep(
                 Text(
                     text = phase.glyph,
                     fontSize = 20.sp,
-                    color = if (phase.bad) Accent else Color(0xFF4CAF50),
+                    color = if (phase.bad) Accent else Palette.Good,
                     modifier = Modifier.padding(end = 12.dp, top = 2.dp),
                 )
                 Column {

@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android
 
+import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.feed.FeedEmptyReason
 import ae.marketplace.mobile.feed.FeedSurface
 import androidx.compose.foundation.background
@@ -24,7 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val Accent = Color(0xFFB4652A)
+// Was a private copy of the same hex in four files, two of which had drifted.
+// See ae.marketplace.mobile.android.ui.Palette.
+private val Accent = Palette.Accent
 
 /**
  * The four tabs.

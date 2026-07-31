@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android
 
+import ae.marketplace.mobile.android.ui.Palette
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +44,9 @@ enum class Destination {
     Me,
 }
 
-private val Accent = Color(0xFFB4652A)
+// Was a private copy of the same hex in four files, two of which had drifted.
+// See ae.marketplace.mobile.android.ui.Palette.
+private val Accent = Palette.Accent
 
 /**
  * NAV_BAR_HEIGHT excludes the system navigation inset, which the bar adds on top

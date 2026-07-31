@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -171,6 +172,32 @@ private fun ReelPage(
             posterUrl = item.posterUrl,
             lqip = item.lqip,
             modifier = Modifier.fillMaxSize(),
+        )
+
+        // Gradients top and bottom, under the overlay and over the video.
+        //
+        // This mattered less while every reel was a black rectangle. Now that
+        // posters render — and once real footage does — the background under
+        // the title, the price and the CTA is an arbitrary photograph, and
+        // white text on a white car in Dubai sunlight is simply not there.
+        //
+        // A gradient rather than the flat per-pill scrims already in the
+        // overlay, because those solve a different problem: a pill is a small
+        // opaque shape and a hard edge is fine on it, whereas a hard edge
+        // across the whole lower third reads as a black bar someone forgot to
+        // remove. The stops are weighted towards the bottom because that is
+        // where four lines of text sit; the top only has to carry a badge.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Black.copy(alpha = 0.55f),
+                        0.18f to Color.Transparent,
+                        0.55f to Color.Transparent,
+                        1.0f to Color.Black.copy(alpha = 0.75f),
+                    )
+                )
         )
 
         // Time bar, badge, time pill, product line, CTAs. One skeleton for every
