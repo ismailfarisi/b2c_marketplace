@@ -274,4 +274,15 @@
         <item quantity="many">نُشر منذ %d أسبوعاً</item>
         <item quantity="other">نُشر منذ %d أسبوع</item>
     </plurals>
+    <string name="sell_length">المدة</string>
+    <string name="sell_timer">مؤقت</string>
+    <string name="sell_flash">فلاش</string>
+    <string name="sell_off">إيقاف</string>
+    <string name="sell_gallery">المعرض</string>
+    <string name="sell_flip_camera">تبديل الكاميرا</string>
+    <string name="sell_seconds_short">%1$dث</string>
+    <string name="sell_pick_video">اختر مقطع فيديو</string>
+    <string name="sell_clip_too_long">هذا الفيديو أطول من %1$d ثانية. اختر مقطعاً أقصر أو اقتصّه أولاً.</string>
+    <string name="sell_clip_too_large">حجم الفيديو كبير جداً للرفع. اختر مقطعاً أقصر.</string>
+    <string name="sell_clip_unreadable">تعذّرت قراءة هذا الفيديو. جرّب مقطعاً آخر.</string>
 </resources>

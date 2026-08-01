@@ -340,4 +340,19 @@
         <item quantity="one">listed %dw ago</item>
         <item quantity="other">listed %dw ago</item>
     </plurals>
+    <!-- Recorder controls -->
+    <string name="sell_length">Length</string>
+    <string name="sell_timer">Timer</string>
+    <string name="sell_flash">Flash</string>
+    <string name="sell_off">Off</string>
+    <string name="sell_gallery">Gallery</string>
+    <string name="sell_flip_camera">Flip camera</string>
+    <string name="sell_seconds_short">%1$ds</string>
+    <!-- Video only, and said out loud. The wedge of this product is that its
+         supply is filmed; a picker that accepted images would fill the feed
+         with the same stills every classifieds site already has. -->
+    <string name="sell_pick_video">Choose a video</string>
+    <string name="sell_clip_too_long">That video is longer than %1$d seconds. Choose a shorter one or trim it first.</string>
+    <string name="sell_clip_too_large">That video is too large to upload. Choose a shorter one.</string>
+    <string name="sell_clip_unreadable">That video could not be read. Try another one.</string>
 </resources>

@@ -172,5 +172,16 @@
 "msg_held" = "قيد المراجعة — لم تُسلَّم بعد.";
 "msg_redacted" = "تمت إزالة بيانات التواصل.";
 "msg_blocked" = "لم تُسلَّم.";
+"sell_length" = "المدة";
+"sell_timer" = "مؤقت";
+"sell_flash" = "فلاش";
+"sell_off" = "إيقاف";
+"sell_gallery" = "المعرض";
+"sell_flip_camera" = "تبديل الكاميرا";
+"sell_seconds_short" = "%lldث";
+"sell_pick_video" = "اختر مقطع فيديو";
+"sell_clip_too_long" = "هذا الفيديو أطول من %lld ثانية. اختر مقطعاً أقصر أو اقتصّه أولاً.";
+"sell_clip_too_large" = "حجم الفيديو كبير جداً للرفع. اختر مقطعاً أقصر.";
+"sell_clip_unreadable" = "تعذّرت قراءة هذا الفيديو. جرّب مقطعاً آخر.";
 
 "action_back" = "رجوع";

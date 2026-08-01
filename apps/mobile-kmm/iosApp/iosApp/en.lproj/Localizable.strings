@@ -172,6 +172,17 @@
 "msg_held" = "Being reviewed — not delivered yet.";
 "msg_redacted" = "Contact details were removed.";
 "msg_blocked" = "Not delivered.";
+"sell_length" = "Length";
+"sell_timer" = "Timer";
+"sell_flash" = "Flash";
+"sell_off" = "Off";
+"sell_gallery" = "Gallery";
+"sell_flip_camera" = "Flip camera";
+"sell_seconds_short" = "%llds";
+"sell_pick_video" = "Choose a video";
+"sell_clip_too_long" = "That video is longer than %lld seconds. Choose a shorter one or trim it first.";
+"sell_clip_too_large" = "That video is too large to upload. Choose a shorter one.";
+"sell_clip_unreadable" = "That video could not be read. Try another one.";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

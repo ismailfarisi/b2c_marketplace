@@ -59,6 +59,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.content.ContextCompat
+import android.media.MediaMetadataRetriever
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.camera.core.Camera
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import ae.marketplace.mobile.android.ui.Palette
 import java.io.File
 import java.util.concurrent.Executor
 
@@ -154,7 +163,90 @@ fun RecordScreen(
     var recording by remember { mutableStateOf<Recording?>(null) }
     var elapsedMs by remember { mutableStateOf(0L) }
     var capture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
     var facingBack by remember { mutableStateOf(true) }
+
+    // The controls. Saveable, because a rotation mid-setup that reset the
+    // seller's chosen length back to 60s would be its own small insult.
+    var maxMs by rememberSaveable { mutableStateOf(MaxClipMs) }
+    var timerSec by rememberSaveable { mutableStateOf(0) }
+    var torchOn by rememberSaveable { mutableStateOf(false) }
+    var zoom by rememberSaveable { mutableStateOf(1f) }
+    // Ticking down before a take. Null when not counting.
+    var countdown by remember { mutableStateOf<Int?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+
+    // Torch and zoom are applied to the bound camera, and re-applied whenever
+    // it is rebound — flipping to the front camera creates a new one, and the
+    // old torch state would otherwise be silently lost.
+    LaunchedEffect(camera, torchOn, zoom) {
+        val cam = camera ?: return@LaunchedEffect
+        runCatching { cam.cameraControl.enableTorch(torchOn) }
+        val max = cam.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
+        runCatching { cam.cameraControl.setZoomRatio(zoom.coerceIn(1f, max)) }
+    }
+
+    // The front camera has no torch on most devices. Leaving the control lit
+    // while it does nothing is worse than removing it.
+    val hasTorch = camera?.cameraInfo?.hasFlashUnit() == true
+
+    val startTake: () -> Unit = start@{
+        val videoCapture = capture ?: return@start
+        recording = startRecording(
+            context = context,
+            capture = videoCapture,
+            withAudio = hasAudio,
+            maxMs = maxMs,
+            executor = executor,
+            onProgress = { elapsedMs = it },
+            onFinished = { file, durationMs ->
+                recording = null
+                elapsedMs = 0
+                if (file != null) {
+                    // Read once, then deleted. The bytes go to the view model,
+                    // which holds them until the draft exists to upload them
+                    // to; leaving the file behind would accumulate a clip per
+                    // abandoned attempt in the app's cache.
+                    val bytes = runCatching { file.readBytes() }.getOrNull()
+                    file.delete()
+                    if (bytes != null) onRecorded(bytes, durationMs)
+                }
+            },
+        )
+    }
+
+    // The self-timer, so the phone can be propped on the wing mirror and the
+    // seller can be in shot walking round the car — which is the whole reason
+    // this exists rather than a nicety.
+    LaunchedEffect(countdown) {
+        val n = countdown ?: return@LaunchedEffect
+        if (n <= 0) {
+            countdown = null
+            startTake()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(1000)
+        countdown = n - 1
+    }
+
+    val picker = rememberLauncherForActivityResult(
+        // Video only, and not by oversight. The wedge of this product is that
+        // its supply is filmed; a picker that accepted images would fill the
+        // feed with the same stills every classifieds site already has, which
+        // is the argument that kept a gallery button out of this screen for as
+        // long as there wasn't one.
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        when (val picked = context.readClip(uri, maxMs)) {
+            is Picked.Ok -> onRecorded(picked.bytes, picked.durationMs)
+            is Picked.TooLong -> notice = context.getString(
+                R.string.sell_clip_too_long, (maxMs / 1000).toInt()
+            )
+            is Picked.TooLarge -> notice = context.getString(R.string.sell_clip_too_large)
+            is Picked.Unreadable -> notice = context.getString(R.string.sell_clip_unreadable)
+        }
+    }
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
 
@@ -178,7 +270,10 @@ fun RecordScreen(
                     }
                 },
                 update = { view ->
-                    bindCamera(view, lifecycleOwner, facingBack, executor) { capture = it }
+                    bindCamera(view, lifecycleOwner, facingBack, executor) { c, cam ->
+                        capture = c
+                        camera = cam
+                    }
                 },
             )
         }
@@ -204,23 +299,70 @@ fun RecordScreen(
                     .padding(horizontal = 12.dp, vertical = 5.dp)
             ) {
                 Text(
-                    text = "${clock(elapsedMs)} / ${clock(MaxClipMs)}",
+                    // The chosen length, not the constant. The pill reading 1:00 while
+                    // the rail said 15s was the two halves of the same fact
+                    // disagreeing on screen.
+                    text = "${clock(elapsedMs)} / ${clock(maxMs)}",
                     color = if (recording != null) Accent else Color.White,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                 )
             }
-            Text(
-                text = "⟳",
-                color = Color.White,
-                fontSize = 22.sp,
-                modifier = Modifier
-                    // Disabled mid-take. Rebinding the camera during a recording
-                    // ends it, and a seller who taps this halfway round the car
-                    // would lose the half they had.
-                    .clickable(enabled = recording == null) { facingBack = !facingBack }
-                    .padding(8.dp),
-            )
+            // Flip moved down beside the shutter, where the reference puts it
+            // and where a thumb already is. This holds its width so the clock
+            // stays centred rather than drifting right.
+            Spacer(Modifier.width(38.dp))
+        }
+
+        // The control rail, down the left edge like the reference.
+        //
+        // Four controls, and every one of them does something. The reference
+        // also carries Audio, Effects, Green screen and Touch up; those belong
+        // to a video product, not to a listing tool, and adding them as dead
+        // buttons would be worse than not having them.
+        if (hasCamera && recording == null && countdown == null) {
+            Column(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                RailControl(
+                    glyph = "◔",
+                    label = stringResource(R.string.sell_length),
+                    value = "${maxMs / 1000}s",
+                    onClick = {
+                        maxMs = when (maxMs) {
+                            15_000L -> 30_000L
+                            30_000L -> 60_000L
+                            else -> 15_000L
+                        }
+                    },
+                )
+                RailControl(
+                    glyph = "◷",
+                    label = stringResource(R.string.sell_timer),
+                    value = if (timerSec == 0) stringResource(R.string.sell_off)
+                    else stringResource(R.string.sell_seconds_short, timerSec),
+                    onClick = { timerSec = when (timerSec) { 0 -> 3; 3 -> 10; else -> 0 } },
+                )
+                if (hasTorch) {
+                    RailControl(
+                        glyph = if (torchOn) "☀" else "☾",
+                        label = stringResource(R.string.sell_flash),
+                        value = if (torchOn) "1" else stringResource(R.string.sell_off),
+                        active = torchOn,
+                        onClick = { torchOn = !torchOn },
+                    )
+                }
+                RailControl(
+                    glyph = "⌕",
+                    label = "",
+                    value = if (zoom > 1.5f) "2×" else "1×",
+                    active = zoom > 1.5f,
+                    onClick = { zoom = if (zoom > 1.5f) 1f else 2f },
+                )
+            }
         }
 
         Column(
@@ -245,39 +387,70 @@ fun RecordScreen(
                 )
             }
 
-            ShutterButton(
-                recording = recording != null,
-                enabled = hasCamera && capture != null,
-                onClick = {
-                    val active = recording
-                    if (active != null) {
-                        active.stop()
-                        return@ShutterButton
-                    }
-                    val videoCapture = capture ?: return@ShutterButton
-                    recording = startRecording(
-                        context = context,
-                        capture = videoCapture,
-                        withAudio = hasAudio,
-                        executor = executor,
-                        onProgress = { elapsedMs = it },
-                        onFinished = { file, durationMs ->
-                            recording = null
-                            elapsedMs = 0
-                            if (file != null) {
-                                // Read once, then deleted. The bytes go to the
-                                // view model, which holds them until the draft
-                                // exists to upload them to; leaving the file
-                                // behind would accumulate a clip per abandoned
-                                // attempt in the app's cache.
-                                val bytes = runCatching { file.readBytes() }.getOrNull()
-                                file.delete()
-                                if (bytes != null) onRecorded(bytes, durationMs)
-                            }
-                        },
-                    )
-                },
-            )
+            notice?.let {
+                Text(
+                    text = it,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .padding(horizontal = 32.dp)
+                        .background(Palette.Bad.copy(alpha = 0.85f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 14.dp, vertical = 9.dp)
+                        .clickable { notice = null },
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // Gallery, shutter, flip — the reference layout, and the order a
+            // right-handed thumb reaches them in.
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SideButton(
+                    glyph = "▣",
+                    label = stringResource(R.string.sell_gallery),
+                    // Not offered mid-take. Launching a picker over a running
+                    // recorder leaves the microphone open behind another app's
+                    // UI.
+                    enabled = recording == null && countdown == null,
+                    onClick = {
+                        notice = null
+                        picker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                        )
+                    },
+                )
+
+                Spacer(Modifier.width(28.dp))
+
+                ShutterButton(
+                    recording = recording != null,
+                    enabled = hasCamera && capture != null && countdown == null,
+                    countdown = countdown,
+                    onClick = {
+                        val active = recording
+                        when {
+                            active != null -> active.stop()
+                            timerSec > 0 -> countdown = timerSec
+                            else -> startTake()
+                        }
+                    },
+                )
+
+                Spacer(Modifier.width(28.dp))
+
+                SideButton(
+                    glyph = "⟳",
+                    label = stringResource(R.string.sell_flip_camera),
+                    // Disabled mid-take. Rebinding the camera during a
+                    // recording ends it, and a seller who taps this halfway
+                    // round the car would lose the half they had.
+                    enabled = recording == null && countdown == null,
+                    onClick = { facingBack = !facingBack },
+                )
+            }
         }
     }
 
@@ -291,7 +464,12 @@ fun RecordScreen(
 }
 
 @Composable
-private fun ShutterButton(recording: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun ShutterButton(
+    recording: Boolean,
+    enabled: Boolean,
+    countdown: Int? = null,
+    onClick: () -> Unit,
+) {
     Box(
         Modifier
             .size(76.dp)
@@ -299,17 +477,158 @@ private fun ShutterButton(recording: Boolean, enabled: Boolean, onClick: () -> U
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        if (countdown != null) {
+            // The number replaces the fill rather than sitting over it. A
+            // seller who has propped the phone up is reading this from two
+            // metres away.
+            Text(
+                text = "$countdown",
+                color = Color.White,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        } else {
+            Box(
+                Modifier
+                    .size(if (recording) 30.dp else 60.dp)
+                    .background(
+                        if (enabled) Accent else Accent.copy(alpha = 0.3f),
+                        // Square while recording, round when idle. The shape *is*
+                        // the stop affordance; a second icon over a live
+                        // viewfinder is one more thing between the seller and the
+                        // car.
+                        RoundedCornerShape(if (recording) 6.dp else 50.dp),
+                    ),
+            )
+        }
+    }
+}
+
+/**
+ * A control on the left rail: glyph, current value, and a name under it.
+ *
+ * The *value* is on the face rather than only the name, because these cycle on
+ * tap. A "Length" button that does not say 30s is a button the seller has to
+ * press to discover the state of.
+ */
+@Composable
+private fun RailControl(
+    glyph: String,
+    label: String,
+    value: String,
+    active: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(6.dp),
+    ) {
         Box(
             Modifier
-                .size(if (recording) 30.dp else 60.dp)
+                .size(44.dp)
                 .background(
-                    if (enabled) Accent else Accent.copy(alpha = 0.3f),
-                    // Square while recording, round when idle. The shape *is* the
-                    // stop affordance; a second icon over a live viewfinder is
-                    // one more thing between the seller and the car.
-                    RoundedCornerShape(if (recording) 6.dp else 50.dp),
+                    if (active) Accent.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.4f),
+                    RoundedCornerShape(50),
                 ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(glyph, color = Color.White, fontSize = 18.sp)
+        }
+        Text(
+            text = value,
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 3.dp),
         )
+        if (label.isNotEmpty()) {
+            Text(label, color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
+        }
+    }
+}
+
+/** Gallery and flip, either side of the shutter. */
+@Composable
+private fun SideButton(
+    glyph: String,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(52.dp)
+            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            glyph,
+            color = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
+            fontSize = 22.sp,
+        )
+    }
+}
+
+// ── gallery import ───────────────────────────────────────────────────────────
+
+/**
+ * The outcome of reading a picked video, so the caller can say which thing was
+ * wrong rather than "that did not work".
+ */
+private sealed interface Picked {
+    data class Ok(val bytes: ByteArray, val durationMs: Long) : Picked
+    data object TooLong : Picked
+    data object TooLarge : Picked
+    data object Unreadable : Picked
+}
+
+/**
+ * Bytes hold the whole clip in memory until the draft exists to upload it to,
+ * which is defensible for a sixty-second recording this app made and is not
+ * defensible for an arbitrary file off the device. A 4K clip from a modern
+ * phone is comfortably several hundred megabytes and would take the process
+ * down before it ever reached the network.
+ */
+private const val MaxClipBytes = 220L * 1024 * 1024
+
+private fun Context.readClip(uri: Uri, maxMs: Long): Picked {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(this, uri)
+        val durationMs = retriever
+            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            ?.toLongOrNull() ?: return Picked.Unreadable
+
+        // Checked before the bytes are read, not after. Reading first would
+        // mean allocating the file to discover it is too long to use.
+        //
+        // One second of slack: a clip trimmed to exactly thirty seconds often
+        // reports 30_012ms, and refusing it would be indistinguishable from a
+        // bug to the person who just trimmed it.
+        if (durationMs > maxMs + 1_000) return Picked.TooLong
+
+        val size = contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+        if (size > MaxClipBytes) return Picked.TooLarge
+
+        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: return Picked.Unreadable
+        if (bytes.isEmpty()) return Picked.Unreadable
+        // Re-checked against the bytes actually read: the descriptor reports
+        // UNKNOWN_LENGTH (-1) for plenty of providers, so the cheap check above
+        // silently passes for exactly the files it was meant to catch.
+        if (bytes.size > MaxClipBytes) return Picked.TooLarge
+
+        Picked.Ok(bytes, durationMs)
+    } catch (_: Exception) {
+        // A picked file can be anything: a stream the provider revoked, a
+        // codec this device cannot parse, a URI that has already expired.
+        Picked.Unreadable
+    } finally {
+        runCatching { retriever.release() }
     }
 }
 
@@ -363,7 +682,7 @@ private fun bindCamera(
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
     facingBack: Boolean,
     executor: Executor,
-    onBound: (VideoCapture<Recorder>) -> Unit,
+    onBound: (VideoCapture<Recorder>, Camera?) -> Unit,
 ) {
     val future = ProcessCameraProvider.getInstance(view.context)
     future.addListener({
@@ -386,8 +705,11 @@ private fun bindCamera(
 
         runCatching {
             provider.unbindAll()
-            provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
-            onBound(capture)
+            // The bound Camera is kept, not discarded: torch and zoom are
+            // properties of the *bound* camera, not of the capture use case,
+            // and there is no other handle to them.
+            val camera = provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
+            onBound(capture, camera)
         }
     }, executor)
 }
@@ -400,6 +722,7 @@ private fun startRecording(
     context: Context,
     capture: VideoCapture<Recorder>,
     withAudio: Boolean,
+    maxMs: Long,
     executor: Executor,
     onProgress: (Long) -> Unit,
     onFinished: (File?, Long) -> Unit,
@@ -410,7 +733,7 @@ private fun startRecording(
     // fire — a few hundred milliseconds late, and later still under load — and
     // the recorder finalises a clean file at the limit instead.
     val options = FileOutputOptions.Builder(file)
-        .setDurationLimitMillis(MaxClipMs)
+        .setDurationLimitMillis(maxMs)
         .build()
 
     return runCatching {
