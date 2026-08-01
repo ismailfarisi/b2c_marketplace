@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.sell
 
+import ae.marketplace.mobile.android.ui.FailureBlock
 import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.ui.words
 import ae.marketplace.mobile.android.PLACES
@@ -93,18 +94,7 @@ fun VerticalStep(
         if (state.verticals.isEmpty()) {
             val failure = state.error
             when {
-                failure != null -> {
-                    Text(
-                        text = failure.words(),
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 13.sp,
-                    )
-                    if (failure.isRetryable) {
-                        TextButton(onRetry, Modifier.padding(top = 8.dp)) {
-                            Text(stringResource(R.string.action_retry), fontSize = 14.sp)
-                        }
-                    }
-                }
+                failure != null -> FailureBlock(failure = failure, onRetry = onRetry)
                 !state.verticalsLoaded -> CircularProgressIndicator(
                     color = Color.White.copy(alpha = 0.7f),
                     strokeWidth = 2.dp,

@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android
 
+import ae.marketplace.mobile.android.ui.FailureBlock
 import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.ui.words
 import ae.marketplace.mobile.feed.FeedEmptyReason
@@ -145,22 +146,13 @@ fun FeedEmptyState(
                 modifier = Modifier.size(28.dp),
             )
 
-            error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    error.words(),
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                )
-                // Only where retrying could work. A retry button under
-                // "You are signed out" is a button that cannot succeed, and
-                // the viewer presses it three times before believing it.
-                if (error.isRetryable) {
-                    TextButton(onRetry, Modifier.padding(top = 8.dp)) {
-                        Text(stringResource(R.string.action_retry), fontSize = 14.sp)
-                    }
-                }
-            }
+            // The app's own failure block, not a hand-rolled one. The first
+            // version of this built its own Text + TextButton and the retry
+            // came out Material3 default purple on a black feed, because a
+            // bare TextButton inherits the theme's primary colour and this app
+            // never set one. Reusing the component gets the palette, the
+            // isRetryable rule and the button style that everything else uses.
+            error != null -> FailureBlock(failure = error, onRetry = onRetry)
 
             else -> Text(
                 when (reason) {

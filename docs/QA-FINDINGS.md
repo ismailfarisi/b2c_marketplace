@@ -610,6 +610,62 @@ one: `$USER` is unset in Git Bash and `set -u` aborted the search. A skippable
 check that can reach its skip by accident is worse than no check, because the
 outcome looks like success.
 
+## 24. "Allow camera" was a button that did nothing, forever — **fixed**
+
+Android stops showing the permission dialog after the second refusal and
+`launch` then returns denied without drawing anything; iOS `requestAccess` never
+prompts twice at all and returns the stored answer immediately. Both platforms
+re-asked anyway, and neither mentioned Settings — the only place the decision
+can still be changed. A hard dead end on the tab this product gets its supply
+from.
+
+Android pairs `shouldShowRequestPermissionRationale` with a record of having
+asked, because alone it cannot tell "never asked" from "permanently denied" —
+both are false. iOS reads `authorizationStatus`, which distinguishes them
+exactly. Both re-read on resume, or the seller grants it in Settings, returns to
+the same refusal screen, and concludes the setting did not take.
+
+Walked on a device: first refusal still offers "Allow camera"; the second
+switches to "Open settings", which lands on the app's own App info page;
+granting there and returning brings up a live viewfinder with no relaunch.
+
+## 25. Three facts rendered as one on the Vertical step — **fixed**
+
+Still loading, the request failed, and this deployment genuinely has nothing
+sellable all drew "Nothing is sellable right now", because the only question
+asked was whether the list was empty. A false statement about a working product,
+shown for the whole of the first fetch and every failure, to someone who has
+just recorded a video.
+
+Separately, a failed tile tap was invisible: picking a vertical fetches its
+form, and when that failed the view model set an error and returned the seller
+to the grid, where nothing drew it. The tile simply did not respond.
+
+`SellUiState.error` was the last `e.message` in the app — untranslatable,
+unbranchable, and nullable, so a throwable with no message rendered a failed
+publish as a silent success.
+
+## 26. A retry button in Material3 purple — **fixed**
+
+Found by looking at the offline feed rather than at the diff. The new empty
+state hand-rolled its own `Text` + `TextButton` instead of reusing the app's
+`FailureBlock`, and a bare `TextButton` inherits the theme's primary colour —
+which this app never sets, so it came out default violet on a black feed.
+
+The fix is to delete the duplicate and call `FailureBlock`, which already
+carries the palette, the `isRetryable` rule and the button style everything else
+uses. The lesson is the ordinary one: a component was reimplemented because it
+was easier to write than to look for.
+
+## Harness note: parse-swift depended on MSYS path rewriting
+
+`swiftc.exe` was handed POSIX paths and worked only because Git Bash rewrites
+them on the way to a native binary. A shell with `MSYS_NO_PATHCONV=1` — an
+ordinary thing to set, and set accidentally two commands earlier — produced
+seventeen "error opening input file" lines and a failure that reads like broken
+Swift rather than a broken script. Converted with `cygpath` explicitly now, and
+verified under both settings.
+
 ## Harness note: the shell was silently destroying Arabic
 
 An early test of the template editor sent Arabic through a bash heredoc into

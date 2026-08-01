@@ -78,6 +78,20 @@ if [ ${#files[@]} -eq 0 ]; then
     exit 1
 fi
 
+# Hand a Windows compiler Windows paths, explicitly.
+#
+# Git Bash usually rewrites POSIX paths on the way to a native binary, so this
+# worked by accident — until a caller with MSYS_NO_PATHCONV=1 in the
+# environment, which is a perfectly ordinary thing to set, got seventeen
+# "error opening input file '\c\Users\...'" lines and a failure that looks like
+# broken Swift rather than a broken script. Converting here does not care
+# either way.
+if command -v cygpath >/dev/null 2>&1; then
+    for i in "${!files[@]}"; do
+        files[$i]="$(cygpath -w "${files[$i]}")"
+    done
+fi
+
 if "$swiftc_bin" -parse "${files[@]}"; then
     echo "parse-swift: ${#files[@]} files parse"
 else
