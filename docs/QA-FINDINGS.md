@@ -718,20 +718,40 @@ large number. And the planner estimates `rows=1` for a scan that returns
 underestimate is how a nested loop gets chosen somewhere else and a page takes
 thirty seconds.
 
-## 29. The API cannot boot in production, and now says so in a test
+## 29. The API could not boot in production — **fixed**
 
-Not a bug — a missing integration, and the single most concrete thing between
-this repository and a deployment.
+`buildTranscoder` refused `stub` (playlists that point at nothing) and `ffmpeg`
+(an in-memory job table that strands every in-flight reel on a worker restart),
+and nothing else was implemented. Both refusals are right; the gap was the
+absence of a third option. There was no value of `TRANSCODE_VENDOR` that both
+existed and was permitted, so the process could not start with `APP_ENV=production`.
 
-`buildTranscoder` refuses `stub` in production because it publishes reels whose
-playlists point at nothing, and refuses `ffmpeg` because its job table is an
-in-memory map that strands every in-flight reel on a worker restart. Both
-refusals are right. Nothing else is implemented, so there is no value of
-`TRANSCODE_VENDOR` that both exists and is permitted.
+Now implemented: `media.MediaConvertProvider`, registered as `aws-mediaconvert`.
 
-Written as `TestNoTranscodeVendorIsProductionReady` rather than a TODO, because
-a TODO cannot tell you when it stops being true. Implement a provider, register
-it, and the test fails and asks to be deleted.
+AWS Elemental MediaConvert rather than Mux or Cloudflare Stream, chosen by what
+the deployment already has: the object store is S3, the region is me-central-1,
+the credential chain is already wired through `objectstore`, and MediaConvert
+reads and writes S3 directly — so a reel never travels through this process.
+The alternatives mean shipping every upload to a third party and paying egress
+to do it.
+
+It is permitted in production for a structural reason rather than a preference:
+it holds no job state here. The job lives in AWS under an id persisted with the
+reel, and `Fetch` resolves it from that id alone, so a restart, a redeploy, or a
+second worker running the reconciliation sweep all behave identically. That is
+precisely what disqualifies the ffmpeg provider.
+
+The subtle part is that the output location must be a pure function of the
+input. `Fetch` rebuilds playlist URLs from the job, and it is called by the
+reconciliation sweep as well as by the completion event — so a random per-job
+prefix would work right up until an event was lost, and then produce URLs
+pointing at nothing, on the path nobody exercises before production. There is a
+round-trip test for exactly this, and it was watched failing: replacing the
+derived prefix with `outputPrefix(source) + uuid` breaks all three renditions.
+
+`TestNoTranscodeVendorIsProductionReady` was written as a test rather than a
+TODO so that implementing a provider would break it and force this entry to be
+rewritten. It did, and this is the rewrite.
 
 ## 30. Production config guardrails, tested and extended — **fixed**
 

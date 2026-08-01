@@ -134,10 +134,10 @@ jobs:
           - an SMS sender for OTP delivery
           - `ANTHROPIC_API_KEY` for moderation — the API refuses to boot in
             production without it, on purpose
-          - **a transcode vendor.** `stub` and `ffmpeg` are both refused in
-            production and nothing else is implemented, so the API cannot
-            currently boot in production at all. See
-            `TestNoTranscodeVendorIsProductionReady`.
+          - `MEDIACONVERT_ROLE_ARN` and `MEDIACONVERT_DESTINATION` — the
+            transcode vendor is implemented (`TRANSCODE_VENDOR=aws-mediaconvert`)
+            and refuses to boot without them, by name.
 
-          The last one is a code gap and the blocking one.
+          All of these are environment. There is no longer a code gap blocking
+          a production boot.
           EOF

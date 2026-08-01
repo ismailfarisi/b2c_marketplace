@@ -57,6 +57,14 @@ type Config struct {
 	// where the binary is pinned to a known build.
 	FFmpegBinary string
 
+	// AWS Elemental MediaConvert — the first transcode provider permitted in
+	// production. Unused by any other vendor, and validated by the provider
+	// itself at wiring time rather than required here, so a deployment running
+	// ffmpeg locally does not have to set them.
+	MediaConvertRole        string
+	MediaConvertQueue       string
+	MediaConvertDestination string
+
 	// Phase 4: ranking, social, analytics warehouse.
 	//
 	// Unset means the Postgres event sink stays in use. That is correct for
@@ -158,6 +166,10 @@ func Load() (Config, error) {
 		OpenSearchIndex: optional("OPENSEARCH_INDEX", "reels"),
 		FFProbeBinary:   optional("FFPROBE_BINARY", ""),
 		FFmpegBinary:    optional("FFMPEG_BINARY", ""),
+
+		MediaConvertRole:        optional("MEDIACONVERT_ROLE_ARN", ""),
+		MediaConvertQueue:       optional("MEDIACONVERT_QUEUE_ARN", ""),
+		MediaConvertDestination: optional("MEDIACONVERT_DESTINATION", ""),
 
 		ClickHouseURL:      optional("CLICKHOUSE_URL", ""),
 		ClickHouseDatabase: optional("CLICKHOUSE_DATABASE", "analytics"),
