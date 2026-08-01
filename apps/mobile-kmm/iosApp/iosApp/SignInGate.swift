@@ -17,9 +17,8 @@ struct SignInGate: View {
     let viewModel: SignInViewModel
     let onCancel: () -> Void
 
-    @State private var state = SignInUiState(
-        phone: "", code: "", challengeId: "", busy: false, error: nil, resendAtMillis: 0
-    )
+    @State private var current: SignInUiState?
+    private var state: SignInUiState { current ?? viewModel.state.value }
     @State private var phone: String = ""
     @State private var code: String = ""
     @State private var now: Int64 = 0
@@ -115,7 +114,7 @@ struct SignInGate: View {
         .background(Palette.ink)
         .task {
             for await s in viewModel.state {
-                state = s
+                current = s
                 if s.code != code { code = s.code }
             }
         }

@@ -166,3 +166,19 @@ build: ## Build API, worker and feed binaries
 ## every missing translation takes.
 ios-strings:
 	bash apps/mobile-kmm/tools/gen-ios-strings.sh
+
+.PHONY: test-mobile
+## Compile and test the mobile module for both platforms.
+##
+## The iOS *Kotlin* target is included deliberately, and it is not decorative:
+## Kotlin/Native compiles Apple targets on any host — only linking the framework
+## needs a Mac — so `iosMain` can and should be checked here. It was not, and
+## four compile errors accumulated in it: a Security API compared across signed
+## and unsigned, an NSDictionary factory that does not exist in the bindings, a
+## CMTime passed by value where a CValue was wanted, and a method read off the
+## wrong class. Every one of them would have blocked the first iOS build.
+##
+## What this still cannot check is the Swift. That needs Xcode.
+test-mobile:
+	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest \
+		:shared:compileKotlinIosSimulatorArm64 :androidApp:assembleDebug

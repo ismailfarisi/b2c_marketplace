@@ -21,11 +21,20 @@ struct SearchScreen: View {
     let onOpenReel: (String) -> Void
     let onInquire: (SearchResult) -> Void
 
-    @State private var state = SearchUiState(
-        query: "", items: [], total: 0, loading: false, searched: false,
-        error: nil, filters: SearchFilters(), draftFilters: nil,
-        hasMore: false, loadingMore: false
-    )
+    /// Nil until the flow emits, then whatever it last said.
+    ///
+    /// Optional rather than a fabricated empty value, for two reasons. A
+    /// hand-built `SearchUiState(...)` is a literal that has to be updated every
+    /// time the shared type gains a field, and Kotlin default arguments do not
+    /// cross to Swift above a small parameter count — so the no-arg form does
+    /// not exist and the long form silently rots.
+    ///
+    /// It is also more honest: a screen rendering an invented empty state before
+    /// the first emission shows "nothing matched" for a frame to someone whose
+    /// search is still running. `StateFlow.value` is available synchronously, so
+    /// there is never a frame without a real answer.
+    @State private var current: SearchUiState?
+    private var state: SearchUiState { current ?? viewModel.search.value }
     @State private var query: String = ""
 
     var body: some View {
@@ -71,7 +80,7 @@ struct SearchScreen: View {
         .background(Palette.ink)
         .task {
             for await s in viewModel.search {
-                state = s
+                current = s
                 // The box is not driven from state on every tick — that would
                 // fight the keyboard mid-word. It is only corrected when the
                 // two have genuinely diverged, which happens when the view
@@ -232,7 +241,9 @@ struct SavedScreen: View {
     let viewModel: MeViewModel
     let onOpenReel: (String) -> Void
 
-    @State private var state = SavedUiState(items: [], loading: false, loaded: false, error: nil)
+    // See SearchScreen: the current value rather than an invented one.
+    @State private var current: SavedUiState?
+    private var state: SavedUiState { current ?? viewModel.saved.value }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -269,7 +280,7 @@ struct SavedScreen: View {
         .background(Palette.ink)
         .task {
             viewModel.loadSaved(force: false)
-            for await s in viewModel.saved { state = s }
+            for await s in viewModel.saved { current = s }
         }
     }
 }
@@ -337,7 +348,8 @@ struct MeScreen: View {
     let onOpenInbox: () -> Void
     let onSignOut: () -> Void
 
-    @State private var state = MyListingsUiState(items: [], loading: false, loaded: false, error: nil)
+    @State private var current: MyListingsUiState?
+    private var state: MyListingsUiState { current ?? viewModel.listings.value }
     @State private var unread: Int = 0
 
     var body: some View {
@@ -405,7 +417,7 @@ struct MeScreen: View {
             // The unread count is the only reason to open the inbox, so it has
             // to be known before the viewer decides whether to.
             viewModel.loadInbox()
-            for await s in viewModel.listings { state = s }
+            for await s in viewModel.listings { current = s }
         }
         .task {
             for await inbox in viewModel.inbox {

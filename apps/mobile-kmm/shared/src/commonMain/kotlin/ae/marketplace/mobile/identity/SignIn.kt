@@ -234,7 +234,7 @@ class SignInViewModel(
         }
         is Failure.Rejected -> SignInProblem.BadPhone
         is Failure.Server, Failure.NotFound, Failure.Unknown -> SignInProblem.Unknown
-        else -> SignInProblem.Unknown
+
     }
 
     private companion object {

@@ -20,7 +20,8 @@ struct SellFlow: View {
     let onSeeFeed: () -> Void
 
     @StateObject private var recorder = Recorder()
-    @State private var state = SellUiState()
+    @State private var current: SellUiState?
+    private var state: SellUiState { current ?? viewModel.state.value }
 
     var body: some View {
         ZStack {
@@ -65,7 +66,7 @@ struct SellFlow: View {
         }
         .task {
             viewModel.start()
-            for await s in viewModel.state { state = s }
+            for await s in viewModel.state { current = s }
         }
         .onDisappear {
             // The camera goes when the tab does. A session left running holds

@@ -10,7 +10,8 @@ struct InboxScreen: View {
     let onOpen: (Conversation) -> Void
     let onBack: () -> Void
 
-    @State private var state = InboxUiState(items: [], loading: false, error: nil)
+    @State private var current: InboxUiState?
+    private var state: InboxUiState { current ?? viewModel.inbox.value }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,7 +65,7 @@ struct InboxScreen: View {
         .background(Palette.ink)
         .task {
             viewModel.loadInbox()
-            for await s in viewModel.inbox { state = s }
+            for await s in viewModel.inbox { current = s }
         }
     }
 }
@@ -89,10 +90,8 @@ struct ThreadScreen: View {
     let viewModel: MeViewModel
     let onBack: () -> Void
 
-    @State private var state = ThreadUiState(
-        conversationId: "", title: "", messages: [], draft: "",
-        loading: false, sending: false, error: nil
-    )
+    @State private var current: ThreadUiState?
+    private var state: ThreadUiState { current ?? viewModel.thread.value }
     @State private var draft: String = ""
 
     var body: some View {
@@ -161,7 +160,7 @@ struct ThreadScreen: View {
         .background(Palette.ink)
         .task {
             for await s in viewModel.thread {
-                state = s
+                current = s
                 // Only corrected when the view model cleared it — a successful
                 // send. Driving the field from state on every tick would fight
                 // the keyboard mid-word.
