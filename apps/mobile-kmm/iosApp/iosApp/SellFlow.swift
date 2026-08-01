@@ -87,6 +87,11 @@ struct SellFlow: View {
 
 private struct RecordStep: View {
     @Environment(\.scenePhase) private var scenePhase
+    @State private var timerSec = 0
+    @State private var zoomedIn = false
+    @State private var countdown: Int?
+    @State private var picking = false
+    @State private var notice: String?
     @ObservedObject var recorder: Recorder
     let tip: String
     let onClip: (Data, Int64) -> Void
@@ -157,28 +162,69 @@ private struct RecordStep: View {
                         .padding(.bottom, Space.xl)
                 }
 
-                Button {
-                    if recorder.recording {
-                        recorder.stop()
-                    } else {
-                        recorder.start(onFinish: onClip)
+                if let notice {
+                    Text(notice)
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, Space.large)
+                        .padding(.vertical, Space.small)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Palette.bad.opacity(0.85)))
+                        .padding(.horizontal, Space.xxl)
+                        .padding(.bottom, Space.medium)
+                        .onTapGesture { self.notice = nil }
+                }
+
+                // Gallery, shutter, flip — matching the Android rail, and the
+                // order a right-handed thumb reaches them in.
+                HStack(spacing: 28) {
+                    SideButton(system: "photo.on.rectangle", label: "sell_gallery",
+                               enabled: !recorder.recording && countdown == nil) {
+                        notice = nil
+                        picking = true
                     }
-                } label: {
-                    // The shutter, as a ring around a shape that changes. One
-                    // control rather than separate start and stop buttons: the
-                    // seller is holding a phone at arm's length pointed at a
-                    // car, and hunting for a second target is how a clip ends
-                    // up thirty seconds of tarmac.
-                    ZStack {
-                        Circle().stroke(.white, lineWidth: 4).frame(width: 76, height: 76)
-                        RoundedRectangle(cornerRadius: recorder.recording ? 6 : 30)
-                            .fill(Palette.accent)
-                            .frame(width: recorder.recording ? 32 : 60,
-                                   height: recorder.recording ? 32 : 60)
-                            .animation(.easeInOut(duration: 0.15), value: recorder.recording)
+
+                    Button {
+                        if recorder.recording {
+                            recorder.stop()
+                        } else if timerSec > 0 {
+                            countdown = timerSec
+                        } else {
+                            recorder.start(onFinish: onClip)
+                        }
+                    } label: {
+                        // The shutter, as a ring around a shape that changes.
+                        // One control rather than separate start and stop
+                        // buttons: the seller is holding a phone at arm's
+                        // length pointed at a car, and hunting for a second
+                        // target is how a clip ends up thirty seconds of
+                        // tarmac.
+                        ZStack {
+                            Circle().stroke(.white, lineWidth: 4).frame(width: 76, height: 76)
+                            if let countdown {
+                                // The number replaces the fill rather than
+                                // sitting over it. A seller who has propped
+                                // the phone up is reading this from two metres.
+                                Text(String(countdown))
+                                    .font(.system(size: 34, weight: .bold))
+                                    .foregroundStyle(.white)
+                            } else {
+                                RoundedRectangle(cornerRadius: recorder.recording ? 6 : 30)
+                                    .fill(Palette.accent)
+                                    .frame(width: recorder.recording ? 32 : 60,
+                                           height: recorder.recording ? 32 : 60)
+                                    .animation(.easeInOut(duration: 0.15), value: recorder.recording)
+                            }
+                        }
+                    }
+                    .disabled(!recorder.authorised || countdown != nil)
+
+                    SideButton(system: "arrow.triangle.2.circlepath.camera",
+                               label: "sell_flip_camera",
+                               enabled: !recorder.recording && countdown == nil) {
+                        recorder.flip()
                     }
                 }
-                .disabled(!recorder.authorised)
                 .padding(.bottom, Space.xxl)
             }
 
@@ -187,6 +233,76 @@ private struct RecordStep: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.accent)
                     .padding(.bottom, 140)
+            }
+        }
+        // The control rail, down the left edge.
+        //
+        // Four controls and every one does something. The reference this was
+        // modelled on also carries Audio, Effects, Green screen and Touch up;
+        // those belong to a video product rather than a listing tool, and dead
+        // buttons would be worse than none.
+        .overlay(alignment: .leading) {
+            if recorder.authorised && !recorder.recording && countdown == nil {
+                VStack(spacing: 18) {
+                    RailControl(system: "timer", label: "sell_length",
+                                value: String(recorder.maxSeconds) + "s") {
+                        recorder.maxSeconds = recorder.maxSeconds == 15 ? 30
+                            : recorder.maxSeconds == 30 ? 60 : 15
+                    }
+                    RailControl(system: "clock", label: "sell_timer",
+                                value: timerSec == 0
+                                    ? String(localized: "sell_off")
+                                    : String(timerSec) + "s") {
+                        timerSec = timerSec == 0 ? 3 : timerSec == 3 ? 10 : 0
+                    }
+                    if recorder.hasTorch {
+                        RailControl(system: recorder.torchOn ? "bolt.fill" : "bolt.slash",
+                                    label: "sell_flash",
+                                    value: recorder.torchOn ? "1" : String(localized: "sell_off"),
+                                    active: recorder.torchOn) {
+                            recorder.toggleTorch()
+                        }
+                    }
+                    RailControl(system: "magnifyingglass", label: nil,
+                                value: zoomedIn ? "2x" : "1x", active: zoomedIn) {
+                        zoomedIn.toggle()
+                        recorder.setZoom(zoomedIn ? 2 : 1)
+                    }
+                }
+                .padding(.leading, 10)
+            }
+        }
+        // The self-timer, so the phone can be propped on a wing mirror and the
+        // seller can be in shot walking round the car.
+        .task(id: countdown) {
+            guard let n = countdown else { return }
+            if n <= 0 {
+                countdown = nil
+                recorder.start(onFinish: onClip)
+                return
+            }
+            try? await Task.sleep(for: .seconds(1))
+            if !Task.isCancelled { countdown = n - 1 }
+        }
+        .sheet(isPresented: $picking) {
+            // Video only. The wedge of this product is that its supply is
+            // filmed; a picker that accepted images would fill the feed with
+            // the same stills every classifieds site already has.
+            VideoPicker(maxSeconds: recorder.maxSeconds) { result in
+                picking = false
+                switch result {
+                case .ok(let data, let ms):
+                    onClip(data, ms)
+                case .tooLong:
+                    notice = String(format: String(localized: "sell_clip_too_long"),
+                                    recorder.maxSeconds)
+                case .tooLarge:
+                    notice = String(localized: "sell_clip_too_large")
+                case .unreadable:
+                    notice = String(localized: "sell_clip_unreadable")
+                case .cancelled:
+                    break
+                }
             }
         }
         .task { if !recorder.authorised { await recorder.authorise() } }

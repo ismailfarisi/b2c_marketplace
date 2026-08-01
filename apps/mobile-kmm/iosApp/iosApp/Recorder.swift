@@ -36,10 +36,27 @@ final class Recorder: NSObject, ObservableObject {
     @Published private(set) var recording = false
     @Published private(set) var failure: String?
 
+    /// The chosen cap, in seconds. Matches the Android rail: 15, 30 or 60.
+    ///
+    /// Applied to the output whenever it changes rather than read at start:
+    /// `maxRecordedDuration` is a property of the output, and setting it only
+    /// on the way into a take would leave a rail that says 15s recording for a
+    /// minute.
+    @Published var maxSeconds: Int = 60 {
+        didSet { output.maxRecordedDuration = CMTime(seconds: Double(maxSeconds), preferredTimescale: 600) }
+    }
+    @Published private(set) var torchOn = false
+    @Published private(set) var facingBack = true
+    /// Whether the *current* camera can light anything. The front camera of
+    /// most devices cannot, and a lit control that does nothing is worse than
+    /// an absent one.
+    @Published private(set) var hasTorch = false
+
     let session = AVCaptureSession()
     private let output = AVCaptureMovieFileOutput()
     private var onFinish: ((Data, Int64) -> Void)?
     private var startedAt: Date?
+    private var videoInput: AVCaptureDeviceInput?
 
     /// Asks for the camera, and for the microphone separately.
     ///
@@ -100,6 +117,11 @@ final class Recorder: NSObject, ObservableObject {
            let input = try? AVCaptureDeviceInput(device: camera),
            session.canAddInput(input) {
             session.addInput(input)
+            // Kept, because flipping has to remove exactly this input and
+            // searching the session for "the video one" later is how the
+            // microphone gets detached instead.
+            videoInput = input
+            hasTorch = camera.hasTorch
         } else {
             failure = String(localized: "sell_camera_needed")
             session.commitConfiguration()
@@ -115,7 +137,7 @@ final class Recorder: NSObject, ObservableObject {
 
         if session.canAddOutput(output) {
             session.addOutput(output)
-            output.maxRecordedDuration = Self.maxDuration
+            output.maxRecordedDuration = CMTime(seconds: Double(maxSeconds), preferredTimescale: 600)
         }
         session.commitConfiguration()
 
@@ -146,6 +168,64 @@ final class Recorder: NSObject, ObservableObject {
     func stop() {
         guard recording else { return }
         output.stopRecording()
+    }
+
+    /// Swaps the camera.
+    ///
+    /// Refused mid-take: reconfiguring the session during a recording ends it,
+    /// and a seller who taps this halfway round the car would lose the half
+    /// they had.
+    func flip() {
+        guard !recording, let current = videoInput else { return }
+        let wanted: AVCaptureDevice.Position = facingBack ? .front : .back
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: wanted),
+              let input = try? AVCaptureDeviceInput(device: camera) else { return }
+
+        session.beginConfiguration()
+        session.removeInput(current)
+        if session.canAddInput(input) {
+            session.addInput(input)
+            videoInput = input
+            facingBack = (wanted == .back)
+        } else {
+            // Put the old one back rather than leaving the session with no
+            // camera at all, which renders as a viewfinder frozen on its last
+            // frame with nothing to explain it.
+            session.addInput(current)
+        }
+        session.commitConfiguration()
+
+        // The new device has its own torch state, and its own answer to
+        // whether it has one.
+        hasTorch = videoInput?.device.hasTorch ?? false
+        if torchOn { setTorch(true) }
+    }
+
+    func toggleTorch() { setTorch(!torchOn) }
+
+    private func setTorch(_ on: Bool) {
+        guard let device = videoInput?.device, device.hasTorch else {
+            torchOn = false
+            return
+        }
+        // The lock is mandatory; without it this throws and the torch silently
+        // never comes on.
+        guard (try? device.lockForConfiguration()) != nil else { return }
+        device.torchMode = on ? .on : .off
+        device.unlockForConfiguration()
+        torchOn = on
+    }
+
+    /// Zoom, clamped to what this camera actually offers.
+    ///
+    /// A 2× request on a device whose wide-angle maxes below that throws, and
+    /// the throw is the kind that takes the session down rather than the
+    /// gesture.
+    func setZoom(_ factor: CGFloat) {
+        guard let device = videoInput?.device else { return }
+        guard (try? device.lockForConfiguration()) != nil else { return }
+        device.videoZoomFactor = max(1, min(factor, device.activeFormat.videoMaxZoomFactor))
+        device.unlockForConfiguration()
     }
 
     /// Releases the camera.
