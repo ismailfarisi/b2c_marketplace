@@ -49,6 +49,7 @@ fun SellFlow(
                 state = state,
                 onPick = viewModel::onVerticalPicked,
                 onBack = viewModel::onBack,
+                onRetry = viewModel::start,
             )
 
             SellStep.Details -> DetailsStep(

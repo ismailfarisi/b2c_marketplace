@@ -92,6 +92,8 @@
 "sell_camera_needed" = "الكاميرا هي طريقة العرض";
 "sell_camera_why" = "هذا المنتج يعرض فقط ما تم تصويره. لا يوجد رفع صور.";
 "sell_camera_allow" = "السماح للكاميرا";
+"sell_camera_blocked" = "تم إيقاف الوصول إلى الكاميرا لهذا التطبيق. يمكنك تفعيله من الإعدادات.";
+"sell_camera_settings" = "فتح الإعدادات";
 "sell_uploading" = "جارٍ رفع الفيديو";
 "sell_uploading_detail" = "أبقِ التطبيق مفتوحاً حتى ينتهي.";
 "sell_upload_failed" = "لم يكتمل الرفع";

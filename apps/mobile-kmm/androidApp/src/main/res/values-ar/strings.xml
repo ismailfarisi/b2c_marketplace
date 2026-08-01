@@ -144,6 +144,8 @@
     <string name="sell_camera_needed">الكاميرا هي طريقة العرض</string>
     <string name="sell_camera_why">هذا المنتج يعرض فقط ما تم تصويره. لا يوجد رفع صور.</string>
     <string name="sell_camera_allow">السماح للكاميرا</string>
+    <string name="sell_camera_blocked">تم إيقاف الوصول إلى الكاميرا لهذا التطبيق. يمكنك تفعيله من الإعدادات.</string>
+    <string name="sell_camera_settings">فتح الإعدادات</string>
 
     <!--
         One string per pipeline state. A video under review is not live, and

@@ -92,6 +92,8 @@
 "sell_camera_needed" = "The camera is how you list";
 "sell_camera_why" = "This product only lists things people have filmed. There is no photo upload.";
 "sell_camera_allow" = "Allow camera";
+"sell_camera_blocked" = "Camera access is turned off for this app. You can turn it back on in Settings.";
+"sell_camera_settings" = "Open settings";
 "sell_uploading" = "Uploading your video";
 "sell_uploading_detail" = "Keep the app open until this finishes.";
 "sell_upload_failed" = "The upload did not finish";

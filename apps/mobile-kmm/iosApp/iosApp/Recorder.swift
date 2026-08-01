@@ -31,6 +31,8 @@ final class Recorder: NSObject, ObservableObject {
     static let maxDuration = CMTime(seconds: 60, preferredTimescale: 600)
 
     @Published private(set) var authorised = false
+    /// The system will not ask again. Only Settings can change it now.
+    @Published private(set) var blocked = false
     @Published private(set) var recording = false
     @Published private(set) var failure: String?
 
@@ -45,10 +47,43 @@ final class Recorder: NSObject, ObservableObject {
     /// the camera and declined the microphone should get a silent video rather
     /// than a dead screen. Plenty of reels on this platform are shot muted.
     func authorise() async {
-        let camera = await AVCaptureDevice.requestAccess(for: .video)
-        _ = await AVCaptureDevice.requestAccess(for: .audio)
-        authorised = camera
-        if camera { configure() }
+        // Asked only while the system will actually ask. `requestAccess`
+        // returns the stored answer immediately once a decision exists, and it
+        // never prompts twice — so "Allow camera" was a button that did
+        // nothing, permanently, on the tab this product gets its supply from.
+        // The only way back is Settings, which the screen never mentioned.
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            authorised = true
+            blocked = false
+            configure()
+        case .notDetermined:
+            let camera = await AVCaptureDevice.requestAccess(for: .video)
+            // Separately, because they are refused separately and a seller who
+            // declined the microphone should get a silent clip rather than a
+            // dead screen. Plenty of reels here are shot muted.
+            _ = await AVCaptureDevice.requestAccess(for: .audio)
+            authorised = camera
+            blocked = !camera
+            if camera { configure() }
+        default:
+            // .denied or .restricted. Restricted cannot be changed by the
+            // person holding the phone at all, but Settings is still where
+            // they would find that out.
+            authorised = false
+            blocked = true
+        }
+    }
+
+    /// Re-reads the decision, for a return from Settings.
+    ///
+    /// Without it the seller grants the camera, comes back, and is looking at
+    /// the same refusal screen — from which the obvious conclusion is that the
+    /// setting did not take.
+    func refreshAuthorisation() async {
+        if AVCaptureDevice.authorizationStatus(for: .video) == .authorized, !authorised {
+            await authorise()
+        }
     }
 
     private func configure() {

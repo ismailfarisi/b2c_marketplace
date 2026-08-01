@@ -198,6 +198,12 @@
     <string name="sell_camera_needed">The camera is how you list</string>
     <string name="sell_camera_why">This product only lists things people have filmed. There is no photo upload.</string>
     <string name="sell_camera_allow">Allow camera</string>
+    <!-- Shown once the system will no longer prompt. Re-asking there does
+         nothing, so the button has to point somewhere it can actually be
+         changed, and the words have to explain why the last button did not
+         work. -->
+    <string name="sell_camera_blocked">Camera access is turned off for this app. You can turn it back on in Settings.</string>
+    <string name="sell_camera_settings">Open settings</string>
 
     <!--
         The live screen.

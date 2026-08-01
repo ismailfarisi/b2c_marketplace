@@ -2,6 +2,11 @@ package ae.marketplace.mobile.android.sell
 
 import ae.marketplace.mobile.android.R
 import android.Manifest
+import android.app.Activity
+import android.content.ContextWrapper
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
@@ -49,6 +54,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.ActivityCompat
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.content.ContextCompat
 import java.io.File
 import java.util.concurrent.Executor
@@ -94,17 +103,52 @@ fun RecordScreen(
     // listing — blocking them would trade the supply for the audio.
     var hasAudio by remember { mutableStateOf(context.hasPermission(Manifest.permission.RECORD_AUDIO)) }
 
+    // Whether the system will still show a dialog if we ask again.
+    //
+    // It will not, once the seller has refused twice or picked "Don't allow" —
+    // and `launch` then returns denied without drawing anything. So "Allow
+    // camera" was a button that did nothing, forever, on the tab this product
+    // gets its supply from. The only way back is Settings, which the screen
+    // never mentioned.
+    //
+    // `shouldShowRequestPermissionRationale` cannot distinguish "never asked"
+    // from "permanently denied" on its own — both are false — so the ask is
+    // recorded and the two are read together.
+    var asked by rememberSaveable { mutableStateOf(false) }
+    var blocked by remember { mutableStateOf(false) }
+
     val permissions = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
         hasCamera = granted[Manifest.permission.CAMERA] ?: hasCamera
         hasAudio = granted[Manifest.permission.RECORD_AUDIO] ?: hasAudio
+        blocked = !hasCamera && !context.canAskAgain(Manifest.permission.CAMERA)
+    }
+
+    val ask = {
+        asked = true
+        permissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+    }
+
+    // Re-read on resume: the seller may have granted it in Settings and come
+    // back, and without this they return to the same refusal screen and
+    // conclude the setting did not take.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasCamera = context.hasPermission(Manifest.permission.CAMERA)
+                hasAudio = context.hasPermission(Manifest.permission.RECORD_AUDIO)
+                if (hasCamera) blocked = false
+                else if (asked) blocked = !context.canAskAgain(Manifest.permission.CAMERA)
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
 
     LaunchedEffect(Unit) {
-        if (!hasCamera) {
-            permissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
-        }
+        if (!hasCamera && !asked) ask()
     }
 
     var recording by remember { mutableStateOf<Recording?>(null) }
@@ -116,9 +160,9 @@ fun RecordScreen(
 
         if (!hasCamera) {
             CameraDenied(
-                onAsk = {
-                    permissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
-                },
+                blocked = blocked,
+                onAsk = ask,
+                onSettings = { context.openAppSettings() },
                 modifier = Modifier.align(Alignment.Center),
             )
         } else {
@@ -270,7 +314,12 @@ private fun ShutterButton(recording: Boolean, enabled: Boolean, onClick: () -> U
 }
 
 @Composable
-private fun CameraDenied(onAsk: () -> Unit, modifier: Modifier = Modifier) {
+private fun CameraDenied(
+    blocked: Boolean,
+    onAsk: () -> Unit,
+    onSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier.padding(horizontal = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -282,7 +331,9 @@ private fun CameraDenied(onAsk: () -> Unit, modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Medium,
         )
         Text(
-            text = stringResource(R.string.sell_camera_why),
+            text = stringResource(
+                if (blocked) R.string.sell_camera_blocked else R.string.sell_camera_why
+            ),
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 8.dp),
@@ -291,10 +342,16 @@ private fun CameraDenied(onAsk: () -> Unit, modifier: Modifier = Modifier) {
             Modifier
                 .padding(top = 20.dp)
                 .background(Accent, RoundedCornerShape(10.dp))
-                .clickable(onClick = onAsk)
+                .clickable(onClick = if (blocked) onSettings else onAsk)
                 .padding(horizontal = 22.dp, vertical = 11.dp)
         ) {
-            Text(stringResource(R.string.sell_camera_allow), color = Color.White, fontSize = 14.sp)
+            Text(
+                stringResource(
+                    if (blocked) R.string.sell_camera_settings else R.string.sell_camera_allow
+                ),
+                color = Color.White,
+                fontSize = 14.sp,
+            )
         }
     }
 }
@@ -391,4 +448,28 @@ private fun Context.hasPermission(permission: String): Boolean =
 private fun clock(ms: Long): String {
     val total = ms / 1000
     return "${total / 60}:${(total % 60).toString().padStart(2, '0')}"
+}
+
+/// Whether asking again would still show the system dialog.
+///
+/// False both before the first ask and after a permanent refusal, which is why
+/// the caller pairs it with a record of having asked.
+private fun Context.canAskAgain(permission: String): Boolean {
+    val activity = findActivity() ?: return false
+    return ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
+}
+
+private fun Context.openAppSettings() {
+    startActivity(
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

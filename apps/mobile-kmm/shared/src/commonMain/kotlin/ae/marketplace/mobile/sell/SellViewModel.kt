@@ -72,6 +72,17 @@ data class SellUiState(
     val hasClip: Boolean = false,
 
     val verticals: List<SellVertical> = emptyList(),
+    /**
+     * Whether the tile grid has been answered for, either way.
+     *
+     * Needed because an empty [verticals] means three different things and the
+     * Vertical step rendered all three as the third: still loading, the request
+     * failed, and this deployment genuinely has nothing sellable. It showed
+     * "Nothing is sellable right now" for the whole of the first fetch and for
+     * every failure — a false statement about a working product, made to
+     * someone who has just recorded a video.
+     */
+    val verticalsLoaded: Boolean = false,
     val selected: SellVertical? = null,
     val form: SellForm? = null,
 
@@ -101,7 +112,22 @@ data class SellUiState(
     val lng: Double = 0.0,
 
     val busy: Boolean = false,
-    val error: String? = null,
+    /**
+     * Why the last step failed, classified.
+     *
+     * A [Failure], not the `e.message` this held while every other screen had
+     * already moved on. The sell flow was the last one left, and it is the
+     * worst place to leave it: by the time this field is set the seller has
+     * recorded a video, filled a form and waited on an upload, and what they
+     * were shown for their trouble was a raw exception message — untranslatable
+     * in an app that ships Arabic, and frequently just a class name.
+     *
+     * The nullability was the sharper edge. `e.message` is `String?`, and this
+     * field's word for *nothing went wrong* is also null, so a throwable that
+     * carried no message rendered a failed publish as a silent success: no
+     * error, no retry, and a reel the seller believed was live.
+     */
+    val error: Failure? = null,
 
     val reelId: String? = null,
     val reviewNote: String = "",
@@ -171,10 +197,22 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
      * hundred bytes and it removes a spinner from the middle of the flow.
      */
     fun start() {
+        // Re-entrant: the Vertical step calls this again as its retry, and both
+        // platforms call it from a lifecycle hook that can fire twice.
+        if (_state.value.verticals.isNotEmpty()) return
+        _state.value = _state.value.copy(error = null)
         viewModelScope.launch {
             runCatching { api.verticals() }
-                .onSuccess { _state.value = _state.value.copy(verticals = it.verticals) }
-                .onFailure { e -> _state.value = _state.value.copy(error = e.message) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        verticals = it.verticals, verticalsLoaded = true,
+                    )
+                }
+                .onFailure { e ->
+                    // verticalsLoaded stays false, which is what lets the step
+                    // draw the failure instead of "nothing sellable".
+                    _state.value = _state.value.copy(error = e.toFailure())
+                }
         }
     }
 
@@ -214,7 +252,7 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                     // Back to the grid rather than forward into an empty form. A
                     // form step with no fields is a dead end with a Next button.
                     _state.value = _state.value.copy(
-                        busy = false, step = SellStep.Vertical, error = e.message,
+                        busy = false, step = SellStep.Vertical, error = e.toFailure(),
                     )
                 }
         }
@@ -350,7 +388,7 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                 // screen.
                 _state.value = _state.value.copy(
                     busy = false, step = SellStep.Details,
-                    upload = UploadPhase.Idle, error = e.message,
+                    upload = UploadPhase.Idle, error = e.toFailure(),
                 )
                 return@launch
             }
@@ -374,7 +412,7 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                     // as a failed publish, because retrying the upload is exactly
                     // what fixes it — see [retryUpload].
                     _state.value = _state.value.copy(
-                        busy = false, upload = UploadPhase.Failed, error = e.message,
+                        busy = false, upload = UploadPhase.Failed, error = e.toFailure(),
                     )
                     return@launch
                 }
@@ -391,7 +429,7 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                     // rejected is the listing, and offering to retry the upload
                     // would send the seller to fix the one part that worked.
                     _state.value = _state.value.copy(
-                        busy = false, upload = UploadPhase.Refused, error = e.message,
+                        busy = false, upload = UploadPhase.Refused, error = e.toFailure(),
                     )
                 }
         }
@@ -418,7 +456,7 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                 }
                 .onFailure { e ->
                     _state.value = _state.value.copy(
-                        busy = false, upload = UploadPhase.Refused, error = e.message,
+                        busy = false, upload = UploadPhase.Refused, error = e.toFailure(),
                     )
                 }
         }
@@ -445,7 +483,7 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
             runCatching { api.uploadVideo(url, pendingUploadHeaders, bytes) }
                 .onFailure { e ->
                     _state.value = _state.value.copy(
-                        busy = false, upload = UploadPhase.Failed, error = e.message,
+                        busy = false, upload = UploadPhase.Failed, error = e.toFailure(),
                     )
                     return@launch
                 }
@@ -460,7 +498,7 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                     // a publish that 409s here means the pipeline already started
                     // — which is a success the seller should be shown, not an
                     // error. Refreshing the status says which it was.
-                    _state.value = _state.value.copy(busy = false, error = e.message)
+                    _state.value = _state.value.copy(busy = false, error = e.toFailure())
                     refreshStatus()
                 }
         }

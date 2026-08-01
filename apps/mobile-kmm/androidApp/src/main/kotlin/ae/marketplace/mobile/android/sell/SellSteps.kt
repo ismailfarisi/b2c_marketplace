@@ -1,6 +1,7 @@
 package ae.marketplace.mobile.android.sell
 
 import ae.marketplace.mobile.android.ui.Palette
+import ae.marketplace.mobile.android.ui.words
 import ae.marketplace.mobile.android.PLACES
 import ae.marketplace.mobile.android.Place
 import ae.marketplace.mobile.android.R
@@ -9,6 +10,7 @@ import ae.marketplace.mobile.model.SellField
 import ae.marketplace.mobile.model.SellVertical
 import ae.marketplace.mobile.sell.FieldIssue
 import ae.marketplace.mobile.sell.FieldProblem
+import ae.marketplace.mobile.network.isRetryable
 import ae.marketplace.mobile.sell.SellUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,7 +33,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +78,7 @@ fun VerticalStep(
     state: SellUiState,
     onPick: (SellVertical) -> Unit,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     StepScaffold(
@@ -81,13 +87,49 @@ fun VerticalStep(
         modifier = modifier,
         footer = null,
     ) {
+        // Three different facts, and this step used to render all three as the
+        // third. Someone who has just filmed a listing and is told the product
+        // cannot sell it does not tap again — they leave.
         if (state.verticals.isEmpty()) {
-            Text(
-                text = stringResource(R.string.sell_nothing_sellable),
-                color = Color.White.copy(alpha = 0.55f),
-                fontSize = 13.sp,
-            )
+            val failure = state.error
+            when {
+                failure != null -> {
+                    Text(
+                        text = failure.words(),
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 13.sp,
+                    )
+                    if (failure.isRetryable) {
+                        TextButton(onRetry, Modifier.padding(top = 8.dp)) {
+                            Text(stringResource(R.string.action_retry), fontSize = 14.sp)
+                        }
+                    }
+                }
+                !state.verticalsLoaded -> CircularProgressIndicator(
+                    color = Color.White.copy(alpha = 0.7f),
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(24.dp),
+                )
+                else -> Text(
+                    text = stringResource(R.string.sell_nothing_sellable),
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 13.sp,
+                )
+            }
             return@StepScaffold
+        }
+
+        // A grid that loaded and a tap that failed. Picking a vertical fetches
+        // its form, and when that fetch failed the view model set an error and
+        // sent the seller back here — where nothing drew it, so the tile simply
+        // did not respond. They tap it again, and again.
+        state.error?.let {
+            Text(
+                text = it.words(),
+                color = Palette.Bad,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
         }
         // Two per row, matching the mock. chunked rather than a LazyVerticalGrid:
         // the list is single digits and a lazy grid inside a scrolling column is

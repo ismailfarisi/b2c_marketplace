@@ -127,7 +127,7 @@ fun LiveStep(
 
             state.error?.let {
                 Text(
-                    text = it,
+                    text = it.words(),
                     color = Accent.copy(alpha = 0.9f),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 14.dp),

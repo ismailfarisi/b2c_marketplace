@@ -37,9 +37,12 @@ struct SellFlow: View {
                 }
 
             case .vertical:
-                VerticalStep(state: state, onPick: viewModel.onVerticalPicked) {
-                    viewModel.onBack()
-                }
+                VerticalStep(
+                    state: state,
+                    onPick: viewModel.onVerticalPicked,
+                    onBack: { viewModel.onBack() },
+                    onRetry: { viewModel.start() }
+                )
 
             case .details:
                 DetailsStep(state: state, viewModel: viewModel)
@@ -83,6 +86,7 @@ struct SellFlow: View {
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct RecordStep: View {
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var recorder: Recorder
     let tip: String
     let onClip: (Data, Int64) -> Void
@@ -101,13 +105,26 @@ private struct RecordStep: View {
                     Text("sell_camera_needed")
                         .font(.system(size: 19).weight(.semibold))
                         .foregroundStyle(Palette.text)
-                    Text("sell_camera_why")
+                    Text(recorder.blocked ? "sell_camera_blocked" : "sell_camera_why")
                         .font(.system(size: TypeScale.secondary))
                         .foregroundStyle(Palette.textMuted)
                         .multilineTextAlignment(.center)
-                    Button("sell_camera_allow") { Task { await recorder.authorise() } }
+                    // Once the system will no longer prompt, asking again is a
+                    // no-op. The button has to point at the one place the
+                    // decision can still be changed.
+                    if recorder.blocked {
+                        Button("sell_camera_settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
                         .tint(Palette.accent)
                         .padding(.top, Space.small)
+                    } else {
+                        Button("sell_camera_allow") { Task { await recorder.authorise() } }
+                            .tint(Palette.accent)
+                            .padding(.top, Space.small)
+                    }
                 }
                 .padding(.horizontal, Space.xxl)
             }
@@ -173,6 +190,11 @@ private struct RecordStep: View {
             }
         }
         .task { if !recorder.authorised { await recorder.authorise() } }
+        // The return from Settings. scenePhase rather than onAppear: the view
+        // is never dismissed, so onAppear does not fire on the way back.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await recorder.refreshAuthorisation() } }
+        }
     }
 }
 
@@ -190,14 +212,47 @@ private struct VerticalStep: View {
     let state: SellUiState
     let onPick: (SellVertical) -> Void
     let onBack: () -> Void
+    let onRetry: () -> Void
 
     var body: some View {
         StepScaffold(title: "sell_what_listing", onBack: onBack, footer: nil) {
             if state.verticals.isEmpty {
-                Text("sell_nothing_sellable")
-                    .font(.system(size: TypeScale.secondary))
-                    .foregroundStyle(Palette.textMuted)
+                // Three different facts, rendered as the third until now.
+                // Someone who has just filmed a listing and is told the
+                // product cannot sell it does not tap again — they leave.
+                if let failure = state.error {
+                    VStack(spacing: Space.small) {
+                        Text(failure.words)
+                            .font(.system(size: TypeScale.secondary))
+                            .foregroundStyle(Palette.text.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                        if failure.canRetry {
+                            Button(action: onRetry) {
+                                Text("action_retry")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Palette.accent)
+                                    .frame(minHeight: Space.touch)
+                            }
+                        }
+                    }
+                } else if !state.verticalsLoaded {
+                    ProgressView().tint(Palette.textMuted)
+                } else {
+                    Text("sell_nothing_sellable")
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(Palette.textMuted)
+                }
             } else {
+                // A grid that loaded and a tap that failed. Picking a vertical
+                // fetches its form; when that failed the view model set an
+                // error and sent the seller back here, where nothing drew it —
+                // so the tile simply did not respond, and they tap it again.
+                if let failure = state.error {
+                    Text(failure.words)
+                        .font(.system(size: TypeScale.caption))
+                        .foregroundStyle(Palette.bad)
+                        .padding(.bottom, Space.medium)
+                }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
                           spacing: Space.small) {
                     ForEach(state.verticals, id: \.key) { vertical in
