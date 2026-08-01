@@ -41,6 +41,20 @@ class FeedPager(
     private var loading = false
     private var skewSampled = false
 
+    /**
+     * Which refresh the pager is currently serving.
+     *
+     * Bumped by [refresh] and captured by [loadNext] at entry. A response that
+     * comes back under a stale generation is dropped on the floor — it belongs
+     * to a surface the viewer has left, and there is no correct place to put it.
+     *
+     * A generation counter rather than cancellation because the pager holds no
+     * scope: it is a suspending object called from whatever coroutine the
+     * caller owns, and the caller cancelling its own job must not be the only
+     * thing standing between a stale page and the wrong tab.
+     */
+    private var generation = 0
+
     var rankingProfile: String? = null
         private set
 
@@ -77,6 +91,13 @@ class FeedPager(
 
     /**
      * Loads the first page, discarding anything already held.
+     *
+     * Abandons any page still in flight rather than waiting for it or refusing
+     * to start. Both alternatives were tried and both are wrong: waiting makes
+     * a tab tap take as long as the request the viewer just gave up on, and
+     * refusing left the new surface permanently blank, because `loadNext`
+     * returned immediately on the abandoned load's `loading` flag and no
+     * request ever went out.
      */
     suspend fun refresh(
         lat: Double,
@@ -85,10 +106,19 @@ class FeedPager(
         surface: FeedSurface = FeedSurface.ForYou,
         subjectType: String? = null,
     ): List<FeedItem> {
+        generation++
         items.clear()
         cursor = null
         exhausted = false
         emptyReason = null
+        // Released here rather than by the abandoned load, which may be parked
+        // on a socket for the length of a timeout and holds the only thing
+        // stopping the fetch below.
+        loading = false
+        // The device could have resynchronised its clock since the last page,
+        // and a refresh is the only moment the app can notice. Re-sampled, as
+        // clockSkewMillis has always claimed.
+        skewSampled = false
         return loadNext(lat, lng, categoryId, surface, subjectType)
     }
 
@@ -110,6 +140,7 @@ class FeedPager(
     ): List<FeedItem> {
         if (exhausted || loading) return emptyList()
         loading = true
+        val mine = generation
         try {
             val page = try {
                 api.feed(lat, lng, cursor, categoryId, pageSize, surface, subjectType)
@@ -117,10 +148,20 @@ class FeedPager(
                 if (!e.isStaleCursor) throw e
                 // Drop the cursor and start again rather than surfacing an
                 // error. The viewer's session is old, not broken.
+                //
+                // Guarded, because this branch *writes* before it retries: a
+                // stale load clearing the list here would blank whatever the
+                // current surface has already put on screen.
+                if (mine != generation) return emptyList()
                 cursor = null
                 items.clear()
                 api.feed(lat, lng, null, categoryId, pageSize, surface, subjectType)
             }
+
+            // A refresh happened while this was in flight. Everything below
+            // writes shared state — cursor, exhaustion, the list itself — and
+            // all of it describes a surface the viewer is no longer looking at.
+            if (mine != generation) return emptyList()
 
             rankingProfile = page.rankingProfile
             servedSurface = FeedSurface.fromWire(page.surface)
@@ -149,7 +190,11 @@ class FeedPager(
             items += fresh
             return fresh
         } finally {
-            loading = false
+            // Only if this load is still the current one. A stale load
+            // finishing — or throwing — must not clear the guard belonging to
+            // the refresh that superseded it, or the next prefetch would run
+            // concurrently with a page already in flight.
+            if (mine == generation) loading = false
         }
     }
 

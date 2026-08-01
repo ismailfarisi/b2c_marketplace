@@ -80,7 +80,12 @@ fun ReelFeed(
             // message exists to send the viewer to another tab, and a screen
             // with no tabs on it gives them nowhere to go.
             Box(Modifier.fillMaxSize(), Alignment.Center) {
-                FeedEmptyState(reason = state.emptyReason, error = state.error)
+                FeedEmptyState(
+                    reason = state.emptyReason,
+                    error = state.error,
+                    loading = state.loading,
+                    onRetry = viewModel::refresh,
+                )
             }
         } else {
             VerticalPager(

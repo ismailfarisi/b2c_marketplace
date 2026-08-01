@@ -10,6 +10,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.http.HttpHeaders
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,6 +30,13 @@ class FeedPagerTest {
         append(if (next == null) "null" else "\"$next\"")
         append(""","ranking_profile":"phase-4-heuristic"}""")
     }
+
+    /** One item carrying a time signal, which is what the skew is sampled from. */
+    private fun timedPage(id: String, asOf: String) =
+        """{"items":[{"id":"$id","author":{"type":"vendor_branch","id":"b1"},
+           "renditions":[],"published_at":"2026-07-28T10:00:00Z",
+           "time_signal":{"mode":"countdown","ends_at":"2026-07-28T12:00:00Z",
+           "as_of":"$asOf"}}],"next_cursor":null,"ranking_profile":"phase-4-heuristic"}"""
 
     /**
      * Built through [ApiClientFactory] rather than as a bare `HttpClient`.
@@ -166,6 +175,106 @@ class FeedPagerTest {
 
         assertFalse(pager.shouldLoadMore(3), "fetching this early pays for pages nobody reaches")
         assertTrue(pager.shouldLoadMore(7), "leaving it later stalls the feed at the worst moment")
+    }
+
+    /**
+     * The tab row sits under the viewer's thumb and a prefetch is in flight for
+     * most of a scroll, so "switch surface while a page is loading" is not an
+     * edge case — it is the common case for anyone who scrolls and then changes
+     * their mind.
+     *
+     * Two ways it used to go wrong, both silent:
+     *
+     *  - `refresh` cleared the list and called `loadNext`, which returned
+     *    immediately because the abandoned prefetch still held `loading`. No
+     *    request went out, nothing errored, and the new tab rendered blank
+     *    forever — no spinner, no empty reason, nothing to retry.
+     *  - the abandoned prefetch then completed and appended *the previous
+     *    surface's* reels into the cleared list, overwriting the cursor with
+     *    one belonging to a tab the viewer had left. The feed went on paging
+     *    the old surface under the new tab's label.
+     */
+    @Test
+    fun a_refresh_during_an_in_flight_page_still_loads_the_new_surface() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var call = 0
+        val pager = FeedPager(api {
+            MockEngine {
+                call++
+                when (call) {
+                    1 -> respond(page(listOf("a1", "a2"), "A2"), HttpStatusCode.OK, jsonOk("").first)
+                    2 -> {
+                        entered.complete(Unit)
+                        release.await()
+                        respond(page(listOf("a3"), "A3"), HttpStatusCode.OK, jsonOk("").first)
+                    }
+                    else -> respond(page(listOf("b1", "b2"), "B2"), HttpStatusCode.OK, jsonOk("").first)
+                }
+            }
+        })
+
+        pager.refresh(25.2, 55.3, surface = FeedSurface.ForYou)
+        assertEquals(listOf("a1", "a2"), pager.snapshot().map { it.id })
+
+        // A prefetch for "For you" goes out and does not come back yet.
+        val abandoned = launch { pager.loadNext(25.2, 55.3, surface = FeedSurface.ForYou) }
+        entered.await()
+
+        // The viewer taps "Live now".
+        pager.refresh(25.2, 55.3, surface = FeedSurface.LiveNow)
+
+        assertEquals(
+            listOf("b1", "b2"), pager.snapshot().map { it.id },
+            "a refresh must fetch even with an abandoned page in flight",
+        )
+
+        release.complete(Unit)
+        abandoned.join()
+
+        assertEquals(
+            listOf("b1", "b2"), pager.snapshot().map { it.id },
+            "the abandoned page belongs to a surface the viewer has left",
+        )
+        assertEquals(3, call, "no fourth request: the abandoned load must not page on")
+    }
+
+    /**
+     * The skew doc says "re-sampled on refresh, which is the only moment the
+     * device could have resynchronised without the app noticing". It was not:
+     * `skewSampled` was set once for the pager's lifetime and `refresh` never
+     * cleared it, so the documented behaviour never happened.
+     *
+     * It matters where the countdowns are money. A device that was four minutes
+     * fast at launch and correct after an NTP sync keeps rendering every auction
+     * four minutes early, and pull-to-refresh — the one thing a viewer does when
+     * a clock looks wrong — could not fix it.
+     */
+    @Test
+    fun refresh_resamples_the_clock_skew() = runTest {
+        var call = 0
+        val pager = FeedPager(
+            api {
+                MockEngine {
+                    call++
+                    val asOf = if (call == 1) "2026-07-28T10:00:00Z" else "2026-07-28T10:01:00Z"
+                    val body = timedPage("r$call", asOf)
+                    respond(body, HttpStatusCode.OK, jsonOk("").first)
+                }
+            },
+            // Frozen, so the only thing that can move the skew is the server's
+            // own clock arriving on the second page.
+            nowMillis = { 1_700_000_000_000L },
+        )
+
+        pager.refresh(25.2, 55.3)
+        val first = pager.clockSkewMillis
+        pager.refresh(25.2, 55.3)
+
+        assertEquals(
+            60_000L, pager.clockSkewMillis - first,
+            "the second page's clock is one minute later and the skew must follow it",
+        )
     }
 
     @Test

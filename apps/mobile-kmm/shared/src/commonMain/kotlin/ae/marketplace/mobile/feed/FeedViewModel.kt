@@ -9,6 +9,7 @@ import ae.marketplace.mobile.events.EventQueue
 import ae.marketplace.mobile.playback.PlaybackCoordinator
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +19,24 @@ data class FeedUiState(
     val items: List<FeedItem> = emptyList(),
     val loading: Boolean = false,
     val exhausted: Boolean = false,
-    val error: String? = null,
+    /**
+     * Why the last load failed, classified.
+     *
+     * A [Failure] rather than the `e.message` this used to hold, and the feed
+     * was the last screen in the app still carrying the string. Three separate
+     * problems with it, and the third is the one that shipped:
+     *
+     *  - untranslatable. There is no Arabic for a Ktor exception message, and
+     *    half of them are a class name.
+     *  - unbranchable. Offline and "the server is down" want different words
+     *    and only one of them is worth a retry button.
+     *  - **`e.message` is nullable.** A throwable with no message set this back
+     *    to null, which is this field's word for *nothing went wrong* — so a
+     *    failed load fell through to [emptyReason] and the viewer was told the
+     *    marketplace had nothing for them. Being wrongly told a shop is empty
+     *    is worse than being told the connection dropped: one of them you retry.
+     */
+    val error: Failure? = null,
     val rankingProfile: String? = null,
     /**
      * The tab the viewer tapped. Highlighted immediately, before the page it
@@ -118,6 +136,8 @@ class FeedViewModel(
      * changed — including the pager, which has no interest in it.
      */
     val focused: StateFlow<FocusedReelState> = _focused.asStateFlow()
+
+    private var refreshJob: Job? = null
 
     private var lat: Double = 0.0
     private var lng: Double = 0.0
@@ -226,13 +246,24 @@ class FeedViewModel(
     fun refresh() {
         val surface = _state.value.surface
         val vertical = _state.value.selectedVertical
-        viewModelScope.launch {
+        // The tab the viewer just left is not worth finishing. The pager drops
+        // a stale page on its own, so this is not what makes the switch correct
+        // — it is what stops a superseded request from spending the viewer's
+        // data and then resolving into an emit() for a surface they left.
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            runCatching { pager.refresh(lat, lng, categoryId, surface, vertical) }
-                .onSuccess { emit() }
-                .onFailure { e ->
-                    _state.value = _state.value.copy(loading = false, error = e.message)
-                }
+            try {
+                pager.refresh(lat, lng, categoryId, surface, vertical)
+                emit()
+            } catch (e: Throwable) {
+                // toFailure rethrows CancellationException rather than
+                // classifying it, which is the whole point of calling it here:
+                // `runCatching` used to swallow the cancellation above and
+                // paint an error over a feed that was working exactly as
+                // designed.
+                _state.value = _state.value.copy(loading = false, error = e.toFailure())
+            }
         }
     }
 
@@ -251,9 +282,20 @@ class FeedViewModel(
             val surface = _state.value.surface
             val vertical = _state.value.selectedVertical
             viewModelScope.launch {
-                runCatching { pager.loadNext(lat, lng, categoryId, surface, vertical) }
-                    .onSuccess { if (it.isNotEmpty()) emit() else emit() }
-                    .onFailure { /* Keep the feed on screen. The next swipe retries. */ }
+                try {
+                    pager.loadNext(lat, lng, categoryId, surface, vertical)
+                    // Emitted even for an empty page: that is how `exhausted`
+                    // reaches the UI, and it is the difference between a feed
+                    // that says it has reached the end and one that spins at
+                    // the bottom forever.
+                    emit()
+                } catch (e: Throwable) {
+                    // Rethrown when it is a cancellation; otherwise the feed
+                    // stays on screen and the next swipe retries. A prefetch
+                    // that failed is not worth an error over reels the viewer
+                    // is still reading.
+                    e.toFailure()
+                }
             }
         }
     }

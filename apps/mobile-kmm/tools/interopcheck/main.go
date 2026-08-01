@@ -206,31 +206,52 @@ type finding struct {
 func scanSwift(dir string, kotlin map[string]*kotlinType) []finding {
 	var findings []finding
 
+	// Every Swift file, read once and kept, because the check below needs two
+	// passes over all of them and re-walking to get the second is worse.
+	type swiftFile struct{ path, src string }
+	var files []swiftFile
 	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".swift") {
 			return nil
 		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return nil
+		if raw, err := os.ReadFile(path); err == nil {
+			files = append(files, swiftFile{path, string(raw)})
 		}
-		src := string(raw)
+		return nil
+	})
 
-		// Swift extensions add members to Kotlin types, and from a call site
-		// they are indistinguishable from Kotlin's own. Folded in before any
-		// checking, so `failure.words` resolves.
-		for _, m := range reSwiftExtension.FindAllStringSubmatchIndex(src, -1) {
-			name := src[m[2]:m[3]]
+	// Pass one: every Swift extension on a Kotlin type, from every file.
+	//
+	// Swift extensions add members to Kotlin types, and from a call site they
+	// are indistinguishable from Kotlin's own — `failure.words` is Swift's,
+	// `failure.detail` is Kotlin's, and nothing at the call site says which.
+	//
+	// This was folded in during the same pass that did the checking, which made
+	// the result depend on filename order: `Failure.words` is declared in
+	// Feedback.swift and used in FeedScreen.swift, and `FeedScreen` sorts
+	// before `Feedback` because 'S' < 'b'. So the use was checked before the
+	// declaration was known and reported as missing, while the same call in
+	// Messaging.swift passed — for no reason but its name. A checker that
+	// reports a real symbol as missing is one people learn to ignore, and
+	// "a finding is a definite problem" is the only promise this tool makes.
+	for _, f := range files {
+		for _, m := range reSwiftExtension.FindAllStringSubmatchIndex(f.src, -1) {
+			name := f.src[m[2]:m[3]]
 			t, ok := kotlin[name]
 			if !ok {
 				continue
 			}
 			// To the end of the file is over-broad and safe: it can only widen
 			// what the checker accepts, never invent a finding.
-			for _, mm := range reSwiftMember.FindAllStringSubmatch(src[m[1]:], -1) {
+			for _, mm := range reSwiftMember.FindAllStringSubmatch(f.src[m[1]:], -1) {
 				t.members[mm[1]] = true
 			}
 		}
+	}
+
+	// Pass two: the call sites, now that every extension is known.
+	for _, f := range files {
+		path, src := f.path, f.src
 
 		// Receivers, scoped to the Swift type that declares them.
 		lines := strings.Split(src, "\n")
@@ -320,8 +341,7 @@ func scanSwift(dir string, kotlin map[string]*kotlinType) []finding {
 				}
 			}
 		}
-		return nil
-	})
+	}
 	return findings
 }
 
