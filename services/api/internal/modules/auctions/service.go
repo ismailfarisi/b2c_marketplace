@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/money"
 	"github.com/marketplace/api/internal/platform/postgres"
+	"github.com/marketplace/api/internal/seam/subject"
 )
 
 type Service struct {
@@ -21,9 +23,57 @@ type Service struct {
 	// is guarded. An auction that runs and settles silently is a smaller
 	// product, not a broken one.
 	notify Notifier
+	// reproject pushes a moved closing time into the feed's signal cache.
+	// Nil-safe like notify, and for a weaker reason: without it the clock in
+	// the feed is a day behind the lot rather than absent.
+	reproject Reprojector
+}
+
+// Reprojector re-derives a subject's feed time signal from the row that just
+// changed. Satisfied by *timesignal.Projector.
+//
+// Named as an interface here rather than importing the module for the reason
+// Notifier is: a vertical depending on the thing that caches its projections
+// is a cycle waiting to happen, and the seam already defines the vocabulary.
+type Reprojector interface {
+	Refresh(ctx context.Context, t subject.Type, id uuid.UUID) error
 }
 
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+
+// WithReprojector attaches one.
+//
+// Needed because `reel_time_signals` is a cache and anti-snipe invalidates it.
+// A bid inside the last two minutes extends the close, and until this existed
+// nothing told the feed: `Refresh` had exactly one caller, the reconcile sweep,
+// which does not look at a signal until a day after it was written. So the feed
+// counted down to the *original* close, reached zero, and — a countdown that is
+// not recurring means the lot is gone — dropped a reel whose auction was still
+// taking bids. Those two minutes are the whole reason anti-snipe exists, and
+// they were the two minutes the feed was wrong.
+func (s *Service) WithReprojector(r Reprojector) *Service {
+	s.reproject = r
+	return s
+}
+
+// reprojectLot refreshes the cached signal, after the transaction that moved it.
+//
+// After, and never inside: the projector holds its own pool connection and
+// would read the pre-commit row, caching precisely the stale value this call
+// exists to replace.
+//
+// Logged rather than returned. The bid is committed and accepted by this point;
+// failing the request would tell the bidder their bid did not land when it did,
+// and the reconcile sweep is the backstop for the clock.
+func (s *Service) reprojectLot(ctx context.Context, id uuid.UUID) {
+	if s.reproject == nil {
+		return
+	}
+	if err := s.reproject.Refresh(ctx, subject.TypeAuction, id); err != nil {
+		slog.Warn("auction time signal not reprojected",
+			"auction_id", id, "error", err)
+	}
+}
 
 const auctionColumns = `
 	id, reference_no, seller_id, emirate, plate_code, plate_number, digit_count,
@@ -137,6 +187,10 @@ func (s *Service) Schedule(ctx context.Context, sellerID, id uuid.UUID) error {
 // change underneath it.
 func (s *Service) Bid(ctx context.Context, auctionID, bidderID uuid.UUID, amountMinor int64) (Auction, error) {
 	var out Auction
+	// Hoisted out of the closure so the re-projection below can be conditional
+	// on it. Only an *extended* bid moves the closing time; re-projecting on
+	// every bid would rewrite the same row on every tap of a busy lot.
+	var extended bool
 
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		a, err := scanAuction(tx.QueryRow(ctx,
@@ -159,7 +213,8 @@ func (s *Service) Bid(ctx context.Context, auctionID, bidderID uuid.UUID, amount
 			return err
 		}
 
-		closesAt, extended := ExtendedClose(a.ClosesAt, now)
+		var closesAt time.Time
+		closesAt, extended = ExtendedClose(a.ClosesAt, now)
 
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO plate_bids (auction_id, bidder_id, amount_minor, extended_close)
@@ -211,8 +266,16 @@ func (s *Service) Bid(ctx context.Context, auctionID, bidderID uuid.UUID, amount
 		out = a
 		return nil
 	})
+	if err != nil {
+		return out, err
+	}
 
-	return out, err
+	// The feed's clock, corrected. See WithReprojector for what went wrong
+	// without it.
+	if extended {
+		s.reprojectLot(ctx, auctionID)
+	}
+	return out, nil
 }
 
 // OpenDue moves scheduled lots to live. Run by the worker sweep.

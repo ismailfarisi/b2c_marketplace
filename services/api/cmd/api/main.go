@@ -50,6 +50,7 @@ import (
 	"github.com/marketplace/api/internal/modules/property"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/tax"
+	"github.com/marketplace/api/internal/modules/timesignal"
 	"github.com/marketplace/api/internal/modules/trust"
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/idempotency"
@@ -269,8 +270,12 @@ func run() error {
 	propertySvc := property.NewService(pool)
 	// The notifier matters on *this* side too, not only in the worker: the
 	// outbid message fires inside the bid transaction, which happens here.
-	auctionSvc := auctions.NewService(pool).WithNotifier(
-		app.AuctionNotifier{Notify: notifySvc})
+	auctionSvc := auctions.NewService(pool).
+		WithNotifier(app.AuctionNotifier{Notify: notifySvc}).
+		// Anti-snipe moves the closing time, and `reel_time_signals` is a
+		// cache. Wired here rather than only in the worker because the
+		// extension happens on the bid path, which is this process.
+		WithReprojector(timesignal.New(pool, registries.Subjects))
 	app.RegisterComposers(registries, vehicleSvc, propertySvc)
 
 	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)
