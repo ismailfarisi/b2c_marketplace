@@ -45,17 +45,17 @@ type kotlinType struct {
 	members map[string]bool
 	// funcs maps a function name to the ordered parameter names, which become
 	// Swift argument labels.
-	funcs map[string][]string
+	funcs  map[string][]string
 	isEnum bool
 }
 
 var (
 	reType = regexp.MustCompile(
 		`(?m)^\s*(?:public\s+|internal\s+)?(?:data\s+|sealed\s+|value\s+)?(class|interface|object|enum class)\s+([A-Z]\w*)`)
-	reFunc     = regexp.MustCompile(`(?m)^\s*(?:override\s+)?(?:suspend\s+)?fun\s+(?:<[^>]+>\s*)?(\w+)\s*\(([^)]*)\)`)
-	reProperty = regexp.MustCompile(`(?m)^\s*(?:override\s+)?(?:va[lr])\s+(\w+)\s*[:=]`)
-	reCtorProp = regexp.MustCompile(`(?m)^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:va[lr])\s+(\w+)\s*:`)
-	reEnumEntry = regexp.MustCompile(`(?m)^\s{4}([A-Z][A-Za-z0-9_]*)\s*[,;]`)
+	reFunc       = regexp.MustCompile(`(?m)^\s*(?:override\s+)?(?:suspend\s+)?fun\s+(?:<[^>]+>\s*)?(\w+)\s*\(([^)]*)\)`)
+	reProperty   = regexp.MustCompile(`(?m)^\s*(?:override\s+)?(?:va[lr])\s+(\w+)\s*[:=]`)
+	reCtorProp   = regexp.MustCompile(`(?m)^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:va[lr])\s+(\w+)\s*:`)
+	reEnumEntry  = regexp.MustCompile(`(?m)^\s{4}([A-Z][A-Za-z0-9_]*)\s*[,;]`)
 	reDataObject = regexp.MustCompile(`(?m)^\s*data object\s+([A-Z]\w*)`)
 )
 
@@ -284,6 +284,39 @@ func scanSwift(dir string, kotlin map[string]*kotlinType) []finding {
 						line:   i + 1,
 						detail: fmt.Sprintf("%s.%s — no such member on Kotlin %s", m[1], member, typeName),
 					})
+					continue
+				}
+
+				// Argument labels, when this is a call and the function's
+				// parameters are known.
+				//
+				// The other half of the same failure class, and the one SKIE
+				// makes easy to get wrong: Kotlin parameter names become Swift
+				// argument labels verbatim, so renaming a parameter is a source
+				// break in the Swift that Kotlin will never mention. A call
+				// with the right name and the wrong labels compiles on the
+				// Kotlin side forever.
+				if m[3] != "(" {
+					continue
+				}
+				want, known := t.funcs[member]
+				if !known {
+					continue
+				}
+				call := line[strings.Index(line, m[0])+len(m[0]):]
+				got := argumentLabels(call)
+				if got == nil {
+					// Unbalanced on this line — a call wrapped across lines.
+					// Skipped rather than guessed at.
+					continue
+				}
+				if !labelsMatch(want, got) {
+					findings = append(findings, finding{
+						file: filepath.Base(path),
+						line: i + 1,
+						detail: fmt.Sprintf("%s.%s(%s) — Kotlin declares (%s)",
+							m[1], member, strings.Join(got, ":"), strings.Join(want, ":")),
+					})
 				}
 			}
 		}
@@ -323,4 +356,87 @@ func main() {
 	if len(findings) > 0 {
 		os.Exit(1)
 	}
+}
+
+// argumentLabels reads the labels out of a Swift call's argument list.
+//
+// Returns nil when the parentheses do not balance on the line, which means the
+// call is wrapped and this line does not hold all of it. Skipping those is a
+// deliberate loss of coverage: guessing at a partial argument list produces
+// findings that are wrong, and one wrong finding costs more trust than ten
+// missed ones buy.
+func argumentLabels(s string) []string {
+	depth := 1
+	field := strings.Builder{}
+	var labels []string
+
+	flush := func() {
+		a := strings.TrimSpace(field.String())
+		field.Reset()
+		if a == "" {
+			return
+		}
+		// A trailing closure or an unlabelled argument has no colon before the
+		// first delimiter; Kotlin exports every parameter with a label, so an
+		// unlabelled one is recorded as "_" and will not match.
+		colon := strings.Index(a, ":")
+		if colon <= 0 {
+			labels = append(labels, "_")
+			return
+		}
+		label := strings.TrimSpace(a[:colon])
+		if strings.ContainsAny(label, " .()[]\"") {
+			labels = append(labels, "_")
+			return
+		}
+		labels = append(labels, label)
+	}
+
+	inString := false
+	for _, r := range s {
+		if r == '"' {
+			inString = !inString
+		}
+		if !inString {
+			switch r {
+			case '(', '[', '{':
+				depth++
+			case ')', ']', '}':
+				depth--
+				if depth == 0 {
+					flush()
+					return labels
+				}
+			case ',':
+				if depth == 1 {
+					flush()
+					continue
+				}
+			}
+		}
+		field.WriteRune(r)
+	}
+	return nil // unbalanced: the call spans lines
+}
+
+// labelsMatch compares a Swift call's labels against Kotlin's parameter names.
+//
+// Trailing parameters may be omitted — Kotlin default arguments that SKIE did
+// export — so a prefix match is accepted. An out-of-order or misspelled label
+// is not: those are the mistakes worth reporting.
+func labelsMatch(want, got []string) bool {
+	if len(got) > len(want) {
+		return false
+	}
+	for i, g := range got {
+		if g == "_" {
+			// A trailing closure or an unlabelled argument. Not something this
+			// checker can adjudicate.
+			continue
+		}
+		if g != want[i] {
+			return false
+		}
+	}
+	return true
 }
