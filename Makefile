@@ -112,7 +112,7 @@ dev-mobile: ## Build and install the Android app (mobile is Kotlin Multiplatform
 	cd apps/mobile-kmm && ./gradlew :androidApp:installDebug
 
 .PHONY: test-mobile
-test-mobile: check-interop ## Compile and test the mobile module for both platforms
+test-mobile: check-interop parse-swift ## Compile and test the mobile module for both platforms
 	#
 	# The iOS *Kotlin* target is here deliberately, and it is not decorative:
 	# Kotlin/Native compiles Apple targets on any host — only linking the
@@ -123,8 +123,12 @@ test-mobile: check-interop ## Compile and test the mobile module for both platfo
 	# method read off the wrong class. Every one would have blocked the first
 	# iOS build.
 	#
-	# What is still not checked here is the Swift itself. That needs Xcode;
-	# check-interop covers the part of it that does not.
+	# The Swift is covered as far as it can be without Xcode, by two targets
+	# above rather than by nothing: parse-swift rejects anything the grammar
+	# rejects, check-interop rejects a Kotlin symbol or argument label that
+	# does not exist. What is left for a Mac is type checking and SwiftUI
+	# semantics — which is where it belongs, and is no longer the first place
+	# a missing brace gets noticed.
 	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest \n		:shared:compileKotlinIosSimulatorArm64 :androidApp:assembleDebug
 
 # ------------------------------------------------------------ verification --
@@ -193,3 +197,15 @@ ios-strings:
 check-interop:
 	cd apps/mobile-kmm/tools/interopcheck && go build -o ic.exe .
 	cd apps/mobile-kmm && ./tools/interopcheck/ic.exe .
+
+.PHONY: parse-swift
+## Syntax-check the iOS Swift without Xcode.
+##
+## `swiftc -parse` never resolves an import, so SwiftUI and the Shared
+## framework not existing off a Mac costs nothing. It catches what the grammar
+## rejects and nothing else — not a type, not a SwiftUI misuse. See the header
+## of tools/parse-swift.sh for the exact boundary.
+##
+## Skips with status 0 where there is no toolchain, which is most machines.
+parse-swift:
+	bash apps/mobile-kmm/tools/parse-swift.sh
