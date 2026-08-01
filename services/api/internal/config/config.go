@@ -175,6 +175,31 @@ func Load() (Config, error) {
 		if len(cfg.JWTSigningKey) < 32 {
 			problems = append(problems, "JWT_SIGNING_KEY must be at least 32 bytes in production")
 		}
+		// Length is not entropy. The key CI uses —
+		// "ci-only-signing-key-at-least-32-bytes-long" — is 42 characters and
+		// passes the check above, and a copied .env.example passes it too. A
+		// signing key that is guessable forges any session in the product, so
+		// the obvious placeholders are named rather than trusted.
+		if word := placeholderIn(cfg.JWTSigningKey); word != "" {
+			problems = append(problems,
+				"JWT_SIGNING_KEY looks like a placeholder (contains "+word+
+					") — generate one with: openssl rand -base64 48")
+		}
+		// The object store, required for the same reason the transcoder and the
+		// moderator are, and it was the one leg of the media pipeline that was
+		// not.
+		//
+		// BuildMedia returns nil when the bucket is unset and the API runs
+		// without the media surface, which its comment defends as "a deployment
+		// that only serves orders is a legitimate configuration". That holds in
+		// development. In production it means the entire point of a video-first
+		// marketplace is switched off by an unset variable, announced by one
+		// warning line, and discovered when someone asks why the feed is empty.
+		if cfg.S3Bucket == "" {
+			problems = append(problems,
+				"S3_BUCKET is required in production — without it the media "+
+					"surface is silently disabled and the feed has nothing to serve")
+		}
 		if strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
 			problems = append(problems, "DATABASE_URL must not disable TLS in production")
 		}
@@ -214,4 +239,26 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("invalid configuration:\n  - %s", strings.Join(problems, "\n  - "))
 	}
 	return cfg, nil
+}
+
+// placeholderIn reports the first placeholder marker found in a secret, or "".
+//
+// Substring matching on a small list, deliberately. Entropy estimation would be
+// the clever answer and it is the wrong one here: a base64 key from
+// `openssl rand` and a determined person's "correcthorsebatterystaple" score
+// similarly, and a false positive at boot is an outage. These words appear in
+// the values this repository itself ships — .env.example, the CI signing key —
+// which are the ones that actually get copied into a deployment by accident.
+func placeholderIn(secret string) string {
+	lower := strings.ToLower(secret)
+	for _, word := range []string{
+		"changeme", "change-me", "change_me",
+		"placeholder", "example", "ci-only", "replace",
+		"your-", "xxxx", "insecure", "notsecret", "dev-secret",
+	} {
+		if strings.Contains(lower, word) {
+			return word
+		}
+	}
+	return ""
 }

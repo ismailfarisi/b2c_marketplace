@@ -718,6 +718,74 @@ large number. And the planner estimates `rows=1` for a scan that returns
 underestimate is how a nested loop gets chosen somewhere else and a page takes
 thirty seconds.
 
+## 29. The API cannot boot in production, and now says so in a test
+
+Not a bug — a missing integration, and the single most concrete thing between
+this repository and a deployment.
+
+`buildTranscoder` refuses `stub` in production because it publishes reels whose
+playlists point at nothing, and refuses `ffmpeg` because its job table is an
+in-memory map that strands every in-flight reel on a worker restart. Both
+refusals are right. Nothing else is implemented, so there is no value of
+`TRANSCODE_VENDOR` that both exists and is permitted.
+
+Written as `TestNoTranscodeVendorIsProductionReady` rather than a TODO, because
+a TODO cannot tell you when it stops being true. Implement a provider, register
+it, and the test fails and asks to be deleted.
+
+## 30. Production config guardrails, tested and extended — **fixed**
+
+The existing rules turned out to be better than assumed — the OTP dev echo, a
+short signing key, `sslmode=disable`, and `auto` in a public endpoint are all
+already refused in production, as are the stub and ffmpeg transcoders and a
+missing moderation key. What none of them had was a test, which for the one
+function whose entire job is refusing to start is a strange gap: a guardrail
+nobody tests is one somebody deletes in a refactor, and the deletion is
+invisible because the process still boots.
+
+Two rules added.
+
+**`S3_BUCKET` is now required in production.** `BuildMedia` returns nil when it
+is unset and the API runs without the media surface, defended in a comment as
+"a deployment that only serves orders is a legitimate configuration". True in
+development. In production it means the entire point of a video-first
+marketplace is switched off by an unset variable, announced by one warning
+line, and discovered when someone asks why the feed is empty. The transcoder
+and the moderator both hard-fail there; object storage, which both depend on,
+was the one leg that did not.
+
+**A placeholder signing key is refused.** Length is not entropy: the key this
+repository's own CI uses — `ci-only-signing-key-at-least-32-bytes-long` — is 42
+characters and passed the length rule. A guessable signing key forges any
+session in the product. Word list rather than an entropy estimate, deliberately;
+a false positive here is an outage, and the words that matter are the ones this
+repository actually ships.
+
+Not required, on purpose: `S3_ACCESS_KEY_ID`. An empty value falls through to
+the AWS default credential chain, so demanding it would break exactly the
+IAM-role deployment that is the correct way to run this.
+
+## 31. Two stale pins found by building the thing — **fixed**
+
+There were no Dockerfiles at all, so nothing had ever built the services outside
+a developer machine. Writing one found both immediately:
+
+  - **CI pinned Go 1.24 while `go.mod` requires 1.26.0.** Every job passed
+    anyway, because `GOTOOLCHAIN` defaults to `auto` and Go silently downloaded
+    1.26 before doing anything — so the pin was decorative, CI was testing on
+    whatever `go.mod` asked for, and it paid a toolchain download per job for
+    the privilege. The Alpine builder sets `GOTOOLCHAIN=local`, which turns the
+    silent upgrade into an honest failure, which is how it surfaced.
+  - **The Dockerfile's own comment claimed tzdata was "baked in below"** and it
+    was not installed. Alpine ships no zoneinfo, so the runtime `COPY` failed.
+    Had that copy silently succeeded, the container would have rendered every
+    settlement date in UTC — the bug already fixed once in finding #14.
+
+The images are distroless, non-root, 31–38 MB, and are verified at publish time
+by being run with a deliberately invalid production config: the container must
+exit non-zero and say why. That checks the binary is executable in the base
+image and that the guardrails above are compiled in, in one step.
+
 ## Harness note: the shell was silently destroying Arabic
 
 An early test of the template editor sent Arabic through a bash heredoc into

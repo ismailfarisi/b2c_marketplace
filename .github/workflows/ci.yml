@@ -10,7 +10,15 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.24"
+  # Matched to services/api/go.mod, which requires 1.26.0.
+  #
+  # This said 1.24 and every job still passed, because GOTOOLCHAIN defaults to
+  # auto and Go silently downloaded 1.26 before doing anything. So the pin was
+  # decorative — CI was testing on whatever go.mod asked for, paying a toolchain
+  # download per job for the privilege, and would have broken outright the day
+  # anything set GOTOOLCHAIN=local. The Alpine builder image does exactly that,
+  # which is how it was noticed.
+  GO_VERSION: "1.26"
   NODE_VERSION: "22"
 
 jobs:
