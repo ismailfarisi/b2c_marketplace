@@ -125,6 +125,144 @@ jobs:
       - run: npm run typecheck
       - run: npm run build:web
 
+  # The mobile app was not built by CI at all, and the Makefile has said so in a
+  # comment for some time: "the 38 shared-logic tests do not run unless CI calls
+  # test-mobile explicitly. It should."
+  #
+  # It did not, and the bill came due — four compile errors accumulated in
+  # `iosMain` for want of anyone running the compiler, every one of which would
+  # have blocked the first iOS build.
+  mobile:
+    name: KMM shared, Android, interop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/api/go.sum
+
+      # Before the builds, because it is seconds and it fails on exactly the
+      # class of mistake the expensive jobs cannot see: a Swift call to a Kotlin
+      # symbol that does not exist, or exists with different argument labels.
+      - name: Swift/Kotlin boundary
+        working-directory: apps/mobile-kmm
+        run: |
+          (cd tools/interopcheck && go build -o ic .)
+          ./tools/interopcheck/ic .
+
+      - name: Shared tests
+        working-directory: apps/mobile-kmm
+        run: ./gradlew :shared:testDebugUnitTest
+
+      - name: Android
+        working-directory: apps/mobile-kmm
+        run: ./gradlew :androidApp:assembleDebug
+
+      # Both languages or neither. A missing translation ships as an English
+      # string in an Arabic build, which no test notices and every user does.
+      - name: Strings agree across languages
+        working-directory: apps/mobile-kmm
+        run: |
+          en=$(grep -c '<string ' androidApp/src/main/res/values/strings.xml)
+          ar=$(grep -c '<string ' androidApp/src/main/res/values-ar/strings.xml)
+          echo "en=$en ar=$ar"
+          if [ "$en" != "$ar" ]; then
+            echo "::error::values/strings.xml has $en strings, values-ar has $ar"
+            exit 1
+          fi
+
+  # The iOS half, on the only host that can do it.
+  #
+  # This is where "the Swift has never been type-checked" stops being true.
+  # There is no .xcodeproj in the tree, so this does not xcodebuild — it links
+  # the Kotlin framework and runs `swiftc -typecheck` against it with the
+  # simulator SDK, which resolves SwiftUI, UIKit, AVFoundation *and* Shared.
+  # That is a real type-check of every SwiftUI file, not the syntax-only
+  # `-parse` that runs off a Mac.
+  ios:
+    name: iOS framework and Swift typecheck
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Link the shared framework
+        working-directory: apps/mobile-kmm
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
+
+      - name: Typecheck the Swift against it
+        working-directory: apps/mobile-kmm
+        run: |
+          set -euo pipefail
+          # The directory *containing* Shared.framework is the search path.
+          # Located rather than hardcoded because the debug/release segment has
+          # moved between Kotlin versions before.
+          fw=$(dirname "$(find shared/build/bin/iosSimulatorArm64 \
+                            -maxdepth 3 -name 'Shared.framework' | head -1)")
+          if [ -z "$fw" ] || [ "$fw" = "." ]; then
+            echo "::error::Shared.framework not found under shared/build/bin"
+            find shared/build/bin -maxdepth 4 -type d
+            exit 1
+          fi
+          echo "framework search path: $fw"
+          xcrun swiftc -typecheck \
+            -target arm64-apple-ios17.0-simulator \
+            -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
+            -F "$fw" \
+            iosApp/iosApp/*.swift
+
+  # Phase 10's load tests. PLAN.md §2.3 asks for a targeted test of capacity
+  # reservation, and the video-first plan adds the feed read path under a
+  # signup spike — neither survives being skipped.
+  #
+  # Not on pull requests: they seed 20,000 reels and take minutes. On master and
+  # on demand, which is often enough to catch a regression and rare enough not
+  # to tax every review.
+  loadtest:
+    name: Capacity and feed under load
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: marketplace
+          POSTGRES_PASSWORD: marketplace
+          POSTGRES_DB: marketplace
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U marketplace"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DB_URL: postgres://marketplace:marketplace@localhost:5432/marketplace?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/api/go.sum
+
+      - name: Migrate
+        working-directory: services/api
+        run: go tool migrate -path migrations -database "$DB_URL" up
+
+      # Its own variable, not DATABASE_URL. capacity_test.go writes to
+      # capacity_buckets, and pointing it at whatever DATABASE_URL happens to
+      # hold would make for a very confusing afternoon.
+      - name: Load tests
+        working-directory: services/api
+        run: LOADTEST_DATABASE_URL="$DB_URL" go test -tags loadtest -v -timeout 20m ./loadtest/...
+
   # The contract is only a source of truth if drift is impossible. A spec change
   # merged without regenerated clients is the same class of bug as a migration
   # merged without the code that uses it — it just fails later and further away.

@@ -129,17 +129,23 @@ test-mobile: check-interop parse-swift ## Compile and test the mobile module for
 	# does not exist. What is left for a Mac is type checking and SwiftUI
 	# semantics — which is where it belongs, and is no longer the first place
 	# a missing brace gets noticed.
-	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest \n		:shared:compileKotlinIosSimulatorArm64 :androidApp:assembleDebug
+	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest \
+		:shared:compileKotlinIosSimulatorArm64 :androidApp:assembleDebug
 
 # ------------------------------------------------------------ verification --
 
 # `test` deliberately excludes test-mobile.
 #
 # The KMM tests need a JDK and an Android SDK, and making the default target
-# require both means a backend contributor cannot run `make test`. The cost is
-# real and is named here rather than hidden: the 38 shared-logic tests — the
-# egress policy, the view/skip labelling, the event queue — do not run unless
-# CI calls test-mobile explicitly. It should.
+# require both means a backend contributor cannot run `make test`.
+#
+# This comment used to end "the 38 shared-logic tests do not run unless CI calls
+# test-mobile explicitly. It should." It did not, and the bill came due: four
+# compile errors accumulated in iosMain for want of anyone running the compiler.
+# CI now has `mobile` and `ios` jobs covering the shared tests, the Android
+# build, the Swift/Kotlin boundary and — on a macOS runner, which is the only
+# place it can happen — a real `swiftc -typecheck` of every SwiftUI file against
+# the linked framework. Locally this target is still the way to run it.
 .PHONY: test test-go test-ts test-all lint lint-go lint-ts build
 test: test-go test-ts ## Run backend and TypeScript tests
 

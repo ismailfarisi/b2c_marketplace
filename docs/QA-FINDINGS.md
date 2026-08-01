@@ -666,6 +666,58 @@ seventeen "error opening input file" lines and a failure that reads like broken
 Swift rather than a broken script. Converted with `cygpath` explicitly now, and
 verified under both settings.
 
+## 27. CI never built the mobile app, and could not have — **fixed**
+
+The workflow covered migrations, Go, TypeScript and contract drift. It did not
+touch `apps/mobile-kmm` at all, which is what let four compile errors sit in
+`iosMain`, and the Makefile had been saying so in a comment: "the 38
+shared-logic tests do not run unless CI calls test-mobile explicitly. It
+should."
+
+Three jobs added. `mobile` on Linux runs the boundary check first (seconds, and
+it catches the class the expensive jobs cannot see), then the shared tests, the
+Android build, and a check that the two string tables have the same key count —
+a missing translation ships as an English string in an Arabic build, which no
+test notices and every user does. `ios` on a macOS runner links the Kotlin
+framework and runs `swiftc -typecheck` against it with the simulator SDK, which
+resolves SwiftUI, UIKit, AVFoundation *and* Shared: a real type-check of every
+SwiftUI file, not the syntax-only `-parse` available off a Mac. There is no
+`.xcodeproj` in the tree, so this deliberately does not `xcodebuild`.
+`loadtest` runs Phase 10's capacity and feed tests on master only — they seed
+20,000 reels and take minutes.
+
+Two things would have failed that CI on its first run, both invisible on this
+machine because nothing here executes them:
+
+  - **`gradlew` was mode 100644 in git.** Every job that calls `./gradlew`
+    would have died with "Permission denied" on any POSIX runner. It has been
+    non-executable for the life of the repository; nothing had run it on Linux
+    or macOS.
+  - **`make test-mobile` had a literal `
+` where a line continuation belonged**,
+    so the recipe passed `
+` to Gradle as an argument. `make` is not installed
+    on this machine, which is exactly why it survived.
+
+## 28. Phase 10 load tests, run rather than assumed
+
+Numbers at 20,000 reels, on a laptop under Docker — a shape, not a capacity
+verdict:
+
+  - 400 writers against a limit of 100: exactly 100 granted, 300 refused, 0
+    errored. No overbooking under the contention the lock exists for.
+  - reserve/release returned the bucket to empty on all 10 rounds of 50.
+  - 755 reservations/s at 128 concurrent writers on one bucket.
+  - the feed read path uses `reels_feed_idx`; 69 ms execution at 20,000 rows.
+
+Two things worth watching rather than fixing now. Feed p95 goes 175 ms at 8
+concurrent readers to **524 ms at 32**, while throughput only moves 52 → 85
+queries/s — the read path saturates rather than scales, and 32 readers is not a
+large number. And the planner estimates `rows=1` for a scan that returns
+**3,471**: it happened to choose the right index here, but a three-thousand-fold
+underestimate is how a nested loop gets chosen somewhere else and a page takes
+thirty seconds.
+
 ## Harness note: the shell was silently destroying Arabic
 
 An early test of the template editor sent Arabic through a bash heredoc into
