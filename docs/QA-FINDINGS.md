@@ -541,6 +541,75 @@ statements downstream of the real one. The column was also wrong
 A check that cannot run is a check that has not run, and an erasure is not the
 place to guess.
 
+## 21. A tab switch mid-load blanked the feed, permanently — **fixed**
+
+`FeedPager.refresh` cleared the list and called `loadNext`, which returned
+immediately because the prefetch it had just abandoned still held the `loading`
+guard. No request went out, nothing threw, and the new surface rendered blank —
+no spinner, no empty reason, nothing to retry. The abandoned page then landed
+*in the cleared list* and overwrote the cursor, so the feed went on paging the
+old surface under the new tab's label.
+
+Not an edge case: a prefetch is in flight for most of a scroll and the tab row
+sits under the thumb.
+
+A generation counter now marks each refresh; a response that returns under a
+stale one is dropped rather than written. A counter rather than cancellation
+because the pager owns no scope, and the caller cancelling its own job must not
+be the only thing between a stale page and the wrong tab.
+
+Two neighbours found in the same read. `clockSkewMillis` documented itself as
+"re-sampled on refresh" and never was — a device four minutes fast at launch and
+correct after an NTP sync kept rendering every auction four minutes early, and
+pull-to-refresh could not fix it. And `FeedUiState.error` was still `e.message`
+where every other screen had moved to `Failure`: untranslatable, unbranchable,
+and *nullable* — a throwable with no message set the field back to null, which
+is that field's word for nothing went wrong, so a failed load fell through to
+`emptyReason` and told the viewer the marketplace had nothing for them.
+
+Both pager defects were watched failing first: `[]` for the blank feed, `0` for
+the frozen skew.
+
+## 22. The feed's clock did not follow the auction's — **fixed**
+
+Found on a device: a plate lot in For you showing a live "1h 49m left" pill
+directly above its own Place bid button, greyed out, reason "Sold".
+
+`reel_time_signals` is a cache and nothing invalidated it. `Projector.Refresh`
+had exactly one caller in the tree — the reconcile sweep — despite its own doc
+describing a vertical write path as the primary one. The API process never
+constructed a Projector.
+
+Two holes. **Anti-snipe** extended `closes_at` and told nothing, so the feed
+counted down to the original instant and — non-recurring countdown means the lot
+is gone — dropped a reel still taking bids, during the exact two minutes the
+feature exists for. **Reconcile** could not select an ended countdown: its
+work-list tested `ends_at < now()` only for `recurring` rows, so the
+non-recurring case waited out the 24-hour staleness clause. That is the case
+where the row wants deleting, which Refresh's doc calls the direction that
+matters.
+
+The write-path fix refreshes *after* the transaction commits. Inside it, the
+projector's own pool connection reads the pre-commit row and re-caches precisely
+the value it was called to replace.
+
+## 23. Two checks that could not fail — **fixed**
+
+Both found by planting faults rather than by reading, which is the only way this
+class shows up.
+
+`interopcheck` folded Swift extensions into the Kotlin type table during the
+same pass that checked call sites, so resolution depended on filename order:
+`Failure.words` is declared in Feedback.swift and used in FeedScreen.swift, and
+`FeedScreen` sorts first because 'S' < 'b'. A real symbol was reported missing
+while the identical call in Messaging.swift passed, for no reason but its name.
+Two passes now.
+
+`parse-swift.sh` reported "no Swift toolchain — skipping" on a machine that had
+one: `$USER` is unset in Git Bash and `set -u` aborted the search. A skippable
+check that can reach its skip by accident is worse than no check, because the
+outcome looks like success.
+
 ## Harness note: the shell was silently destroying Arabic
 
 An early test of the template editor sent Arabic through a bash heredoc into
