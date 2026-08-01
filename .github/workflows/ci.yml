@@ -271,6 +271,31 @@ jobs:
         working-directory: services/api
         run: LOADTEST_DATABASE_URL="$DB_URL" go test -tags loadtest -v -timeout 20m ./loadtest/...
 
+  # The infrastructure the API refuses to start without. Checked the same way
+  # the code is, because a typo in an IAM policy document is discovered at
+  # `apply` time otherwise — which is during a deploy, holding an outage.
+  #
+  # No credentials and no backend: `validate` checks the configuration against
+  # the provider's real schema without touching an account.
+  terraform:
+    name: Terraform validates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+
+      - name: Format
+        working-directory: deploy/aws
+        run: terraform fmt -check -diff
+
+      - name: Validate
+        working-directory: deploy/aws
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
   # The contract is only a source of truth if drift is impossible. A spec change
   # merged without regenerated clients is the same class of bug as a migration
   # merged without the code that uses it — it just fails later and further away.

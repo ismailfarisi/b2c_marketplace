@@ -301,6 +301,62 @@ is worse than no runbook: it reads as reassurance.
 
 ---
 
+## 10. Standing up a new environment
+
+Everything the API refuses to start without, in the order `config.Load`
+validates it. The refusals are deliberate — each one names the variable — so
+this list is the inverse of the startup errors rather than a separate document
+that can drift from them.
+
+**What Terraform creates** (`deploy/aws`, ~10 minutes):
+
+```
+cd deploy/aws
+terraform init
+terraform apply -var environment=staging
+```
+
+The outputs are named for the variables they satisfy: `S3_BUCKET`,
+`S3_REGION`, `MEDIA_CDN_BASE_URL`, `MEDIACONVERT_ROLE_ARN`,
+`MEDIACONVERT_DESTINATION`. Attach `app_policy_arn` to whatever identity runs
+the containers — a task role, an IRSA role, an instance profile. Do **not**
+create a user with static keys: `objectstore` falls through to the default
+credential chain when `S3_ACCESS_KEY_ID` is empty, which is why that variable
+is not required, and a long-lived key in an environment file is the credential
+that leaks.
+
+**What Terraform does not create, and why:**
+
+| Variable | Why it is not here |
+|---|---|
+| `DATABASE_URL` | Managed Postgres with PostGIS. Cost, region, HA and backup retention belong to whoever pays; a default would be wastefully large or quietly unsuitable. Must have TLS — `sslmode=disable` is refused. |
+| `JWT_SIGNING_KEY` | `openssl rand -base64 48`. Length is checked and so are placeholders: the value CI uses is 42 characters and is rejected. |
+| `ANTHROPIC_API_KEY` | Not an AWS resource. The API refuses to boot without it, because the stub text moderator approves everything. |
+| SMS sender | The UAE requires a registered sender ID; the process is manual and carrier-specific. |
+
+**Then:**
+
+```
+TRANSCODE_VENDOR=aws-mediaconvert     # the only value permitted in production
+APP_ENV=production
+```
+
+Run the migrations before the first boot (`make migrate-up` against the new
+`DATABASE_URL`), then start the API. If anything is missing it will refuse to
+start and name every problem at once rather than one per restart.
+
+**Verifying it worked**, in the order things break:
+
+1. `GET /healthz` returns 200.
+2. Record and publish a reel from the app. It should reach `review_pending`,
+   not `failed` — `failed` here is almost always the MediaConvert role, and
+   the job's error message in the MediaConvert console says which permission.
+3. Approve it in the admin queue and confirm it appears in the feed with a
+   playing video, not a poster that never resolves. A poster with no playback
+   means `MEDIA_CDN_BASE_URL` does not point at the CloudFront distribution.
+4. Check `reel_time_signals` has a row for the subject. No row means the
+   projector never ran; see §2.
+
 ## Escalation
 
 | Condition | Wake someone |
