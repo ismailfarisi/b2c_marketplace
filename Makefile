@@ -112,8 +112,20 @@ dev-mobile: ## Build and install the Android app (mobile is Kotlin Multiplatform
 	cd apps/mobile-kmm && ./gradlew :androidApp:installDebug
 
 .PHONY: test-mobile
-test-mobile: ## Run the shared KMM tests
-	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest
+test-mobile: check-interop ## Compile and test the mobile module for both platforms
+	#
+	# The iOS *Kotlin* target is here deliberately, and it is not decorative:
+	# Kotlin/Native compiles Apple targets on any host — only linking the
+	# framework needs a Mac — so iosMain can and should be checked here. It was
+	# not, and four compile errors accumulated in it: a Security API compared
+	# across signed and unsigned, an NSDictionary factory that does not exist in
+	# the bindings, a CMTime passed by value where a CValue was wanted, and a
+	# method read off the wrong class. Every one would have blocked the first
+	# iOS build.
+	#
+	# What is still not checked here is the Swift itself. That needs Xcode;
+	# check-interop covers the part of it that does not.
+	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest \n		:shared:compileKotlinIosSimulatorArm64 :androidApp:assembleDebug
 
 # ------------------------------------------------------------ verification --
 
@@ -167,18 +179,17 @@ build: ## Build API, worker and feed binaries
 ios-strings:
 	bash apps/mobile-kmm/tools/gen-ios-strings.sh
 
-.PHONY: test-mobile
-## Compile and test the mobile module for both platforms.
+.PHONY: check-interop
+## Validate the Swift↔Kotlin boundary without a Swift compiler.
 ##
-## The iOS *Kotlin* target is included deliberately, and it is not decorative:
-## Kotlin/Native compiles Apple targets on any host — only linking the framework
-## needs a Mac — so `iosMain` can and should be checked here. It was not, and
-## four compile errors accumulated in it: a Security API compared across signed
-## and unsigned, an NSDictionary factory that does not exist in the bindings, a
-## CMTime passed by value where a CValue was wanted, and a method read off the
-## wrong class. Every one of them would have blocked the first iOS build.
+## Roughly 2,500 lines of SwiftUI go unverified between Mac builds, and the
+## errors they accumulate are overwhelmingly one kind: a reference to a Kotlin
+## symbol that does not exist. That class is mechanically checkable, so it is
+## checked here rather than waiting for someone with Xcode.
 ##
-## What this still cannot check is the Swift. That needs Xcode.
-test-mobile:
-	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest \
-		:shared:compileKotlinIosSimulatorArm64 :androidApp:assembleDebug
+## A finding is a definite problem. A clean run is NOT a promise that the Swift
+## compiles — this is not a type checker and does not model generics, argument
+## types or SwiftUI. See tools/interopcheck for the full boundary.
+check-interop:
+	cd apps/mobile-kmm/tools/interopcheck && go build -o ic.exe .
+	cd apps/mobile-kmm && ./tools/interopcheck/ic.exe .
