@@ -35,6 +35,15 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// The feed itself. Anonymous viewers get it keyed by device;
 			// signed-in viewers additionally get block filtering.
 			r.Get("/feed", h.Reels.GetFeed)
+			// One reel, enriched the same way. Public for the same reason the
+			// feed is: a shared link to a car must open the car, not a login
+			// wall, and the reel is already visible to anyone scrolling.
+			r.Get("/feed/reels/{reelId}", h.Reels.FeedReel)
+			// The bid history. Public for the same reason the lot is: an auction
+			// nobody can see the bidding on is not an auction.
+			if h.Auctions != nil {
+				r.Get("/auctions/{auctionId}/bids", h.Auctions.BidHistory)
+			}
 			// Event ingest is here rather than behind auth for the same reason:
 			// anonymous viewing is a supported mode, and its engagement data is
 			// exactly what Phase 4's ranking needs. Rate limiting, not
@@ -49,6 +58,9 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// an anonymous comment cannot be struck, rate-limited across
 			// sessions, or held against a reputation.
 			r.Get("/reels/{reelId}/comments", h.Reels.ListComments)
+			// Anonymous, like the feed itself: the filter row is drawn before a
+			// viewer has done anything, including sign in.
+			r.Get("/feed/filters", h.Reels.GetFeedFilters)
 		}
 
 		// Phase 6 — classifieds browse.
@@ -117,6 +129,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Put("/listings/{listingId}/favourite", h.Vehicles.Favourite)
 			r.Delete("/listings/{listingId}/favourite", h.Vehicles.Favourite)
 			r.Post("/listings/{listingId}/report", h.Vehicles.ReportListing)
+			// The car picker behind the sell form's lookup field. Authenticated
+			// rather than public: it is an authoring control, and the browse
+			// surface has its own facets.
+			r.Get("/vehicles/models", h.Vehicles.SuggestModels)
 
 			// Monetisation. Paid placement is bought here and labelled in the
 			// search response — see VehicleHandlers.Search.
@@ -145,6 +161,32 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			// comments their own queue in Phase 4.
 			r.Get("/moderation/messages", h.Chat.Queue)
 			r.Post("/moderation/messages/{messageId}/decide", h.Chat.Decide)
+		}
+
+		if h.Auctions != nil {
+			// Bidding is the one action in this product that creates a binding
+			// obligation, so it is authenticated even though the reel it sits on
+			// is public.
+			r.Post("/auctions/{auctionId}/bid", h.Auctions.PlaceBid)
+		}
+
+		// Trust documents — a mulkiya, a Trakheesi permit.
+		//
+		// Authenticated throughout, including the read: a mulkiya carries a
+		// chassis number, an owner's name and an address, and the only people
+		// who ever see one are its uploader and a reviewer.
+		if h.Documents != nil {
+			r.Post("/documents/uploads", h.Documents.RequestDocumentUpload)
+			r.Post("/documents/{documentId}/confirm", h.Documents.ConfirmDocument)
+			r.Get("/subjects/{subjectType}/{subjectId}/documents", h.Documents.SubjectDocuments)
+
+			// A fourth review queue, beside reels, listings and messages. Its
+			// own for the reason each of the others is: judging whether a
+			// registration card matches a listing is a different skill from
+			// judging whether a video breaks the rules, and interleaving them
+			// buries the queue with a publish SLA on it.
+			r.Get("/moderation/documents", h.Documents.DocumentQueue)
+			r.Post("/moderation/documents/{documentId}/decide", h.Documents.DecideDocument)
 		}
 
 		// Phase 7 — logistics.
@@ -368,6 +410,28 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/moderation/boosts/{campaignId}/decide", h.BoostOps.Review)
 		}
 
+		// The viewer's own lists. Mounted before the reels nil-check for the
+		// same reason the sell routes are: its nil condition is its own.
+		if h.Me != nil {
+			r.Get("/me/saves", h.Me.Saves)
+			r.Get("/me/listings", h.Me.MyListings)
+		}
+
+		// The sell flow. Mounted before the reels nil-check below because it is
+		// its own handler set with its own nil condition — it needs a registered
+		// composer as well as the media stack, and a deployment with media but
+		// no sellable vertical should serve the feed and not the Sell tab.
+		if h.Sell != nil {
+			r.Get("/sell/verticals", h.Sell.SellVerticals)
+			r.Get("/sell/verticals/{vertical}/form", h.Sell.SellForm)
+			// One call for the whole form step: subject row, reel draft,
+			// presigned PUT and CTA. Composed server-side to close a race the
+			// client cannot win — see SellHandlers.
+			r.Post("/sell/drafts", h.Sell.CreateSellDraft)
+			r.Post("/sell/drafts/{reelId}/publish", h.Sell.PublishSellDraft)
+			r.Get("/sell/reels/{reelId}", h.Sell.SellReelStatus)
+		}
+
 		if h.Reels == nil {
 			return
 		}
@@ -441,6 +505,7 @@ func MountFeed(r chi.Router, h *ReelHandlers, issuer *auth.Issuer) {
 		r.Use(auth.Optional(issuer))
 
 		r.Get("/feed", h.GetFeed)
+		r.Get("/feed/reels/{reelId}", h.FeedReel)
 		r.Post("/events", h.SubmitEvents)
 		r.Get("/reels/{reelId}/comments", h.ListComments)
 		// The click endpoint belongs here too. It is on the same hot path as

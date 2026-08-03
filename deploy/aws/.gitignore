@@ -1,0 +1,6 @@
+# Provider binaries and lock state. The lock file below IS committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example

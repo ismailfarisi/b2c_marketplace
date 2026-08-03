@@ -33,9 +33,7 @@ type followHandler struct{}
 
 func (followHandler) Resolve(_ context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Follow", "متابعة"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 	return action.Resolved{
 		Label:   label,
 		LabelAr: labelAr,
@@ -52,9 +50,7 @@ type shareHandler struct{}
 
 func (shareHandler) Resolve(_ context.Context, a action.Action, _ action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Share", "مشاركة"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 	return action.Resolved{
 		Label:     label,
 		LabelAr:   labelAr,
@@ -79,9 +75,7 @@ type branchHandler struct {
 
 func (h branchHandler) Resolve(ctx context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
 	label, labelAr := "View menu", "عرض القائمة"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 
 	res := action.Resolved{
 		Label:     label,
@@ -131,9 +125,7 @@ type externalHandler struct{}
 // for whatever a vendor account can be persuaded to post.
 func (externalHandler) Resolve(_ context.Context, a action.Action, _ action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Learn more", "اعرف المزيد"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 
 	parsed, err := url.Parse(strings.TrimSpace(a.TargetURL))
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {

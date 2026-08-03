@@ -35,6 +35,7 @@ package subject
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -50,6 +51,15 @@ const (
 	TypeOffering Type = "service_offering"
 	TypePlan     Type = "meal_plan"
 	TypeListing  Type = "vehicle_listing"
+	// TypeOffer is a vendor's time-boxed sale — the first user of ModeWindow.
+	// Named for the mechanic rather than the hour: the same rule is a midnight
+	// clear-out, a midday lull filler and a Friday brunch window.
+	TypeOffer Type = "flash_offer"
+	// TypeProperty is a regulated advertisement, which is what makes it a
+	// separate type rather than a second flavour of listing. See migration 000026.
+	TypeProperty Type = "property_listing"
+	// TypeAuction is a plate lot — the first and only user of ModeCountdown.
+	TypeAuction Type = "plate_auction"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -273,8 +283,71 @@ type Viewer struct {
 //     be fast and it must not fail the page: a provider error costs the overlay
 //     its text, not the viewer their feed.
 type Provider interface {
+	// Facet is how this vertical appears in the feed's filter row.
+	//
+	// Declared by the vertical rather than listed in the client, for the reason
+	// every other label on this seam is: a hard-coded chip list means adding a
+	// vertical requires shipping a mobile release, which is the exact failure
+	// this package exists to prevent. Register a provider and the filter appears
+	// in both clients on the next request.
+	Facet() Facet
+
 	Project(ctx context.Context, subjectID uuid.UUID) (sig TimeSignal, ok bool, err error)
 	Summarize(ctx context.Context, subjectIDs []uuid.UUID, v Viewer) (map[uuid.UUID]Summary, error)
+}
+
+// Facet is one filter chip.
+//
+// No count. A count would have to be computed per viewer — the eligible set is
+// geo-scoped, so "Cars (12)" is a different number at every location — and
+// putting a per-viewer aggregate on the filter row means a second geo scan on
+// the hottest read path to decorate a button.
+type Facet struct {
+	// Key is what the client sends back as ?subject_type=. Matches Type.
+	Key Type
+	// Label is the vertical's own word for itself. "Cars", not
+	// "vehicle_listing" — the wire value is an implementation detail and no
+	// client should be rendering it.
+	Label   string
+	LabelAr string
+	// Icon names a glyph from a closed set the clients ship: "car", "home",
+	// "meal", "moon", "tag". It is the one place a client legitimately maps a
+	// vertical's value onto something, and it is safe because the mapping is on
+	// the *glyph*, not on the vertical — a new vertical picks an existing name
+	// and needs no release. An unrecognised name falls back to "tag" rather than
+	// drawing nothing.
+	//
+	// Read by the Sell tab's tile grid, which is a row of icons above labels and
+	// unreadable without them. The filter chips ignore it.
+	Icon string
+	// Order sorts the row. Set by the vertical because it knows where it
+	// belongs relative to the others better than an alphabetical sort does.
+	Order int
+}
+
+// Facets lists the registered verticals, sorted for display.
+//
+// This is the whole of what the filter row is built from. A vertical with no
+// provider does not appear — which is the correct behaviour and not a gap: a
+// chip that can never return a result is worse than an absent one, because the
+// viewer reads the empty result as "nothing near me" rather than "not built".
+func (r *Registry) Facets() []Facet {
+	r.mu.RLock()
+	out := make([]Facet, 0, len(r.providers))
+	for t, p := range r.providers {
+		f := p.Facet()
+		f.Key = t
+		out = append(out, f)
+	}
+	r.mu.RUnlock()
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Order != out[j].Order {
+			return out[i].Order < out[j].Order
+		}
+		return out[i].Key < out[j].Key
+	})
+	return out
 }
 
 // Registry binds providers to Type. Registration happens once at startup from
@@ -282,9 +355,29 @@ type Provider interface {
 type Registry struct {
 	mu        sync.RWMutex
 	providers map[Type]Provider
+	// composers is the sell half, and it is a second map rather than a field on
+	// Provider because being visible in the feed and being sellable from a phone
+	// are independent capabilities. See Composer.
+	composers map[Type]Composer
+	// gates is the publish half — see Gate. A third map for the same reason
+	// composers is a second one: a vertical can be visible, sellable and
+	// separately reviewed in any combination, and folding these into Provider
+	// would force every vertical to implement capabilities two of them have.
+	gates map[Type]Gate
+	// owners answers "does this person own this thing" — see Owner. A fourth
+	// map on the same principle: visible, sellable, separately reviewed and
+	// attachable-to are four independent capabilities.
+	owners map[Type]Owner
 }
 
-func NewRegistry() *Registry { return &Registry{providers: make(map[Type]Provider)} }
+func NewRegistry() *Registry {
+	return &Registry{
+		providers: make(map[Type]Provider),
+		composers: make(map[Type]Composer),
+		gates:     make(map[Type]Gate),
+		owners:    make(map[Type]Owner),
+	}
+}
 
 // Register panics on a duplicate, matching action.Registry. Two modules claiming
 // one subject type is a wiring bug that must fail at boot rather than resolve by

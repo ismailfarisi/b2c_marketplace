@@ -119,6 +119,21 @@ type User struct {
 	CreatedAt   time.Time
 }
 
+// Reason codes carried on a 401 from VerifyOTP. See httpx.Problem.Code.
+//
+// These are wire contract: a shipped app branches on them, so they may be added
+// to but never reworded. The client's job with all five is the same shape —
+// tell the viewer whether to retype the code or ask for a new one — and the
+// distinction exists because getting that wrong strands people at the login
+// screen with no way forward.
+const (
+	CodeWrongCode        = "otp_wrong_code"
+	CodeChallengeExpired = "otp_expired"
+	CodeChallengeSpent   = "otp_already_used"
+	CodeTooManyAttempts  = "otp_too_many_attempts"
+	CodeUnknownChallenge = "otp_unknown_challenge"
+)
+
 // VerifyOTP exchanges a code for a session, creating the user on first login.
 func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code string, device DeviceInfo) (*Session, error) {
 	var session *Session
@@ -141,14 +156,41 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code str
 			  FROM otp_codes WHERE id = $1 FOR UPDATE`, challengeID,
 		).Scan(&phone, &codeHash, &attempts, &maxAttempts, &consumedAt, &expiresAt)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return httpx.ErrUnauthorized
+			// A challenge id that never existed, or one old enough to have been
+			// swept. Same remedy as an expired one from the caller's point of
+			// view, and given its own code only so the log can tell a client bug
+			// from an ordinary timeout.
+			return httpx.Coded(httpx.ErrUnauthorized, CodeUnknownChallenge,
+				"That sign-in attempt is no longer valid. Ask for a new code.")
 		}
 		if err != nil {
 			return fmt.Errorf("load otp: %w", err)
 		}
 
-		if consumedAt != nil || time.Now().After(expiresAt) || attempts >= maxAttempts {
-			return httpx.ErrUnauthorized
+		// Three distinguishable failures, and the distinction is deliberate.
+		//
+		// All three were a bare 401 until now, which is defensible as
+		// information hiding right up until you watch someone use it: a code
+		// that has expired looks identical to a typo, so they retype the same
+		// six digits from the same SMS and fail again. Someone out of attempts
+		// does that forever.
+		//
+		// Nothing is disclosed by saying which. The caller already holds the
+		// challenge id — it was minted for them thirty seconds ago — and none of
+		// these answers reveals whether the *phone* has an account, which is the
+		// fact actually worth hiding here and is hidden by upsert-on-verify
+		// regardless.
+		if consumedAt != nil {
+			return httpx.Coded(httpx.ErrUnauthorized, CodeChallengeSpent,
+				"That code has already been used. Ask for a new one.")
+		}
+		if time.Now().After(expiresAt) {
+			return httpx.Coded(httpx.ErrUnauthorized, CodeChallengeExpired,
+				"That code has expired. Ask for a new one.")
+		}
+		if attempts >= maxAttempts {
+			return httpx.Coded(httpx.ErrUnauthorized, CodeTooManyAttempts,
+				"Too many incorrect codes. Ask for a new one.")
 		}
 
 		// Constant-time compare. A timing side channel on a 6-digit code is a
@@ -158,7 +200,15 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code str
 				`UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`, challengeID); err != nil {
 				return fmt.Errorf("record attempt: %w", err)
 			}
-			return httpx.ErrUnauthorized
+			// The attempt that exhausts the budget says so on the spot, rather
+			// than letting the viewer discover it on the next try. Recomputed
+			// from the row read under FOR UPDATE, so it is exact.
+			if attempts+1 >= maxAttempts {
+				return httpx.Coded(httpx.ErrUnauthorized, CodeTooManyAttempts,
+					"Too many incorrect codes. Ask for a new one.")
+			}
+			return httpx.Coded(httpx.ErrUnauthorized, CodeWrongCode,
+				"That code is not right.")
 		}
 
 		if _, err := tx.Exec(ctx,

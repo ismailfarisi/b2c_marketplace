@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.VerticalPager
@@ -21,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -35,7 +37,19 @@ import androidx.compose.ui.unit.dp
  * Compose and SwiftUI have nothing in common.
  */
 @Composable
-fun ReelFeed(viewModel: FeedViewModel) {
+fun ReelFeed(
+    viewModel: FeedViewModel,
+    onOpenFilters: () -> Unit = {},
+    /**
+     * Where a CTA press goes once it has been recorded.
+     *
+     * Hoisted out of this composable because the destination is a different
+     * screen and the feed must not know how to build one. The host decides —
+     * see MainActivity, where the branch is on the action's *kind* and never on
+     * its target type, which is the line this whole seam is drawn along.
+     */
+    onActionPressed: (ResolvedAction, String) -> Unit = { _, _ -> },
+) {
     val state by viewModel.state.collectAsState()
 
     val pagerState = rememberPagerState { state.items.size }
@@ -66,7 +80,12 @@ fun ReelFeed(viewModel: FeedViewModel) {
             // message exists to send the viewer to another tab, and a screen
             // with no tabs on it gives them nowhere to go.
             Box(Modifier.fillMaxSize(), Alignment.Center) {
-                FeedEmptyState(reason = state.emptyReason, error = state.error)
+                FeedEmptyState(
+                    reason = state.emptyReason,
+                    error = state.error,
+                    loading = state.loading,
+                    onRetry = viewModel::refresh,
+                )
             }
         } else {
             VerticalPager(
@@ -85,7 +104,13 @@ fun ReelFeed(viewModel: FeedViewModel) {
                     viewModel = viewModel,
                     onLike = { viewModel.toggleLike(state.items[page].id) },
                     onAction = { action ->
+                        // Recorded first, always — including when the target
+                        // turns out to be unavailable. Phase 3 built the funnel
+                        // with action_click as conversion's denominator, and a
+                        // client that only reports successful navigations
+                        // flatters the rate by exactly the number of dead CTAs.
                         viewModel.onActionClick(action.id, state.items[page].id)
+                        onActionPressed(action, state.items[page].id)
                     },
                 )
             }
@@ -101,17 +126,34 @@ fun ReelFeed(viewModel: FeedViewModel) {
                 onSelect = viewModel::onSurfaceSelected,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            // Its own line, under the surfaces rather than beside them. Sharing
+            // the row cost "Nearby" its last three characters: four tab labels
+            // and a filter summary do not fit across a phone, and the tab row
+            // scrolls, so the casualty was silent.
+            //
+            // Under rather than over, because the two controls are not
+            // alternatives — a surface reorders the eligible set, a filter
+            // changes what is eligible — and stacking them says that more
+            // clearly than one row of mixed chips would.
+            FilterButton(
+                state = state,
+                onClick = onOpenFilters,
+                modifier = Modifier.padding(start = 22.dp, top = 2.dp),
+            )
         }
     }
 }
 
 /**
- * The tab row's height, shared by the row itself and by the overlay that has to
- * clear it. A constant rather than a measurement because the row is a fixed
- * stack of text and a 2dp rule, and onGloballyPositioned for one number would
- * add a layout pass to every frame of a video feed.
+ * The height of the whole top chrome — surface tabs plus the filter summary
+ * under them — shared by the rows themselves and by the overlay that has to
+ * clear them.
+ *
+ * A constant rather than a measurement because both rows are fixed stacks of
+ * text, and an onGloballyPositioned for one number would add a layout pass to
+ * every frame of a video feed.
  */
-private val TAB_ROW_HEIGHT = 48.dp
+private val TAB_ROW_HEIGHT = 86.dp
 
 @Composable
 private fun ReelPage(
@@ -128,7 +170,39 @@ private fun ReelPage(
             reelId = item.id,
             isActive = isActive,
             viewModel = viewModel,
+            // Drawn under the player until it reports a rendered frame. Without
+            // it a swipe reveals black for as long as a manifest fetch and a
+            // decode take, on the one screen whose whole promise is that the
+            // next thing is already there.
+            posterUrl = item.posterUrl,
+            lqip = item.lqip,
             modifier = Modifier.fillMaxSize(),
+        )
+
+        // Gradients top and bottom, under the overlay and over the video.
+        //
+        // This mattered less while every reel was a black rectangle. Now that
+        // posters render — and once real footage does — the background under
+        // the title, the price and the CTA is an arbitrary photograph, and
+        // white text on a white car in Dubai sunlight is simply not there.
+        //
+        // A gradient rather than the flat per-pill scrims already in the
+        // overlay, because those solve a different problem: a pill is a small
+        // opaque shape and a hard edge is fine on it, whereas a hard edge
+        // across the whole lower third reads as a black bar someone forgot to
+        // remove. The stops are weighted towards the bottom because that is
+        // where four lines of text sit; the top only has to carry a badge.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Black.copy(alpha = 0.55f),
+                        0.18f to Color.Transparent,
+                        0.55f to Color.Transparent,
+                        1.0f to Color.Black.copy(alpha = 0.75f),
+                    )
+                )
         )
 
         // Time bar, badge, time pill, product line, CTAs. One skeleton for every
@@ -141,6 +215,7 @@ private fun ReelPage(
             // Height of the tab row below. Kept next to the FeedTabs call that
             // creates it so the two move together.
             chromeTop = TAB_ROW_HEIGHT,
+            chromeBottom = NAV_BAR_HEIGHT,
         )
 
         Text(

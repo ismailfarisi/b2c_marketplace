@@ -3,7 +3,10 @@ package app
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/marketplace/api/internal/modules/auctions"
 	"github.com/marketplace/api/internal/modules/catalog"
+	"github.com/marketplace/api/internal/modules/offers"
+	"github.com/marketplace/api/internal/modules/property"
 	"github.com/marketplace/api/internal/modules/social"
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/seam/action"
@@ -109,6 +112,89 @@ func BuildRegistries(pool *pgxpool.Pool) Registries {
 	// A subject type with no provider is legal and common. Its reels play, carry
 	// their CTAs, and render no badge and no countdown.
 	subjects.Register(subject.TypeListing, vehicles.NewSubjectProvider(pool))
+	// And the publish gate: a reel about a car waits for the listing desk.
+	//
+	// Registered here rather than beside the composers because the *worker*
+	// runs the publish job and only cmd/api calls RegisterComposers. A gate
+	// registered in the wrong place is a gate that silently never applies,
+	// which is precisely the bug it exists to fix.
+	subjects.RegisterGate(subject.TypeListing, vehicles.NewPublishGate(pool))
+	// And who is allowed to attach a mulkiya to it.
+	subjects.RegisterOwner(subject.TypeListing, vehicles.NewOwnerCheck(pool))
+
+	// Meal plans — the first vertical to arrive *after* the subject seam was
+	// finished, and therefore the test of what the seam claimed.
+	//
+	// This line and one Go file are the whole of it. Both clients gain a "Meals"
+	// filter chip, a MEAL SUBSCRIPTION badge and a recurring daily cutoff — the
+	// fourth and last time mode, and the first one in production — without a
+	// line changing in the feed, the ranker, the overlay or either app. If that
+	// had required a mobile release, the seam would have failed.
+	//
+	// Ownership follows the table, so it lives in catalog beside the plan CTA
+	// rather than in verticals/meals: `subscription_plans` is a catalogue row
+	// several verticals write into.
+	subjects.Register(subject.TypePlan, catalog.NewPlanSubjectProvider(pool))
+
+	// Flash offers — a vendor's time-boxed sale, and the first user of
+	// ModeWindow. The seam has carried that mode unexercised since it was
+	// written; this is the vertical it was written for.
+	actions.Register(action.KindClaimOffer, action.TargetFlashOffer,
+		offers.NewClaimHandler(pool))
+	subjects.Register(subject.TypeOffer, offers.NewSubjectProvider(pool))
+
+	// Plate auctions — the fourth time mode, and the last one to arrive.
+	//
+	// ModeCountdown has been in the seam since it was written and unexercised
+	// ever since; every other mode found a vertical first. This is the one its
+	// own Horizon comment was written about.
+	actions.Register(action.KindPlaceBid, action.TargetPlateAuction,
+		auctions.NewBidHandler(pool))
+	subjects.Register(subject.TypeAuction, auctions.NewSubjectProvider(pool))
+	subjects.RegisterOwner(subject.TypeAuction, auctions.NewOwnerCheck(pool))
+
+	// Property.
+	//
+	// A separate kind from a car enquiry rather than a reuse of
+	// inquire_listing, because the two produce different things: one opens a
+	// thread between private parties, the other creates a regulated lead against
+	// a permit. See property.EnquiryHandler.
+	actions.Register(action.KindEnquireProperty, action.TargetProperty,
+		property.NewEnquiryHandler(pool))
+	subjects.Register(subject.TypeProperty, property.NewSubjectProvider(pool))
+	// The gate that matters most: an unpermitted property advert must not
+	// reach the feed, and a reel of a specific flat with its price on it is an
+	// advertisement whatever else it is.
+	subjects.RegisterGate(subject.TypeProperty, property.NewPublishGate(pool))
+	// Sharper here than for a car: the permit is what makes an advert
+	// publishable, so attaching one to a stranger's advert would push it live.
+	subjects.RegisterOwner(subject.TypeProperty, property.NewOwnerCheck(pool))
 
 	return Registries{Actions: actions, Verticals: verticals, Subjects: subjects}
+}
+
+// RegisterComposers attaches the sell flows.
+//
+// Separate from BuildRegistries and called only by cmd/api, because a composer
+// needs a *Service — quota, threads and fraud signals wired — where a provider
+// needs only a pool. cmd/feed and cmd/worker build no such service and have no
+// business accepting a listing anyway: the feed process serves reads, and a
+// write path mounted there would be a second, unaudited way to create supply.
+//
+// This is where the "adding a vertical is a Go file and a registration line"
+// claim is either true or it is not, for the sell half. Today it is one line.
+func RegisterComposers(r Registries, vehicleSvc *vehicles.Service, propertySvc *property.Service) {
+	r.Subjects.RegisterComposer(subject.TypeListing, vehicles.NewComposer(vehicleSvc))
+
+	// Property is sellable from the app, and the flow is deliberately different
+	// in one place: its trust upload is a gate rather than a badge. See
+	// property.Composer — the permit arrives days after the video does.
+	r.Subjects.RegisterComposer(subject.TypeProperty, property.NewComposer(propertySvc))
+
+	// Flash offers are absent, and that is the seam working rather than a gap.
+	// An offer is authored by a restaurant through a vendor console against its
+	// own branch — there is no consumer standing outside a kitchen filming a
+	// discount they are entitled to publish. Being visible in the feed and being
+	// sellable from a phone are separate capabilities, which is exactly why
+	// Composer is a separate optional interface from Provider.
 }

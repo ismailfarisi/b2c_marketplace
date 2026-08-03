@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/mediaconvert"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -30,7 +32,6 @@ import (
 	"github.com/marketplace/api/internal/modules/social"
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/objectstore"
-	"github.com/marketplace/api/internal/seam/action"
 )
 
 // Media is the Phase 2 dependency graph, extended in Phase 3 with the action
@@ -67,7 +68,7 @@ type Media struct {
 // then runs without the media surface rather than failing to boot — a
 // deployment that only serves orders is a legitimate configuration, and the
 // alternative is that a missing bucket name takes down checkout.
-func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client, registry *action.Registry) (*Media, error) {
+func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client, registries Registries) (*Media, error) {
 	if cfg.S3Bucket == "" {
 		slog.Warn("media disabled: S3_BUCKET is not set")
 		return nil, nil
@@ -77,6 +78,7 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 		Region:         cfg.S3Region,
 		Bucket:         cfg.S3Bucket,
 		Endpoint:       cfg.S3Endpoint,
+		PublicEndpoint: cfg.S3PublicEndpoint,
 		AccessKeyID:    cfg.S3AccessKeyID,
 		SecretKey:      cfg.S3SecretKey,
 		ForcePathStyle: cfg.S3ForcePathStyle,
@@ -95,7 +97,7 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 	if err != nil {
 		return nil, err
 	}
-	transcoder, err := buildTranscoder(cfg, store)
+	transcoder, err := buildTranscoder(ctx, cfg, store)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +151,7 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 	// The actions service borrows the reels service's branch authorisation
 	// rather than reimplementing it. Two copies of an authorisation rule is one
 	// too many, and the one that drifts is always the one nobody is watching.
-	m.Actions = actions.NewService(pool, registry, reelSvc.Repo())
+	m.Actions = actions.NewService(pool, registries.Actions, reelSvc.Repo())
 	m.Attribution = attribution.NewService(pool)
 
 	m.Likes = social.NewLikes(pool, counterOrNil(counters))
@@ -172,6 +174,9 @@ func BuildMedia(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb 
 		Prober:     prober,
 		Transcoder: transcoder,
 		Moderator:  moderation.Pipeline{Vision: vision, Text: text},
+		// The publish gate's source. Without this the pipeline publishes a
+		// reel regardless of whether the listing it advertises was approved.
+		Subjects: registries.Subjects,
 	})
 
 	return m, nil
@@ -232,7 +237,7 @@ func buildProber(cfg config.Config) (media.Prober, error) {
 	return media.FFProbe{Binary: cfg.FFProbeBinary}, nil
 }
 
-func buildTranscoder(cfg config.Config, store *objectstore.Store) (media.TranscodeProvider, error) {
+func buildTranscoder(ctx context.Context, cfg config.Config, store *objectstore.Store) (media.TranscodeProvider, error) {
 	switch cfg.TranscodeVendor {
 	case "stub", "":
 		// The guard is here and not in a comment: a stub transcoder in
@@ -257,6 +262,30 @@ func buildTranscoder(cfg config.Config, store *objectstore.Store) (media.Transco
 			Store:   store,
 			BaseURL: cfg.MediaCDNBaseURL,
 		}, nil
+	case media.MediaConvertName:
+		// The first vendor that is allowed to run in production, and the
+		// reason is structural rather than a preference: it holds no job state
+		// in this process. The job lives in MediaConvert under an id persisted
+		// with the reel, so a worker restart — the exact thing that disqualifies
+		// the ffmpeg provider — changes nothing.
+		awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.S3Region))
+		if err != nil {
+			return nil, fmt.Errorf("mediaconvert: aws config: %w", err)
+		}
+		p := media.MediaConvertProvider{
+			API:         mediaconvert.NewFromConfig(awsCfg),
+			Role:        cfg.MediaConvertRole,
+			Queue:       cfg.MediaConvertQueue,
+			Destination: cfg.MediaConvertDestination,
+			BaseURL:     cfg.MediaCDNBaseURL,
+		}
+		// Checked at boot rather than on the first upload. An AccessDenied at
+		// 9am on a missing role arn is a support ticket; a named variable in
+		// the startup error is a two-minute fix.
+		if err := p.Validate(); err != nil {
+			return nil, err
+		}
+		return p, nil
 	default:
 		return nil, fmt.Errorf("transcode vendor %q is not implemented — "+
 			"implement media.TranscodeProvider and register it here", cfg.TranscodeVendor)

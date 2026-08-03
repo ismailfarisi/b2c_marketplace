@@ -109,7 +109,24 @@ const StaleAfter = 24 * time.Hour
 //     boundary is exactly the sort of thing this codebase has already been bitten
 //     by once.
 //
-//  3. **Staleness.** Anything not recomputed within StaleAfter.
+//  3. **Endings.** A *non*-recurring signal whose instant has passed. Same
+//     trigger as recurrence and the opposite outcome: when this clock reaches
+//     zero the subject is usually finished — the lot sold, the offer closed —
+//     and re-calling the provider is what removes the row.
+//
+//     This clause was missing, and its absence disabled the deletion path that
+//     [Projector.Refresh] documents as "the direction that matters". Nothing
+//     else selects an ended countdown: the recurrence clause requires
+//     `recurring`, and staleness does not fire for a day. A settled plate
+//     auction was found on For you under a live "1h 49m left" pill, next to
+//     its own Place bid CTA correctly disabled with the reason "Sold" — the
+//     two facts on screen at once, and the clock is the louder of them.
+//
+//     Only the surfaces that filter on the signal were spared, because
+//     `candidatePredicate` requires `ts.ends_at > now()`. For you joins it as
+//     decoration, so For you showed it.
+//
+//  4. **Staleness.** Anything not recomputed within StaleAfter.
 //
 // Returns how many subjects were refreshed. Errors on individual subjects are
 // logged and skipped — one vertical's broken provider must not stop the sweep,
@@ -132,6 +149,20 @@ func (p *Projector) Reconcile(ctx context.Context, limit int) (int, error) {
 		   AND r.subject_id IS NOT NULL
 		   AND (ts.subject_id IS NULL
 		        OR (ts.recurring AND ts.ends_at < now())
+		        -- An ended non-recurring signal, asked about exactly once.
+		        --
+		        -- The projected_at <= ends_at test is what stops this from
+		        -- selecting the same row on every sweep. Recurring self-limits,
+		        -- because rolling it writes an ends_at in the future; a
+		        -- non-recurring one does not, so a provider that keeps
+		        -- returning the same past instant would refill the work-list
+		        -- forever and crowd out the backfill that shares its LIMIT.
+		        -- Once re-projected after its own end, the answer is taken as
+		        -- considered and not asked again until staleness.
+		        OR (NOT ts.recurring
+		            AND ts.ends_at IS NOT NULL
+		            AND ts.ends_at < now()
+		            AND ts.projected_at <= ts.ends_at)
 		        OR ts.projected_at < now() - make_interval(secs => $1))
 		 LIMIT $2`, StaleAfter.Seconds(), limit)
 	if err != nil {

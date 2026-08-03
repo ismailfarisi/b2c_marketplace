@@ -50,6 +50,24 @@ type Handlers struct {
 	Vehicles *VehicleHandlers
 	Chat     *ChatHandlers
 
+	// Me is the viewer's own two lists — what they kept and what they sell.
+	// Nil without the media stack, because saves are reels.
+	Me *MeHandlers
+
+	// Documents is the trust-document surface. Nil-safe: a deployment without
+	// it serves a sell flow whose trust row says the upload is not available,
+	// which is what every deployment did until it existed.
+	Documents *DocumentHandlers
+
+	// Auctions is the plate vertical. Nil-safe like the rest.
+	Auctions *AuctionHandlers
+
+	// Sell is the authoring flow as a phone uses it. Nil until both the media
+	// stack and at least one composer exist — a Sell tab whose tile grid is
+	// empty is a tab that opens a camera and then has nowhere to put the video,
+	// and the seller finds that out after filming.
+	Sell *SellHandlers
+
 	// Phase 7. Logistics is the first surface in this system with no customer
 	// on it at all — every route below is used by a driver, a vendor or ops —
 	// which is why it gets its own handler sets rather than joining the order

@@ -198,7 +198,29 @@ func (f Filter) Build() (string, []any) {
 		// Trigram similarity rather than to_tsquery: this market types brand
 		// names in two scripts and three spellings, and a stemmer for neither
 		// language helps with "パジェロ" or "بترول".
-		where = append(where, "(l.title % "+arg(f.Text)+" OR l.description ILIKE '%' || "+arg(f.Text)+" || '%')")
+		//
+		// The make and model are matched as well as the seller's own words, and
+		// that is a fix rather than a nicety. Title and description are both
+		// optional and the app's sell flow sets neither — the overlay's words
+		// come from Summarize, so there is nothing to ask the seller for — which
+		// meant every listing created from a phone was invisible to search.
+		// Nobody would have noticed until a seller asked why their car cannot be
+		// found by its own name.
+		//
+		// It is also more correct for the listings that *do* have a title: a car
+		// headlined "Immaculate family SUV, first owner" should still come back
+		// for "nissan".
+		t := arg(f.Text)
+		where = append(where, "("+
+			"l.title % "+t+
+			" OR l.description ILIKE '%' || "+t+" || '%'"+
+			" OR mk.name ILIKE '%' || "+t+" || '%'"+
+			" OR md.name ILIKE '%' || "+t+" || '%'"+
+			" OR (mk.name || ' ' || md.name) % "+t+
+			// The year, typed as part of the phrase people actually use —
+			// "2021 patrol" is one query, not a filter plus a query.
+			" OR l.year::text = "+t+
+			")")
 	}
 
 	distance := "NULL::float8"
@@ -228,10 +250,44 @@ func (f Filter) Build() (string, []any) {
 			       l.make_id, l.model_id, l.trim_id, l.year, l.mileage_km,
 			       l.transmission, l.fuel_type, l.body_type, l.regional_spec,
 			       l.exterior_colour, l.price_minor, l.currency, l.is_negotiable,
-			       l.title, l.emirate, l.city, l.published_at, l.bumped_at,
+			       -- Composed when the seller gave no headline, which is every
+			       -- listing the app creates: the sell flow has no title field
+			       -- because the overlay's words come from Summarize. A result
+			       -- row still has to name the car, and "(untitled)" does not.
+			       COALESCE(NULLIF(l.title, ''),
+			                l.year || ' ' || mk.name || ' ' || md.name) AS title,
+			       l.emirate, l.city, l.published_at, l.bumped_at,
 			       (l.featured_until IS NOT NULL AND l.featured_until > now()) AS is_featured,
+			       rl.id                       AS reel_id,
+			       COALESCE(rl.poster_key, '') AS poster_key,
+			       COALESCE(rl.lqip, '')       AS lqip,
 			       %s AS distance_m
 			  FROM vehicle_listings l
+			  -- Inner joins, matching the schema: make_id and model_id are both
+			  -- NOT NULL, so this filters nothing. It is here so the text
+			  -- predicate can reach the taxonomy — see the note on f.Text.
+			  JOIN vehicle_makes mk ON mk.id = l.make_id
+			  JOIN vehicle_models md ON md.id = l.model_id
+			  -- The card's picture: the newest *published* reel for this
+			  -- listing.
+			  --
+			  -- LATERAL rather than a plain join, for the reason MyListings
+			  -- gives: a relisted car legitimately has several reels, and a join
+			  -- would return the listing once per reel — silently inflating both
+			  -- the page and the count(*) OVER () total.
+			  --
+			  -- Restricted to published rather than taking the newest of any
+			  -- state. A seller who is midway through replacing their video has
+			  -- a fresher reel that is still transcoding, and preferring it would
+			  -- blank the thumbnail of a listing that has a perfectly good older
+			  -- one.
+			  LEFT JOIN LATERAL (
+			      SELECT id, poster_key, lqip FROM reels
+			       WHERE subject_type = 'vehicle_listing' AND subject_id = l.id
+			         AND state = 'published'
+			       ORDER BY published_at DESC NULLS LAST
+			       LIMIT 1
+			  ) rl ON true
 			 WHERE %s
 		),
 		ranked AS (
@@ -252,6 +308,7 @@ func (f Filter) Build() (string, []any) {
 		       COALESCE(l.emirate, ''), COALESCE(l.city, ''),
 		       l.published_at, l.distance_m,
 		       (l.is_featured AND l.featured_rank <= %d) AS promoted,
+		       l.poster_key, l.lqip, l.reel_id,
 		       count(*) OVER () AS total
 		  FROM ranked l
 		 ORDER BY (l.is_featured AND l.featured_rank <= %d) DESC, %s, l.id

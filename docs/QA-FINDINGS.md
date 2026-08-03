@@ -541,6 +541,271 @@ statements downstream of the real one. The column was also wrong
 A check that cannot run is a check that has not run, and an erasure is not the
 place to guess.
 
+## 21. A tab switch mid-load blanked the feed, permanently — **fixed**
+
+`FeedPager.refresh` cleared the list and called `loadNext`, which returned
+immediately because the prefetch it had just abandoned still held the `loading`
+guard. No request went out, nothing threw, and the new surface rendered blank —
+no spinner, no empty reason, nothing to retry. The abandoned page then landed
+*in the cleared list* and overwrote the cursor, so the feed went on paging the
+old surface under the new tab's label.
+
+Not an edge case: a prefetch is in flight for most of a scroll and the tab row
+sits under the thumb.
+
+A generation counter now marks each refresh; a response that returns under a
+stale one is dropped rather than written. A counter rather than cancellation
+because the pager owns no scope, and the caller cancelling its own job must not
+be the only thing between a stale page and the wrong tab.
+
+Two neighbours found in the same read. `clockSkewMillis` documented itself as
+"re-sampled on refresh" and never was — a device four minutes fast at launch and
+correct after an NTP sync kept rendering every auction four minutes early, and
+pull-to-refresh could not fix it. And `FeedUiState.error` was still `e.message`
+where every other screen had moved to `Failure`: untranslatable, unbranchable,
+and *nullable* — a throwable with no message set the field back to null, which
+is that field's word for nothing went wrong, so a failed load fell through to
+`emptyReason` and told the viewer the marketplace had nothing for them.
+
+Both pager defects were watched failing first: `[]` for the blank feed, `0` for
+the frozen skew.
+
+## 22. The feed's clock did not follow the auction's — **fixed**
+
+Found on a device: a plate lot in For you showing a live "1h 49m left" pill
+directly above its own Place bid button, greyed out, reason "Sold".
+
+`reel_time_signals` is a cache and nothing invalidated it. `Projector.Refresh`
+had exactly one caller in the tree — the reconcile sweep — despite its own doc
+describing a vertical write path as the primary one. The API process never
+constructed a Projector.
+
+Two holes. **Anti-snipe** extended `closes_at` and told nothing, so the feed
+counted down to the original instant and — non-recurring countdown means the lot
+is gone — dropped a reel still taking bids, during the exact two minutes the
+feature exists for. **Reconcile** could not select an ended countdown: its
+work-list tested `ends_at < now()` only for `recurring` rows, so the
+non-recurring case waited out the 24-hour staleness clause. That is the case
+where the row wants deleting, which Refresh's doc calls the direction that
+matters.
+
+The write-path fix refreshes *after* the transaction commits. Inside it, the
+projector's own pool connection reads the pre-commit row and re-caches precisely
+the value it was called to replace.
+
+## 23. Two checks that could not fail — **fixed**
+
+Both found by planting faults rather than by reading, which is the only way this
+class shows up.
+
+`interopcheck` folded Swift extensions into the Kotlin type table during the
+same pass that checked call sites, so resolution depended on filename order:
+`Failure.words` is declared in Feedback.swift and used in FeedScreen.swift, and
+`FeedScreen` sorts first because 'S' < 'b'. A real symbol was reported missing
+while the identical call in Messaging.swift passed, for no reason but its name.
+Two passes now.
+
+`parse-swift.sh` reported "no Swift toolchain — skipping" on a machine that had
+one: `$USER` is unset in Git Bash and `set -u` aborted the search. A skippable
+check that can reach its skip by accident is worse than no check, because the
+outcome looks like success.
+
+## 24. "Allow camera" was a button that did nothing, forever — **fixed**
+
+Android stops showing the permission dialog after the second refusal and
+`launch` then returns denied without drawing anything; iOS `requestAccess` never
+prompts twice at all and returns the stored answer immediately. Both platforms
+re-asked anyway, and neither mentioned Settings — the only place the decision
+can still be changed. A hard dead end on the tab this product gets its supply
+from.
+
+Android pairs `shouldShowRequestPermissionRationale` with a record of having
+asked, because alone it cannot tell "never asked" from "permanently denied" —
+both are false. iOS reads `authorizationStatus`, which distinguishes them
+exactly. Both re-read on resume, or the seller grants it in Settings, returns to
+the same refusal screen, and concludes the setting did not take.
+
+Walked on a device: first refusal still offers "Allow camera"; the second
+switches to "Open settings", which lands on the app's own App info page;
+granting there and returning brings up a live viewfinder with no relaunch.
+
+## 25. Three facts rendered as one on the Vertical step — **fixed**
+
+Still loading, the request failed, and this deployment genuinely has nothing
+sellable all drew "Nothing is sellable right now", because the only question
+asked was whether the list was empty. A false statement about a working product,
+shown for the whole of the first fetch and every failure, to someone who has
+just recorded a video.
+
+Separately, a failed tile tap was invisible: picking a vertical fetches its
+form, and when that failed the view model set an error and returned the seller
+to the grid, where nothing drew it. The tile simply did not respond.
+
+`SellUiState.error` was the last `e.message` in the app — untranslatable,
+unbranchable, and nullable, so a throwable with no message rendered a failed
+publish as a silent success.
+
+## 26. A retry button in Material3 purple — **fixed**
+
+Found by looking at the offline feed rather than at the diff. The new empty
+state hand-rolled its own `Text` + `TextButton` instead of reusing the app's
+`FailureBlock`, and a bare `TextButton` inherits the theme's primary colour —
+which this app never sets, so it came out default violet on a black feed.
+
+The fix is to delete the duplicate and call `FailureBlock`, which already
+carries the palette, the `isRetryable` rule and the button style everything else
+uses. The lesson is the ordinary one: a component was reimplemented because it
+was easier to write than to look for.
+
+## Harness note: parse-swift depended on MSYS path rewriting
+
+`swiftc.exe` was handed POSIX paths and worked only because Git Bash rewrites
+them on the way to a native binary. A shell with `MSYS_NO_PATHCONV=1` — an
+ordinary thing to set, and set accidentally two commands earlier — produced
+seventeen "error opening input file" lines and a failure that reads like broken
+Swift rather than a broken script. Converted with `cygpath` explicitly now, and
+verified under both settings.
+
+## 27. CI never built the mobile app, and could not have — **fixed**
+
+The workflow covered migrations, Go, TypeScript and contract drift. It did not
+touch `apps/mobile-kmm` at all, which is what let four compile errors sit in
+`iosMain`, and the Makefile had been saying so in a comment: "the 38
+shared-logic tests do not run unless CI calls test-mobile explicitly. It
+should."
+
+Three jobs added. `mobile` on Linux runs the boundary check first (seconds, and
+it catches the class the expensive jobs cannot see), then the shared tests, the
+Android build, and a check that the two string tables have the same key count —
+a missing translation ships as an English string in an Arabic build, which no
+test notices and every user does. `ios` on a macOS runner links the Kotlin
+framework and runs `swiftc -typecheck` against it with the simulator SDK, which
+resolves SwiftUI, UIKit, AVFoundation *and* Shared: a real type-check of every
+SwiftUI file, not the syntax-only `-parse` available off a Mac. There is no
+`.xcodeproj` in the tree, so this deliberately does not `xcodebuild`.
+`loadtest` runs Phase 10's capacity and feed tests on master only — they seed
+20,000 reels and take minutes.
+
+Two things would have failed that CI on its first run, both invisible on this
+machine because nothing here executes them:
+
+  - **`gradlew` was mode 100644 in git.** Every job that calls `./gradlew`
+    would have died with "Permission denied" on any POSIX runner. It has been
+    non-executable for the life of the repository; nothing had run it on Linux
+    or macOS.
+  - **`make test-mobile` had a literal `
+` where a line continuation belonged**,
+    so the recipe passed `
+` to Gradle as an argument. `make` is not installed
+    on this machine, which is exactly why it survived.
+
+## 28. Phase 10 load tests, run rather than assumed
+
+Numbers at 20,000 reels, on a laptop under Docker — a shape, not a capacity
+verdict:
+
+  - 400 writers against a limit of 100: exactly 100 granted, 300 refused, 0
+    errored. No overbooking under the contention the lock exists for.
+  - reserve/release returned the bucket to empty on all 10 rounds of 50.
+  - 755 reservations/s at 128 concurrent writers on one bucket.
+  - the feed read path uses `reels_feed_idx`; 69 ms execution at 20,000 rows.
+
+Two things worth watching rather than fixing now. Feed p95 goes 175 ms at 8
+concurrent readers to **524 ms at 32**, while throughput only moves 52 → 85
+queries/s — the read path saturates rather than scales, and 32 readers is not a
+large number. And the planner estimates `rows=1` for a scan that returns
+**3,471**: it happened to choose the right index here, but a three-thousand-fold
+underestimate is how a nested loop gets chosen somewhere else and a page takes
+thirty seconds.
+
+## 29. The API could not boot in production — **fixed**
+
+`buildTranscoder` refused `stub` (playlists that point at nothing) and `ffmpeg`
+(an in-memory job table that strands every in-flight reel on a worker restart),
+and nothing else was implemented. Both refusals are right; the gap was the
+absence of a third option. There was no value of `TRANSCODE_VENDOR` that both
+existed and was permitted, so the process could not start with `APP_ENV=production`.
+
+Now implemented: `media.MediaConvertProvider`, registered as `aws-mediaconvert`.
+
+AWS Elemental MediaConvert rather than Mux or Cloudflare Stream, chosen by what
+the deployment already has: the object store is S3, the region is me-central-1,
+the credential chain is already wired through `objectstore`, and MediaConvert
+reads and writes S3 directly — so a reel never travels through this process.
+The alternatives mean shipping every upload to a third party and paying egress
+to do it.
+
+It is permitted in production for a structural reason rather than a preference:
+it holds no job state here. The job lives in AWS under an id persisted with the
+reel, and `Fetch` resolves it from that id alone, so a restart, a redeploy, or a
+second worker running the reconciliation sweep all behave identically. That is
+precisely what disqualifies the ffmpeg provider.
+
+The subtle part is that the output location must be a pure function of the
+input. `Fetch` rebuilds playlist URLs from the job, and it is called by the
+reconciliation sweep as well as by the completion event — so a random per-job
+prefix would work right up until an event was lost, and then produce URLs
+pointing at nothing, on the path nobody exercises before production. There is a
+round-trip test for exactly this, and it was watched failing: replacing the
+derived prefix with `outputPrefix(source) + uuid` breaks all three renditions.
+
+`TestNoTranscodeVendorIsProductionReady` was written as a test rather than a
+TODO so that implementing a provider would break it and force this entry to be
+rewritten. It did, and this is the rewrite.
+
+## 30. Production config guardrails, tested and extended — **fixed**
+
+The existing rules turned out to be better than assumed — the OTP dev echo, a
+short signing key, `sslmode=disable`, and `auto` in a public endpoint are all
+already refused in production, as are the stub and ffmpeg transcoders and a
+missing moderation key. What none of them had was a test, which for the one
+function whose entire job is refusing to start is a strange gap: a guardrail
+nobody tests is one somebody deletes in a refactor, and the deletion is
+invisible because the process still boots.
+
+Two rules added.
+
+**`S3_BUCKET` is now required in production.** `BuildMedia` returns nil when it
+is unset and the API runs without the media surface, defended in a comment as
+"a deployment that only serves orders is a legitimate configuration". True in
+development. In production it means the entire point of a video-first
+marketplace is switched off by an unset variable, announced by one warning
+line, and discovered when someone asks why the feed is empty. The transcoder
+and the moderator both hard-fail there; object storage, which both depend on,
+was the one leg that did not.
+
+**A placeholder signing key is refused.** Length is not entropy: the key this
+repository's own CI uses — `ci-only-signing-key-at-least-32-bytes-long` — is 42
+characters and passed the length rule. A guessable signing key forges any
+session in the product. Word list rather than an entropy estimate, deliberately;
+a false positive here is an outage, and the words that matter are the ones this
+repository actually ships.
+
+Not required, on purpose: `S3_ACCESS_KEY_ID`. An empty value falls through to
+the AWS default credential chain, so demanding it would break exactly the
+IAM-role deployment that is the correct way to run this.
+
+## 31. Two stale pins found by building the thing — **fixed**
+
+There were no Dockerfiles at all, so nothing had ever built the services outside
+a developer machine. Writing one found both immediately:
+
+  - **CI pinned Go 1.24 while `go.mod` requires 1.26.0.** Every job passed
+    anyway, because `GOTOOLCHAIN` defaults to `auto` and Go silently downloaded
+    1.26 before doing anything — so the pin was decorative, CI was testing on
+    whatever `go.mod` asked for, and it paid a toolchain download per job for
+    the privilege. The Alpine builder sets `GOTOOLCHAIN=local`, which turns the
+    silent upgrade into an honest failure, which is how it surfaced.
+  - **The Dockerfile's own comment claimed tzdata was "baked in below"** and it
+    was not installed. Alpine ships no zoneinfo, so the runtime `COPY` failed.
+    Had that copy silently succeeded, the container would have rendered every
+    settlement date in UTC — the bug already fixed once in finding #14.
+
+The images are distroless, non-root, 31–38 MB, and are verified at publish time
+by being run with a deliberately invalid production config: the container must
+exit non-zero and say why. That checks the binary is executable in the base
+image and that the guardrails above are compiled in, in one step.
+
 ## Harness note: the shell was silently destroying Arabic
 
 An early test of the template editor sent Arabic through a bash heredoc into

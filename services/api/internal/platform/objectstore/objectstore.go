@@ -14,6 +14,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -24,19 +25,38 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 type Config struct {
-	Region         string
-	Bucket         string
-	Endpoint       string // empty for real AWS
+	Region   string
+	Bucket   string
+	Endpoint string // empty for real AWS
+	// PublicEndpoint is the host *clients* reach the store on, when that is not
+	// the host this process reaches it on. Empty means they are the same.
+	//
+	// They are routinely not the same, and assuming they are is a bug that only
+	// shows up once a real device is involved. A deployed API talks to S3 over a
+	// VPC endpoint or an internal service name; the phone has to be handed a
+	// publicly resolvable host. In development the split is starker still: the
+	// API reaches MinIO at localhost:9000, and an Android emulator reaching
+	// "localhost" reaches *itself* — its route to the host machine is 10.0.2.2,
+	// which in turn is not routable from the host.
+	//
+	// Signing has to happen against the endpoint the client will call, because
+	// the host is part of what SigV4 signs. So there are two clients: one for
+	// this process's own requests, one that exists only to mint URLs.
+	PublicEndpoint string
 	AccessKeyID    string
 	SecretKey      string
 	ForcePathStyle bool
 }
 
 type Store struct {
-	client  *s3.Client
+	client *s3.Client
+	// presign may be backed by a different endpoint than client — see
+	// Config.PublicEndpoint.
 	presign *s3.PresignClient
 	bucket  string
 }
@@ -63,19 +83,51 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("objectstore: load aws config: %w", err)
 	}
 
-	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		if cfg.Endpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
-		}
-		// MinIO addresses buckets as a path segment, not a subdomain. Virtual
-		// hosting would require wildcard DNS for `bucket.localhost`, which does
-		// not resolve.
-		o.UsePathStyle = cfg.ForcePathStyle
-	})
+	newClient := func(endpoint string) *s3.Client {
+		return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+			if endpoint != "" {
+				o.BaseEndpoint = aws.String(endpoint)
+			}
+			// MinIO addresses buckets as a path segment, not a subdomain. Virtual
+			// hosting would require wildcard DNS for `bucket.localhost`, which does
+			// not resolve.
+			o.UsePathStyle = cfg.ForcePathStyle
+
+			// Checksums only when the operation requires them, not whenever
+			// they are supported.
+			//
+			// aws-sdk-go-v2 changed this default in early 2025, and the effect
+			// on *presigned* URLs is that the signature starts covering a
+			// `x-amz-sdk-checksum-algorithm` header the SDK would have added
+			// itself. Nothing else sends that header — not a browser, not an
+			// Android upload, not curl — so every presigned PUT minted after
+			// the bump comes back 403 AccessDenied while the same credentials
+			// keep working for the API's own writes, which do send it.
+			//
+			// The symptom is genuinely misleading: uploads had worked, nothing
+			// in this file changed, and the only visible difference is a
+			// dependency version. It cost an hour of looking at hostnames and
+			// clock skew.
+			//
+			// WhenRequired keeps checksums on the operations that mandate them
+			// and off the presigned path.
+			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+			o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+		})
+	}
+
+	client := newClient(cfg.Endpoint)
+
+	// The signing client, which never sends a request — it only produces URLs,
+	// and those have to name the host the *client* will call.
+	signer := client
+	if cfg.PublicEndpoint != "" && cfg.PublicEndpoint != cfg.Endpoint {
+		signer = newClient(cfg.PublicEndpoint)
+	}
 
 	return &Store{
 		client:  client,
-		presign: s3.NewPresignClient(client),
+		presign: s3.NewPresignClient(signer),
 		bucket:  cfg.Bucket,
 	}, nil
 }
@@ -160,6 +212,38 @@ func (s *Store) Put(ctx context.Context, key, contentType string, body io.Reader
 	return nil
 }
 
+// Size reports how many bytes are at a key, and ok=false when nothing is.
+//
+// A HEAD, not a GET — this reads the object's metadata and never its body, so it
+// does not breach the rule above about the request path. Its one caller is the
+// publish handler confirming that the video the client says it uploaded is
+// actually in the bucket.
+func (s *Store) Size(ctx context.Context, key string) (int64, bool, error) {
+	out, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		// A missing object is the normal answer to this question — the client
+		// may still be uploading — so it is reported as ok=false rather than as
+		// an error the caller has to string-match.
+		var missing *types.NotFound
+		var noKey *types.NoSuchKey
+		if errors.As(err, &missing) || errors.As(err, &noKey) {
+			return 0, false, nil
+		}
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && (apiErr.ErrorCode() == "NotFound" || apiErr.ErrorCode() == "NoSuchKey") {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("objectstore: head %s: %w", key, err)
+	}
+	if out.ContentLength == nil {
+		return 0, true, nil
+	}
+	return *out.ContentLength, true, nil
+}
+
 // uploadKey lays out `uploads/{ownerType}/{ownerID}/{random}.{ext}`.
 //
 // Owner-prefixed so a bucket policy can scope access per tenant later without a
@@ -190,6 +274,23 @@ func extensionFor(contentType string) string {
 		return ".mov"
 	case "video/webm":
 		return ".webm"
+
+	// Documents — a mulkiya, a Trakheesi permit. Added when the trust slot
+	// gained somewhere to put one; before this, a document presign was refused
+	// here with "unsupported content type" and the caller had no idea the
+	// allow-list it tripped over was a video allow-list.
+	//
+	// Note what is still absent. `image/heic` is what an iPhone produces by
+	// default and is deliberately not here: the reviewer tooling cannot open
+	// one, so accepting it would produce documents nobody can look at. The
+	// client converts. `image/svg+xml` is not here because an SVG is a script.
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "application/pdf":
+		return ".pdf"
+
 	default:
 		return ""
 	}

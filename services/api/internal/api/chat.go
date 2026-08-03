@@ -64,7 +64,7 @@ func (h *ChatHandlers) History(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": renderMessages(messages)})
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": renderMessages(messages, userID)})
 }
 
 func (h *ChatHandlers) Send(w http.ResponseWriter, r *http.Request) {
@@ -97,9 +97,16 @@ func (h *ChatHandlers) Send(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := map[string]any{
-		"id":         msg.ID,
-		"state":      msg.State,
-		"body":       msg.Body,
+		"id":    msg.ID,
+		"state": msg.State,
+		"body":  msg.Body,
+		// Always true — the sender is the viewer by definition here — but stated
+		// rather than defaulted, because the client appends this object straight
+		// into the thread it is rendering. Leaving it absent would make the
+		// message the viewer just sent the one bubble on the screen drawn as
+		// though it came from the other side.
+		"mine":       true,
+		"sender_id":  userID,
 		"created_at": msg.CreatedAt,
 	}
 	switch msg.State {
@@ -202,12 +209,27 @@ func (h *ChatHandlers) Decide(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func renderMessages(messages []chat.Message) []map[string]any {
+// renderMessages projects a thread for one participant.
+//
+// `mine` is computed here rather than left to the client, and that is not
+// convenience. A chat where every bubble looks the same is not a chat — it is a
+// transcript with the speaker labels torn off, and that is exactly what the app
+// rendered: `sender_id` was on the wire and the client had no idea which uuid
+// was its own, because nothing in the token exchange ever told it.
+//
+// The alternatives were worse. Returning the viewer's user id somewhere for the
+// client to compare against means publishing an identifier the product
+// otherwise never needs, and asking the client to derive it from a JWT means
+// parsing a token the client is supposed to treat as opaque. The server already
+// knows who is asking, on every request, from the authenticated context.
+func renderMessages(messages []chat.Message, viewer uuid.UUID) []map[string]any {
 	out := make([]map[string]any, 0, len(messages))
 	for _, m := range messages {
 		out = append(out, map[string]any{
-			"id":         m.ID,
-			"sender_id":  m.SenderID,
+			"id":        m.ID,
+			"sender_id": m.SenderID,
+			// Whether this side of the conversation wrote it.
+			"mine":       m.SenderID == viewer,
 			"body":       m.Body,
 			"state":      m.State,
 			"created_at": m.CreatedAt,

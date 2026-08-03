@@ -27,6 +27,19 @@ type SubjectProvider struct {
 
 func NewSubjectProvider(pool *pgxpool.Pool) *SubjectProvider { return &SubjectProvider{pool: pool} }
 
+// Facet is how vehicles appears in the feed's filter row.
+//
+// "Cars", not "Vehicles" and certainly not "vehicle_listing". The row is read at
+// a glance by someone deciding whether to keep scrolling, and the word they use
+// for the thing is the word that belongs on the chip.
+//
+// Order 20 leaves room below it. Food is the launch vertical per
+// PLAN-VIDEO-FIRST §5 and belongs first when it registers; this is the second
+// thing anyone came for.
+func (p *SubjectProvider) Facet() subject.Facet {
+	return subject.Facet{Label: "Cars", LabelAr: "سيارات", Icon: "car", Order: 20}
+}
+
 // FreshnessHorizon is the span a listing's age is drawn against.
 //
 // Thirty days, matching the default listing term, so the bar reads as "how much

@@ -2,12 +2,14 @@ package ae.marketplace.mobile.playback
 
 import ae.marketplace.mobile.PlatformContext
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.readValue
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
 import platform.AVFoundation.AVPlayerActionAtItemEndNone
 import platform.AVFoundation.actionAtItemEnd
 import platform.AVFoundation.currentItem
+import platform.AVFoundation.currentTime
 import platform.AVFoundation.pause
 import platform.AVFoundation.play
 import platform.AVFoundation.replaceCurrentItemWithPlayerItem
@@ -64,7 +66,10 @@ internal class AvReelPlayer : ReelPlayer {
             `object` = item,
             queue = NSOperationQueue.mainQueue,
         ) { _ ->
-            player.seekToTime(kCMTimeZero)
+            // `readValue()`, not the constant directly: Kotlin/Native models a
+            // C struct passed by value as CValue<T>, and kCMTimeZero is the
+            // struct. Passing it bare does not compile.
+            player.seekToTime(kCMTimeZero.readValue())
             player.play()
         }
     }
@@ -79,7 +84,11 @@ internal class AvReelPlayer : ReelPlayer {
 
     override fun positionMs(): Long {
         val item = player.currentItem ?: return 0
-        val seconds = CMTimeGetSeconds(item.currentTime())
+        // The *player*'s clock, not the item's. AVPlayerItem has no
+        // currentTime() in the Kotlin/Native bindings — it is a method on
+        // AVPlayer — and the two are the same value for a single-item player
+        // anyway.
+        val seconds = CMTimeGetSeconds(player.currentTime())
         return if (seconds.isNaN()) 0 else (seconds * 1000).toLong()
     }
 

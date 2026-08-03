@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Arabic, and the reason it is a whole file rather than a nice-to-have.
+
+    This product ships in the UAE. The *server* has been bilingual since the
+    subject seam was written — every provider carries LabelAr, every action
+    carries a label_ar, and the price line, badge and CTA on a reel already
+    arrive translated because the client sends Accept-Language. So the content
+    was Arabic and the chrome around it was English, which is the worst of both:
+    a screen where the car is described in Arabic and the button under it says
+    "Message seller".
+
+    Two things are worth knowing about the translations here.
+
+    **Numbers stay Western.** Arabic-Indic digits (٠١٢٣) are correct in a great
+    deal of Arabic typesetting and wrong for this: prices, mileages and phone
+    numbers in the Gulf are written in Western digits almost universally, and a
+    price rendered ١٨٩٬٠٠٠ next to a listing card showing 189,000 reads as two
+    different cars. The format arguments pass through unchanged.
+
+    **Layout direction is Android's problem, not this file's.** The manifest
+    already declares supportsRtl, and every screen in the app uses `start`/`end`
+    padding rather than `left`/`right`, so mirroring is automatic. The one place
+    it is not is a hard-coded glyph: "‹" for back becomes wrong in RTL, and
+    Compose does not mirror a text character. Left as-is and noted, because the
+    fix is an icon rather than a string.
+-->
+<resources>
+    <string name="app_name">السوق</string>
+
+    <!-- District names, display only. See the English file for why these are
+         separate from the canonical Place.label the server is sent. -->
+    <string name="place_dubai_marina">دبي مارينا</string>
+    <string name="place_downtown_dubai">وسط مدينة دبي</string>
+    <string name="place_business_bay">الخليج التجاري</string>
+    <string name="place_al_quoz">القوز</string>
+    <string name="place_al_barsha">البرشاء</string>
+    <string name="place_deira">ديرة</string>
+
+    <!--
+        The overlay's words. Numbers arrive as format arguments so the unit can
+        sit on the correct side of them, which is the whole reason these were
+        never concatenated in Kotlin.
+    -->
+    <string name="time_remaining_h">باقي %1$d س %2$d د</string>
+    <string name="time_remaining_ms">باقي %1$02d:%2$02d</string>
+    <string name="time_window">%1$d س %2$d د من %3$d س</string>
+    <string name="time_order_by">اطلب قبل %1$02d:%2$02d</string>
+    <string name="time_opens_h">يفتح بعد %1$d س %2$d د</string>
+    <string name="time_opens_m">يفتح بعد %1$d د</string>
+    <string name="time_closed">مغلق</string>
+
+    <!-- Feed surfaces. Four labels share one row, and Arabic runs longer than
+         English for most of them — these are deliberately the shortest phrasing
+         that is still natural. -->
+    <string name="surface_for_you">لك</string>
+    <string name="surface_live_now">متاح الآن</string>
+    <string name="surface_ending_soon">ينتهي قريباً</string>
+    <string name="surface_nearby">قريب منك</string>
+
+    <string name="empty_live">لا يوجد شيء متاح الآن. عد مساءً.</string>
+    <string name="empty_closing">لا شيء ينتهي خلال الساعات القادمة.</string>
+    <string name="empty_near">لا يوجد شيء على مسافة قريبة بعد.</string>
+    <string name="empty_eligible">لا يوجد شيء متاح في هذا الموقع بعد.</string>
+    <string name="feed_failed">تعذّر تحميل المحتوى.</string>
+
+    <string name="filter_show">عرض</string>
+    <string name="filter_all">الكل</string>
+    <string name="filter_location">الموقع</string>
+    <string name="filter_use_my_location">استخدم موقعي</string>
+    <string name="filter_nearby_you">قريب منك</string>
+    <string name="filter_reach_note">لا يوجد فلتر للمسافة. تظهر لك فقط الأشياء التي يمكنها الوصول إلى الموقع الذي تختاره.</string>
+    <string name="filter_location_denied">تم رفض إذن الموقع — يتم عرض دبي مارينا.</string>
+
+    <string name="nav_feed">الرئيسية</string>
+    <string name="nav_search">بحث</string>
+    <string name="nav_sell">بيع</string>
+    <string name="nav_saved">المحفوظات</string>
+    <string name="nav_me">حسابي</string>
+    <string name="nav_not_built">لم تُبنَ هذه الشاشة بعد. التبويب موجود ليتضح شكل المنتج.</string>
+
+    <!--
+        The sell flow's chrome only. Every label inside the form — "Car", "KM",
+        "Price", "Open listing · 30 days" — comes from the server already
+        translated, which is why there is so little here.
+    -->
+    <string name="sell_what_listing">ما الذي تريد عرضه؟</string>
+    <string name="sell_nothing_sellable">لا يمكن عرض أي شيء من التطبيق بعد.</string>
+    <string name="sell_three_fields">بعض التفاصيل، ثم تصبح منشوراً</string>
+    <string name="sell_next_clock">التالي · حدّد المدة</string>
+    <string name="sell_how_long">كم مدة العرض؟</string>
+    <string name="sell_emirate_area">الإمارة والمنطقة</string>
+    <string name="sell_publish">نشر</string>
+    <string name="sell_place_required">حدّد الموقع. المشترون يرون فقط ما يمكنه الوصول إليهم.</string>
+    <string name="sell_only_term">المدة الوحيدة المتاحة لهذا النوع اليوم.</string>
+    <string name="sell_trust_not_built">رفع المستندات غير متاح بعد.</string>
+    <string name="sell_trust_doc_later">يمكنك إرفاق المستند لاحقاً. الرقم أعلاه كافٍ للإرسال.</string>
+
+    <string name="trust_choose">اختر ملفاً</string>
+    <string name="trust_uploading">جارٍ الرفع…</string>
+    <string name="trust_submitted">تم الاستلام. يراجعه شخص قبل اعتماده.</string>
+    <string name="trust_approved">تمت الموافقة — حصلت على %1$s</string>
+    <string name="trust_rejected">لم يُقبل.</string>
+    <string name="trust_try_again">اختر ملفاً آخر</string>
+
+    <string name="sell_field_required">مطلوب قبل النشر.</string>
+    <string name="sell_field_number">أرقام فقط.</string>
+    <string name="sell_field_option">اختر أحد الخيارات.</string>
+    <string name="sell_field_min">%1$s %2$s على الأقل.</string>
+    <string name="sell_field_max">%1$s %2$s كحد أقصى.</string>
+
+    <string name="signin_title">سجّل الدخول للعرض</string>
+    <string name="signin_why">إعلانك مرتبط بحساب، والمشترون يراسلونك من هنا. رقمك لا يظهر لهم أبداً.</string>
+    <string name="signin_phone_hint">+971 50 000 0000</string>
+    <string name="signin_send_code">أرسل الرمز</string>
+    <string name="signin_code_hint">رمز من ٦ أرقام</string>
+    <string name="signin_verify">تأكيد</string>
+    <string name="signin_change_number">تغيير الرقم</string>
+    <string name="signin_sent_to">أرسلنا رمزاً إلى %1$s</string>
+    <string name="signin_resend">إعادة الإرسال</string>
+    <string name="signin_resend_in">إعادة الإرسال بعد %1$d ث</string>
+
+    <string name="signin_err_phone">الرقم لا يبدو صحيحاً. أضف رمز الدولة.</string>
+    <string name="signin_err_code">الرمز غير صحيح. راجع الرسالة وحاول مرة أخرى.</string>
+    <string name="signin_err_stale">انتهت صلاحية الرمز. اطلب رمزاً جديداً.</string>
+    <string name="signin_err_too_many">محاولات كثيرة. انتظر دقيقة ثم حاول مجدداً.</string>
+    <string name="signin_err_offline">لا يوجد اتصال. تحقق من الشبكة وحاول مجدداً.</string>
+    <string name="signin_err_unknown">تسجيل الدخول لا يعمل الآن. حاول بعد قليل.</string>
+
+    <string name="session_expired">تم تسجيل خروجك. سجّل الدخول مجدداً للمتابعة.</string>
+
+    <string name="err_offline">لا يوجد اتصال. تحقق من الشبكة وحاول مجدداً.</string>
+    <string name="err_timeout">استغرق الأمر وقتاً طويلاً. حاول مجدداً.</string>
+    <string name="err_unauthorized">سجّل الدخول لعرض هذا.</string>
+    <string name="err_forbidden">ليس لديك صلاحية الوصول إلى هذا.</string>
+    <string name="err_not_found">هذا العنصر لم يعد متاحاً.</string>
+    <string name="err_rate_limited">طلبات كثيرة. انتظر لحظة ثم حاول مجدداً.</string>
+    <string name="err_rejected">تعذّر تنفيذ ذلك.</string>
+    <string name="err_server">حدث خطأ لدينا. حاول بعد قليل.</string>
+    <string name="err_unknown">حدث خطأ ما. حاول مجدداً.</string>
+    <string name="action_retry">إعادة المحاولة</string>
+    <string name="action_close">إغلاق</string>
+
+    <string name="sell_camera_needed">الكاميرا هي طريقة العرض</string>
+    <string name="sell_camera_why">هذا المنتج يعرض فقط ما تم تصويره. لا يوجد رفع صور.</string>
+    <string name="sell_camera_allow">السماح للكاميرا</string>
+    <string name="sell_camera_blocked">تم إيقاف الوصول إلى الكاميرا لهذا التطبيق. يمكنك تفعيله من الإعدادات.</string>
+    <string name="sell_camera_settings">فتح الإعدادات</string>
+
+    <!--
+        One string per pipeline state. A video under review is not live, and
+        telling the seller otherwise produces the worst sequence there is: they
+        share the link, their friend sees nothing, and they conclude the
+        platform is broken.
+    -->
+    <string name="sell_uploading">جارٍ رفع الفيديو</string>
+    <string name="sell_uploading_detail">أبقِ التطبيق مفتوحاً حتى ينتهي.</string>
+    <string name="sell_upload_failed">لم يكتمل الرفع</string>
+    <string name="sell_upload_failed_detail">إعلانك محفوظ. أعد رفع الفيديو.</string>
+    <string name="sell_retry_upload">إعادة الرفع</string>
+    <string name="sell_publish_refused">تم رفع الفيديو، لكن الإعلان لم يُقبل</string>
+    <string name="sell_publish_refused_detail">لم يُفقد شيء. حاول النشر مرة أخرى.</string>
+    <string name="sell_retry_publish">حاول النشر مرة أخرى</string>
+    <string name="sell_processing">جارٍ المعالجة</string>
+    <string name="sell_processing_detail">يتم تحويل الفيديو للتشغيل.</string>
+    <string name="sell_processing_failed">تعذّرت معالجة الفيديو</string>
+    <string name="sell_processing_failed_detail">صوّره مرة أخرى — لم يُفقد شيء آخر.</string>
+    <string name="sell_in_review">قيد المراجعة</string>
+    <string name="sell_in_review_detail">يراجع شخص كل إعلان أول. يظهر في الرئيسية بعد الموافقة.</string>
+    <string name="sell_live_in">أنت منشور في %1$s</string>
+    <string name="sell_live_detail">المشترون القريبون يمكنهم رؤيته الآن.</string>
+    <string name="sell_rejected">لم يُنشر</string>
+    <string name="sell_rejected_detail">لم يجتز هذا المراجعة.</string>
+    <string name="sell_stat_views">مشاهدات</string>
+    <string name="sell_stat_saves">حفظ</string>
+    <string name="sell_stat_comments">تعليقات</string>
+    <string name="sell_see_in_feed">شاهده في الرئيسية</string>
+    <string name="sell_done">تم</string>
+
+    <string name="search_hint">ابحث عن سيارة</string>
+    <string name="search_prompt">ابحث بالماركة أو الموديل أو السنة.</string>
+    <string name="search_prompt_hint">جرّب «باترول 2021» أو «لاند كروزر».</string>
+    <string name="search_none">لا توجد نتائج لـ «%1$s».</string>
+    <string name="search_none_hint">راجع الإملاء، أو وسّع نطاق السنة.</string>
+    <string name="search_count">%1$d نتيجة</string>
+    <string name="search_promoted">مموّل</string>
+    <string name="search_filters">الفلاتر</string>
+    <string name="search_filters_n">الفلاتر · %1$d</string>
+
+    <string name="filters_title">ضيّق النتائج</string>
+    <string name="filters_clear">مسح</string>
+    <string name="filters_apply">عرض النتائج</string>
+    <string name="filters_price">السعر (درهم)</string>
+    <string name="filters_min">بدون حد أدنى</string>
+    <string name="filters_max">بدون حد أقصى</string>
+    <string name="filters_year">السنة</string>
+    <string name="filters_from">من</string>
+    <string name="filters_to">إلى</string>
+    <string name="filters_mileage">الممشى</string>
+    <string name="filters_mileage_hint">حتى … كم</string>
+    <string name="filters_spec">المواصفات</string>
+    <string name="filters_body">نوع الهيكل</string>
+    <string name="filters_seller">البائع</string>
+    <string name="filters_sort">الترتيب</string>
+
+    <string name="saved_empty">لم تحفظ شيئاً بعد.</string>
+    <string name="saved_empty_hint">اضغط على علامة الحفظ في أي مقطع ليظهر هنا.</string>
+    <string name="saved_untitled">مقطع محفوظ</string>
+    <string name="saved_gone">لم يعد متاحاً</string>
+
+    <string name="me_messages">الرسائل</string>
+    <string name="me_your_listings">إعلاناتك</string>
+    <string name="me_no_listings">لم تنشر أي إعلان بعد.</string>
+    <string name="me_no_listings_hint">افتح «بيع» لتصوير واحد. يستغرق نحو دقيقة.</string>
+    <string name="me_sign_out">تسجيل الخروج</string>
+
+    <string name="status_active">منشور</string>
+    <string name="status_review">قيد المراجعة</string>
+    <string name="status_draft">مسودة</string>
+    <string name="status_rejected">مرفوض</string>
+    <string name="status_sold">مباع</string>
+    <string name="status_paused">موقوف</string>
+    <string name="status_expired">منتهي</string>
+
+    <string name="reel_note_processing">الفيديو قيد المعالجة.</string>
+    <string name="reel_note_review">الفيديو لدى المراجع.</string>
+    <string name="reel_note_rejected">لم تتم الموافقة على الفيديو.</string>
+    <string name="reel_note_expired">لم يكتمل رفع الفيديو.</string>
+    <string name="reel_note_failed">تعذّرت معالجة الفيديو.</string>
+
+    <string name="inbox_empty">لا توجد رسائل بعد.</string>
+    <string name="inbox_empty_hint">تبدأ عندما يضغط مشترٍ على الزر في أحد مقاطعك.</string>
+    <string name="inbox_untitled">محادثة</string>
+    <string name="thread_empty">ابدأ بالتحية.</string>
+    <string name="thread_empty_hint">أبقِ المحادثة هنا — لا يمكننا المساعدة إلا إذا حدث شيء داخل المنصة.</string>
+    <string name="thread_hint">رسالة</string>
+    <string name="thread_send">إرسال</string>
+    <string name="msg_held">قيد المراجعة — لم تُسلَّم بعد.</string>
+    <string name="msg_redacted">تمت إزالة بيانات التواصل.</string>
+    <string name="msg_blocked">لم تُسلَّم.</string>
+
+    <!--
+        Arabic has six plural categories where English has two, and Android
+        supports all of them. Only `one` and `other` differ in meaning for these
+        phrasings — "منذ دقيقة" versus "منذ %d دقيقة" — but `zero`, `two`, `few`
+        and `many` are declared because leaving them out makes Android fall back
+        to `other`, which produces "منذ 2 دقيقة" where Arabic wants a dual form.
+    -->
+    <plurals name="ago_minutes">
+        <item quantity="one">نُشر منذ دقيقة</item>
+        <item quantity="two">نُشر منذ دقيقتين</item>
+        <item quantity="few">نُشر منذ %d دقائق</item>
+        <item quantity="many">نُشر منذ %d دقيقة</item>
+        <item quantity="other">نُشر منذ %d دقيقة</item>
+    </plurals>
+    <plurals name="ago_hours">
+        <item quantity="one">نُشر منذ ساعة</item>
+        <item quantity="two">نُشر منذ ساعتين</item>
+        <item quantity="few">نُشر منذ %d ساعات</item>
+        <item quantity="many">نُشر منذ %d ساعة</item>
+        <item quantity="other">نُشر منذ %d ساعة</item>
+    </plurals>
+    <plurals name="ago_days">
+        <item quantity="one">نُشر منذ يوم</item>
+        <item quantity="two">نُشر منذ يومين</item>
+        <item quantity="few">نُشر منذ %d أيام</item>
+        <item quantity="many">نُشر منذ %d يوماً</item>
+        <item quantity="other">نُشر منذ %d يوم</item>
+    </plurals>
+    <plurals name="ago_weeks">
+        <item quantity="one">نُشر منذ أسبوع</item>
+        <item quantity="two">نُشر منذ أسبوعين</item>
+        <item quantity="few">نُشر منذ %d أسابيع</item>
+        <item quantity="many">نُشر منذ %d أسبوعاً</item>
+        <item quantity="other">نُشر منذ %d أسبوع</item>
+    </plurals>
+    <string name="sell_length">المدة</string>
+    <string name="sell_timer">مؤقت</string>
+    <string name="sell_flash">فلاش</string>
+    <string name="sell_off">إيقاف</string>
+    <string name="sell_gallery">المعرض</string>
+    <string name="sell_flip_camera">تبديل الكاميرا</string>
+    <string name="sell_seconds_short">%1$dث</string>
+    <string name="sell_pick_video">اختر مقطع فيديو</string>
+    <string name="sell_clip_too_long">هذا الفيديو أطول من %1$d ثانية. اختر مقطعاً أقصر أو اقتصّه أولاً.</string>
+    <string name="sell_clip_too_large">حجم الفيديو كبير جداً للرفع. اختر مقطعاً أقصر.</string>
+    <string name="sell_clip_unreadable">تعذّرت قراءة هذا الفيديو. جرّب مقطعاً آخر.</string>
+</resources>

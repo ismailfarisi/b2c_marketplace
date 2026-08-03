@@ -28,7 +28,12 @@ type Config struct {
 	OTPDevEcho bool
 	OTPTTL     time.Duration
 
-	S3Endpoint       string
+	S3Endpoint string
+	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
+	// object store somewhere this process does not. Empty means the same host.
+	// See objectstore.Config.PublicEndpoint — getting this wrong produces an
+	// upload URL the phone cannot reach, or a HEAD the server cannot make.
+	S3PublicEndpoint string
 	S3Region         string
 	S3Bucket         string
 	S3AccessKeyID    string
@@ -50,7 +55,15 @@ type Config struct {
 	// FFmpegBinary is used only by the local transcode provider. Empty means
 	// "ffmpeg on PATH", which is right on a laptop and wrong in a container
 	// where the binary is pinned to a known build.
-	FFmpegBinary    string
+	FFmpegBinary string
+
+	// AWS Elemental MediaConvert — the first transcode provider permitted in
+	// production. Unused by any other vendor, and validated by the provider
+	// itself at wiring time rather than required here, so a deployment running
+	// ffmpeg locally does not have to set them.
+	MediaConvertRole        string
+	MediaConvertQueue       string
+	MediaConvertDestination string
 
 	// Phase 4: ranking, social, analytics warehouse.
 	//
@@ -130,6 +143,7 @@ func Load() (Config, error) {
 		OTPTTL:     duration("OTP_TTL", "5m"),
 
 		S3Endpoint:       optional("S3_ENDPOINT", ""),
+		S3PublicEndpoint: optional("S3_PUBLIC_ENDPOINT", ""),
 		S3Region:         optional("S3_REGION", "me-central-1"),
 		S3Bucket:         optional("S3_BUCKET", ""),
 		S3AccessKeyID:    optional("S3_ACCESS_KEY_ID", ""),
@@ -153,6 +167,10 @@ func Load() (Config, error) {
 		FFProbeBinary:   optional("FFPROBE_BINARY", ""),
 		FFmpegBinary:    optional("FFMPEG_BINARY", ""),
 
+		MediaConvertRole:        optional("MEDIACONVERT_ROLE_ARN", ""),
+		MediaConvertQueue:       optional("MEDIACONVERT_QUEUE_ARN", ""),
+		MediaConvertDestination: optional("MEDIACONVERT_DESTINATION", ""),
+
 		ClickHouseURL:      optional("CLICKHOUSE_URL", ""),
 		ClickHouseDatabase: optional("CLICKHOUSE_DATABASE", "analytics"),
 		ClickHouseTable:    optional("CLICKHOUSE_TABLE", "reel_events"),
@@ -169,8 +187,63 @@ func Load() (Config, error) {
 		if len(cfg.JWTSigningKey) < 32 {
 			problems = append(problems, "JWT_SIGNING_KEY must be at least 32 bytes in production")
 		}
+		// Length is not entropy. The key CI uses —
+		// "ci-only-signing-key-at-least-32-bytes-long" — is 42 characters and
+		// passes the check above, and a copied .env.example passes it too. A
+		// signing key that is guessable forges any session in the product, so
+		// the obvious placeholders are named rather than trusted.
+		if word := placeholderIn(cfg.JWTSigningKey); word != "" {
+			problems = append(problems,
+				"JWT_SIGNING_KEY looks like a placeholder (contains "+word+
+					") — generate one with: openssl rand -base64 48")
+		}
+		// The object store, required for the same reason the transcoder and the
+		// moderator are, and it was the one leg of the media pipeline that was
+		// not.
+		//
+		// BuildMedia returns nil when the bucket is unset and the API runs
+		// without the media surface, which its comment defends as "a deployment
+		// that only serves orders is a legitimate configuration". That holds in
+		// development. In production it means the entire point of a video-first
+		// marketplace is switched off by an unset variable, announced by one
+		// warning line, and discovered when someone asks why the feed is empty.
+		if cfg.S3Bucket == "" {
+			problems = append(problems,
+				"S3_BUCKET is required in production — without it the media "+
+					"surface is silently disabled and the feed has nothing to serve")
+		}
 		if strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
 			problems = append(problems, "DATABASE_URL must not disable TLS in production")
+		}
+		// `auto` resolves to this machine's LAN address, which in a deployment
+		// is a private container address. A presigned URL built on one resolves
+		// for nobody and the symptom is every upload failing with no mention of
+		// a hostname — so it is refused here rather than resolved.
+		for name, value := range map[string]string{
+			"S3_PUBLIC_ENDPOINT": cfg.S3PublicEndpoint,
+			"MEDIA_CDN_BASE_URL": cfg.MediaCDNBaseURL,
+		} {
+			if strings.Contains(value, AutoHost) {
+				problems = append(problems,
+					name+" cannot be \""+AutoHost+"\" in production — name a real host")
+			}
+		}
+	} else {
+		// Development. Both of these are rendered on a *device*, so they cannot
+		// say localhost — and they cannot say 10.0.2.2 either, because the web
+		// admin has to reach the same objects from a browser on the host. The
+		// only address that works for all of them is this machine's on the LAN,
+		// and it changes with the DHCP lease.
+		//
+		// Resolved here rather than written into .env, where it goes stale and
+		// takes every image and every upload with it.
+		for _, target := range []*string{&cfg.S3PublicEndpoint, &cfg.MediaCDNBaseURL} {
+			resolved, err := resolveAuto(*target)
+			if err != nil {
+				problems = append(problems, err.Error())
+				continue
+			}
+			*target = resolved
 		}
 	}
 
@@ -178,4 +251,26 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("invalid configuration:\n  - %s", strings.Join(problems, "\n  - "))
 	}
 	return cfg, nil
+}
+
+// placeholderIn reports the first placeholder marker found in a secret, or "".
+//
+// Substring matching on a small list, deliberately. Entropy estimation would be
+// the clever answer and it is the wrong one here: a base64 key from
+// `openssl rand` and a determined person's "correcthorsebatterystaple" score
+// similarly, and a false positive at boot is an outage. These words appear in
+// the values this repository itself ships — .env.example, the CI signing key —
+// which are the ones that actually get copied into a deployment by accident.
+func placeholderIn(secret string) string {
+	lower := strings.ToLower(secret)
+	for _, word := range []string{
+		"changeme", "change-me", "change_me",
+		"placeholder", "example", "ci-only", "replace",
+		"your-", "xxxx", "insecure", "notsecret", "dev-secret",
+	} {
+		if strings.Contains(lower, word) {
+			return word
+		}
+	}
+	return ""
 }

@@ -36,9 +36,7 @@ func NewPlanHandler(pool *pgxpool.Pool) *PlanHandler { return &PlanHandler{pool:
 // feed will ever produce.
 func (h *PlanHandler) Resolve(ctx context.Context, a action.Action, v action.Viewer) (action.Resolved, error) {
 	label, labelAr := "Subscribe", "اشترك"
-	if a.Label != "" {
-		label, labelAr = a.Label, a.LabelAr
-	}
+	label, labelAr = action.Override(label, labelAr, a.Label, a.LabelAr)
 
 	res := action.Resolved{
 		Label:     label,

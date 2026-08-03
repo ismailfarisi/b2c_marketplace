@@ -74,6 +74,21 @@ object ReelClock {
          */
         data class ElapsedOf(val remainingMinutes: Int, val totalMinutes: Int) : Label
 
+        /**
+         * A window that has not opened yet — "opens in 5h 7m".
+         *
+         * Added when the first pre-window signal reached a device and rendered
+         * as "9h 7m of 4h": the bar was correctly clamped to empty, but the
+         * label still counted from now to the *end*, which for an offer
+         * announced in the afternoon is longer than the window itself. A label
+         * whose elapsed exceeds its total is not a rounding error, it is
+         * arithmetic on a window that has not started.
+         *
+         * A distinct case rather than reusing [Remaining], because "5h left" and
+         * "opens in 5h" are opposite instructions.
+         */
+        data class Opens(val hours: Int, val minutes: Int) : Label
+
         /** "listed 3d ago" — freshness, at the coarsest unit that is still true. */
         data class Ago(val amount: Int, val unit: Unit) : Label
 
@@ -170,11 +185,27 @@ object ReelClock {
         val total = ends - starts
         if (now >= ends) return Face(1f, Label.Closed, expired = true)
 
-        // Before it opens the bar sits empty rather than negative. A window
-        // announced early is a normal state — "midnight offer" is posted in the
-        // afternoon — and clamping is what makes the reel show the offer rather
-        // than a broken bar.
-        val elapsed = (now - starts).coerceAtLeast(0L)
+        // Not open yet — a normal state, and the common one. An offer that runs
+        // at 22:00 is posted in the afternoon, so most of the impressions it
+        // ever gets happen before it starts.
+        //
+        // The bar sits empty and the label counts down to the *opening*. The
+        // first version clamped the bar and forgot the label, which produced
+        // "9h 7m of 4h" — elapsed larger than the total, because it was
+        // measuring to the end of a window that had not begun.
+        if (now < starts) {
+            val untilOpen = starts - now
+            return Face(
+                fraction = 0f,
+                label = Label.Opens(
+                    hours = (untilOpen / 3_600_000L).toInt(),
+                    minutes = ((untilOpen % 3_600_000L) / 60_000L).toInt(),
+                ),
+                expired = false,
+            )
+        }
+
+        val elapsed = now - starts
         val fraction = if (total <= 0) 1f else (elapsed.toFloat() / total).coerceIn(0f, 1f)
 
         return Face(

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,7 +21,6 @@ import (
 	"github.com/marketplace/api/internal/modules/ranking"
 	"github.com/marketplace/api/internal/modules/reels"
 	"github.com/marketplace/api/internal/modules/social"
-	"github.com/marketplace/api/internal/seam/action"
 	"github.com/marketplace/api/internal/seam/subject"
 )
 
@@ -31,6 +31,11 @@ type ReelHandlers struct {
 	Feed       *feed.Service
 	Ingest     *engagement.Ingest
 	Moderation *moderation.Service
+
+	// MediaBase prefixes poster keys into fetchable URLs. Empty yields no
+	// poster rather than a URL resolved against the API host, which would 404
+	// for every reel in a deployment with no media stack.
+	MediaBase string
 
 	// Phase 3. Nil-safe: a feed served without them renders reels with no CTAs,
 	// which is what Phase 2 did and is still a coherent product.
@@ -323,6 +328,12 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 	// an error screen.
 	surface := feed.ParseSurface(q.Get("surface"))
 
+	// Repeatable *and* comma-separated. Both spellings are in the wild — Ktor
+	// emits repeats, a hand-written URL uses commas — and accepting one and
+	// silently ignoring the other produces an unfiltered feed that looks like a
+	// filter bug on whichever client picked the other form.
+	subjectTypes := parseSubjectTypes(q["subject_type"])
+
 	query := feed.Query{
 		Lat:      lat,
 		Lng:      lng,
@@ -330,6 +341,8 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		Cursor:   cursor,
 		Limit:    limit,
 		Surface:  surface,
+
+		SubjectTypes: subjectTypes,
 	}
 
 	// Optional auth: a signed-in viewer gets block filtering and a durable
@@ -350,31 +363,18 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		reelIDs[i] = it.ID
 	}
 
-	// Resolve the CTAs for the whole page in one batch. This is the seam doing
-	// its job: the feed hands over (kind, target_type, target_id) triples and
-	// gets back labels, availability and routes without ever learning what a
-	// laundry offering is.
-	var resolved map[uuid.UUID][]actions.Resolved
-	if h.Actions != nil && len(reelIDs) > 0 {
-		resolved, err = h.Actions.ResolvePage(r.Context(), reelIDs, action.Viewer{
-			UserID:  viewerID,
-			Lat:     lat,
-			Lng:     lng,
-			Locale:  httpx.LocaleFromContext(r.Context()),
-			Country: "AE",
-		})
-		if err != nil {
-			// A CTA-resolution failure must not blank the feed. Reels still
-			// play; they simply render without buttons this request.
-			logIfErr(r, "action resolution failed", err)
-			resolved = nil
-		}
-	}
-
-	// Record the impression denominator. Phase 2 kept the seen-set in Redis and
-	// out of the serving path, which was right for serving and wrong for
-	// measurement: without a durable impression count, "conversion rate"
-	// quietly becomes orders-per-click — the flattering one.
+	// The impression denominator, which is the one piece of enrichment that
+	// belongs only to the feed.
+	//
+	// Phase 2 kept the seen-set in Redis and out of the serving path, which was
+	// right for serving and wrong for measurement: without a durable impression
+	// count, "conversion rate" quietly becomes orders-per-click — the
+	// flattering one.
+	//
+	// Recorded here rather than inside `enrich`, because an impression means
+	// "served to someone who did not ask for it" and the single-reel endpoint
+	// serves people who did. Counting those would inflate the denominator with
+	// the most engaged traffic on the platform.
 	//
 	// Best-effort. Losing an impression row costs accuracy on a metric; failing
 	// the request to protect that metric would cost the front door.
@@ -383,68 +383,9 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 			h.Actions.Repo().RecordImpressions(r.Context(), viewerKey, viewerID, "feed", reelIDs))
 	}
 
-	// Whether this viewer has already liked, saved or followed each item, in one
-	// query for the page. Rendered by the client as a filled heart, so it is
-	// answered from the relation tables and never from a counter — a counter is
-	// a badge and being 3% low for ten seconds costs nothing, while a heart that
-	// un-fills when you scroll away and back is immediately wrong to the one
-	// person who knows the answer.
-	var state social.ViewerState
-	if h.Likes != nil && len(reelIDs) > 0 {
-		state, err = h.Likes.StateFor(r.Context(), viewerID, reelIDs)
-		if err != nil {
-			logIfErr(r, "viewer state lookup failed", err)
-		}
-	}
-
-	// Overlay text, one call per provider for the whole page.
-	//
-	// Best-effort in the same way CTA resolution is: a provider that fails costs
-	// its reels their badge and product line, not the viewer their feed. Trading
-	// the product for its subtitle would be a poor exchange.
-	var summaries map[subject.Ref]subject.Summary
-	if h.Subjects != nil {
-		refs := make([]subject.Ref, 0, len(page.Items))
-		for _, it := range page.Items {
-			if it.SubjectType == nil || it.SubjectID == nil {
-				continue
-			}
-			refs = append(refs, subject.Ref{
-				Type: subject.Type(*it.SubjectType),
-				ID:   *it.SubjectID,
-			})
-		}
-		if len(refs) > 0 {
-			summaries, err = h.Subjects.SummarizePage(r.Context(), refs, subject.Viewer{
-				UserID:  viewerID,
-				Locale:  httpx.LocaleFromContext(r.Context()),
-				Country: "AE",
-			})
-			if err != nil {
-				logIfErr(r, "subject summary resolution failed", err)
-				summaries = nil
-			}
-		}
-	}
-
-	items := make([]map[string]any, 0, len(page.Items))
-	for _, it := range page.Items {
-		item := feedItemResponse(it)
-		item["actions"] = actionsResponse(resolved[it.ID])
-		item["viewer"] = map[string]any{
-			"liked":    state.Liked[it.ID],
-			"saved":    state.Saved[it.ID],
-			"followed": state.Followed[it.ID],
-		}
-		item["summary"] = nil
-		if it.SubjectType != nil && it.SubjectID != nil {
-			ref := subject.Ref{Type: subject.Type(*it.SubjectType), ID: *it.SubjectID}
-			if s, ok := summaries[ref]; ok {
-				item["summary"] = summaryResponse(s)
-			}
-		}
-		items = append(items, item)
-	}
+	// CTAs, viewer state and subject summaries — shared with the single-reel
+	// endpoint so the two cannot drift. See ReelHandlers.enrich.
+	items := h.enrich(r, page.Items, viewerID, lat, lng)
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
 		"items":       items,
 		"next_cursor": nullable(page.NextCursor),
@@ -462,6 +403,51 @@ func (h *ReelHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 		// "the feed looked wrong at 14:20" is answerable rather than debatable.
 		"ranking_profile": page.Profile,
 	})
+}
+
+// parseSubjectTypes flattens the filter values.
+//
+// Not validated against the registered set. An unknown vertical matches no rows
+// and yields an empty page, which is the same answer as a real vertical with
+// nothing near you — and rejecting it would turn a client that is one release
+// ahead of the server into an error screen rather than a thin feed.
+func parseSubjectTypes(values []string) []string {
+	var out []string
+	for _, v := range values {
+		for _, part := range strings.Split(v, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
+}
+
+// GetFeedFilters lists the verticals the feed can be filtered by.
+//
+// Served rather than hard-coded in each client, which is the same rule the CTA
+// labels follow and is the whole reason the subject seam exists: registering a
+// vertical makes its chip appear in both apps on the next request, and shipping
+// real estate does not mean shipping an app release to name it.
+//
+// Only registered verticals appear. A chip that can never return a result is
+// worse than an absent one — the viewer reads the empty page as "nothing near
+// me" rather than "not built yet".
+func (h *ReelHandlers) GetFeedFilters(w http.ResponseWriter, r *http.Request) {
+	out := make([]map[string]any, 0)
+	if h.Subjects != nil {
+		for _, f := range h.Subjects.Facets() {
+			out = append(out, map[string]any{
+				"key":      string(f.Key),
+				"label":    f.Label,
+				"label_ar": f.LabelAr,
+			})
+		}
+	}
+	// Surfaces are not listed here. They are a fixed set the clients are built
+	// against and they change the *ordering*, not the contents — mixing them
+	// into a facet list would invite a client to render them as more chips.
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"verticals": out})
 }
 
 // emptyReason names why a page is empty, or "" when it is not.
@@ -744,7 +730,10 @@ func authorReelResponse(r *reels.Reel) map[string]any {
 	return out
 }
 
-func feedItemResponse(it feed.Item) map[string]any {
+// mediaBase is threaded in rather than read from a package global: the handler
+// owns the configuration, and a package-level base would make this function
+// untestable and its behaviour dependent on process start-up order.
+func feedItemResponse(it feed.Item, mediaBase string) map[string]any {
 	renditions := make([]map[string]any, 0, len(it.Renditions))
 	for _, r := range it.Renditions {
 		renditions = append(renditions, map[string]any{
@@ -770,8 +759,20 @@ func feedItemResponse(it feed.Item) map[string]any {
 		"duration_ms":  it.DurationMS,
 		"poster_key":   it.PosterKey,
 		"preview_key":  it.PreviewKey,
-		"lqip":         it.LQIP,
-		"renditions":   renditions,
+		// The absolute form, which is what a client can actually fetch.
+		//
+		// `poster_key` alone has been on the wire since Phase 2 and no client
+		// ever resolved it, because doing so means every client hard-coding the
+		// object store's hostname — and then getting it wrong in exactly one
+		// environment. /me/saves already composes the URL server-side; this is
+		// the same decision, applied to the surface that needs it most.
+		//
+		// Both are sent. The key is what an admin tool and the moderation queue
+		// want, and dropping it would be a breaking change for a saving of
+		// forty bytes.
+		"poster_url": mediaURL(mediaBase, it.PosterKey),
+		"lqip":       it.LQIP,
+		"renditions": renditions,
 		"counters": map[string]any{
 			"views":    it.Counters.Views,
 			"likes":    it.Counters.Likes,

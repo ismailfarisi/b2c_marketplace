@@ -276,6 +276,12 @@ func (s *Service) Unsave(ctx context.Context, userID, reelID uuid.UUID) error {
 	return s.repo.Unsave(ctx, userID, reelID)
 }
 
+// SavedCards is the Saved tab. See Repository.SavedReels — the words on each
+// card are the owning vertical's and are resolved by the caller.
+func (s *Service) SavedCards(ctx context.Context, userID uuid.UUID, limit int) ([]SavedCard, error) {
+	return s.repo.SavedReels(ctx, userID, limit)
+}
+
 func (s *Service) Saved(ctx context.Context, userID uuid.UUID, limit int) ([]uuid.UUID, error) {
 	return s.repo.SavedReelIDs(ctx, userID, limit)
 }

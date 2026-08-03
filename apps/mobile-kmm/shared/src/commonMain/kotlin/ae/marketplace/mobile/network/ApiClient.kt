@@ -62,11 +62,25 @@ object ApiClientFactory {
      * recovery worked while testing a client that could not produce the error it
      * recovers from.
      */
+    /**
+     * [onAuthLost] fires when a refresh token is rejected — spent, revoked, or
+     * belonging to an account that has been erased.
+     *
+     * It exists because clearing the store is only half of handling that. The
+     * client recovers correctly on its own: the next request goes out
+     * unauthenticated and public endpoints keep working. But nothing above it
+     * knows, so the shell keeps drawing the account tabs, every request to them
+     * 401s, and the viewer is told their network is unreliable. A callback here
+     * is the only point that sees the event at all — by design, since it is the
+     * one place that knows a refresh was attempted and failed rather than a
+     * request merely being unauthorised.
+     */
     fun create(
         baseUrl: String,
         tokens: TokenStore,
         identity: ViewerIdentity,
         engine: HttpClientEngine? = null,
+        onAuthLost: () -> Unit = {},
     ): HttpClient {
         val config: HttpClientConfig<*>.() -> Unit = {
         expectSuccess = true
@@ -106,6 +120,7 @@ object ApiClientFactory {
                         // an anonymous viewer — which is a working state — instead
                         // of retrying a dead token on every request.
                         tokens.clear()
+                        onAuthLost()
                         null
                     }
                 }
@@ -132,6 +147,45 @@ object ApiClientFactory {
         }
         }
 
+        return if (engine != null) HttpClient(engine, config) else HttpClient(config)
+    }
+
+    /**
+     * A bare client for presigned object-store PUTs. Deliberately not [create].
+     *
+     * Two things about the API client are actively wrong for this job.
+     *
+     * **The `Auth` plugin.** A presigned URL carries its own signature in the
+     * query string. Attaching `Authorization: Bearer …` to it makes S3 read the
+     * request as an attempt at SigV4 *header* authentication, and it rejects it.
+     * The symptom is a 403 on upload with a token that works everywhere else,
+     * and it is a genuinely hard afternoon to diagnose.
+     *
+     * **The ten-second timeout.** That number was chosen for a feed page, where
+     * failing fast and retrying beats a viewer watching a spinner. A twenty-
+     * megabyte video on a congested cell will not finish in ten seconds, and the
+     * client would abort it over and over with no error a seller could act on.
+     *
+     * No [ContentNegotiation] either: the body is bytes and the response is
+     * empty. And no `expectSuccess` — the store is outside the problem+json
+     * contract, so [ae.marketplace.mobile.sell.SellApi.uploadVideo] checks the
+     * status itself rather than letting a validator invent an [ApiException] for
+     * a response that has no problem document in it.
+     */
+    fun createUploader(engine: HttpClientEngine? = null): HttpClient {
+        val config: HttpClientConfig<*>.() -> Unit = {
+            install(HttpTimeout) {
+                // Ten minutes end to end, matching the two-hour presign loosely:
+                // long enough for a bad connection to finish a sixty-second clip,
+                // short enough that a dead socket does not hold the coroutine for
+                // the life of the process.
+                requestTimeoutMillis = 10 * 60 * 1000
+                connectTimeoutMillis = 15_000
+                // Per-read, not total. A stalled upload is detected in half a
+                // minute rather than in ten.
+                socketTimeoutMillis = 30_000
+            }
+        }
         return if (engine != null) HttpClient(engine, config) else HttpClient(config)
     }
 }

@@ -3,6 +3,21 @@
     <string name="app_name">Marketplace</string>
 
     <!--
+        District names, for display only.
+        The canonical English form in Place.label is what travels to the server
+        and what a listing is stored under; these are what a person reads. If
+        the two were the same string, an Arabic seller's listing would be filed
+        under a different place name from an English seller's in the same
+        building, and every geo-grouped report would split down the middle.
+    -->
+    <string name="place_dubai_marina">Dubai Marina</string>
+    <string name="place_downtown_dubai">Downtown Dubai</string>
+    <string name="place_business_bay">Business Bay</string>
+    <string name="place_al_quoz">Al Quoz</string>
+    <string name="place_al_barsha">Al Barsha</string>
+    <string name="place_deira">Deira</string>
+
+    <!--
         The overlay's words.
 
         Numbers reach these as format arguments rather than being concatenated in
@@ -14,6 +29,10 @@
     <string name="time_remaining_ms">%1$02d:%2$02d left</string>
     <string name="time_window">%1$dh %2$dm of %3$dh</string>
     <string name="time_order_by">order by %1$02d:%2$02d</string>
+    <!-- A window that has not opened yet. The opposite instruction to
+         time_remaining, so it is a separate string rather than a reuse. -->
+    <string name="time_opens_h">opens in %1$dh %2$dm</string>
+    <string name="time_opens_m">opens in %1$dm</string>
     <string name="time_closed">closed</string>
 
     <!-- Feed surfaces. Short by necessity: four tabs share one row. -->
@@ -36,6 +55,275 @@
     <string name="empty_eligible">Nothing is available at this location yet.</string>
     <string name="feed_failed">Could not load the feed.</string>
 
+    <!--
+        The filter sheet.
+
+        "Show" rather than "Category": there is no category taxonomy in this
+        product, and calling the vertical filter a category would promise a
+        browse tree that does not exist.
+    -->
+    <string name="filter_show">SHOW</string>
+    <string name="filter_all">All</string>
+    <string name="filter_location">LOCATION</string>
+    <string name="filter_use_my_location">Use my location</string>
+    <string name="filter_nearby_you">Near you</string>
+    <string name="filter_reach_note">There is no distance filter. The feed only ever shows what can actually reach the location you pick.</string>
+    <string name="filter_location_denied">Location permission declined — showing Dubai Marina.</string>
+
+    <!--
+        Bottom navigation. One word each, because five labels share a phone
+        width and Arabic runs longer than English for most of them.
+    -->
+    <string name="nav_feed">Feed</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_sell">Sell</string>
+    <string name="nav_saved">Saved</string>
+    <string name="nav_me">Me</string>
+    <string name="nav_not_built">This screen has not been built yet. The tab is here so the shape of the product is visible.</string>
+
+    <!--
+        The sell flow.
+
+        Note what is absent: any word about cars. Every label the seller reads on
+        the form itself — "Car", "KM", "Price", "Spec", "Open listing · 30 days",
+        "Add mulkiya to earn Verified" — comes from the server, because the field
+        list is the vertical's and hard-coding it here would mean shipping an app
+        release to launch property. What is here is only the chrome around it.
+    -->
+    <string name="sell_what_listing">What are you listing?</string>
+    <string name="sell_nothing_sellable">Nothing can be listed from the app yet.</string>
+    <string name="sell_three_fields">A few details, then you\'re live</string>
+    <string name="sell_next_clock">Next · set the clock</string>
+    <string name="sell_how_long">How long should it run?</string>
+    <string name="sell_emirate_area">EMIRATE &amp; AREA</string>
+    <string name="sell_publish">Publish</string>
+    <string name="sell_place_required">Pick where it is. Buyers only ever see listings that can reach them.</string>
+    <string name="sell_only_term">The only listing term available for this today.</string>
+    <string name="sell_trust_not_built">Document upload is not built yet.</string>
+    <!-- Shown under the trust row. Phrased so an advertiser who has just typed a
+         permit number does not read it as "that was wasted": the number lands,
+         the photograph is what cannot be attached yet. -->
+    <string name="sell_trust_doc_later">You can attach the document later. The number above is enough to submit.</string>
+
+    <!--
+        The trust document, on the Live screen.
+        None of these says "Verified". The badge is the reviewer's to grant, and
+        naming it before that has happened is the same mistake as calling a reel
+        live while it is with a moderator — worse, because the badge is the one
+        thing a buyer trusts.
+    -->
+    <string name="trust_choose">Choose a file</string>
+    <string name="trust_uploading">Uploading…</string>
+    <string name="trust_submitted">Received. A person checks it before it counts.</string>
+    <string name="trust_approved">Approved — you have %1$s</string>
+    <string name="trust_rejected">Not accepted.</string>
+    <string name="trust_try_again">Choose another file</string>
+
+    <!-- Field-level problems. The bound arrives as a number; the sentence is here
+         so a translator can reach it. -->
+    <string name="sell_field_required">Needed before you can publish.</string>
+    <string name="sell_field_number">Digits only.</string>
+    <string name="sell_field_option">Pick one of the options.</string>
+    <string name="sell_field_min">At least %1$s %2$s.</string>
+    <string name="sell_field_max">At most %1$s %2$s.</string>
+
+    <!--
+        Sign-in, which appears only in front of the Sell tab.
+
+        The reason is stated rather than assumed. A wall with no explanation
+        reads as a data grab; this one is the seller's own benefit, because the
+        phone number is how a buyer reaches them and it never becomes public.
+    -->
+    <string name="signin_title">Sign in to list</string>
+    <string name="signin_why">Your listing belongs to an account, and buyers message you here. Your number is never shown to them.</string>
+    <string name="signin_phone_hint">+971 50 000 0000</string>
+    <string name="signin_send_code">Send code</string>
+    <string name="signin_code_hint">6-digit code</string>
+    <string name="signin_verify">Verify</string>
+    <string name="signin_change_number">Change number</string>
+    <string name="signin_sent_to">We sent a code to %1$s</string>
+    <string name="signin_resend">Resend code</string>
+    <string name="signin_resend_in">Resend in %1$ds</string>
+
+    <!--
+        Sign-in failures, one per thing the viewer should do next.
+
+        All five were a single line reading whatever exception the HTTP client
+        happened to throw. The distinction that matters most is the third: a
+        challenge that has expired, been used, or run out of attempts cannot be
+        rescued by retyping, and telling someone their code is wrong when it is
+        merely too late leaves them typing the same six digits until they give
+        up.
+    -->
+    <string name="signin_err_phone">That number does not look right. Include the country code.</string>
+    <string name="signin_err_code">That code is not right. Check the message and try again.</string>
+    <string name="signin_err_stale">That code has expired. Ask for a new one.</string>
+    <string name="signin_err_too_many">Too many attempts. Wait a minute, then try again.</string>
+    <string name="signin_err_offline">No connection. Check your network and try again.</string>
+    <string name="signin_err_unknown">Sign-in is not working right now. Try again shortly.</string>
+
+    <!--
+        Shown only when a session ends without the viewer ending it — a revoked
+        or expired refresh token. Saying this after someone taps Sign out would
+        be telling them what they just did.
+    -->
+    <string name="session_expired">You have been signed out. Sign in again to continue.</string>
+
+    <!--
+        Failures, one per thing the viewer can do about it.
+
+        These replaced `e.message` on every screen in the app. That string was
+        whatever Ktor, kotlinx.serialization or the platform socket layer
+        produced — in English regardless of locale, frequently a class name, and
+        impossible to branch on. A viewer in a lift read
+        "javax.net.ssl.SSLException" and concluded the app was broken.
+
+        Every line here ends in something to do, except the two that genuinely
+        have nothing: a 403 and a 404 are final, and pretending otherwise is
+        what puts a Retry button in front of someone it cannot help.
+    -->
+    <string name="err_offline">No connection. Check your network and try again.</string>
+    <string name="err_timeout">That took too long. Try again.</string>
+    <string name="err_unauthorized">Sign in to see this.</string>
+    <string name="err_forbidden">You do not have access to this.</string>
+    <string name="err_not_found">This is no longer available.</string>
+    <string name="err_rate_limited">Too many requests. Wait a moment and try again.</string>
+    <string name="err_rejected">That could not be done.</string>
+    <string name="err_server">Something went wrong on our side. Try again shortly.</string>
+    <string name="err_unknown">Something went wrong. Try again.</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_close">Close</string>
+
+    <!-- The recorder. -->
+    <string name="sell_camera_needed">The camera is how you list</string>
+    <string name="sell_camera_why">This product only lists things people have filmed. There is no photo upload.</string>
+    <string name="sell_camera_allow">Allow camera</string>
+    <!-- Shown once the system will no longer prompt. Re-asking there does
+         nothing, so the button has to point somewhere it can actually be
+         changed, and the words have to explain why the last button did not
+         work. -->
+    <string name="sell_camera_blocked">Camera access is turned off for this app. You can turn it back on in Settings.</string>
+    <string name="sell_camera_settings">Open settings</string>
+
+    <!--
+        The live screen.
+
+        Separate strings per pipeline state rather than one "Done". A reel in
+        review is not live, and telling the seller it is produces the worst
+        sequence there is: they share the link, their friend sees nothing, and
+        they conclude the platform is broken.
+    -->
+    <string name="sell_uploading">Uploading your video</string>
+    <string name="sell_uploading_detail">Keep the app open until this finishes.</string>
+    <string name="sell_upload_failed">The upload did not finish</string>
+    <string name="sell_upload_failed_detail">Your listing is saved. Retry the video.</string>
+    <string name="sell_retry_upload">Retry upload</string>
+    <string name="sell_publish_refused">Your video is up, the listing was not accepted</string>
+    <string name="sell_publish_refused_detail">Nothing is lost. Try publishing again.</string>
+    <string name="sell_retry_publish">Try publishing again</string>
+    <string name="sell_processing">Processing</string>
+    <string name="sell_processing_detail">Converting the video for playback.</string>
+    <string name="sell_processing_failed">The video could not be processed</string>
+    <string name="sell_processing_failed_detail">Record it again — nothing else is lost.</string>
+    <string name="sell_in_review">With a reviewer</string>
+    <string name="sell_in_review_detail">A person checks every first listing. It appears in the feed once they pass it.</string>
+    <string name="sell_live_in">You\'re live in %1$s</string>
+    <string name="sell_live_detail">Buyers near you can see it now.</string>
+    <string name="sell_rejected">Not published</string>
+    <string name="sell_rejected_detail">This one did not pass review.</string>
+    <string name="sell_stat_views">Views</string>
+    <string name="sell_stat_saves">Saves</string>
+    <string name="sell_stat_comments">Comments</string>
+    <string name="sell_see_in_feed">See it in the feed</string>
+    <string name="sell_done">Done</string>
+
+    <!--
+        Search, Saved, Me and messaging.
+
+        Three separate empty states for search rather than one "No results":
+        "type something", "nothing matched" and "that failed" are three
+        different facts, and collapsing them reports a working search as broken
+        to the person who has not searched yet.
+    -->
+    <string name="search_hint">Search cars</string>
+    <string name="search_prompt">Search by make, model or year.</string>
+    <string name="search_prompt_hint">Try “Patrol 2021” or “Land Cruiser”.</string>
+    <string name="search_none">Nothing matched “%1$s”.</string>
+    <string name="search_none_hint">Check the spelling, or widen the year.</string>
+    <string name="search_count">%1$d results</string>
+    <string name="search_promoted">PROMOTED</string>
+    <string name="search_filters">Filters</string>
+    <!-- The count is always on the button. A filter still applied from three
+         searches ago is the commonest way a search screen lies. -->
+    <string name="search_filters_n">Filters · %1$d</string>
+    <string name="filters_title">Narrow it down</string>
+    <string name="filters_clear">Clear</string>
+    <string name="filters_apply">Show results</string>
+    <string name="filters_price">Price (AED)</string>
+    <string name="filters_min">No minimum</string>
+    <string name="filters_max">No maximum</string>
+    <string name="filters_year">Year</string>
+    <string name="filters_from">From</string>
+    <string name="filters_to">To</string>
+    <string name="filters_mileage">Mileage</string>
+    <string name="filters_mileage_hint">Up to … km</string>
+    <string name="filters_spec">Regional spec</string>
+    <string name="filters_body">Body type</string>
+    <string name="filters_seller">Seller</string>
+    <string name="filters_sort">Sort</string>
+
+    <string name="saved_empty">Nothing saved yet.</string>
+    <string name="saved_empty_hint">Tap the bookmark on a reel to keep it here.</string>
+    <string name="saved_untitled">Saved reel</string>
+    <string name="saved_gone">No longer available</string>
+
+    <string name="me_messages">Messages</string>
+    <string name="me_your_listings">YOUR LISTINGS</string>
+    <string name="me_no_listings">You have not listed anything yet.</string>
+    <string name="me_no_listings_hint">Open Sell to film one. It takes about a minute.</string>
+    <string name="me_sign_out">Sign out</string>
+
+    <!-- Listing states, as a seller reads them. -->
+    <string name="status_active">Live</string>
+    <string name="status_review">In review</string>
+    <string name="status_draft">Draft</string>
+    <string name="status_rejected">Rejected</string>
+    <string name="status_sold">Sold</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_expired">Expired</string>
+
+    <!--
+        The reel's state, when that is what is holding a listing up.
+
+        A seller whose listing says "in review" while the video is still
+        transcoding is being told the wrong reason, and will wait for the wrong
+        thing.
+    -->
+    <string name="reel_note_processing">Video still processing.</string>
+    <string name="reel_note_review">Video is with a reviewer.</string>
+    <string name="reel_note_rejected">Video was not approved.</string>
+    <string name="reel_note_expired">Video upload never finished.</string>
+    <string name="reel_note_failed">Video could not be processed.</string>
+
+    <string name="inbox_empty">No messages yet.</string>
+    <string name="inbox_empty_hint">They start when a buyer taps the button on one of your reels.</string>
+    <string name="inbox_untitled">Conversation</string>
+    <string name="thread_empty">Say hello.</string>
+    <string name="thread_empty_hint">Keep it here — we can only help if something goes wrong on the platform.</string>
+    <string name="thread_hint">Message</string>
+    <string name="thread_send">Send</string>
+
+    <!--
+        Message states, said plainly under the bubble.
+
+        A silently altered or silently withheld message is the most alienating
+        thing a messaging product can do: the sender assumes they are being
+        ignored, and goes looking for a phone number.
+    -->
+    <string name="msg_held">Being reviewed — not delivered yet.</string>
+    <string name="msg_redacted">Contact details were removed.</string>
+    <string name="msg_blocked">Not delivered.</string>
+
     <plurals name="ago_minutes">
         <item quantity="one">listed %d minute ago</item>
         <item quantity="other">listed %d minutes ago</item>
@@ -52,4 +340,19 @@
         <item quantity="one">listed %dw ago</item>
         <item quantity="other">listed %dw ago</item>
     </plurals>
+    <!-- Recorder controls -->
+    <string name="sell_length">Length</string>
+    <string name="sell_timer">Timer</string>
+    <string name="sell_flash">Flash</string>
+    <string name="sell_off">Off</string>
+    <string name="sell_gallery">Gallery</string>
+    <string name="sell_flip_camera">Flip camera</string>
+    <string name="sell_seconds_short">%1$ds</string>
+    <!-- Video only, and said out loud. The wedge of this product is that its
+         supply is filmed; a picker that accepted images would fill the feed
+         with the same stills every classifieds site already has. -->
+    <string name="sell_pick_video">Choose a video</string>
+    <string name="sell_clip_too_long">That video is longer than %1$d seconds. Choose a shorter one or trim it first.</string>
+    <string name="sell_clip_too_large">That video is too large to upload. Choose a shorter one.</string>
+    <string name="sell_clip_unreadable">That video could not be read. Try another one.</string>
 </resources>

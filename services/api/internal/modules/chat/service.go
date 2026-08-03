@@ -353,12 +353,21 @@ func (s *Service) Inbox(ctx context.Context, userID uuid.UUID, limit int) ([]Inb
 		limit = 50
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT c.id, c.listing_id, COALESCE(l.title, l.reference_no),
+		SELECT c.id, c.listing_id,
+		       -- Composed when the seller gave no headline, which is every
+		       -- listing the app creates. COALESCE onto the reference number
+		       -- alone left both parties looking at "V-2607-TDUV27" and having
+		       -- to remember which car that was.
+		       COALESCE(NULLIF(l.title, ''),
+		                l.year || ' ' || mk.name || ' ' || md.name,
+		                l.reference_no),
 		       CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END,
 		       CASE WHEN c.buyer_id = $1 THEN c.buyer_unread ELSE c.seller_unread END,
 		       c.last_message_at, c.state
 		  FROM conversations c
 		  JOIN vehicle_listings l ON l.id = c.listing_id
+		  JOIN vehicle_makes mk ON mk.id = l.make_id
+		  JOIN vehicle_models md ON md.id = l.model_id
 		 WHERE (c.buyer_id = $1 OR c.seller_id = $1) AND c.state <> 'blocked'
 		 ORDER BY c.last_message_at DESC NULLS LAST
 		 LIMIT $2`,

@@ -15,7 +15,8 @@ struct FeedScreen: View {
     @State private var items: [FeedItem] = []
     @State private var surface: FeedSurface = FeedSurface.forYou
     @State private var emptyReason: FeedEmptyReason?
-    @State private var error: String?
+    @State private var error: Failure?
+    @State private var loading = false
     @State private var clockSkewMillis: Int64 = 0
 
     var body: some View {
@@ -28,8 +29,11 @@ struct FeedScreen: View {
                     // replacing it. That is the point of naming *why* a surface
                     // is empty: the message exists to send the viewer to another
                     // tab, and a screen with no tabs gives them nowhere to go.
-                    FeedEmptyStateView(reason: emptyReason, error: error)
-                        .frame(width: geo.size.width, height: geo.size.height)
+                    FeedEmptyStateView(
+                        reason: emptyReason, error: error, loading: loading,
+                        onRetry: { viewModel.refresh() }
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {
@@ -89,6 +93,7 @@ struct FeedScreen: View {
                 surface = state.surface
                 emptyReason = state.emptyReason
                 error = state.error
+                loading = state.loading
                 clockSkewMillis = state.clockSkewMillis
             }
         }
@@ -160,18 +165,46 @@ struct FeedTabsView: View {
 /// live" are the same empty array.
 struct FeedEmptyStateView: View {
     let reason: FeedEmptyReason?
-    let error: String?
+    let error: Failure?
+    let loading: Bool
+    let onRetry: () -> Void
 
     var body: some View {
-        Text(NSLocalizedString(key, comment: ""))
-            .foregroundStyle(.white.opacity(0.7))
-            .font(.system(size: 14))
-            .multilineTextAlignment(.center)
-            .padding(32)
+        Group {
+            if loading {
+                // Ordered before the failure on purpose: a retry sets both,
+                // and leaving the previous error under a spinner tells the
+                // viewer the retry has already failed.
+                ProgressView().tint(.white.opacity(0.7))
+            } else if let error {
+                VStack(spacing: Space.small) {
+                    Text(error.words)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .font(.system(size: 14))
+                        .multilineTextAlignment(.center)
+                    // Only where retrying could work. A retry button under
+                    // "You are signed out" cannot succeed, and the viewer
+                    // presses it three times before believing it.
+                    if error.canRetry {
+                        Button(action: onRetry) {
+                            Text("action_retry")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Palette.accent)
+                                .frame(minHeight: Space.touch)
+                        }
+                    }
+                }
+            } else {
+                Text(NSLocalizedString(emptyKey, comment: ""))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 14))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(32)
     }
 
-    private var key: String {
-        if error != nil { return "feed_failed" }
+    private var emptyKey: String {
         guard let reason else { return "empty_eligible" }
         if reason == FeedEmptyReason.nothingLive { return "empty_live" }
         if reason == FeedEmptyReason.nothingClosing { return "empty_closing" }
@@ -191,7 +224,9 @@ private struct ReelPage: View {
 
             // Time bar, badge, time pill, product line, CTAs. One skeleton for
             // every vertical; only the time signal differs between them.
-            ReelOverlay(item: item, skewMillis: skewMillis) { action in
+            // navBarHeight is added by the overlay itself; the bar is drawn by
+            // RootView over this view and neither knows about the other.
+            ReelOverlay(item: item, skewMillis: skewMillis, chromeBottom: navBarHeight) { action in
                 viewModel.onActionClick(actionId: action.id, reelId: item.id)
             }
         }

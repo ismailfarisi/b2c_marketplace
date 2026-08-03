@@ -78,6 +78,26 @@ type Result struct {
 	PublishedAt  *time.Time
 	DistanceM    *float64
 	Promoted     bool
+	// PosterKey and LQIP come from the listing's newest published reel.
+	//
+	// A search result is a card, not a reel, and this is the only picture on it.
+	// Without one the results list is a column of text rows for a product whose
+	// entire premise is that people choose things by looking at them — and every
+	// competing site in this market shows a photograph.
+	//
+	// Empty for a listing created through the web form, which has no video. That
+	// is a real and permanent state rather than a loading one, which is why the
+	// client falls back to a flat block rather than a spinner.
+	PosterKey string
+	LQIP      string
+	// ReelID is the video this card is a still from, when there is one.
+	//
+	// Carried so a search result can open the reel rather than only a chat.
+	// Search used to go straight from a row to a conversation, skipping the
+	// video entirely — on a platform whose whole premise is that people decide
+	// by watching, which made the highest-intent surface the one place you
+	// could not watch anything.
+	ReelID uuid.NullUUID
 }
 
 // ResolveTaxonomy turns the slugs a client sends into ids.
@@ -141,19 +161,20 @@ func (r *Repository) Insert(ctx context.Context, tx pgx.Tx, in CreateInput) (uui
 			make_id, model_id, year, mileage_km,
 			transmission, fuel_type, body_type, regional_spec, vin,
 			price_minor, currency, title, description,
-			point, radius_m, status)
+			point, radius_m, emirate, city, status)
 		VALUES (
 			generate_listing_reference(), $1, $2, $3,
 			$4, $5, $6, $7,
 			NULLIF($8, ''), NULLIF($9, ''), NULLIF($10, ''), $11, NULLIF($12, ''),
 			$13, $14, NULLIF($15, ''), NULLIF($16, ''),
-			ST_SetSRID(ST_MakePoint($17, $18), 4326)::geography, $19, 'draft')
+			ST_SetSRID(ST_MakePoint($17, $18), 4326)::geography, $19,
+			NULLIF($20, ''), NULLIF($21, ''), 'draft')
 		RETURNING id, reference_no`,
 		in.SellerID, in.SellerKind, in.DealerID,
 		in.MakeID, in.ModelID, d.Year, d.MileageKM,
 		d.Transmission, d.FuelType, d.BodyType, d.RegionalSpec, vin,
 		d.PriceMinor, currency, d.Title, d.Description,
-		d.Lng, d.Lat, radius,
+		d.Lng, d.Lat, radius, d.Emirate, d.City,
 	).Scan(&id, &ref)
 	if err != nil {
 		return uuid.Nil, "", fmt.Errorf("insert listing: %w", err)
@@ -310,7 +331,8 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Result, int64, err
 			&v.MakeID, &v.ModelID, &v.TrimID, &v.Year, &v.MileageKM,
 			&v.Transmission, &v.FuelType, &v.BodyType, &v.RegionalSpec, &v.Colour,
 			&v.PriceMinor, &v.Currency, &v.IsNegotiable, &v.Title,
-			&v.Emirate, &v.City, &v.PublishedAt, &v.DistanceM, &v.Promoted, &total,
+			&v.Emirate, &v.City, &v.PublishedAt, &v.DistanceM, &v.Promoted,
+			&v.PosterKey, &v.LQIP, &v.ReelID, &total,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan listing: %w", err)
 		}

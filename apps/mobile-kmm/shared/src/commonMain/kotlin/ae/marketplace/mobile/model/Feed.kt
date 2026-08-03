@@ -54,6 +54,15 @@ data class FeedItem(
     val caption: String = "",
     @SerialName("duration_ms") val durationMs: Int = 0,
     @SerialName("poster_key") val posterKey: String = "",
+    /**
+     * The still, absolute and fetchable.
+     *
+     * Composed server-side rather than derived from [posterKey], which is the
+     * key alone and would need every client to hard-code the object store's
+     * hostname — then get it wrong in exactly one environment. Both are on the
+     * wire; the key is what the moderation tools want.
+     */
+    @SerialName("poster_url") val posterUrl: String = "",
     @SerialName("preview_key") val previewKey: String = "",
     /**
      * BlurHash or a base64 micro-thumb, inline. The feed paints this before any
@@ -81,6 +90,28 @@ data class FeedItem(
     @SerialName("time_signal") val timeSignal: TimeSignal? = null,
     /** The badge and the lines above the CTA. Null when the subject has no provider. */
     val summary: SubjectSummary? = null,
+)
+
+/**
+ * The verticals this feed can be filtered by, as the server lists them.
+ *
+ * Served rather than compiled in. A vertical registers a provider and its chip
+ * appears here on the next request — which is the same rule [ResolvedAction]
+ * follows for CTA labels, and for the same reason: a hard-coded list means
+ * shipping real estate requires shipping an app release to name it.
+ */
+@Serializable
+data class FeedFilters(
+    val verticals: List<Vertical> = emptyList(),
+)
+
+@Serializable
+data class Vertical(
+    /** Sent back as `subject_type`. An opaque wire value — never rendered. */
+    val key: String,
+    /** The vertical's own word for itself. "Cars", not "vehicle_listing". */
+    val label: String,
+    @SerialName("label_ar") val labelAr: String = "",
 )
 
 /**

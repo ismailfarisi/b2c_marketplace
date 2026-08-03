@@ -1,11 +1,15 @@
 package ae.marketplace.mobile.feed
 
 import ae.marketplace.mobile.model.FeedItem
+import ae.marketplace.mobile.network.Failure
+import ae.marketplace.mobile.network.toFailure
+import ae.marketplace.mobile.model.Vertical
 import ae.marketplace.mobile.model.ClientEvent
 import ae.marketplace.mobile.events.EventQueue
 import ae.marketplace.mobile.playback.PlaybackCoordinator
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +19,24 @@ data class FeedUiState(
     val items: List<FeedItem> = emptyList(),
     val loading: Boolean = false,
     val exhausted: Boolean = false,
-    val error: String? = null,
+    /**
+     * Why the last load failed, classified.
+     *
+     * A [Failure] rather than the `e.message` this used to hold, and the feed
+     * was the last screen in the app still carrying the string. Three separate
+     * problems with it, and the third is the one that shipped:
+     *
+     *  - untranslatable. There is no Arabic for a Ktor exception message, and
+     *    half of them are a class name.
+     *  - unbranchable. Offline and "the server is down" want different words
+     *    and only one of them is worth a retry button.
+     *  - **`e.message` is nullable.** A throwable with no message set this back
+     *    to null, which is this field's word for *nothing went wrong* — so a
+     *    failed load fell through to [emptyReason] and the viewer was told the
+     *    marketplace had nothing for them. Being wrongly told a shop is empty
+     *    is worse than being told the connection dropped: one of them you retry.
+     */
+    val error: Failure? = null,
     val rankingProfile: String? = null,
     /**
      * The tab the viewer tapped. Highlighted immediately, before the page it
@@ -45,7 +66,41 @@ data class FeedUiState(
      * re-sampling per tick freezes every countdown in the feed.
      */
     val clockSkewMillis: Long = 0L,
+    /**
+     * The verticals the server says this feed can be filtered by, in the order
+     * it gave them. Empty until the first fetch lands, and empty forever in a
+     * deployment with no providers registered — in which case the filter row
+     * should not be drawn at all rather than drawn with one "All" chip.
+     */
+    val verticals: List<Vertical> = emptyList(),
+    /** The selected vertical's key, or null for all of them. */
+    val selectedVertical: String? = null,
+    /** Where the feed is being served for. Never null — see LocationChoice. */
+    val lat: Double = 0.0,
+    val lng: Double = 0.0,
+    /**
+     * A label for the current point, when it came from a named place. Empty when
+     * it came from the device, because the client has no reverse geocoder and
+     * "25.08, 55.14" is not a location a person recognises.
+     */
+    val locationLabel: String = "",
 )
+
+/**
+ * One reel, opened deliberately rather than served.
+ *
+ * [reelId] outlives [item] on purpose: it is set the moment the viewer taps,
+ * before anything has been fetched, so a late response for a reel they have
+ * since dismissed can be recognised and dropped.
+ */
+data class FocusedReelState(
+    val reelId: String? = null,
+    val item: FeedItem? = null,
+    val loading: Boolean = false,
+    val error: Failure? = null,
+) {
+    val open: Boolean get() = reelId != null
+}
 
 /**
  * The feed's state, shared.
@@ -71,15 +126,88 @@ class FeedViewModel(
     private val _state = MutableStateFlow(FeedUiState())
     val state: StateFlow<FeedUiState> = _state.asStateFlow()
 
+    private val _focused = MutableStateFlow(FocusedReelState())
+
+    /**
+     * A single reel opened over the feed, or nothing.
+     *
+     * Separate from [state] rather than a nullable field on it, because every
+     * consumer of the feed's list state would otherwise recompose whenever this
+     * changed — including the pager, which has no interest in it.
+     */
+    val focused: StateFlow<FocusedReelState> = _focused.asStateFlow()
+
+    private var refreshJob: Job? = null
+
     private var lat: Double = 0.0
     private var lng: Double = 0.0
     private var categoryId: String? = null
 
-    fun start(lat: Double, lng: Double, categoryId: String? = null) {
+    fun start(lat: Double, lng: Double, categoryId: String? = null, locationLabel: String = "") {
         this.lat = lat
         this.lng = lng
         this.categoryId = categoryId
+        _state.value = _state.value.copy(lat = lat, lng = lng, locationLabel = locationLabel)
         events.start()
+        loadFilters()
+        refresh()
+    }
+
+    /**
+     * Fetches the filter row once.
+     *
+     * Failure is silent and the row simply does not appear. A filter list is
+     * navigation furniture — surfacing its failure as an error over a feed that
+     * loaded perfectly well would report a broken app to someone holding a
+     * working one.
+     */
+    private fun loadFilters() {
+        viewModelScope.launch {
+            runCatching { api.filters() }
+                .onSuccess { _state.value = _state.value.copy(verticals = it.verticals) }
+        }
+    }
+
+    /**
+     * The viewer picked a vertical, or cleared it by passing null.
+     *
+     * A new filter is a new feed, so the pager resets — same reasoning as
+     * [onSurfaceSelected]: the cursor carries an exclusion set built for the
+     * query that produced it, and reusing it would page one feed with another's
+     * memory.
+     */
+    fun onVerticalSelected(key: String?) {
+        if (_state.value.selectedVertical == key) return
+        playback.onPause()
+        _state.value = _state.value.copy(
+            selectedVertical = key,
+            items = emptyList(),
+            emptyReason = null,
+            exhausted = false,
+        )
+        refresh()
+    }
+
+    /**
+     * The viewer moved the feed somewhere else.
+     *
+     * The whole product is local discovery, so this is not a filter over the
+     * current results — it is a different feed, and every candidate source is
+     * geo-scoped. Hence the same reset.
+     */
+    fun onLocationSelected(lat: Double, lng: Double, label: String) {
+        if (this.lat == lat && this.lng == lng) return
+        this.lat = lat
+        this.lng = lng
+        playback.onPause()
+        _state.value = _state.value.copy(
+            lat = lat,
+            lng = lng,
+            locationLabel = label,
+            items = emptyList(),
+            emptyReason = null,
+            exhausted = false,
+        )
         refresh()
     }
 
@@ -117,13 +245,25 @@ class FeedViewModel(
 
     fun refresh() {
         val surface = _state.value.surface
-        viewModelScope.launch {
+        val vertical = _state.value.selectedVertical
+        // The tab the viewer just left is not worth finishing. The pager drops
+        // a stale page on its own, so this is not what makes the switch correct
+        // — it is what stops a superseded request from spending the viewer's
+        // data and then resolving into an emit() for a surface they left.
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            runCatching { pager.refresh(lat, lng, categoryId, surface) }
-                .onSuccess { emit() }
-                .onFailure { e ->
-                    _state.value = _state.value.copy(loading = false, error = e.message)
-                }
+            try {
+                pager.refresh(lat, lng, categoryId, surface, vertical)
+                emit()
+            } catch (e: Throwable) {
+                // toFailure rethrows CancellationException rather than
+                // classifying it, which is the whole point of calling it here:
+                // `runCatching` used to swallow the cancellation above and
+                // paint an error over a feed that was working exactly as
+                // designed.
+                _state.value = _state.value.copy(loading = false, error = e.toFailure())
+            }
         }
     }
 
@@ -140,10 +280,22 @@ class FeedViewModel(
 
         if (pager.shouldLoadMore(index)) {
             val surface = _state.value.surface
+            val vertical = _state.value.selectedVertical
             viewModelScope.launch {
-                runCatching { pager.loadNext(lat, lng, categoryId, surface) }
-                    .onSuccess { if (it.isNotEmpty()) emit() else emit() }
-                    .onFailure { /* Keep the feed on screen. The next swipe retries. */ }
+                try {
+                    pager.loadNext(lat, lng, categoryId, surface, vertical)
+                    // Emitted even for an empty page: that is how `exhausted`
+                    // reaches the UI, and it is the difference between a feed
+                    // that says it has reached the end and one that spins at
+                    // the bottom forever.
+                    emit()
+                } catch (e: Throwable) {
+                    // Rethrown when it is a cancellation; otherwise the feed
+                    // stays on screen and the next swipe retries. A prefetch
+                    // that failed is not worth an error over reels the viewer
+                    // is still reading.
+                    e.toFailure()
+                }
             }
         }
     }
@@ -227,6 +379,76 @@ class FeedViewModel(
      * ever appears in common code.
      */
     fun playerFor(reelId: String) = playback.playerFor(reelId)
+
+    // ── One reel, on its own ─────────────────────────────────────────────────
+
+    /**
+     * Opens a single reel over the feed — the destination for a Saved row or a
+     * search result.
+     *
+     * # Why this lives on the feed's state holder
+     *
+     * It could have been its own view model, and that was the first instinct.
+     * It would also have meant a second [PlaybackCoordinator], which owns a
+     * pool of hardware decoders. On a mid-range Android device those are a
+     * genuinely scarce resource: a second pool held open behind the first is
+     * how the *next* video anywhere in the app fails to start, with no error
+     * that names the cause.
+     *
+     * So the focused reel borrows this coordinator. It is the same machinery,
+     * one item long, and the feed list underneath is untouched — which is the
+     * other half of the requirement, because a viewer who dismisses this must
+     * come back to where they were rather than to the top.
+     */
+    fun openReel(reelId: String) {
+        if (_focused.value.reelId == reelId && _focused.value.item != null) return
+
+        // The list is paused before the fetch, not after it. The coordinator
+        // would otherwise keep the feed's current reel playing — audio and all
+        // — underneath a screen that has already visually replaced it.
+        playback.onPause()
+
+        _focused.value = FocusedReelState(reelId = reelId, loading = true)
+        viewModelScope.launch {
+            runCatching { api.reel(reelId, lat.takeIf { it != 0.0 }, lng.takeIf { it != 0.0 }) }
+                .onSuccess { item ->
+                    // Guarded against a stale response: a viewer can dismiss
+                    // and open a different reel while the first is in flight,
+                    // and without this the first one wins by arriving second.
+                    if (_focused.value.reelId != reelId) return@onSuccess
+                    _focused.value = FocusedReelState(reelId = reelId, item = item)
+                    playback.onVisible(0, listOf(item))
+                }
+                .onFailure { e ->
+                    if (_focused.value.reelId != reelId) return@onFailure
+                    _focused.value = FocusedReelState(reelId = reelId, error = e.toFailure())
+                }
+        }
+    }
+
+    /**
+     * Closes it and hands playback back to the list.
+     *
+     * `onVisible` with the pager's own index rather than `onForeground`,
+     * because the coordinator's notion of "current" was moved to the focused
+     * reel and has to be moved back explicitly — otherwise the feed resumes
+     * with the wrong reel considered active and credits its watch time to a
+     * reel nobody is looking at.
+     */
+    fun closeReel(returnToIndex: Int) {
+        _focused.value = FocusedReelState()
+        val items = _state.value.items
+        if (items.isNotEmpty()) {
+            playback.onVisible(returnToIndex.coerceIn(0, items.lastIndex), items)
+        }
+    }
+
+    /** Retries a failed fetch, keeping the same target. */
+    fun retryReel() {
+        val id = _focused.value.reelId ?: return
+        _focused.value = FocusedReelState()
+        openReel(id)
+    }
 
     fun onAppBackgrounded() {
         playback.onPause()

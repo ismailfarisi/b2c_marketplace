@@ -1,0 +1,143 @@
+name: Release
+
+# Publishes the deployable artifact: three container images, tagged by commit
+# and by version.
+#
+# This stops short of deploying them, and that is deliberate rather than
+# unfinished. A deploy step needs a cluster, a registry pull secret and a
+# production database that exist outside this repository; writing one against
+# invented names would produce a workflow that looks like a deploy pipeline and
+# fails on first use. What is here is the half that is genuinely repository
+# work — reproducible, versioned images — and the half that needs an
+# environment is named in the summary rather than faked.
+#
+# To add the other half: give the repository a `production` environment with
+# its secrets, and append a job that runs the migrations and rolls the images.
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: Build and publish ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # GHCR only. No cloud credentials are needed to produce the artifact,
+      # which is the reason this job can exist at all in a repository with no
+      # infrastructure attached to it yet.
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, worker, feed]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}
+          # The commit SHA tag is the one a rollback uses. `latest` and the
+          # branch tag are conveniences; neither identifies a build uniquely,
+          # and pinning a deployment to either is how two environments end up
+          # running different code under the same name.
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          # The repository root, matching the Dockerfile's own note: the build
+          # needs the Go module, and .dockerignore excludes everything else.
+          context: .
+          file: services/api/Dockerfile
+          push: true
+          build-args: |
+            CMD=${{ matrix.service }}
+            VERSION=${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Shared across the three services, which is most of the point of one
+          # Dockerfile: the dependency layer is built once and reused twice.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # An image that cannot start is not an artifact. Running it with a
+      # deliberately invalid production config proves both that the binary is
+      # executable in this base image and that the guardrails are compiled in —
+      # the container must exit non-zero and say why.
+      - name: The image refuses a bad production config
+        run: |
+          set +e
+          out=$(docker run --rm \
+            -e APP_ENV=production \
+            -e DATABASE_URL='postgres://u:p@db/m?sslmode=disable' \
+            -e JWT_SIGNING_KEY='ci-only-signing-key-at-least-32-bytes-long' \
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:sha-${{ github.sha }} 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          if [ $code -eq 0 ]; then
+            echo "::error::the image started with an invalid production config"
+            exit 1
+          fi
+          echo "$out" | grep -q "invalid configuration" || {
+            echo "::error::exited non-zero, but not for the expected reason"
+            exit 1
+          }
+
+  summary:
+    name: What is still needed to deploy
+    runs-on: ubuntu-latest
+    needs: images
+    steps:
+      # Written to the run summary rather than a README nobody opens at the
+      # moment they need it, which is the moment they are looking at a green
+      # release run and wondering why nothing changed in production.
+      - run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Images published
+
+          `api`, `worker` and `feed`, tagged `sha-${{ github.sha }}`.
+
+          ## Not done by this workflow
+
+          These are environment, not code, and none of them can live in this
+          repository:
+
+          - a cluster or host to run the images on
+          - `DATABASE_URL` for a managed Postgres with PostGIS and TLS
+          - an object store bucket and either static keys or an instance role
+          - an SMS sender for OTP delivery
+          - `ANTHROPIC_API_KEY` for moderation — the API refuses to boot in
+            production without it, on purpose
+          - `MEDIACONVERT_ROLE_ARN` and `MEDIACONVERT_DESTINATION` — the
+            transcode vendor is implemented (`TRANSCODE_VENDOR=aws-mediaconvert`)
+            and refuses to boot without them, by name.
+
+          All of these are environment. There is no longer a code gap blocking
+          a production boot.
+          EOF

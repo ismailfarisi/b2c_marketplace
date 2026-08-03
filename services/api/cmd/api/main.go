@@ -7,6 +7,9 @@
 package main
 
 import (
+	// Embedded tzdata — see the note in cmd/worker.
+	_ "time/tzdata"
+
 	"context"
 	"errors"
 	"fmt"
@@ -29,11 +32,13 @@ import (
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
 	"github.com/marketplace/api/internal/modules/attribution"
+	"github.com/marketplace/api/internal/modules/auctions"
 	"github.com/marketplace/api/internal/modules/boosts"
 	"github.com/marketplace/api/internal/modules/chat"
 	"github.com/marketplace/api/internal/modules/classifieds"
 	"github.com/marketplace/api/internal/modules/console"
 	"github.com/marketplace/api/internal/modules/dispatch"
+	"github.com/marketplace/api/internal/modules/documents"
 	"github.com/marketplace/api/internal/modules/driver"
 	"github.com/marketplace/api/internal/modules/identity"
 	"github.com/marketplace/api/internal/modules/invoicing"
@@ -42,8 +47,10 @@ import (
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/modules/payouts"
+	"github.com/marketplace/api/internal/modules/property"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/tax"
+	"github.com/marketplace/api/internal/modules/timesignal"
 	"github.com/marketplace/api/internal/modules/trust"
 	"github.com/marketplace/api/internal/modules/vehicles"
 	"github.com/marketplace/api/internal/platform/idempotency"
@@ -258,7 +265,20 @@ func run() error {
 	packagesSvc := classifieds.NewService(pool)
 	vehicleSvc := vehicles.NewService(pool, packagesSvc, chatSvc, trustSvc)
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
+	// The sell half of the subject seam, wired only in this process. See
+	// app.RegisterComposers for why cmd/feed and cmd/worker do not get it.
+	propertySvc := property.NewService(pool)
+	// The notifier matters on *this* side too, not only in the worker: the
+	// outbid message fires inside the bid transaction, which happens here.
+	auctionSvc := auctions.NewService(pool).
+		WithNotifier(app.AuctionNotifier{Notify: notifySvc}).
+		// Anti-snipe moves the closing time, and `reel_time_signals` is a
+		// cache. Wired here rather than only in the worker because the
+		// extension happens on the bid path, which is this process.
+		WithReprojector(timesignal.New(pool, registries.Subjects))
+	app.RegisterComposers(registries, vehicleSvc, propertySvc)
+
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)
 	if err != nil {
 		return err
 	}
@@ -278,6 +298,7 @@ func run() error {
 			Actions:     media.Actions,
 			Attribution: media.Attribution,
 			Subjects:    registries.Subjects,
+			MediaBase:   cfg.MediaCDNBaseURL,
 
 			Likes:     media.Likes,
 			Comments:  media.Comments,
@@ -312,10 +333,35 @@ func run() error {
 			Packages:   packagesSvc,
 			Trust:      trustSvc,
 			Moderation: media.Moderation,
+			MediaBase:  cfg.MediaCDNBaseURL,
 		}
 		handlers.Chat = &api.ChatHandlers{
 			Chat:       chatSvc,
 			Moderation: media.Moderation,
+		}
+		handlers.Auctions = &api.AuctionHandlers{Auctions: auctionSvc}
+		handlers.Documents = &api.DocumentHandlers{
+			Documents:  documents.NewService(pool, media.Store),
+			Moderation: media.Moderation,
+			Subjects:   registries.Subjects,
+		}
+		handlers.Me = &api.MeHandlers{
+			Actions:   media.Actions,
+			Subjects:  registries.Subjects,
+			Listings:  vehicleSvc,
+			MediaBase: cfg.MediaCDNBaseURL,
+		}
+		// The sell flow needs the media stack (a reel has to go somewhere) and
+		// at least one registered composer. Both are checked rather than
+		// assumed: mounting it with an empty registry would give the app a Sell
+		// tab that lists no verticals, which reads as a broken build.
+		if len(registries.Subjects.Sellable()) > 0 {
+			handlers.Sell = &api.SellHandlers{
+				Reels:    media.Reels,
+				Actions:  media.Actions,
+				Subjects: registries.Subjects,
+				Counters: media.Counters,
+			}
 		}
 	}
 

@@ -1,0 +1,403 @@
+package ae.marketplace.mobile.me
+
+import ae.marketplace.mobile.model.Conversation
+import ae.marketplace.mobile.model.Message
+import ae.marketplace.mobile.model.MyListing
+import ae.marketplace.mobile.model.SavedItem
+import ae.marketplace.mobile.model.SearchResult
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import ae.marketplace.mobile.network.Failure
+import ae.marketplace.mobile.network.toFailure
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+data class SavedUiState(
+    val items: List<SavedItem> = emptyList(),
+    val loading: Boolean = false,
+    val loaded: Boolean = false,
+    val error: Failure? = null,
+)
+
+data class MyListingsUiState(
+    val items: List<MyListing> = emptyList(),
+    val loading: Boolean = false,
+    val loaded: Boolean = false,
+    val error: Failure? = null,
+)
+
+data class SearchUiState(
+    val query: String = "",
+    val items: List<SearchResult> = emptyList(),
+    val total: Long = 0,
+    val loading: Boolean = false,
+    /** True once a search has actually run, so "no results" can be told from "not searched yet". */
+    val searched: Boolean = false,
+    val error: Failure? = null,
+    val filters: SearchFilters = SearchFilters(),
+    /**
+     * A filter set the viewer is editing but has not applied.
+     *
+     * Held apart from [filters] so the sheet can be cancelled. Editing the live
+     * set directly would re-run the search on every checkbox — four requests to
+     * tick four body types — and leave no way back if they change their mind.
+     */
+    val draftFilters: SearchFilters? = null,
+    /**
+     * True when there is more to fetch. Derived from [total] rather than from
+     * an empty page, so the last page does not require an extra round trip to
+     * discover it is the last page.
+     */
+    val hasMore: Boolean = false,
+    val loadingMore: Boolean = false,
+)
+
+data class InboxUiState(
+    val items: List<Conversation> = emptyList(),
+    val loading: Boolean = false,
+    val error: Failure? = null,
+)
+
+data class ThreadUiState(
+    val conversationId: String = "",
+    val title: String = "",
+    val messages: List<Message> = emptyList(),
+    val draft: String = "",
+    val loading: Boolean = false,
+    val sending: Boolean = false,
+    val error: Failure? = null,
+)
+
+/**
+ * The signed-in viewer's own screens.
+ *
+ * One view model across Saved, Me, Search and messaging, deliberately. They are
+ * four lists behind four tabs of one shell, they are all cheap, and separating
+ * them would mean four objects with four lifecycles for a screen whose whole
+ * job is to stay loaded while the viewer flicks between tabs.
+ *
+ * Each list keeps a `loaded` flag so re-entering a tab does not re-fetch. A
+ * pull-to-refresh calls the loader again explicitly, which is the only thing
+ * that should.
+ */
+class MeViewModel(private val api: MeApi) : ViewModel() {
+
+    private val _saved = MutableStateFlow(SavedUiState())
+    val saved: StateFlow<SavedUiState> = _saved.asStateFlow()
+
+    private val _listings = MutableStateFlow(MyListingsUiState())
+    val listings: StateFlow<MyListingsUiState> = _listings.asStateFlow()
+
+    private val _search = MutableStateFlow(SearchUiState())
+    val search: StateFlow<SearchUiState> = _search.asStateFlow()
+
+    private val _inbox = MutableStateFlow(InboxUiState())
+    val inbox: StateFlow<InboxUiState> = _inbox.asStateFlow()
+
+    private val _thread = MutableStateFlow(ThreadUiState())
+    val thread: StateFlow<ThreadUiState> = _thread.asStateFlow()
+
+    private var searchJob: Job? = null
+    private var lat: Double? = null
+    private var lng: Double? = null
+
+    /**
+     * Where the viewer is, so search can sort by distance.
+     *
+     * Must be called again whenever the feed's location changes. It was called
+     * once at launch with the hard-coded fallback and never again, which meant
+     * someone who moved the feed to Abu Dhabi still got "412 km away" measured
+     * from Dubai Marina on every search result — a wrong number rendered with
+     * total confidence, which is worse than no number.
+     *
+     * Re-runs the current search rather than waiting for the next keystroke. A
+     * results list whose distances refer to a place the viewer has just left is
+     * stale in the one column they are using to choose.
+     */
+    fun setLocation(lat: Double, lng: Double) {
+        if (this.lat == lat && this.lng == lng) return
+        this.lat = lat
+        this.lng = lng
+        if (_search.value.searched && _search.value.query.isNotBlank()) submitSearch()
+    }
+
+    /**
+     * Drops everything belonging to the account that just left.
+     *
+     * Not housekeeping. Saved, My listings and the inbox are all *this person's*,
+     * and the view model outlives the session by design — it is created once for
+     * the shell so that flicking between tabs does not re-fetch. Without this,
+     * signing out and signing in as someone else showed the first account's
+     * conversations to the second one, and the `loaded` flag meant it would
+     * never re-fetch to correct itself.
+     */
+    fun forget() {
+        searchJob?.cancel()
+        _saved.value = SavedUiState()
+        _listings.value = MyListingsUiState()
+        _inbox.value = InboxUiState()
+        _thread.value = ThreadUiState()
+        // Search survives. It is the one surface here that is public — no
+        // account is needed to run it — so clearing a query someone is midway
+        // through typing would be destroying work for no reason.
+    }
+
+    // ── Saved ────────────────────────────────────────────────────────────────
+
+    fun loadSaved(force: Boolean = false) {
+        if (_saved.value.loading || (_saved.value.loaded && !force)) return
+        _saved.value = _saved.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            runCatching { api.saves() }
+                .onSuccess { _saved.value = SavedUiState(items = it.items, loaded = true) }
+                .onFailure { e -> _saved.value = _saved.value.copy(loading = false, error = e.toFailure()) }
+        }
+    }
+
+    // ── My listings ──────────────────────────────────────────────────────────
+
+    fun loadMyListings(force: Boolean = false) {
+        if (_listings.value.loading || (_listings.value.loaded && !force)) return
+        _listings.value = _listings.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            runCatching { api.myListings() }
+                .onSuccess { _listings.value = MyListingsUiState(items = it.items, loaded = true) }
+                .onFailure { e -> _listings.value = _listings.value.copy(loading = false, error = e.toFailure()) }
+        }
+    }
+
+    // ── Search ───────────────────────────────────────────────────────────────
+
+    /**
+     * Debounced, cancelling the previous request.
+     *
+     * Same reasoning as the sell form's lookup: without the cancel, a slow
+     * response for "pat" can land after a fast one for "patrol" and replace the
+     * right results with stale ones — which reads as the app ignoring what you
+     * typed.
+     */
+    fun onQueryChanged(query: String) {
+        _search.value = _search.value.copy(query = query)
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            // Clearing the box with filters still set is not "nothing to
+            // search" — "every GCC-spec car under 200,000 near me" is a
+            // complete question. Only a query *and* no filters is empty.
+            if (!_search.value.filters.isEmpty) {
+                searchJob = viewModelScope.launch {
+                    delay(SEARCH_DEBOUNCE_MS)
+                    runSearch("")
+                }
+                return
+            }
+            _search.value = _search.value.copy(items = emptyList(), total = 0, searched = false)
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            runSearch(query)
+        }
+    }
+
+    fun submitSearch() {
+        searchJob?.cancel()
+        val q = _search.value.query
+        if (q.isBlank()) return
+        searchJob = viewModelScope.launch { runSearch(q) }
+    }
+
+    private suspend fun runSearch(query: String) {
+        _search.value = _search.value.copy(loading = true, error = null)
+        runCatching {
+            api.search(
+                query = query, lat = lat, lng = lng,
+                filters = _search.value.filters,
+                limit = PAGE,
+            )
+        }
+            .onSuccess {
+                // The query is re-read from state rather than closed over, so a
+                // result that lands after the box was cleared does not repopulate
+                // it.
+                _search.value = _search.value.copy(
+                    items = it.items, total = it.total,
+                    loading = false, searched = true, error = null,
+                    hasMore = it.items.size.toLong() < it.total,
+                )
+            }
+            .onFailure { e ->
+                _search.value = _search.value.copy(loading = false, searched = true, error = e.toFailure())
+            }
+    }
+
+    /**
+     * The next page.
+     *
+     * Offset paging rather than a cursor, matching what the endpoint offers.
+     * That is the wrong primitive for a feed — it double-counts and skips when
+     * rows are inserted between pages, which is why the feed uses a cursor —
+     * and acceptable here: a classifieds index changes over hours, and a buyer
+     * scrolling page three is not going to notice one car appearing twice.
+     * Worth revisiting if search ever sorts by anything that moves.
+     */
+    fun loadMore() {
+        val s = _search.value
+        if (s.loadingMore || s.loading || !s.hasMore || s.query.isBlank()) return
+        _search.value = s.copy(loadingMore = true)
+        viewModelScope.launch {
+            runCatching {
+                api.search(
+                    query = s.query, lat = lat, lng = lng,
+                    filters = s.filters, limit = PAGE, offset = s.items.size,
+                )
+            }
+                .onSuccess { page ->
+                    val merged = _search.value.items + page.items
+                    _search.value = _search.value.copy(
+                        items = merged,
+                        total = page.total,
+                        loadingMore = false,
+                        // Compared against the *merged* length, and guarded on
+                        // the page being non-empty. A server that returns
+                        // nothing while claiming a higher total would otherwise
+                        // spin this loop forever at the bottom of the list.
+                        hasMore = page.items.isNotEmpty() && merged.size.toLong() < page.total,
+                    )
+                }
+                .onFailure { e ->
+                    // The rows already on screen stay. A failed *next* page is
+                    // a strip at the bottom, never a replacement of results the
+                    // viewer is reading.
+                    _search.value = _search.value.copy(loadingMore = false, error = e.toFailure())
+                }
+        }
+    }
+
+    // ── Search filters ───────────────────────────────────────────────────────
+
+    /** Opens the sheet on a copy of what is currently applied. */
+    fun openFilters() {
+        _search.value = _search.value.copy(draftFilters = _search.value.filters)
+    }
+
+    fun editFilters(block: (SearchFilters) -> SearchFilters) {
+        val draft = _search.value.draftFilters ?: _search.value.filters
+        _search.value = _search.value.copy(draftFilters = block(draft))
+    }
+
+    fun cancelFilters() {
+        _search.value = _search.value.copy(draftFilters = null)
+    }
+
+    /**
+     * Applies the draft and re-runs.
+     *
+     * Runs even with an empty query, unlike [submitSearch]. "Every GCC-spec car
+     * under 200,000 near me" is a complete question with no text in it, and
+     * requiring a word before filters do anything would make the sheet useless
+     * for exactly the buyer who knows what they want.
+     */
+    fun applyFilters() {
+        val draft = _search.value.draftFilters ?: return
+        searchJob?.cancel()
+        _search.value = _search.value.copy(filters = draft, draftFilters = null)
+        searchJob = viewModelScope.launch { runSearch(_search.value.query) }
+    }
+
+    fun clearFilters() {
+        if (_search.value.filters.isEmpty && _search.value.filters.sort == null) return
+        searchJob?.cancel()
+        _search.value = _search.value.copy(filters = SearchFilters(), draftFilters = null)
+        searchJob = viewModelScope.launch { runSearch(_search.value.query) }
+    }
+
+    // ── Messaging ────────────────────────────────────────────────────────────
+
+    fun loadInbox() {
+        _inbox.value = _inbox.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            runCatching { api.inbox() }
+                .onSuccess { _inbox.value = InboxUiState(items = it.items) }
+                .onFailure { e -> _inbox.value = _inbox.value.copy(loading = false, error = e.toFailure()) }
+        }
+    }
+
+    fun openThread(conversationId: String, title: String) {
+        _thread.value = ThreadUiState(conversationId = conversationId, title = title, loading = true)
+        viewModelScope.launch {
+            runCatching { api.thread(conversationId) }
+                .onSuccess { _thread.value = _thread.value.copy(messages = it.items, loading = false) }
+                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.toFailure()) }
+            // Marking read is fire-and-forget: a failure costs an unread badge,
+            // and blocking the thread on it would be a worse trade.
+            runCatching { api.markRead(conversationId) }
+            loadInbox()
+        }
+    }
+
+    /**
+     * Opens the thread for a listing — the reel CTA's destination.
+     *
+     * The reel and action ids travel with it. They are what lets someone answer
+     * "did the feed produce this lead"; without them every conversion this
+     * product exists to create looks organic.
+     */
+    fun inquire(listingId: String, title: String, reelId: String?, actionId: String?) {
+        _thread.value = ThreadUiState(title = title, loading = true)
+        viewModelScope.launch {
+            runCatching { api.inquire(listingId, reelId, actionId) }
+                .onSuccess { openThread(it.conversationId, title) }
+                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.toFailure()) }
+        }
+    }
+
+    fun onDraftChanged(text: String) {
+        _thread.value = _thread.value.copy(draft = text)
+    }
+
+    /**
+     * Sends, and renders whatever actually happened.
+     *
+     * There is no optimistic bubble. A message can come back `held` — under
+     * review and undelivered — or `redacted`, with a phone number stripped out.
+     * Drawing the text the sender typed and moving on would misreport both, and
+     * a sender who believes a held message arrived concludes they are being
+     * ignored and goes looking for a way off the platform.
+     */
+    fun sendDraft() {
+        val s = _thread.value
+        val body = s.draft.trim()
+        if (body.isEmpty() || s.sending || s.conversationId.isEmpty()) return
+
+        _thread.value = s.copy(sending = true, error = null)
+        viewModelScope.launch {
+            runCatching { api.send(s.conversationId, body) }
+                .onSuccess { sent ->
+                    _thread.value = _thread.value.copy(
+                        messages = _thread.value.messages + sent,
+                        draft = "",
+                        sending = false,
+                    )
+                }
+                .onFailure { e ->
+                    // The draft stays in the box. Losing what someone typed
+                    // because the network dropped is the single most annoying
+                    // failure a messaging screen has.
+                    _thread.value = _thread.value.copy(sending = false, error = e.toFailure())
+                }
+        }
+    }
+
+    fun closeThread() {
+        _thread.value = ThreadUiState()
+    }
+
+    private companion object {
+        const val SEARCH_DEBOUNCE_MS = 280L
+        const val PAGE = 20
+    }
+}

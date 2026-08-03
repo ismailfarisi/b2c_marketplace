@@ -1,0 +1,359 @@
+package auctions
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/money"
+	"github.com/marketplace/api/internal/platform/postgres"
+	"github.com/marketplace/api/internal/seam/subject"
+)
+
+type Service struct {
+	pool *pgxpool.Pool
+	// notify is nil in a deployment without notifications, and every send site
+	// is guarded. An auction that runs and settles silently is a smaller
+	// product, not a broken one.
+	notify Notifier
+	// reproject pushes a moved closing time into the feed's signal cache.
+	// Nil-safe like notify, and for a weaker reason: without it the clock in
+	// the feed is a day behind the lot rather than absent.
+	reproject Reprojector
+}
+
+// Reprojector re-derives a subject's feed time signal from the row that just
+// changed. Satisfied by *timesignal.Projector.
+//
+// Named as an interface here rather than importing the module for the reason
+// Notifier is: a vertical depending on the thing that caches its projections
+// is a cycle waiting to happen, and the seam already defines the vocabulary.
+type Reprojector interface {
+	Refresh(ctx context.Context, t subject.Type, id uuid.UUID) error
+}
+
+func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+
+// WithReprojector attaches one.
+//
+// Needed because `reel_time_signals` is a cache and anti-snipe invalidates it.
+// A bid inside the last two minutes extends the close, and until this existed
+// nothing told the feed: `Refresh` had exactly one caller, the reconcile sweep,
+// which does not look at a signal until a day after it was written. So the feed
+// counted down to the *original* close, reached zero, and — a countdown that is
+// not recurring means the lot is gone — dropped a reel whose auction was still
+// taking bids. Those two minutes are the whole reason anti-snipe exists, and
+// they were the two minutes the feed was wrong.
+func (s *Service) WithReprojector(r Reprojector) *Service {
+	s.reproject = r
+	return s
+}
+
+// reprojectLot refreshes the cached signal, after the transaction that moved it.
+//
+// After, and never inside: the projector holds its own pool connection and
+// would read the pre-commit row, caching precisely the stale value this call
+// exists to replace.
+//
+// Logged rather than returned. The bid is committed and accepted by this point;
+// failing the request would tell the bidder their bid did not land when it did,
+// and the reconcile sweep is the backstop for the clock.
+func (s *Service) reprojectLot(ctx context.Context, id uuid.UUID) {
+	if s.reproject == nil {
+		return
+	}
+	if err := s.reproject.Refresh(ctx, subject.TypeAuction, id); err != nil {
+		slog.Warn("auction time signal not reprojected",
+			"auction_id", id, "error", err)
+	}
+}
+
+const auctionColumns = `
+	id, reference_no, seller_id, emirate, plate_code, plate_number, digit_count,
+	currency, opening_minor, reserve_minor, increment_minor,
+	opens_at, closes_at, status, current_minor, current_bidder, bid_count, winner_id`
+
+func scanAuction(row pgx.Row) (Auction, error) {
+	var a Auction
+	var status string
+	err := row.Scan(&a.ID, &a.ReferenceNo, &a.SellerID, &a.Emirate, &a.PlateCode,
+		&a.PlateNumber, &a.DigitCount, &a.Currency, &a.OpeningMinor, &a.ReserveMinor,
+		&a.IncrementMinor, &a.OpensAt, &a.ClosesAt, &status,
+		&a.CurrentMinor, &a.CurrentBidder, &a.BidCount, &a.WinnerID)
+	a.Status = Status(status)
+	return a, err
+}
+
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (Auction, error) {
+	a, err := scanAuction(s.pool.QueryRow(ctx,
+		`SELECT`+auctionColumns+` FROM plate_auctions WHERE id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Auction{}, httpx.ErrNotFound
+	}
+	if err != nil {
+		return Auction{}, fmt.Errorf("auctions: get: %w", err)
+	}
+	return a, nil
+}
+
+type CreateInput struct {
+	SellerID       uuid.UUID
+	Emirate        string
+	PlateCode      string
+	PlateNumber    string
+	OpeningMinor   int64
+	ReserveMinor   *int64
+	IncrementMinor int64
+	OpensAt        time.Time
+	ClosesAt       time.Time
+	Lat, Lng       float64
+}
+
+func (s *Service) Create(ctx context.Context, in CreateInput) (Auction, error) {
+	digits, err := DigitsOf(in.PlateNumber)
+	if err != nil {
+		return Auction{}, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "plate_number", Code: "invalid", Message: err.Error(),
+		}}}
+	}
+	if err := ValidateSchedule(in.OpensAt, in.ClosesAt); err != nil {
+		return Auction{}, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "closes_at", Code: "invalid", Message: err.Error(),
+		}}}
+	}
+	if in.IncrementMinor <= 0 {
+		in.IncrementMinor = 100_000
+	}
+
+	var id uuid.UUID
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO plate_auctions (
+			seller_id, emirate, plate_code, plate_number, digit_count,
+			opening_minor, reserve_minor, increment_minor, opens_at, closes_at,
+			point, status)
+		VALUES ($1, $2, upper($3), $4, $5, $6, $7, $8, $9, $10,
+		        CASE WHEN $11 = 0 AND $12 = 0 THEN NULL
+		             ELSE ST_SetSRID(ST_MakePoint($12, $11), 4326)::geography END,
+		        'draft')
+		RETURNING id`,
+		in.SellerID, in.Emirate, in.PlateCode, in.PlateNumber, digits,
+		in.OpeningMinor, in.ReserveMinor, in.IncrementMinor, in.OpensAt, in.ClosesAt,
+		in.Lat, in.Lng,
+	).Scan(&id)
+	if err != nil {
+		return Auction{}, fmt.Errorf("auctions: create: %w", err)
+	}
+	return s.Get(ctx, id)
+}
+
+// Schedule moves a draft to `scheduled`, which is what makes it real.
+//
+// A separate step from Create for the same reason the sell flow separates draft
+// from publish: the reel has to exist and be approved before anyone can be told
+// a lot is coming.
+func (s *Service) Schedule(ctx context.Context, sellerID, id uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE plate_auctions SET status = 'scheduled'
+		 WHERE id = $1 AND seller_id = $2 AND status = 'draft'`, id, sellerID)
+	if err != nil {
+		return fmt.Errorf("auctions: schedule: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return httpx.ErrNotFound
+	}
+	return nil
+}
+
+// Bid is the whole point of the module.
+//
+// # Why every line of this is inside one transaction with a row lock
+//
+// Two bids arriving in the same millisecond is not a rare case on a lot that is
+// about to close — it is the *expected* case, because that is exactly when
+// everybody is watching. Without `FOR UPDATE`, both read the same
+// `current_minor`, both decide they are high enough, and both write. The second
+// write wins and the first bidder is silently outbid by a number lower than
+// their own.
+//
+// The check is a pure function ([CheckBid]) so the rule can be tested without a
+// database; the lock is here so the rule is applied to a value nobody else can
+// change underneath it.
+func (s *Service) Bid(ctx context.Context, auctionID, bidderID uuid.UUID, amountMinor int64) (Auction, error) {
+	var out Auction
+	// Hoisted out of the closure so the re-projection below can be conditional
+	// on it. Only an *extended* bid moves the closing time; re-projecting on
+	// every bid would rewrite the same row on every tap of a busy lot.
+	var extended bool
+
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		a, err := scanAuction(tx.QueryRow(ctx,
+			`SELECT`+auctionColumns+` FROM plate_auctions WHERE id = $1 FOR UPDATE`, auctionID))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return httpx.ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("auctions: lock lot: %w", err)
+		}
+
+		// One clock read for the whole decision. Reading `now` again below
+		// would let the lot be open for the check and closed for the write.
+		now := time.Now()
+
+		// A lot whose closing time has passed but which the sweep has not
+		// reached yet is closed, and is treated as closed here rather than
+		// taking a bid the settlement is about to ignore.
+		if err := CheckBid(a, bidderID.String(), amountMinor, now); err != nil {
+			return err
+		}
+
+		var closesAt time.Time
+		closesAt, extended = ExtendedClose(a.ClosesAt, now)
+
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO plate_bids (auction_id, bidder_id, amount_minor, extended_close)
+			VALUES ($1, $2, $3, $4)`,
+			auctionID, bidderID, amountMinor, extended,
+		); err != nil {
+			return fmt.Errorf("auctions: record bid: %w", err)
+		}
+
+		if _, err := tx.Exec(ctx, `
+			UPDATE plate_auctions
+			   SET current_minor = $2, current_bidder = $3,
+			       bid_count = bid_count + 1, closes_at = $4
+			 WHERE id = $1`,
+			auctionID, amountMinor, bidderID, closesAt,
+		); err != nil {
+			return fmt.Errorf("auctions: apply bid: %w", err)
+		}
+
+		// The person who just lost their lead is the one who most needs to
+		// know, and they are only knowable *here* — a moment later the row
+		// says somebody else is winning and the previous leader is gone.
+		//
+		// Inside the transaction, so a bid that rolls back does not announce
+		// itself. The dedupe key is the bid amount rather than the auction, so
+		// a bidder outbid three times is told three times: each one is a
+		// separate, actionable event, unlike a settlement which is one.
+		if a.CurrentBidder != nil && *a.CurrentBidder != bidderID.String() {
+			s.tell(ctx, tx, NotifyMessage{
+				UserID:      *a.CurrentBidder,
+				TemplateKey: "auction.outbid",
+				DedupeKey:   fmt.Sprintf("auction.outbid:%s:%d", auctionID, amountMinor),
+				Params: map[string]string{
+					"plate":  a.Plate(),
+					"amount": money.New(amountMinor, a.Currency).Major(),
+					// The number that would put them back in front, so the
+					// notification is one tap from being acted on.
+					"ask":    money.New(amountMinor+a.IncrementMinor, a.Currency).Major(),
+					"closes": closesAt.In(marketZone).Format("2 Jan, 15:04"),
+				},
+			})
+		}
+
+		a.CurrentMinor = &amountMinor
+		b := bidderID.String()
+		a.CurrentBidder = &b
+		a.BidCount++
+		a.ClosesAt = closesAt
+		out = a
+		return nil
+	})
+	if err != nil {
+		return out, err
+	}
+
+	// The feed's clock, corrected. See WithReprojector for what went wrong
+	// without it.
+	if extended {
+		s.reprojectLot(ctx, auctionID)
+	}
+	return out, nil
+}
+
+// OpenDue moves scheduled lots to live. Run by the worker sweep.
+func (s *Service) OpenDue(ctx context.Context, now time.Time) (int, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE plate_auctions SET status = 'live'
+		 WHERE status = 'scheduled' AND opens_at <= $1`, now)
+	if err != nil {
+		return 0, fmt.Errorf("auctions: open due: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+// CloseDue settles every lot whose time is up.
+//
+// Won or unsold, decided by the reserve. A lot that closes below its reserve is
+// **unsold** — not sold cheap. That is the entire function of a reserve, and
+// getting it wrong transfers a plate for less than the seller agreed to.
+//
+// One statement rather than a read-then-write loop, so a lot cannot be closed
+// twice by two workers: the WHERE clause is the lock.
+func (s *Service) CloseDue(ctx context.Context, now time.Time) (won, unsold int, err error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE plate_auctions
+		   SET status = 'closed_won', winner_id = current_bidder
+		 WHERE status = 'live' AND closes_at <= $1
+		   AND current_bidder IS NOT NULL
+		   AND (reserve_minor IS NULL OR current_minor >= reserve_minor)`, now)
+	if err != nil {
+		return 0, 0, fmt.Errorf("auctions: close won: %w", err)
+	}
+	won = int(tag.RowsAffected())
+
+	tag, err = s.pool.Exec(ctx, `
+		UPDATE plate_auctions SET status = 'closed_unsold'
+		 WHERE status = 'live' AND closes_at <= $1`, now)
+	if err != nil {
+		return won, 0, fmt.Errorf("auctions: close unsold: %w", err)
+	}
+	return won, int(tag.RowsAffected()), nil
+}
+
+// Bid is one row of the history.
+type Bid struct {
+	BidderID string
+	Amount   int64
+	Extended bool
+	PlacedAt time.Time
+	IsMine   bool
+}
+
+// History is the bid list, newest first.
+//
+// Bidder ids are returned only as `IsMine`. A public list of who bid what is
+// how an auction platform hands a competitor a map of its buyers — and on a
+// plate, the bidder's identity is the one thing nobody needs to know.
+func (s *Service) History(ctx context.Context, auctionID uuid.UUID, viewer uuid.NullUUID, limit int) ([]Bid, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT bidder_id, amount_minor, extended_close, placed_at
+		  FROM plate_bids WHERE auction_id = $1
+		 ORDER BY amount_minor DESC LIMIT $2`, auctionID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("auctions: history: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Bid
+	for rows.Next() {
+		var b Bid
+		var bidder uuid.UUID
+		if err := rows.Scan(&bidder, &b.Amount, &b.Extended, &b.PlacedAt); err != nil {
+			return nil, fmt.Errorf("auctions: scan bid: %w", err)
+		}
+		b.IsMine = viewer.Valid && viewer.UUID == bidder
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}

@@ -112,18 +112,40 @@ dev-mobile: ## Build and install the Android app (mobile is Kotlin Multiplatform
 	cd apps/mobile-kmm && ./gradlew :androidApp:installDebug
 
 .PHONY: test-mobile
-test-mobile: ## Run the shared KMM tests
-	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest
+test-mobile: check-interop parse-swift ## Compile and test the mobile module for both platforms
+	#
+	# The iOS *Kotlin* target is here deliberately, and it is not decorative:
+	# Kotlin/Native compiles Apple targets on any host — only linking the
+	# framework needs a Mac — so iosMain can and should be checked here. It was
+	# not, and four compile errors accumulated in it: a Security API compared
+	# across signed and unsigned, an NSDictionary factory that does not exist in
+	# the bindings, a CMTime passed by value where a CValue was wanted, and a
+	# method read off the wrong class. Every one would have blocked the first
+	# iOS build.
+	#
+	# The Swift is covered as far as it can be without Xcode, by two targets
+	# above rather than by nothing: parse-swift rejects anything the grammar
+	# rejects, check-interop rejects a Kotlin symbol or argument label that
+	# does not exist. What is left for a Mac is type checking and SwiftUI
+	# semantics — which is where it belongs, and is no longer the first place
+	# a missing brace gets noticed.
+	cd apps/mobile-kmm && ./gradlew :shared:testDebugUnitTest \
+		:shared:compileKotlinIosSimulatorArm64 :androidApp:assembleDebug
 
 # ------------------------------------------------------------ verification --
 
 # `test` deliberately excludes test-mobile.
 #
 # The KMM tests need a JDK and an Android SDK, and making the default target
-# require both means a backend contributor cannot run `make test`. The cost is
-# real and is named here rather than hidden: the 38 shared-logic tests — the
-# egress policy, the view/skip labelling, the event queue — do not run unless
-# CI calls test-mobile explicitly. It should.
+# require both means a backend contributor cannot run `make test`.
+#
+# This comment used to end "the 38 shared-logic tests do not run unless CI calls
+# test-mobile explicitly. It should." It did not, and the bill came due: four
+# compile errors accumulated in iosMain for want of anyone running the compiler.
+# CI now has `mobile` and `ios` jobs covering the shared tests, the Android
+# build, the Swift/Kotlin boundary and — on a macOS runner, which is the only
+# place it can happen — a real `swiftc -typecheck` of every SwiftUI file against
+# the linked framework. Locally this target is still the way to run it.
 .PHONY: test test-go test-ts test-all lint lint-go lint-ts build
 test: test-go test-ts ## Run backend and TypeScript tests
 
@@ -157,3 +179,39 @@ build: ## Build API, worker and feed binaries
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/api ./cmd/api
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/worker ./cmd/worker
 	cd $(API_DIR) && go build -ldflags "-X main.version=$(GIT_SHA)" -o bin/feed ./cmd/feed
+
+.PHONY: ios-strings
+## Regenerate the iOS .strings tables from the Android string resources.
+##
+## Run after touching either values/strings.xml or values-ar/strings.xml. The
+## script warns when the two languages disagree in count, which is the shape
+## every missing translation takes.
+ios-strings:
+	bash apps/mobile-kmm/tools/gen-ios-strings.sh
+
+.PHONY: check-interop
+## Validate the Swift↔Kotlin boundary without a Swift compiler.
+##
+## Roughly 2,500 lines of SwiftUI go unverified between Mac builds, and the
+## errors they accumulate are overwhelmingly one kind: a reference to a Kotlin
+## symbol that does not exist. That class is mechanically checkable, so it is
+## checked here rather than waiting for someone with Xcode.
+##
+## A finding is a definite problem. A clean run is NOT a promise that the Swift
+## compiles — this is not a type checker and does not model generics, argument
+## types or SwiftUI. See tools/interopcheck for the full boundary.
+check-interop:
+	cd apps/mobile-kmm/tools/interopcheck && go build -o ic.exe .
+	cd apps/mobile-kmm && ./tools/interopcheck/ic.exe .
+
+.PHONY: parse-swift
+## Syntax-check the iOS Swift without Xcode.
+##
+## `swiftc -parse` never resolves an import, so SwiftUI and the Shared
+## framework not existing off a Mac costs nothing. It catches what the grammar
+## rejects and nothing else — not a type, not a SwiftUI misuse. See the header
+## of tools/parse-swift.sh for the exact boundary.
+##
+## Skips with status 0 where there is no toolchain, which is most machines.
+parse-swift:
+	bash apps/mobile-kmm/tools/parse-swift.sh

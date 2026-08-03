@@ -26,6 +26,10 @@ type VehicleHandlers struct {
 	Packages   *classifieds.Service
 	Trust      *trust.Service
 	Moderation *moderation.Service
+	// MediaBase prefixes poster keys on search results. Empty in a deployment
+	// with no media stack, which correctly yields no thumbnails rather than
+	// URLs that 404.
+	MediaBase string
 }
 
 // --- search and detail ------------------------------------------------------
@@ -63,6 +67,17 @@ func (h *VehicleHandlers) Search(w http.ResponseWriter, r *http.Request) {
 			// thing that makes buyers stop trusting the order, at which point
 			// the placement the seller paid for is worth nothing.
 			"promoted": v.Promoted,
+			// The card's picture, from the listing's newest published reel.
+			// Empty for a web-form listing with no video, which the client
+			// renders as a flat block rather than a spinner — it is a permanent
+			// state, not a loading one.
+			"poster_url": mediaURL(h.MediaBase, v.PosterKey),
+			"lqip":       v.LQIP,
+			// Present only when the listing has a published reel. The client
+			// opens the video when there is one and falls through to a chat
+			// when there is not — a web-form listing with no footage should
+			// still be reachable.
+			"reel_id": nullableUUID(v.ReelID),
 		}
 		if v.DistanceM != nil {
 			item["distance_m"] = int64(*v.DistanceM)
@@ -684,4 +699,16 @@ func (h *VehicleHandlers) ListingQueue(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
+}
+
+// nullableUUID renders a NULL uuid as JSON null rather than as the zero uuid.
+//
+// "00000000-0000-0000-0000-000000000000" is a value a client will happily try
+// to fetch, and the 404 it gets back looks like a broken link rather than an
+// absent one.
+func nullableUUID(v uuid.NullUUID) any {
+	if !v.Valid {
+		return nil
+	}
+	return v.UUID
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -282,6 +283,60 @@ func (r *Repository) Unsave(ctx context.Context, userID, reelID uuid.UUID) error
 }
 
 // SavedReelIDs is the user's saved list, newest first.
+// SavedCard is one row of the Saved tab.
+//
+// It carries no words. The badge, the title, the line and the price are the
+// owning vertical's to compose, exactly as they are in the feed — the caller
+// resolves them through subject.Registry.SummarizePage. What is here is only
+// what this module owns: which reel, what it is about, and the still to draw
+// while nothing else has loaded.
+type SavedCard struct {
+	ReelID      uuid.UUID
+	SubjectType string
+	SubjectID   *uuid.UUID
+	PosterKey   string
+	LQIP        string
+	SavedAt     time.Time
+	// Removed marks a reel that is no longer in the feed.
+	//
+	// Kept in the list rather than filtered out. A saved car that sold is a
+	// thing the viewer chose to keep, and silently deleting it from their own
+	// list reads as the app losing their data — which is worse than the
+	// disappointment of seeing it greyed out.
+	Removed bool
+}
+
+// SavedReels lists what a viewer kept, newest first.
+func (r *Repository) SavedReels(ctx context.Context, userID uuid.UUID, limit int) ([]SavedCard, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT s.reel_id, COALESCE(r.subject_type, ''), r.subject_id,
+		       COALESCE(r.poster_key, ''), COALESCE(r.lqip, ''),
+		       s.created_at, r.state <> 'published'
+		  FROM reel_saves s
+		  JOIN reels r ON r.id = s.reel_id
+		 WHERE s.user_id = $1
+		 ORDER BY s.created_at DESC
+		 LIMIT $2`, userID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("saved reels: %w", err)
+	}
+	defer rows.Close()
+
+	var out []SavedCard
+	for rows.Next() {
+		var c SavedCard
+		if err := rows.Scan(&c.ReelID, &c.SubjectType, &c.SubjectID,
+			&c.PosterKey, &c.LQIP, &c.SavedAt, &c.Removed); err != nil {
+			return nil, fmt.Errorf("scan saved reel: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 func (r *Repository) SavedReelIDs(ctx context.Context, userID uuid.UUID, limit int) ([]uuid.UUID, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50

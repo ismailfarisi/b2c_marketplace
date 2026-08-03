@@ -1,0 +1,10 @@
+# The build context is the repository root so the Go module can be copied
+# whole. Everything that is not that module is excluded — without this the
+# context is node_modules, Gradle caches and build output, which is gigabytes
+# sent to the daemon on every build.
+*
+!services/api/
+
+services/api/bin/
+services/api/**/*_test.go
+services/api/loadtest/

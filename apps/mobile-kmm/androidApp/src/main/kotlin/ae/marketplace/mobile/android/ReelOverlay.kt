@@ -1,5 +1,12 @@
 package ae.marketplace.mobile.android
 
+import ae.marketplace.mobile.android.ui.rememberArabic
+import ae.marketplace.mobile.model.badgeFor
+import ae.marketplace.mobile.model.labelFor
+import ae.marketplace.mobile.model.lineFor
+import ae.marketplace.mobile.model.priceSuffixFor
+import ae.marketplace.mobile.model.titleFor
+import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.feed.ReelClock
 import ae.marketplace.mobile.model.FeedItem
 import ae.marketplace.mobile.model.ResolvedAction
@@ -50,7 +57,9 @@ import kotlinx.coroutines.delay
  * a timer, which is the part that genuinely has to be written twice.
  */
 
-private val Accent = Color(0xFFB4652A)
+// Was a private copy of the same hex in four files, two of which had drifted.
+// See ae.marketplace.mobile.android.ui.Palette.
+private val Accent = Palette.Accent
 private val Scrim = Color.Black.copy(alpha = 0.55f)
 
 /**
@@ -79,7 +88,16 @@ fun ReelOverlay(
      * "Nearby".
      */
     chromeTop: Dp = 0.dp,
+    /**
+     * Space reserved at the bottom for the navigation bar, which is drawn by the
+     * activity over this overlay. Same reasoning as [chromeTop]: the two are laid
+     * out independently and nothing else makes them agree — without it the price
+     * and the CTA sit underneath "Sell".
+     */
+    chromeBottom: Dp = 0.dp,
 ) {
+    val arabic = rememberArabic()
+
     Box(modifier.fillMaxWidth()) {
         Column(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
             // The bar stays above everything, including the tabs — it is the
@@ -94,7 +112,7 @@ fun ReelOverlay(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                item.summary?.badge?.takeIf { it.isNotBlank() }?.let { Pill(it, filled = true) }
+                item.summary?.badgeFor(arabic)?.takeIf { it.isNotBlank() }?.let { Pill(it, filled = true) }
                 TimePill(item.timeSignal, skewMillis)
             }
         }
@@ -104,6 +122,7 @@ fun ReelOverlay(
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .padding(bottom = chromeBottom)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -188,6 +207,13 @@ private fun labelText(label: ReelClock.Label): String = when (label) {
         label.totalMinutes / 60,
     )
 
+    is ReelClock.Label.Opens ->
+        if (label.hours > 0) {
+            stringResource(R.string.time_opens_h, label.hours, label.minutes)
+        } else {
+            stringResource(R.string.time_opens_m, label.minutes)
+        }
+
     is ReelClock.Label.Ago -> {
         val unit = when (label.unit) {
             ReelClock.Label.Unit.MINUTE -> R.plurals.ago_minutes
@@ -236,10 +262,11 @@ private fun Pill(text: String, filled: Boolean) {
  */
 @Composable
 private fun ProductLine(item: FeedItem) {
+    val arabic = rememberArabic()
     val summary: SubjectSummary? = item.summary
 
     Text(
-        text = summary?.title?.takeIf { it.isNotBlank() }
+        text = summary?.titleFor(arabic)?.takeIf { it.isNotBlank() }
             ?: item.author.name.ifBlank { "—" },
         color = Color.White,
         fontWeight = FontWeight.SemiBold,
@@ -248,7 +275,7 @@ private fun ProductLine(item: FeedItem) {
         overflow = TextOverflow.Ellipsis,
     )
 
-    val line = summary?.line?.takeIf { it.isNotBlank() } ?: item.caption
+    val line = summary?.lineFor(arabic)?.takeIf { it.isNotBlank() } ?: item.caption
     if (line.isNotBlank()) {
         Text(
             text = line,
@@ -264,7 +291,7 @@ private fun ProductLine(item: FeedItem) {
     // AED 0.00.
     summary?.currency?.let { currency ->
         Text(
-            text = formatPrice(summary.priceMinor ?: 0L, currency) + summary.priceSuffix,
+            text = formatPrice(summary.priceMinor ?: 0L, currency) + summary.priceSuffixFor(arabic),
             color = Accent,
             fontWeight = FontWeight.SemiBold,
             fontSize = 18.sp,
@@ -289,6 +316,7 @@ private fun formatPrice(minor: Long, currency: String): String {
 
 @Composable
 private fun ActionRow(actions: List<ResolvedAction>, onAction: (ResolvedAction) -> Unit) {
+    val arabic = rememberArabic()
     if (actions.isEmpty()) return
 
     Row(
@@ -311,7 +339,7 @@ private fun ActionRow(actions: List<ResolvedAction>, onAction: (ResolvedAction) 
                     // is deliberately no `when (action.targetType)` here — the
                     // moment one exists, adding a vertical means shipping a
                     // mobile release.
-                    Text(action.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(action.labelFor(arabic), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 // Always shown when a CTA is unavailable. A greyed-out button
                 // with no explanation reads as a broken app, and the vendor gets

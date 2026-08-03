@@ -232,6 +232,82 @@ func (s *Service) NotifyBytesArrived(ctx context.Context, assetID uuid.UUID, byt
 	})
 }
 
+// ConfirmBytes asks the object store directly whether the upload landed.
+//
+// # Why this exists alongside the S3 event
+//
+// It does not replace [NotifyBytesArrived] and must not be read as doing so.
+// The event remains the trigger of record for exactly the reason §1.1 gives: it
+// fires whether or not the client that uploaded is still alive, which is the
+// only thing that works for a vendor console tab that gets closed mid-upload.
+//
+// What the event cannot do is respond to a client that *is* still alive and has
+// just finished. On the app's sell path the seller taps Publish milliseconds
+// after the last byte, and making them wait on a bucket notification adds a
+// delivery hop to the one moment in the flow they are watching a spinner. A HEAD
+// against the key answers the same question immediately.
+//
+// It is also, today, the only thing that answers it at all: this deployment has
+// no S3 event consumer wired — `NotifyBytesArrived` has no caller — so without
+// this a reel created from the app would sit in `draft` forever with its bytes
+// sitting in the bucket beside it.
+//
+// # It stamps and stops
+//
+// It deliberately does not call Advance, and the first version of it did — which
+// stranded every reel it touched.
+//
+// Advance moves a reel as far as its preconditions allow and *returns the job to
+// enqueue*. The API process has no pipeline: the worker's media sweep is what
+// runs probe, transcode and moderate, and it finds work by calling Advance
+// itself and acting on the job that comes back. So a reel advanced here goes
+// draft → uploaded → probing inside the request, the JobProbe that would have
+// started the work is discarded with the return value, and the sweep then finds
+// it sitting in `probing` where Advance correctly reports there is nothing to do
+// until a probe that will never run has run. The reel stops forever, one state
+// past the point anything can rescue it.
+//
+// Stamping only is both simpler and exactly what the S3 event path is for: the
+// sweep picks the reel up on its next pass and drives it from `draft` with the
+// job in hand. The cost is the sweep interval, which the live screen is already
+// polling through.
+//
+// Idempotent and safe to race with the event — MarkBytesReady coalesces
+// `bytes_ready_at`, so whichever commits second is a no-op.
+//
+// Returns ok=false when the object is not there yet. That is a normal answer —
+// the client may still be uploading — and the caller reports it as "still
+// uploading" rather than as a failure.
+func (s *Service) ConfirmBytes(ctx context.Context, reelID uuid.UUID) (bool, error) {
+	asset, err := s.repo.Asset(ctx, reelID)
+	if err != nil {
+		return false, err
+	}
+	if asset.BytesReady {
+		return true, nil
+	}
+	if s.store == nil {
+		return false, nil
+	}
+
+	size, present, err := s.store.Size(ctx, asset.S3Key)
+	if err != nil {
+		return false, err
+	}
+	// A zero-byte object is an upload that started and died. Treating it as
+	// arrived would send an empty file to ffprobe, and the seller would get a
+	// processing failure instead of a retry prompt.
+	if !present || size <= 0 {
+		return false, nil
+	}
+
+	err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		_, err := s.repo.MarkBytesReady(ctx, tx, asset.ID, size)
+		return err
+	})
+	return err == nil, err
+}
+
 // Advance moves a reel as far as its preconditions allow, inside one
 // transaction, and returns the job to enqueue.
 //

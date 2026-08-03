@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,6 +110,18 @@ type Query struct {
 	// empty value as SurfaceForYou so that an internal caller constructing a
 	// Query by hand gets the ranked feed instead of no feed.
 	Surface Surface
+
+	// SubjectTypes narrows the feed to one or more verticals — the filter row.
+	//
+	// A slice rather than a single value because "Cars and Meals" is a coherent
+	// thing to ask for and a single value would force the client to fetch twice
+	// and interleave two ranked pages by hand, which is not ranking.
+	//
+	// Empty means every vertical, and that includes reels with no subject at
+	// all. That default is load-bearing: most reels today have no subject, and a
+	// filter that silently excluded them would make "All" show less than the
+	// unfiltered feed.
+	SubjectTypes []string
 
 	// ViewerID is empty for anonymous browsing, which is supported: putting a
 	// login wall in front of the front door would be fatal to it.
@@ -272,7 +285,7 @@ func (s *Service) Get(ctx context.Context, q Query) (*Page, error) {
 	// impressions across every session. The cursor is the narrow one and the
 	// authoritative one for pagination: without it a deployment with no Redis
 	// returns page 1 forever.
-	seenIDs, err := s.seen.Recent(ctx, q.ViewerKey, seenCap)
+	seenIDs, err := s.seen.Recent(ctx, q.seenKey(), seenCap)
 	if err != nil {
 		slog.WarnContext(ctx, "seen-set unavailable, paginating from the cursor alone", "error", err)
 		seenIDs = nil
@@ -314,7 +327,7 @@ func (s *Service) Get(ctx context.Context, q Query) (*Page, error) {
 		// cost of being slightly wrong (marking a reel the user swiped past
 		// without watching) is a repeat they do not get; the cost of the other
 		// direction is a feed stuck in a loop.
-		if err := s.seen.Mark(ctx, q.ViewerKey, served); err != nil {
+		if err := s.seen.Mark(ctx, q.seenKey(), served); err != nil {
 			slog.WarnContext(ctx, "failed to mark seen", "error", err)
 		}
 	}
@@ -454,6 +467,65 @@ func (s *Service) loadByIDs(ctx context.Context, filled []SponsoredItem) ([]Item
 	return out, nil
 }
 
+// One fetches a single reel by id, for a viewer who already knows which one
+// they want.
+//
+// # Why this is not "the feed with a where clause"
+//
+// The feed's job is to *choose*, and almost all of it — retrieval, ranking,
+// exploration slots, the seen-set, sponsored injection — is about choosing.
+// None of that applies when a viewer taps a row in Saved: they have already
+// chosen, and re-running the ranker over one row would be theatre.
+//
+// What does still apply is eligibility, and that is the whole reason this
+// method exists rather than the handler reading the row itself. A saved reel
+// can have been taken down, its subject can have sold, its author can have been
+// blocked. `published` and not deleted is the floor; anything below it must
+// 404 rather than play, because a reel that is out of the feed for a moderation
+// reason must be out of *every* surface.
+//
+// Deliberately not geo-filtered, which is the one place this differs from the
+// feed. Coverage decides who a reel is *shown* to unprompted; a viewer who
+// saved a car in Dubai and opened the app in Al Ain has not stopped being
+// entitled to look at it. The CTA still resolves against their location and
+// will refuse if the thing genuinely cannot reach them, which is the correct
+// place for that refusal.
+func (s *Service) One(ctx context.Context, reelID uuid.UUID) (Item, bool, error) {
+	items, err := s.loadByIDs(ctx, []SponsoredItem{{ReelID: reelID}})
+	if err != nil {
+		return Item{}, false, err
+	}
+	if len(items) == 0 {
+		return Item{}, false, nil
+	}
+
+	// `state` and `visibility`, which between them are the whole gate. There is
+	// no soft-delete column on reels — removal is the `removed` state, which
+	// `published` already excludes — so checking for one was a wrong guess that
+	// 500'd rather than failing open, which is at least the right direction.
+	var state, visibility string
+	err = s.pool.QueryRow(ctx,
+		`SELECT state::text, COALESCE(visibility, 'public') FROM reels WHERE id = $1`, reelID,
+	).Scan(&state, &visibility)
+	if err != nil {
+		return Item{}, false, fmt.Errorf("feed: reel state: %w", err)
+	}
+	// Visibility is checked here and not in the feed's own query, because the
+	// feed never retrieves a non-public reel in the first place — its candidate
+	// sources filter on it. This endpoint takes an id from a client, so it is
+	// the one path where an unlisted reel could be fetched by guessing.
+	if state != "published" || visibility != "public" {
+		return Item{}, false, nil
+	}
+
+	it := items[0]
+	// loadByIDs stamps a delivery id because its only caller until now was the
+	// sponsored path. This reel was not delivered as an ad, and leaving a
+	// fabricated id on it would attribute an organic view to a campaign.
+	it.DeliveryID = uuid.NullUUID{}
+	return it, true, nil
+}
+
 // candidate is one retrieved reel with its ranking features attached.
 type candidate struct {
 	Item
@@ -510,9 +582,21 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 	// never declared, so it is appended exactly when the text that references it
 	// is present. Passing it unconditionally fails every other surface with an
 	// arity error, which is a good failure — loud and immediate — but a failure.
+	// The ending-soon horizon is $15, but only on that surface — its predicate
+	// is the only text that mentions it. So the subject filter, which every
+	// surface carries, is $15 or $16 depending on whether the horizon is there.
+	//
+	// Numbered rather than padded. Passing a nil placeholder to keep the indexes
+	// fixed looks tidier and does not work: Postgres infers parameter types from
+	// where they are used, and a parameter the statement never references is
+	// `could not determine data type of parameter $15` at prepare time — a 500
+	// on every request, which is how this was found.
+	subjParam := "$15"
 	if q.Surface == SurfaceEndingSoon {
 		args = append(args, EndingSoonHorizon.Seconds())
+		subjParam = "$16"
 	}
+	args = append(args, subjectTypesArg(q.SubjectTypes))
 
 	rows, err := s.pool.Query(ctx, `
 		WITH viewer AS (
@@ -543,6 +627,13 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		     WHERE r.state = 'published'
 		       AND (`+q.Surface.candidatePredicate()+`)
 		       AND r.visibility = 'public'
+		       -- The filter row. NULL-safe by construction: cardinality(NULL) is
+		       -- NULL, so the coalesce is what makes "no filter" mean "keep
+		       -- everything" rather than "keep nothing" — the same trap the
+		       -- exclusion list below documents, and it has bitten this query
+		       -- once already.
+		       AND (coalesce(cardinality(`+subjParam+`::text[]), 0) = 0
+		            OR r.subject_type = ANY(`+subjParam+`))
 		       -- One predicate for both service-area polygons and radius
 		       -- listings, because coverage was resolved at publish time.
 		       AND ST_Intersects(r.coverage, v.pt)
@@ -738,6 +829,71 @@ func (s *Service) retrieve(ctx context.Context, q Query, exclude []uuid.UUID, w 
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// seenKey namespaces the seen-set per *view*, not per viewer.
+//
+// Found the moment the filter row was first used, and it is worth stating
+// plainly because the naive key looks obviously right: the viewer scrolls the
+// unfiltered feed, every reel is marked seen, they tap "Cars" — and the one car
+// they just scrolled past is excluded, so the tab they deliberately narrowed to
+// comes back empty. The filter looks broken while working perfectly.
+//
+// The seen-set exists to stop *one feed* repeating itself as it pages. It was
+// never meant to be a memory that follows the viewer across a change of intent,
+// and narrowing to a vertical is exactly that: a new question, which deserves
+// the best answer rather than the leftovers of the previous one.
+//
+// The cost is that a reel seen in For you can appear again under Cars. That is
+// the correct trade — a viewer who asks for cars wants the cars, including one
+// they half-watched a minute ago — and it is bounded, because within any single
+// view paging still excludes properly.
+func (q Query) seenKey() string {
+	if q.ViewerKey == "" {
+		return ""
+	}
+	key := q.ViewerKey + "|" + string(q.Surface)
+	if len(q.SubjectTypes) > 0 {
+		// Sorted, so ?subject_type=a&subject_type=b and the reverse are one
+		// view rather than two half-remembered ones.
+		types := append([]string(nil), q.SubjectTypes...)
+		sort.Strings(types)
+		key += "|" + strings.Join(types, ",")
+	}
+	return key + "|" + geoCell(q.Lat, q.Lng)
+}
+
+// geoCell buckets a point so the seen-set is scoped to *where* the feed was
+// served, without resetting on GPS jitter.
+//
+// Location belongs in the key for the same reason the vertical does, and it was
+// missed the first time: moving the feed to another district is a new question,
+// not a filter over the old answer — which is what the client already says in
+// as many words ("this is not a filter over the current results, it is a
+// different feed"). Without it, a kitchen seen at Dubai Marina is silently
+// excluded from a feed the viewer deliberately moved to Al Barsha to find, and
+// the empty screen reads as "nothing here" rather than "you already saw it".
+//
+// Two decimal places is roughly a kilometre at this latitude. Finer would make
+// a stationary phone's GPS wander mint a new key every few pages and forget
+// what it had shown; coarser would merge districts that are genuinely different
+// feeds. Rounded rather than truncated so that points either side of a boundary
+// do not land in cells further apart than they are.
+func geoCell(lat, lng float64) string {
+	return fmt.Sprintf("%.2f,%.2f", lat, lng)
+}
+
+// subjectTypesArg normalises the filter for SQL.
+//
+// A nil slice rather than an empty one: cardinality of an empty array is 0 and
+// of NULL is NULL, and the predicate coalesces either to "no filter". Passing
+// nil keeps the intent visible in a query log — an empty array reads like a
+// filter that matched nothing.
+func subjectTypesArg(types []string) any {
+	if len(types) == 0 {
+		return nil
+	}
+	return types
 }
 
 // rank turns a candidate set into a page.

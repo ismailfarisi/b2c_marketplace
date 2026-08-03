@@ -14,6 +14,12 @@
 package main
 
 import (
+	// Embedded tzdata, so Asia/Dubai resolves in a scratch container with no
+	// system zoneinfo. Without it every wall-clock rendering in the product
+	// silently falls back to UTC — four hours wrong, and wrong by a whole day
+	// for anything near midnight.
+	_ "time/tzdata"
+
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +33,7 @@ import (
 
 	"github.com/marketplace/api/internal/app"
 	"github.com/marketplace/api/internal/config"
+	"github.com/marketplace/api/internal/modules/auctions"
 	"github.com/marketplace/api/internal/modules/boosts"
 	"github.com/marketplace/api/internal/modules/classifieds"
 	"github.com/marketplace/api/internal/modules/dispatch"
@@ -97,7 +104,7 @@ func run() error {
 	// true until the day someone registers a provider in one place.
 	registries := app.BuildRegistries(pool)
 
-	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries.Actions)
+	media, err := app.BuildMedia(ctx, cfg, pool, rdb, registries)
 	if err != nil {
 		return err
 	}
@@ -117,6 +124,16 @@ func run() error {
 			PlatformVATBP:   platformVATBP,
 			ReserveCapacity: true,
 		}))
+
+	// Auctions run on their own, much tighter, loop. See auctionTick: a lot
+	// that closes late is taking bids after the hammer.
+	//
+	// Built with its own notify.Service rather than sharing the compliance
+	// loop's: BuildNotify is a constructor over a pool, the two loops run
+	// concurrently, and threading one instance between them would be sharing
+	// state for no saving.
+	go runAuctionLoop(ctx, auctions.NewService(pool).WithNotifier(
+		app.AuctionNotifier{Notify: app.BuildNotify(cfg, pool)}))
 
 	// The classifieds loop, likewise separate and for the sharpest reason of
 	// the three: its fraud detectors are the only jobs in this process where
