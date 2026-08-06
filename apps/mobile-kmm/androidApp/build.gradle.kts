@@ -15,9 +15,12 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // Pointed at the Go API. 10.0.2.2 is the emulator's route to the host,
-        // which is where `make dev` runs cmd/api.
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/v1\"")
+        // Pointed at the Go API. Supports -PAPI_BASE_URL override for Cloudflare Tunnels / remote hosts.
+        val apiBaseUrl = project.findProperty("API_BASE_URL") as? String
+            ?: System.getenv("API_BASE_URL")
+            ?: "http://10.0.2.2:8080/v1"
+
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildFeatures {
