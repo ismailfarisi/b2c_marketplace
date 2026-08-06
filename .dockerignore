@@ -4,7 +4,16 @@
 # sent to the daemon on every build.
 *
 !services/api/
+!apps/web/
+!packages/
+!package.json
+!package-lock.json
 
+**/node_modules
+**/.next
+**/.git
+apps/mobile-kmm/
 services/api/bin/
 services/api/**/*_test.go
 services/api/loadtest/
+
