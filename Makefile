@@ -104,12 +104,15 @@ run-worker: ## Run the background worker
 run-feed: ## Run the feed read-path service (:8081)
 	cd $(API_DIR) && go run -ldflags "-X main.version=$(GIT_SHA)" ./cmd/feed
 
-.PHONY: dev-web dev-mobile
+.PHONY: dev-web dev-mobile dev-apk-tunnel
 dev-web: ## Run the Next.js web app
 	npm run dev:web
 
 dev-mobile: ## Build and install the Android app (mobile is Kotlin Multiplatform)
 	cd apps/mobile-kmm && ./gradlew :androidApp:installDebug
+
+dev-apk-tunnel: ## Build Android APK pointing to live Cloudflare Tunnel URL
+	powershell -ExecutionPolicy Bypass -File scripts/build-apk-with-tunnel.ps1
 
 .PHONY: test-mobile
 test-mobile: check-interop parse-swift ## Compile and test the mobile module for both platforms
