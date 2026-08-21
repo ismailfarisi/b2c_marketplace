@@ -88,4 +88,12 @@ class FeedApi(private val client: HttpClient) {
     suspend fun unlike(reelId: String) {
         client.delete("reels/$reelId/like")
     }
+
+    suspend fun save(reelId: String) {
+        client.put("reels/$reelId/save")
+    }
+
+    suspend fun unsave(reelId: String) {
+        client.delete("reels/$reelId/save")
+    }
 }

@@ -312,18 +312,29 @@ class FeedViewModel(
     fun toggleLike(reelId: String) {
         val items = _state.value.items
         val index = items.indexOfFirst { it.id == reelId }
-        if (index < 0) return
+        // The reel opened over the feed is state of its own: it may not be in
+        // the page list at all (one arrived from Saved), and a heart that only
+        // worked for feed-resident reels would be a coin-flip in the detail
+        // view with no way to tell which.
+        val focusedItem = _focused.value.item?.takeIf { it.id == reelId }
+        if (index < 0 && focusedItem == null) return
 
-        val item = items[index]
+        val item = if (index >= 0) items[index] else focusedItem!!
         val liked = !item.viewer.liked
-        val updated = items.toMutableList()
-        updated[index] = item.copy(
+        val updatedItem = item.copy(
             viewer = item.viewer.copy(liked = liked),
             counters = item.counters.copy(
                 likes = (item.counters.likes + if (liked) 1 else -1).coerceAtLeast(0)
             ),
         )
-        _state.value = _state.value.copy(items = updated)
+        if (index >= 0) {
+            val updated = items.toMutableList()
+            updated[index] = updatedItem
+            _state.value = _state.value.copy(items = updated)
+        }
+        if (focusedItem != null) {
+            _focused.value = _focused.value.copy(item = updatedItem)
+        }
 
         events.enqueue(
             ClientEvent(
@@ -339,11 +350,67 @@ class FeedViewModel(
                     // Put it back. A like that silently did not happen is worse
                     // than one that visibly failed, because the viewer believes
                     // they have saved something.
-                    val current = _state.value.items.toMutableList()
-                    val i = current.indexOfFirst { it.id == reelId }
-                    if (i >= 0) current[i] = item
-                    _state.value = _state.value.copy(items = current)
+                    revertReel(reelId, item)
                 }
+        }
+    }
+
+    /**
+     * Optimistic save. Same reasoning as [toggleLike]: the bookmark flipping
+     * back a second later reads as the app losing the viewer's choice, so the
+     * state moves first and a failure moves it back.
+     */
+    fun toggleSave(reelId: String) {
+        val items = _state.value.items
+        val index = items.indexOfFirst { it.id == reelId }
+        val focusedItem = _focused.value.item?.takeIf { it.id == reelId }
+        if (index < 0 && focusedItem == null) return
+
+        val item = if (index >= 0) items[index] else focusedItem!!
+        val saved = !item.viewer.saved
+        val updatedItem = item.copy(
+            viewer = item.viewer.copy(saved = saved),
+            counters = item.counters.copy(
+                saves = (item.counters.saves + if (saved) 1 else -1).coerceAtLeast(0)
+            ),
+        )
+        if (index >= 0) {
+            val updated = items.toMutableList()
+            updated[index] = updatedItem
+            _state.value = _state.value.copy(items = updated)
+        }
+        if (focusedItem != null) {
+            _focused.value = _focused.value.copy(item = updatedItem)
+        }
+
+        events.enqueue(
+            ClientEvent(
+                type = if (saved) ClientEvent.SAVE else ClientEvent.UNSAVE,
+                reelId = reelId,
+                occurredAt = events.timestamp(),
+            )
+        )
+
+        viewModelScope.launch {
+            runCatching { if (saved) api.save(reelId) else api.unsave(reelId) }
+                .onFailure { revertReel(reelId, item) }
+        }
+    }
+
+    /**
+     * Restores a reel's pre-toggle state wherever it is currently held — the
+     * feed's page list, the focused reel, or both — after a failed optimistic
+     * update.
+     */
+    private fun revertReel(reelId: String, previous: FeedItem) {
+        val current = _state.value.items.toMutableList()
+        val i = current.indexOfFirst { it.id == reelId }
+        if (i >= 0) {
+            current[i] = previous
+            _state.value = _state.value.copy(items = current)
+        }
+        if (_focused.value.item?.id == reelId) {
+            _focused.value = _focused.value.copy(item = previous)
         }
     }
 
