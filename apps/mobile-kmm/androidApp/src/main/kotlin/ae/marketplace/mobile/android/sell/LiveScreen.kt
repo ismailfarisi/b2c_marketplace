@@ -3,6 +3,7 @@ package ae.marketplace.mobile.android.sell
 import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.android.ui.Space
+import ae.marketplace.mobile.android.ui.Type
 import ae.marketplace.mobile.android.ui.words
 import ae.marketplace.mobile.model.TrustUpload
 import ae.marketplace.mobile.sell.DocumentPhase
@@ -24,13 +25,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.outlined.Autorenew
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,12 +82,25 @@ fun LiveStep(
             val phase = phaseOf(state)
 
             Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    text = phase.glyph,
-                    fontSize = 20.sp,
-                    color = if (phase.bad) Accent else Palette.Good,
-                    modifier = Modifier.padding(end = 12.dp, top = 2.dp),
-                )
+                // A tinted disc rather than a bare glyph. The state of a
+                // listing is the only thing on this screen the seller came to
+                // read, and "✓" against a dark background at 20sp is not a
+                // thing anyone reads from across a forecourt.
+                val tint = if (phase.bad) Palette.Bad else Palette.Good
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .padding(end = Space.Medium)
+                        .size(40.dp)
+                        .background(tint.copy(alpha = 0.15f), RoundedCornerShape(50)),
+                ) {
+                    Icon(
+                        imageVector = phase.icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
                 Column {
                     Text(
                         text = phase.headline,
@@ -93,11 +117,17 @@ fun LiveStep(
                 }
             }
 
-            Column(Modifier.padding(top = 28.dp)) {
+            // Three blocks across, not three label-and-number rows. These
+            // are the numbers the seller reopens the app for; side by side
+            // they read as one result at a glance instead of a settings list.
+            Row(
+                Modifier.fillMaxWidth().padding(top = Space.XL),
+                horizontalArrangement = Arrangement.spacedBy(Space.Large),
+            ) {
                 val counters = state.status?.counters
-                StatRow(stringResource(R.string.sell_stat_views), counters?.views)
-                StatRow(stringResource(R.string.sell_stat_saves), counters?.saves)
-                StatRow(stringResource(R.string.sell_stat_comments), counters?.comments)
+                StatBlock(stringResource(R.string.sell_stat_views), counters?.views, Modifier.weight(1f))
+                StatBlock(stringResource(R.string.sell_stat_saves), counters?.saves, Modifier.weight(1f))
+                StatBlock(stringResource(R.string.sell_stat_comments), counters?.comments, Modifier.weight(1f))
             }
 
             // The button repairs whichever half actually broke. Retrying the
@@ -201,26 +231,28 @@ fun LiveStep(
 }
 
 @Composable
-private fun StatRow(label: String, value: Long?) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 7.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+private fun StatBlock(label: String, value: Long?, modifier: Modifier = Modifier) {
+    Column(modifier) {
         Text(
             // A dash, not a zero, before the first status lands. Zero is a
             // measurement; a dash is "not measured yet", and a seller who reads
             // an unfetched zero as a real one concludes their reel died.
             text = value?.toString() ?: "—",
             color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
+            fontSize = Type.Heading,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = label,
+            color = Palette.TextFaint,
+            fontSize = Type.Caption,
+            modifier = Modifier.padding(top = Space.Hair),
         )
     }
 }
 
 private data class Phase(
-    val glyph: String,
+    val icon: ImageVector,
     val headline: String,
     val detail: String,
     val bad: Boolean = false,
@@ -238,45 +270,45 @@ private data class Phase(
 @Composable
 private fun phaseOf(state: SellUiState): Phase {
     if (state.upload == UploadPhase.Uploading) {
-        return Phase("↑", stringResource(R.string.sell_uploading), stringResource(R.string.sell_uploading_detail))
+        return Phase(Icons.Filled.FileUpload, stringResource(R.string.sell_uploading), stringResource(R.string.sell_uploading_detail))
     }
     if (state.upload == UploadPhase.Failed) {
-        return Phase("!", stringResource(R.string.sell_upload_failed), stringResource(R.string.sell_upload_failed_detail), bad = true)
+        return Phase(Icons.Filled.ErrorOutline, stringResource(R.string.sell_upload_failed), stringResource(R.string.sell_upload_failed_detail), bad = true)
     }
     if (state.upload == UploadPhase.Refused) {
         // The video is up. What was refused is the listing, and saying so is
         // the difference between a seller retrying the right thing and giving
         // up on a video they have already successfully sent.
-        return Phase("!", stringResource(R.string.sell_publish_refused), stringResource(R.string.sell_publish_refused_detail), bad = true)
+        return Phase(Icons.Filled.ErrorOutline, stringResource(R.string.sell_publish_refused), stringResource(R.string.sell_publish_refused_detail), bad = true)
     }
 
     return when (state.status?.state) {
         "published" -> Phase(
-            "✓",
+            Icons.Filled.CheckCircle,
             stringResource(R.string.sell_live_in, state.place.ifEmpty { "—" }),
             stringResource(R.string.sell_live_detail),
         )
         "review_pending" -> Phase(
-            "◷",
+            Icons.Outlined.Schedule,
             stringResource(R.string.sell_in_review),
             stringResource(R.string.sell_in_review_detail),
         )
         "rejected" -> Phase(
-            "✕",
+            Icons.Filled.Close,
             stringResource(R.string.sell_rejected),
             state.status?.failure?.detail?.takeIf { it.isNotEmpty() }
                 ?: stringResource(R.string.sell_rejected_detail),
             bad = true,
         )
         "failed" -> Phase(
-            "!",
+            Icons.Filled.ErrorOutline,
             stringResource(R.string.sell_processing_failed),
             state.status?.failure?.detail?.takeIf { it.isNotEmpty() }
                 ?: stringResource(R.string.sell_processing_failed_detail),
             bad = true,
         )
         else -> Phase(
-            "◌",
+            Icons.Outlined.Autorenew,
             stringResource(R.string.sell_processing),
             stringResource(R.string.sell_processing_detail),
         )

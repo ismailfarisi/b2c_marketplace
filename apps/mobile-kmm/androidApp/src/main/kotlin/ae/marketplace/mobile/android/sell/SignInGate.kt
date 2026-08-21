@@ -1,6 +1,7 @@
 package ae.marketplace.mobile.android.sell
 
 import ae.marketplace.mobile.android.R
+import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.identity.SignInProblem
 import ae.marketplace.mobile.identity.SignInViewModel
 import androidx.compose.foundation.background
@@ -13,11 +14,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -108,15 +113,23 @@ fun SignInGate(
             .imePadding()
             .padding(horizontal = 22.dp, vertical = 18.dp),
     ) {
-        Text(
-            text = "✕",
-            color = Color.White,
-            fontSize = 22.sp,
+        val closeLabel = stringResource(R.string.action_close)
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier
+                .padding(bottom = 16.dp)
+                .size(36.dp)
+                .background(Palette.Surface, RoundedCornerShape(50))
                 .clickable(onClick = onCancel)
-                .semantics { contentDescription = "Close" }
-                .padding(bottom = 24.dp),
-        )
+                .semantics { contentDescription = closeLabel },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+        }
         Text(
             text = stringResource(R.string.signin_title),
             color = Color.White,

@@ -1,6 +1,7 @@
 package ae.marketplace.mobile.android
 
 import ae.marketplace.mobile.android.ui.Palette
+import ae.marketplace.mobile.android.ui.Type
 import ae.marketplace.mobile.feed.FeedUiState
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -108,6 +109,7 @@ fun FilterSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Sheet,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
     ) {
         Column(
             Modifier
@@ -173,28 +175,41 @@ fun FilterSheet(
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text = text,
-        color = Color.White.copy(alpha = 0.5f),
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Medium,
+        // Uppercase and faint: a section label is scaffolding for the controls
+        // under it, and at full white it competes with the choices themselves.
+        text = text.uppercase(),
+        color = Palette.TextFaint,
+        fontSize = Type.Caption,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.6.sp,
         modifier = Modifier.padding(top = 8.dp),
     )
 }
 
 @Composable
 private fun Chip(label: String, active: Boolean, onClick: () -> Unit) {
+    // One chip style for the whole app: selected is an accent tint behind an
+    // accent outline, unselected is the surface. The same shape appears on the
+    // sell form and in search, and three different selected-states for the same
+    // gesture is three things to learn.
     val shape = RoundedCornerShape(50)
     Box(
         Modifier
-            .then(if (active) Modifier.background(Accent, shape) else Modifier)
-            .then(if (active) Modifier else Modifier.border(1.dp, Color.White.copy(alpha = 0.25f), shape))
+            .then(
+                if (active) Modifier
+                    .background(Accent.copy(alpha = 0.15f), shape)
+                    .border(1.dp, Accent, shape)
+                // Line, not Surface: the sheet itself is Surface, and a chip
+                // the same colour as the thing it sits on is not a chip.
+                else Modifier.background(Palette.Line, shape)
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 9.dp),
     ) {
         Text(
             text = label,
-            color = if (active) Color.White else Color.White.copy(alpha = 0.8f),
-            fontSize = 13.sp,
+            color = if (active) Accent else Palette.TextMuted,
+            fontSize = Type.Secondary,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
         )
     }

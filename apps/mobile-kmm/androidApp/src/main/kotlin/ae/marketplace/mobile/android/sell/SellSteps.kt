@@ -2,6 +2,9 @@ package ae.marketplace.mobile.android.sell
 
 import ae.marketplace.mobile.android.ui.FailureBlock
 import ae.marketplace.mobile.android.ui.Palette
+import ae.marketplace.mobile.android.ui.Shape
+import ae.marketplace.mobile.android.ui.Space
+import ae.marketplace.mobile.android.ui.Type
 import ae.marketplace.mobile.android.ui.words
 import ae.marketplace.mobile.android.PLACES
 import ae.marketplace.mobile.android.Place
@@ -22,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -34,7 +38,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +54,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -403,19 +412,27 @@ private fun SelectRow(field: SellField, value: String, onValue: (String) -> Unit
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
                 row.forEach { option ->
                     val active = option.value == value
+                    // Selected reads as a tint plus its own outline rather than
+                    // a solid accent slab. A row of solid chips on a dark form
+                    // is louder than the field it belongs to, and the seller is
+                    // choosing a value here, not being warned about one.
                     Box(
                         Modifier
                             .then(
-                                if (active) Modifier.background(Accent, RoundedCornerShape(50))
-                                else Modifier.border(1.dp, Line, RoundedCornerShape(50))
+                                if (active) Modifier
+                                    .background(Accent.copy(alpha = 0.15f), RoundedCornerShape(50))
+                                    .border(1.dp, Accent, RoundedCornerShape(50))
+                                else Modifier
+                                    .background(Palette.Surface, RoundedCornerShape(50))
                             )
                             .clickable { onValue(option.value) }
                             .padding(horizontal = 13.dp, vertical = 7.dp),
                     ) {
                         Text(
                             option.label,
-                            color = if (active) Color.White else Color.White.copy(alpha = 0.75f),
+                            color = if (active) Accent else Palette.TextMuted,
                             fontSize = 12.sp,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
                 }
@@ -695,16 +712,32 @@ internal fun StepScaffold(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "‹",
-                color = Color.White,
-                fontSize = 26.sp,
-                modifier = Modifier.clickable(onClick = onBack).padding(end = 14.dp),
-            )
-            Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            // AutoMirrored, because "‹" does not turn around in Arabic and a
+            // back arrow pointing out of the screen is worse than no arrow.
+            val backLabel = stringResource(R.string.cd_back)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(Space.Touch)
+                    .clickable(onClick = onBack)
+                    .semantics { contentDescription = backLabel },
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(Modifier.weight(1f).padding(start = Space.Small)) {
+                Text(
+                    title,
+                    color = Color.White,
+                    fontSize = Type.Heading,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 if (subtitle.isNotEmpty()) {
-                    Text(subtitle, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                    Text(subtitle, color = Palette.TextFaint, fontSize = Type.Secondary)
                 }
             }
         }
@@ -732,11 +765,15 @@ internal fun PrimaryButton(label: String, enabled: Boolean, onClick: () -> Unit)
     Box(
         Modifier
             .fillMaxWidth()
-            .background(if (enabled) Accent else Accent.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+            .height(Space.Touch)
+            .background(
+                if (enabled) Accent else Accent.copy(alpha = 0.3f),
+                RoundedCornerShape(Shape.Button),
+            )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 15.dp),
+            .padding(horizontal = Space.Medium),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = Color.White, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,12 +35,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +58,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -60,6 +72,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -138,40 +151,49 @@ fun SearchScreen(
             horizontalArrangement = Arrangement.spacedBy(Space.Small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
                     .weight(1f)
-                    .border(1.dp, Palette.Line, RoundedCornerShape(Shape.Field))
+                    .background(Palette.Surface, RoundedCornerShape(50))
                     .padding(horizontal = 14.dp, vertical = 13.dp),
             ) {
-                if (state.query.isEmpty()) {
-                    Text(
-                        stringResource(R.string.search_hint),
-                        color = Palette.TextGhost,
-                        fontSize = Type.Body,
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = null,
+                    tint = Palette.TextFaint,
+                    modifier = Modifier.size(18.dp),
+                )
+                Box(Modifier.weight(1f).padding(start = 10.dp)) {
+                    if (state.query.isEmpty()) {
+                        Text(
+                            stringResource(R.string.search_hint),
+                            color = Palette.TextGhost,
+                            fontSize = Type.Body,
+                        )
+                    }
+                    BasicTextField(
+                        value = state.query,
+                        onValueChange = viewModel::onQueryChanged,
+                        singleLine = true,
+                        textStyle = TextStyle(color = Palette.Text, fontSize = Type.Body),
+                        cursorBrush = SolidColor(Palette.Accent),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Search,
+                        ),
+                        // Search on the IME key, which the field advertised and
+                        // did not honour. Someone who types a query and presses
+                        // the magnifier expects it to run now rather than 280ms
+                        // later, and the debounce is for typing, not for a
+                        // deliberate submit.
+                        keyboardActions = KeyboardActions(onSearch = {
+                            keyboard?.hide()
+                            viewModel.submitSearch()
+                        }),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                BasicTextField(
-                    value = state.query,
-                    onValueChange = viewModel::onQueryChanged,
-                    singleLine = true,
-                    textStyle = TextStyle(color = Palette.Text, fontSize = Type.Body),
-                    cursorBrush = SolidColor(Palette.Accent),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Search,
-                    ),
-                    // Search on the IME key, which the field advertised and did
-                    // not honour. Someone who types a query and presses the
-                    // magnifier expects it to run now rather than 280ms later,
-                    // and the debounce is for typing, not for a deliberate
-                    // submit.
-                    keyboardActions = KeyboardActions(onSearch = {
-                        keyboard?.hide()
-                        viewModel.submitSearch()
-                    }),
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
 
             // The count is on the button, always, and that is the point of it.
@@ -186,7 +208,7 @@ fun SearchScreen(
                     .border(
                         1.dp,
                         if (active > 0) Palette.Accent else Palette.Line,
-                        RoundedCornerShape(Shape.Field),
+                        RoundedCornerShape(50),
                     )
                     .clickable(onClick = viewModel::openFilters)
                     .defaultMinSize(minWidth = Space.Touch, minHeight = Space.Touch)
@@ -298,8 +320,8 @@ private fun SearchRow(r: SearchResult, onClick: () -> Unit) {
                         fontSize = Type.Micro,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
-                            .border(1.dp, Palette.Accent.copy(alpha = 0.6f), RoundedCornerShape(Shape.Pill))
-                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                            .background(Palette.Accent.copy(alpha = 0.15f), RoundedCornerShape(50))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
             }
@@ -346,9 +368,13 @@ private fun distance(metres: Long): String = when {
 /**
  * What the viewer kept.
  *
- * The words on each card are the vertical's, resolved through the same
- * SummarizePage the feed uses — so a saved car and a saved flash offer come
- * through this one composable and it knows what neither of them is.
+ * A poster grid rather than a row list. A list of saved things spends most of
+ * its width on words the viewer already read when they chose to keep the reel;
+ * what tells six saved cars apart is the photograph, so the photograph gets
+ * the screen. The words on each cell are still the vertical's, resolved
+ * through the same SummarizePage the feed uses — a saved car and a saved
+ * flash offer come through this one composable and it knows what neither of
+ * them is.
  */
 @Composable
 fun SavedScreen(
@@ -373,12 +399,26 @@ fun SavedScreen(
                     hint = stringResource(R.string.saved_empty_hint),
                 )
 
-            else -> LazyColumn(contentPadding = bottomInset()) {
-                state.error?.let {
-                    item { FailureStrip(it, onRetry = { viewModel.loadSaved(force = true) }) }
-                }
-                items(state.items, key = { it.reelId }) { item ->
-                    SavedRow(item) { onOpen(item) }
+            else -> {
+                val bottom = bottomInset()
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(
+                        start = Space.Edge,
+                        end = Space.Edge,
+                        bottom = bottom.calculateBottomPadding(),
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(Space.Medium),
+                    verticalArrangement = Arrangement.spacedBy(Space.Medium),
+                ) {
+                    state.error?.let {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            FailureStrip(it, onRetry = { viewModel.loadSaved(force = true) })
+                        }
+                    }
+                    items(state.items, key = { it.reelId }) { item ->
+                        SavedCell(item) { onOpen(item) }
+                    }
                 }
             }
         }
@@ -386,70 +426,75 @@ fun SavedScreen(
 }
 
 @Composable
-private fun SavedRow(item: SavedItem, onClick: () -> Unit) {
+private fun SavedCell(item: SavedItem, onClick: () -> Unit) {
     val fade = if (item.unavailable) 0.4f else 1f
     val summary = item.summary
     val title = summary?.title.orEmpty().ifEmpty { stringResource(R.string.saved_untitled) }
 
-    Row(
+    Box(
         Modifier
             .fillMaxWidth()
+            .aspectRatio(3f / 4f)
+            .alpha(fade)
+            .clip(RoundedCornerShape(Shape.Card))
             .clickable(enabled = !item.unavailable, onClick = onClick)
-            .defaultMinSize(minHeight = Space.Touch)
-            .padding(horizontal = Space.Edge, vertical = 10.dp)
-            // One announcement per row rather than five fragments. A screen
-            // reader reading "USED CAR, 2021 Nissan Patrol, 62,000 km, AED
-            // 185,000" as four separate nodes makes the list four times longer
-            // to move through for no added meaning.
+            // One announcement per cell rather than a fragment per line. A
+            // screen reader moving through six saved cars should hear six
+            // titles, not twenty-four text nodes.
             .semantics(mergeDescendants = true) { contentDescription = title },
-        horizontalArrangement = Arrangement.spacedBy(Space.Medium),
     ) {
         Poster(
             url = item.posterUrl.ifEmpty { null },
             lqip = item.lqip.ifEmpty { null },
-            modifier = Modifier.size(width = 54.dp, height = 72.dp),
+            corner = Shape.Card,
+            modifier = Modifier.fillMaxSize(),
         )
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = summary?.badge.orEmpty(),
-                color = Palette.Text.copy(alpha = 0.45f * fade),
-                fontSize = Type.Micro,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                // No summary means the vertical has no provider, or its provider
-                // failed. Either way the reel is still a real thing the viewer
-                // kept, so the row renders rather than vanishing.
-                text = title,
-                color = Palette.Text.copy(alpha = fade),
-                fontSize = Type.Body,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = Space.Hair),
-            )
-            if (!summary?.line.isNullOrEmpty()) {
-                Text(
-                    text = summary.line,
-                    color = Palette.Text.copy(alpha = 0.5f * fade),
-                    fontSize = Type.Secondary,
-                    modifier = Modifier.padding(top = Space.Hair),
+
+        // The bottom gradient earns the text its legibility; the poster is an
+        // arbitrary photograph and white on a bright one is not there.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.55f to Color.Transparent,
+                        1.0f to Color.Black.copy(alpha = 0.7f),
+                    )
                 )
-            }
+        )
+
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .padding(Space.Medium),
+        ) {
+            Text(
+                text = title,
+                color = Palette.Text,
+                fontSize = Type.Secondary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             val price = summary?.priceMinor
             if (price != null && !summary.currency.isNullOrEmpty()) {
                 Text(
                     text = "${summary.currency} ${group(price / 100)}${summary.priceSuffix}",
-                    color = Palette.Accent.copy(alpha = fade),
+                    color = Palette.Accent,
                     fontSize = Type.Secondary,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = Space.Tight),
+                    modifier = Modifier.padding(top = Space.Hair),
                 )
             }
             if (item.unavailable) {
+                // Greyed rather than dropped. A saved car that sold is
+                // something the viewer chose to keep, and silently deleting it
+                // reads as the app losing their data.
                 Text(
                     text = stringResource(R.string.saved_gone),
-                    color = Palette.TextFaint,
+                    color = Palette.TextMuted,
                     fontSize = Type.Caption,
-                    modifier = Modifier.padding(top = Space.Tight),
+                    modifier = Modifier.padding(top = Space.Hair),
                 )
             }
         }
@@ -624,8 +669,11 @@ private fun StatusPill(l: MyListing) {
         fontSize = Type.Micro,
         fontWeight = FontWeight.Bold,
         modifier = Modifier
-            .border(1.dp, colour.copy(alpha = 0.5f), RoundedCornerShape(Shape.Pill))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            // A soft tint rather than an outline: the pill is a status, not an
+            // action, and the quieter shape keeps a row of them from reading
+            // as a strip of buttons.
+            .background(colour.copy(alpha = 0.15f), RoundedCornerShape(50))
+            .padding(horizontal = 7.dp, vertical = 3.dp),
     )
 }
 
@@ -666,7 +714,18 @@ private fun RowLink(label: String, badge: Int?, onClick: () -> Unit) {
             .padding(horizontal = Space.Edge, vertical = Space.Large),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = Palette.Text, fontSize = Type.Body)
+        Icon(
+            imageVector = Icons.Outlined.Email,
+            contentDescription = null,
+            tint = Palette.Text,
+            modifier = Modifier.size(22.dp),
+        )
+        Text(
+            label,
+            color = Palette.Text,
+            fontSize = Type.Body,
+            modifier = Modifier.padding(start = Space.Medium),
+        )
         if (badge != null) {
             Text(
                 text = if (badge > 99) "99+" else badge.toString(),

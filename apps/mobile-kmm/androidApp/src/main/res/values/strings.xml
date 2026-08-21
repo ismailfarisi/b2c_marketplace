@@ -82,6 +82,18 @@
     <string name="nav_not_built">This screen has not been built yet. The tab is here so the shape of the product is visible.</string>
 
     <!--
+        Content descriptions for icon-only buttons. Close, Send, Flash, Flip
+        camera, Gallery, Filters and Messages already have strings of their own
+        (action_close, thread_send, sell_flash, sell_flip_camera, sell_gallery,
+        search_filters, me_messages) — reuse those rather than adding twins.
+    -->
+    <string name="cd_like">Like</string>
+    <string name="cd_unlike">Remove like</string>
+    <string name="cd_save">Save</string>
+    <string name="cd_unsave">Remove from saved</string>
+    <string name="cd_back">Back</string>
+
+    <!--
         The sell flow.
 
         Note what is absent: any word about cars. Every label the seller reads on

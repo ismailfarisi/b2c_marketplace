@@ -14,7 +14,6 @@ import ae.marketplace.mobile.model.Conversation
 import ae.marketplace.mobile.model.Message
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +34,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -110,7 +113,23 @@ private fun InboxRow(c: Conversation, onClick: () -> Unit) {
             .semantics(mergeDescendants = true) { contentDescription = title },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        // The avatar is the conversation's initial rather than a photo: there
+        // is no seller-picture endpoint, and a grey silhouette repeated down
+        // the list would be decoration pretending to be information.
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(44.dp)
+                .background(Palette.Surface, RoundedCornerShape(50)),
+        ) {
+            Text(
+                text = title.first().uppercase(),
+                color = Palette.TextMuted,
+                fontSize = Type.Heading,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Column(Modifier.weight(1f).padding(start = Space.Medium)) {
             Text(
                 text = title,
                 color = Palette.Text,
@@ -170,6 +189,7 @@ private fun InboxRow(c: Conversation, onClick: () -> Unit) {
 fun ThreadScreen(viewModel: MeViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val state by viewModel.thread.collectAsState()
     val listState = rememberLazyListState()
+    val sendLabel = stringResource(R.string.thread_send)
 
     BackHandler(onBack = onBack)
 
@@ -229,7 +249,7 @@ fun ThreadScreen(viewModel: MeViewModel, onBack: () -> Unit, modifier: Modifier 
             Box(
                 Modifier
                     .weight(1f)
-                    .border(1.dp, Palette.Line, RoundedCornerShape(20.dp))
+                    .background(Palette.Surface, RoundedCornerShape(22.dp))
                     .padding(horizontal = 14.dp, vertical = 11.dp),
             ) {
                 if (state.draft.isEmpty()) {
@@ -255,20 +275,20 @@ fun ThreadScreen(viewModel: MeViewModel, onBack: () -> Unit, modifier: Modifier 
             val canSend = state.draft.isNotBlank() && !state.sending
             Box(
                 Modifier
+                    .size(44.dp)
                     .background(
-                        if (canSend) Palette.Accent else Palette.Accent.copy(alpha = 0.3f),
-                        RoundedCornerShape(20.dp),
+                        if (canSend) Palette.Accent else Palette.Surface,
+                        RoundedCornerShape(50),
                     )
                     .clickable(enabled = canSend) { viewModel.sendDraft() }
-                    .defaultMinSize(minWidth = Space.Touch, minHeight = Space.Touch)
-                    .padding(horizontal = Space.Large, vertical = 11.dp),
+                    .semantics { contentDescription = sendLabel },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = stringResource(R.string.thread_send),
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = null,
+                    tint = if (canSend) Color.White else Palette.TextFaint,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -292,14 +312,14 @@ private fun Bubble(m: Message) {
                     // an app whose subject is video.
                     if (m.mine) Palette.Accent.copy(alpha = 0.22f) else Palette.Surface,
                     RoundedCornerShape(
-                        topStart = 14.dp,
-                        topEnd = 14.dp,
+                        topStart = 20.dp,
+                        topEnd = 20.dp,
                         // The corner nearest the speaker is squared off. It is
                         // the cheapest possible way to say which side a message
                         // is on, and it survives being read in bright sunlight
                         // where a subtle fill difference does not.
-                        bottomStart = if (m.mine) 14.dp else Space.Tight,
-                        bottomEnd = if (m.mine) Space.Tight else 14.dp,
+                        bottomStart = if (m.mine) 20.dp else Space.Tight,
+                        bottomEnd = if (m.mine) Space.Tight else 20.dp,
                     ),
                 )
                 .padding(horizontal = 13.dp, vertical = 9.dp),
@@ -332,20 +352,25 @@ private fun stateNote(m: Message): String? = when (m.state) {
 
 @Composable
 private fun Header(title: String, onBack: () -> Unit) {
+    val backLabel = stringResource(R.string.cd_back)
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = Space.Medium),
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = Space.Medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "‹",
-            color = Palette.Text,
-            fontSize = 26.sp,
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier
+                .size(44.dp)
                 .clickable(onClick = onBack)
-                .defaultMinSize(minWidth = Space.Touch, minHeight = Space.Touch)
-                .semantics { contentDescription = "Back" }
-                .padding(end = Space.Medium),
-        )
+                .semantics { contentDescription = backLabel },
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = null,
+                tint = Palette.Text,
+                modifier = Modifier.size(24.dp),
+            )
+        }
         Text(
             text = title,
             color = Palette.Text,

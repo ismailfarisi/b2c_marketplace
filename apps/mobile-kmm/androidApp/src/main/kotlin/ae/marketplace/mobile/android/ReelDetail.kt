@@ -10,11 +10,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,7 +29,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * One reel, opened because someone asked for it.
@@ -129,6 +131,8 @@ fun ReelDetail(
                     // bands of empty space.
                     chromeTop = 0.dp,
                     chromeBottom = 0.dp,
+                    onLike = { viewModel.toggleLike(item.id) },
+                    onSave = { viewModel.toggleSave(item.id) },
                 )
             }
         }
@@ -142,17 +146,23 @@ fun ReelDetail(
         // directly on top of the badge — "✕SED CAR". The overlay owns the left
         // edge for the subject's own label on every vertical, so anything this
         // screen adds has to go on the other side.
-        Text(
-            text = "✕",
-            color = Palette.Text,
-            fontSize = 24.sp,
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
+                .padding(end = Space.Large, top = Space.Small)
+                .size(36.dp)
+                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50))
                 .clickable(onClick = dismiss)
-                .defaultMinSize(minWidth = Space.Touch, minHeight = Space.Touch)
-                .semantics { contentDescription = closeLabel }
-                .padding(end = Space.Large, top = Space.Small),
-        )
+                .semantics { contentDescription = closeLabel },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = null,
+                tint = Palette.Text,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }

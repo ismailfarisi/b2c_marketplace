@@ -4,7 +4,6 @@ import ae.marketplace.mobile.feed.FeedViewModel
 import ae.marketplace.mobile.model.FeedItem
 import ae.marketplace.mobile.model.ResolvedAction
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -103,6 +101,7 @@ fun ReelFeed(
                     skewMillis = state.clockSkewMillis,
                     viewModel = viewModel,
                     onLike = { viewModel.toggleLike(state.items[page].id) },
+                    onSave = { viewModel.toggleSave(state.items[page].id) },
                     onAction = { action ->
                         // Recorded first, always — including when the target
                         // turns out to be unavailable. Phase 3 built the funnel
@@ -162,6 +161,7 @@ private fun ReelPage(
     skewMillis: Long,
     viewModel: FeedViewModel,
     onLike: () -> Unit,
+    onSave: () -> Unit,
     onAction: (ResolvedAction) -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -205,8 +205,9 @@ private fun ReelPage(
                 )
         )
 
-        // Time bar, badge, time pill, product line, CTAs. One skeleton for every
-        // vertical; only the time signal differs between them.
+        // Time bar, badge, time pill, product line, CTAs and the like/save
+        // rail. One skeleton for every vertical; only the time signal differs
+        // between them.
         ReelOverlay(
             item = item,
             skewMillis = skewMillis,
@@ -216,15 +217,8 @@ private fun ReelPage(
             // creates it so the two move together.
             chromeTop = TAB_ROW_HEIGHT,
             chromeBottom = NAV_BAR_HEIGHT,
-        )
-
-        Text(
-            text = if (item.viewer.liked) "♥ ${item.counters.likes}" else "♡ ${item.counters.likes}",
-            color = Color.White,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(16.dp)
-                .clickable(onClick = onLike),
+            onLike = onLike,
+            onSave = onSave,
         )
     }
 }

@@ -60,6 +60,15 @@ object Palette {
     /** Rejected, failed, expired. Distinct from [Accent], which is not an alarm. */
     val Bad = Color(0xFFD9534F)
 
+    /**
+     * The filled heart, and only the filled heart.
+     *
+     * Not [Accent]: a liked heart in the same orange as the price reads as
+     * decoration rather than state, and the like is the one piece of viewer
+     * state on the feed that has to be visible from across the room.
+     */
+    val Heart = Color(0xFFFF3040)
+
     /** Text on [Ink]. */
     val Text = Color.White
 
@@ -132,9 +141,12 @@ object Type {
 
 object Shape {
     val Field = 10.dp
-    val Card = 8.dp
+    val Card = 12.dp
     val Pill = 4.dp
-    val Thumb = 6.dp
+    val Thumb = 10.dp
+
+    /** Primary and secondary action buttons. Matches [Field] so a form reads as one surface. */
+    val Button = 10.dp
 }
 
 /**

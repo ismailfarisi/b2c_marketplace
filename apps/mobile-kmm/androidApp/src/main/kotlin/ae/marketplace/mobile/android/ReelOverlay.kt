@@ -7,6 +7,7 @@ import ae.marketplace.mobile.model.lineFor
 import ae.marketplace.mobile.model.priceSuffixFor
 import ae.marketplace.mobile.model.titleFor
 import ae.marketplace.mobile.android.ui.Palette
+import ae.marketplace.mobile.android.ui.Shape
 import ae.marketplace.mobile.feed.ReelClock
 import ae.marketplace.mobile.model.FeedItem
 import ae.marketplace.mobile.model.ResolvedAction
@@ -14,6 +15,7 @@ import ae.marketplace.mobile.model.SubjectSummary
 import ae.marketplace.mobile.model.TimeSignal
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,10 +24,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -89,12 +99,14 @@ fun ReelOverlay(
      */
     chromeTop: Dp = 0.dp,
     /**
-     * Space reserved at the bottom for the navigation bar, which is drawn by the
-     * activity over this overlay. Same reasoning as [chromeTop]: the two are laid
-     * out independently and nothing else makes them agree — without it the price
-     * and the CTA sit underneath "Sell".
+     * Space reserved at the bottom for the navigation bar, which is drawn by
+     * the activity over this overlay. Same reasoning as [chromeTop]: the two are
+     * laid out independently and nothing else makes them agree — without it the
+     * price and the CTA sit underneath "Sell".
      */
     chromeBottom: Dp = 0.dp,
+    onLike: () -> Unit = {},
+    onSave: () -> Unit = {},
 ) {
     val arabic = rememberArabic()
 
@@ -117,19 +129,104 @@ fun ReelOverlay(
             }
         }
 
-        Column(
+        Row(
             Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(bottom = chromeBottom)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(start = 16.dp, end = 8.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            ProductLine(item)
-            ActionRow(item.actions, onAction)
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ProductLine(item)
+                ActionRow(item.actions, onAction)
+            }
+            ActionRail(item, onLike, onSave)
         }
     }
+}
+
+/**
+ * The like and save stack at the reel's right edge.
+ *
+ * Counts sit under their glyph in caption type, as Instagram's rail does: the
+ * number is context for the tap, not a second thing to read. Both buttons are
+ * real state — the heart flips [ViewerState.liked], the bookmark
+ * [ViewerState.saved], and both revert visibly if the write fails — so there
+ * is no decorative button here.
+ */
+@Composable
+private fun ActionRail(item: FeedItem, onLike: () -> Unit, onSave: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+    ) {
+        RailButton(
+            active = item.viewer.liked,
+            activeIcon = Icons.Filled.Favorite,
+            inactiveIcon = Icons.Outlined.FavoriteBorder,
+            activeTint = Palette.Heart,
+            count = item.counters.likes,
+            contentDescription = stringResource(if (item.viewer.liked) R.string.cd_unlike else R.string.cd_like),
+            onClick = onLike,
+        )
+        RailButton(
+            active = item.viewer.saved,
+            activeIcon = Icons.Filled.Bookmark,
+            inactiveIcon = Icons.Outlined.Bookmark,
+            activeTint = Color.White,
+            count = item.counters.saves,
+            contentDescription = stringResource(if (item.viewer.saved) R.string.cd_unsave else R.string.cd_save),
+            onClick = onSave,
+        )
+    }
+}
+
+@Composable
+private fun RailButton(
+    active: Boolean,
+    activeIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    inactiveIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    activeTint: Color,
+    count: Long,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(4.dp),
+    ) {
+        Icon(
+            imageVector = if (active) activeIcon else inactiveIcon,
+            contentDescription = contentDescription,
+            tint = if (active) activeTint else Color.White,
+            modifier = Modifier.size(30.dp),
+        )
+        Text(
+            text = compactCount(count),
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/**
+ * 12,340 → "12.3k". Below a thousand the raw number: "742" is already as short
+ * as it gets, and "0.7k" is longer to read than the thing it abbreviates.
+ */
+private fun compactCount(count: Long): String = when {
+    count < 1_000 -> count.toString()
+    count < 10_000 -> "${count / 1000}.${(count % 1000) / 100}k"
+    count < 1_000_000 -> "${count / 1000}k"
+    else -> "${count / 1_000_000}m"
 }
 
 /**
@@ -323,23 +420,61 @@ private fun ActionRow(actions: List<ResolvedAction>, onAction: (ResolvedAction) 
         Modifier.fillMaxWidth().padding(top = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        actions.sortedBy { it.position }.forEach { action ->
+        actions.sortedBy { it.position }.forEachIndexed { index, action ->
             Column(Modifier.weight(1f)) {
-                Button(
-                    onClick = { onAction(action) },
-                    enabled = action.available,
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Accent,
-                        contentColor = Color.White,
-                    ),
-                ) {
-                    // Rendered exactly as the vertical's handler gave it. There
-                    // is deliberately no `when (action.targetType)` here — the
-                    // moment one exists, adding a vertical means shipping a
-                    // mobile release.
-                    Text(action.labelFor(arabic), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // The first action by position is the vertical's primary and
+                // draws filled white — over an arbitrary video frame, white is
+                // the one fill that never blends into the footage. Everything
+                // after it draws as a ghost of the same shape so a secondary
+                // choice never competes with the primary for the thumb.
+                //
+                // Styled by position, not by kind or target: rendering stays
+                // free of `when (targetType)`, because the moment one exists,
+                // adding a vertical means shipping a mobile release.
+                if (index == 0) {
+                    Button(
+                        onClick = { onAction(action) },
+                        enabled = action.available,
+                        shape = RoundedCornerShape(Shape.Button),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black,
+                            disabledContainerColor = Color.White.copy(alpha = 0.35f),
+                            disabledContentColor = Color.Black.copy(alpha = 0.5f),
+                        ),
+                    ) {
+                        Text(
+                            action.labelFor(arabic),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onAction(action) },
+                        enabled = action.available,
+                        shape = RoundedCornerShape(Shape.Button),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (action.available) Color.White.copy(alpha = 0.8f)
+                            else Color.White.copy(alpha = 0.3f),
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.25f),
+                            contentColor = Color.White,
+                            disabledContentColor = Color.White.copy(alpha = 0.4f),
+                        ),
+                    ) {
+                        Text(
+                            action.labelFor(arabic),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
                 // Always shown when a CTA is unavailable. A greyed-out button
                 // with no explanation reads as a broken app, and the vendor gets

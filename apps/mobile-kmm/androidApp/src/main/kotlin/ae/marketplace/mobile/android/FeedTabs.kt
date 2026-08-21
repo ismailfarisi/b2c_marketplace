@@ -61,7 +61,10 @@ fun FeedTabs(
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        // Centred when the labels fit, scrollable when they do not. Four short
+        // English words centre; "Ending soon" in Arabic does not always, and a
+        // row that truncates its own labels is worse than one that scrolls.
+        horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally),
     ) {
         FeedSurface.entries.forEach { surface ->
             Tab(
@@ -84,7 +87,7 @@ private fun Tab(label: String, active: Boolean, onClick: () -> Unit) {
         Text(
             text = label,
             color = if (active) Color.White else Color.White.copy(alpha = 0.65f),
-            fontSize = 14.sp,
+            fontSize = 15.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
         )
         // A 2dp rule under the active tab rather than a filled chip. The tab row

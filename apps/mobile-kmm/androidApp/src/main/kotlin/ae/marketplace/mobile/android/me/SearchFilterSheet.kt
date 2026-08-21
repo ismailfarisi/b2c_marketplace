@@ -38,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * The facets the classifieds index has always accepted and the app never sent.
@@ -77,6 +78,7 @@ fun SearchFilterSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = Palette.Ink,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         dragHandle = null,
     ) {
         Column(
@@ -243,10 +245,13 @@ private fun sortOptions(hasLocation: Boolean): List<Opt> = buildList {
 @Composable
 private fun SectionLabel(text: String) {
     Text(
+        // Same label treatment as the feed's filter sheet. Two sheets that
+        // ask the same kind of question should not look like two products.
         text = text.uppercase(),
         color = Palette.TextFaint,
-        fontSize = Type.Micro,
-        fontWeight = FontWeight.Bold,
+        fontSize = Type.Caption,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.6.sp,
         modifier = Modifier.padding(top = Space.Large, bottom = Space.Small),
     )
 }
@@ -271,7 +276,7 @@ private fun ChipRow(options: List<Opt>, selected: Set<String>, onToggle: (String
                         RoundedCornerShape(50),
                     )
                     .background(
-                        if (on) Palette.Accent.copy(alpha = 0.12f) else Color.Transparent,
+                        if (on) Palette.Accent.copy(alpha = 0.15f) else Palette.Surface,
                         RoundedCornerShape(50),
                     )
                     .clickable { onToggle(opt.value) }

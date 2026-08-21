@@ -79,6 +79,12 @@
     <string name="nav_me">حسابي</string>
     <string name="nav_not_built">لم تُبنَ هذه الشاشة بعد. التبويب موجود ليتضح شكل المنتج.</string>
 
+    <string name="cd_like">إعجاب</string>
+    <string name="cd_unlike">إزالة الإعجاب</string>
+    <string name="cd_save">حفظ</string>
+    <string name="cd_unsave">إزالة من المحفوظات</string>
+    <string name="cd_back">رجوع</string>
+
     <!--
         The sell flow's chrome only. Every label inside the form — "Car", "KM",
         "Price", "Open listing · 30 days" — comes from the server already

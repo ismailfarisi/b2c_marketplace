@@ -36,6 +36,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -89,11 +98,10 @@ private const val MaxClipMs = 60_000L
  * closes the app. Nothing here asks what they are selling — that is a question
  * about the video, and it is asked after the video exists.
  *
- * There is no gallery import. It is the obvious next feature and it is
- * deliberately absent for now: the whole wedge of this product is that its
- * supply is filmed rather than photographed, and the first thing an import
- * button gets used for is a slideshow of the same stills every classifieds site
- * already has.
+ * There is a gallery import, video-only, and the restriction is the point:
+ * the whole wedge of this product is that its supply is filmed rather than
+ * photographed, and a picker that accepted images would fill the feed with
+ * the same stills every classifieds site already has.
  */
 @Composable
 fun RecordScreen(
@@ -105,6 +113,7 @@ fun RecordScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val executor = remember { ContextCompat.getMainExecutor(context) }
+    val closeLabel = stringResource(R.string.action_close)
 
     var hasCamera by remember { mutableStateOf(context.hasPermission(Manifest.permission.CAMERA)) }
     // Tracked separately and never gating the recorder. A seller who refuses the
@@ -287,12 +296,21 @@ fun RecordScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "✕",
-                color = Color.White,
-                fontSize = 22.sp,
-                modifier = Modifier.clickable(onClick = onClose).padding(8.dp),
-            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50))
+                    .clickable(onClick = onClose)
+                    .semantics { contentDescription = closeLabel },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             Box(
                 Modifier
                     .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50))
@@ -328,7 +346,6 @@ fun RecordScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 RailControl(
-                    glyph = "◔",
                     label = stringResource(R.string.sell_length),
                     value = "${maxMs / 1000}s",
                     onClick = {
@@ -340,23 +357,23 @@ fun RecordScreen(
                     },
                 )
                 RailControl(
-                    glyph = "◷",
+                    icon = Icons.Outlined.Timer,
                     label = stringResource(R.string.sell_timer),
                     value = if (timerSec == 0) stringResource(R.string.sell_off)
                     else stringResource(R.string.sell_seconds_short, timerSec),
+                    active = timerSec > 0,
                     onClick = { timerSec = when (timerSec) { 0 -> 3; 3 -> 10; else -> 0 } },
                 )
                 if (hasTorch) {
                     RailControl(
-                        glyph = if (torchOn) "☀" else "☾",
+                        icon = if (torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
                         label = stringResource(R.string.sell_flash),
-                        value = if (torchOn) "1" else stringResource(R.string.sell_off),
+                        value = "",
                         active = torchOn,
                         onClick = { torchOn = !torchOn },
                     )
                 }
                 RailControl(
-                    glyph = "⌕",
                     label = "",
                     value = if (zoom > 1.5f) "2×" else "1×",
                     active = zoom > 1.5f,
@@ -409,7 +426,7 @@ fun RecordScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SideButton(
-                    glyph = "▣",
+                    icon = Icons.Outlined.PhotoLibrary,
                     label = stringResource(R.string.sell_gallery),
                     // Not offered mid-take. Launching a picker over a running
                     // recorder leaves the microphone open behind another app's
@@ -442,7 +459,7 @@ fun RecordScreen(
                 Spacer(Modifier.width(28.dp))
 
                 SideButton(
-                    glyph = "⟳",
+                    icon = Icons.Filled.Cameraswitch,
                     label = stringResource(R.string.sell_flip_camera),
                     // Disabled mid-take. Rebinding the camera during a
                     // recording ends it, and a seller who taps this halfway
@@ -492,7 +509,10 @@ private fun ShutterButton(
                 Modifier
                     .size(if (recording) 30.dp else 60.dp)
                     .background(
-                        if (enabled) Accent else Accent.copy(alpha = 0.3f),
+                        // Red, not the brand orange. Every camera the seller
+                        // has ever used records on red, and the shutter is not
+                        // the place to teach them a new colour.
+                        if (enabled) Palette.Bad else Palette.Bad.copy(alpha = 0.3f),
                         // Square while recording, round when idle. The shape *is*
                         // the stop affordance; a second icon over a live
                         // viewfinder is one more thing between the seller and the
@@ -505,7 +525,8 @@ private fun ShutterButton(
 }
 
 /**
- * A control on the left rail: glyph, current value, and a name under it.
+ * A control on the left rail: an icon, or the control's own value on the
+ * face when the value is the point, and a name under it.
  *
  * The *value* is on the face rather than only the name, because these cycle on
  * tap. A "Length" button that does not say 30s is a button the seller has to
@@ -513,9 +534,9 @@ private fun ShutterButton(
  */
 @Composable
 private fun RailControl(
-    glyph: String,
     label: String,
     value: String,
+    icon: ImageVector? = null,
     active: Boolean = false,
     onClick: () -> Unit,
 ) {
@@ -527,24 +548,49 @@ private fun RailControl(
     ) {
         Box(
             Modifier
-                .size(44.dp)
+                .size(40.dp)
                 .background(
-                    if (active) Accent.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.4f),
+                    if (active) Accent.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.45f),
                     RoundedCornerShape(50),
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Text(glyph, color = Color.White, fontSize = 18.sp)
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            } else {
+                // Length and zoom wear their value instead of an icon. "30s"
+                // and "2x" say in two characters what a stopwatch or a
+                // magnifier can only hint at, and these are the two controls
+                // whose current setting the seller has to read before filming.
+                Text(
+                    text = value,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
-        Text(
-            text = value,
-            color = Color.White,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 3.dp),
-        )
+        if (icon != null && value.isNotEmpty()) {
+            Text(
+                text = value,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
         if (label.isNotEmpty()) {
-            Text(label, color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
+            Text(
+                text = label,
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
         }
     }
 }
@@ -552,7 +598,7 @@ private fun RailControl(
 /** Gallery and flip, either side of the shutter. */
 @Composable
 private fun SideButton(
-    glyph: String,
+    icon: ImageVector,
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -560,15 +606,16 @@ private fun SideButton(
     Box(
         Modifier
             .size(52.dp)
-            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50))
             .clickable(enabled = enabled, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            glyph,
-            color = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
-            fontSize = 22.sp,
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
+            modifier = Modifier.size(24.dp),
         )
     }
 }
