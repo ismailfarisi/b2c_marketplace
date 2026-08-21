@@ -32,12 +32,14 @@ struct SignInGate: View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: onCancel) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 18))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Palette.text)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Palette.surface))
                     .frame(minWidth: Space.touch, minHeight: Space.touch)
             }
             .accessibilityLabel(Text("action_close"))
-            .padding(.bottom, Space.xl)
+            .padding(.bottom, Space.large)
 
             Text("signin_title")
                 .font(.system(size: 21).weight(.semibold))

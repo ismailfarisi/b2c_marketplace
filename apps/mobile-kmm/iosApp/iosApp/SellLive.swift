@@ -23,9 +23,16 @@ struct LiveStep: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .top, spacing: Space.medium) {
-                        Text(phase.glyph)
+                        // A tinted disc rather than a bare glyph. The state of
+                        // the listing is the only thing on this screen the
+                        // seller came to read, and a 20pt character against a
+                        // dark background is not read from across a forecourt.
+                        let tint = phase.bad ? Palette.bad : Palette.good
+                        Image(systemName: phase.symbol)
                             .font(.system(size: 20))
-                            .foregroundStyle(phase.bad ? Palette.accent : Palette.good)
+                            .foregroundStyle(tint)
+                            .frame(width: 40, height: 40)
+                            .background(Circle().fill(tint.opacity(0.15)))
                         VStack(alignment: .leading, spacing: Space.tight) {
                             Text(phase.headline)
                                 .font(.system(size: 19).weight(.semibold))
@@ -36,12 +43,16 @@ struct LiveStep: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: Space.small) {
+                    // Three blocks across, not three label-and-number rows.
+                    // These are the numbers the seller reopens the app for;
+                    // side by side they read as one result at a glance instead
+                    // of a settings list.
+                    HStack(alignment: .top, spacing: Space.large) {
                         stat("sell_stat_views", state.status?.counters.views)
                         stat("sell_stat_saves", state.status?.counters.saves)
                         stat("sell_stat_comments", state.status?.counters.comments)
                     }
-                    .padding(.top, 28)
+                    .padding(.top, Space.xl)
 
                     // The button repairs whichever half actually broke.
                     // Retrying the upload after a refused publish would send the
@@ -91,8 +102,9 @@ struct LiveStep: View {
                         Text("sell_see_in_feed")
                             .font(.system(size: TypeScale.body).weight(.semibold))
                             .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, minHeight: Space.touch)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Palette.accent))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(RoundedRectangle(cornerRadius: Radius.button)
+                                .fill(Palette.accent))
                     }
                 }
                 Button(action: onDone) {
@@ -161,15 +173,18 @@ struct LiveStep: View {
     }
 
     private func stat(_ key: LocalizedStringKey, _ value: Int32?) -> some View {
-        HStack {
-            Text(key)
-                .font(.system(size: TypeScale.secondary))
-                .foregroundStyle(Palette.textMuted)
-            Spacer()
+        VStack(alignment: .leading, spacing: Space.hair) {
+            // A dash, not a zero, before the first status lands. Zero is a
+            // measurement; a dash is "not measured yet", and a seller who reads
+            // an unfetched zero as a real one concludes their reel died.
             Text(value.map { grouped(Int64($0)) } ?? "—")
-                .font(.system(size: TypeScale.body).weight(.medium))
+                .font(.system(size: TypeScale.heading).weight(.semibold))
                 .foregroundStyle(Palette.text)
+            Text(key)
+                .font(.system(size: TypeScale.caption))
+                .foregroundStyle(Palette.textFaint)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var repair: (title: LocalizedStringKey, action: () -> Void)? {
@@ -181,16 +196,16 @@ struct LiveStep: View {
     }
 
     /// The headline, chosen by what is actually true rather than by optimism.
-    private var phase: (glyph: String, headline: String, detail: String, bad: Bool) {
+    private var phase: (symbol: String, headline: String, detail: String, bad: Bool) {
         switch state.upload {
         case .uploading:
-            return ("↑", String(localized: "sell_uploading"),
+            return ("arrow.up.doc", String(localized: "sell_uploading"),
                     String(localized: "sell_uploading_detail"), false)
         case .failed:
-            return ("!", String(localized: "sell_upload_failed"),
+            return ("exclamationmark.circle", String(localized: "sell_upload_failed"),
                     String(localized: "sell_upload_failed_detail"), true)
         case .refused:
-            return ("!", String(localized: "sell_publish_refused"),
+            return ("exclamationmark.circle", String(localized: "sell_publish_refused"),
                     String(localized: "sell_publish_refused_detail"), true)
         default:
             break
@@ -198,20 +213,20 @@ struct LiveStep: View {
 
         switch state.status?.state {
         case "published":
-            return ("✓", String(format: String(localized: "sell_live_in"),
-                                displayPlace(state.place)),
+            return ("checkmark.circle.fill", String(format: String(localized: "sell_live_in"),
+                                                   displayPlace(state.place)),
                     String(localized: "sell_live_detail"), false)
         case "review_pending":
-            return ("◷", String(localized: "sell_in_review"),
+            return ("clock", String(localized: "sell_in_review"),
                     String(localized: "sell_in_review_detail"), false)
         case "rejected":
-            return ("✕", String(localized: "sell_rejected"),
+            return ("xmark", String(localized: "sell_rejected"),
                     String(localized: "sell_rejected_detail"), true)
         case "failed":
-            return ("!", String(localized: "sell_processing_failed"),
+            return ("exclamationmark.circle", String(localized: "sell_processing_failed"),
                     String(localized: "sell_processing_failed_detail"), true)
         default:
-            return ("◷", String(localized: "sell_processing"),
+            return ("arrow.triangle.2.circlepath", String(localized: "sell_processing"),
                     String(localized: "sell_processing_detail"), false)
         }
     }

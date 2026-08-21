@@ -40,17 +40,25 @@ struct SearchScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.small) {
-                TextField("", text: $query, prompt:
-                    Text("search_hint").foregroundStyle(Palette.textGhost))
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(Palette.text)
-                    .font(.system(size: TypeScale.body))
-                    .submitLabel(.search)
-                    .onSubmit { viewModel.submitSearch() }
-                    .onChange(of: query) { _, new in viewModel.onQueryChanged(query: new) }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 13)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.line, lineWidth: 1))
+                // A filled capsule with a magnifier, not an outlined box. The
+                // glyph is what says "type here" before the placeholder is
+                // read, and it is the same field shape the sell form uses.
+                HStack(spacing: Space.small) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: TypeScale.body))
+                        .foregroundStyle(Palette.textFaint)
+                    TextField("", text: $query, prompt:
+                        Text("search_hint").foregroundStyle(Palette.textGhost))
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(Palette.text)
+                        .font(.system(size: TypeScale.body))
+                        .submitLabel(.search)
+                        .onSubmit { viewModel.submitSearch() }
+                        .onChange(of: query) { _, new in viewModel.onQueryChanged(query: new) }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(Palette.surface))
 
                 // The count is on the button, always. A filter still applied
                 // from three searches ago is the commonest way a search screen
@@ -66,10 +74,10 @@ struct SearchScreen: View {
                         .foregroundStyle(active > 0 ? Palette.accent : Palette.textMuted)
                         .padding(.horizontal, Space.medium)
                         .frame(minHeight: Space.touch)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(active > 0 ? Palette.accent : Palette.line, lineWidth: 1)
-                        )
+                        .background(Capsule().fill(
+                            active > 0 ? Palette.accent.opacity(0.15) : Palette.surface))
+                        .overlay(Capsule().stroke(
+                            active > 0 ? Palette.accent : .clear, lineWidth: 1))
                 }
             }
             .padding(.horizontal, Space.large)
@@ -171,7 +179,8 @@ private struct SearchRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: Space.medium) {
             Poster(url: result.posterUrl.isEmpty ? nil : result.posterUrl,
-                   lqip: result.lqip.isEmpty ? nil : result.lqip)
+                   lqip: result.lqip.isEmpty ? nil : result.lqip,
+                   corner: Radius.card)
                 .frame(width: 54, height: 72)
 
             VStack(alignment: .leading, spacing: Space.hair) {
@@ -188,16 +197,15 @@ private struct SearchRow: View {
                         Text("search_promoted")
                             .font(.system(size: TypeScale.micro).weight(.bold))
                             .foregroundStyle(Palette.accent)
-                            .padding(.horizontal, 5).padding(.vertical, 2)
-                            .overlay(RoundedRectangle(cornerRadius: 4)
-                                .stroke(Palette.accent.opacity(0.6), lineWidth: 1))
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(Capsule().fill(Palette.accent.opacity(0.15)))
                     }
                 }
                 Text(Self.attributes(result))
                     .font(.system(size: TypeScale.secondary))
                     .foregroundStyle(Palette.textMuted)
                 Text("\(result.currency) \(grouped(result.priceMinor / 100))")
-                    .font(.system(size: TypeScale.body).weight(.semibold))
+                    .font(.system(size: TypeScale.heading).weight(.semibold))
                     .foregroundStyle(Palette.accent)
             }
         }
@@ -261,20 +269,34 @@ struct SavedScreen: View {
                            hint: String(localized: "saved_empty_hint"))
                 Spacer()
             } else {
-                List(state.items, id: \.reelId) { item in
-                    SavedRow(item: item)
-                        .listRowBackground(Palette.ink)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            // The reel they kept, not the feed in general. A
-                            // bookmark that opens something else is the least
-                            // useful possible answer to a bookmark.
-                            guard !item.unavailable else { return }
-                            onOpenReel(item.reelId)
+                // A grid, not a list. What the viewer kept is a set of
+                // *videos*, and a 54-point thumbnail beside three lines of text
+                // is a filing cabinet — they recognise the car from the frame
+                // long before they read the title.
+                ScrollView {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: Space.medium),
+                            GridItem(.flexible(), spacing: Space.medium),
+                        ],
+                        spacing: Space.medium
+                    ) {
+                        ForEach(state.items, id: \.reelId) { item in
+                            SavedCell(item: item)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    // The reel they kept, not the feed in
+                                    // general. A bookmark that opens something
+                                    // else is the least useful possible answer
+                                    // to a bookmark.
+                                    guard !item.unavailable else { return }
+                                    onOpenReel(item.reelId)
+                                }
                         }
+                    }
+                    .padding(.horizontal, Space.edge)
+                    .padding(.bottom, navBarHeight)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
         .background(Palette.ink)
@@ -285,51 +307,65 @@ struct SavedScreen: View {
     }
 }
 
-private struct SavedRow: View {
+private struct SavedCell: View {
     let item: SavedItem
 
     var body: some View {
-        let fade = item.unavailable ? 0.4 : 1.0
+        let fade = item.unavailable ? 0.5 : 1.0
         let summary = item.summary
+        let title = summary.map { localised($0.title, $0.titleAr) }
+            .flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "saved_untitled")
 
-        HStack(alignment: .top, spacing: Space.medium) {
+        ZStack(alignment: .bottomLeading) {
             Poster(url: item.posterUrl.isEmpty ? nil : item.posterUrl,
-                   lqip: item.lqip.isEmpty ? nil : item.lqip)
-                .frame(width: 54, height: 72)
+                   lqip: item.lqip.isEmpty ? nil : item.lqip,
+                   corner: Radius.card)
+
+            // The bottom gradient earns the text its legibility; the poster is
+            // an arbitrary photograph and white on a bright one is not there.
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.55),
+                    .init(color: .black.opacity(0.7), location: 1.0),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
 
             VStack(alignment: .leading, spacing: Space.hair) {
-                if let badge = summary.map({ localised($0.badge, $0.badgeAr) }), !badge.isEmpty {
-                    Text(badge)
-                        .font(.system(size: TypeScale.micro).weight(.bold))
-                        .foregroundStyle(Palette.text.opacity(0.45 * fade))
-                }
-                // No summary means the vertical has no provider, or its provider
-                // failed. Either way the reel is still a real thing the viewer
-                // kept, so the row renders rather than vanishing.
-                Text(summary.map { localised($0.title, $0.titleAr) }.flatMap { $0.isEmpty ? nil : $0 }
-                     ?? String(localized: "saved_untitled"))
-                    .font(.system(size: TypeScale.body).weight(.medium))
-                    .foregroundStyle(Palette.text.opacity(fade))
-                if let line = summary.map({ localised($0.line, $0.lineAr) }), !line.isEmpty {
-                    Text(line)
-                        .font(.system(size: TypeScale.secondary))
-                        .foregroundStyle(Palette.text.opacity(0.5 * fade))
-                }
+                // No summary means the vertical has no provider, or its
+                // provider failed. Either way the reel is still a real thing
+                // the viewer kept, so the cell renders rather than vanishing.
+                Text(title)
+                    .font(.system(size: TypeScale.secondary).weight(.semibold))
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(2)
                 if let summary, let price = summary.priceMinor?.int64Value,
                    let currency = summary.currency, !currency.isEmpty {
                     Text("\(currency) \(grouped(price / 100))"
                          + localised(summary.priceSuffix, summary.priceSuffixAr))
                         .font(.system(size: TypeScale.secondary).weight(.semibold))
-                        .foregroundStyle(Palette.accent.opacity(fade))
+                        .foregroundStyle(Palette.accent)
                 }
                 if item.unavailable {
+                    // Greyed rather than dropped. A saved car that sold is
+                    // something the viewer chose to keep, and silently deleting
+                    // it reads as the app losing their data.
                     Text("saved_gone")
                         .font(.system(size: TypeScale.caption))
-                        .foregroundStyle(Palette.textFaint)
+                        .foregroundStyle(Palette.textMuted)
                 }
             }
+            .padding(Space.medium)
         }
-        .padding(.vertical, Space.tight)
+        .aspectRatio(3.0 / 4.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+        .opacity(fade)
+        // One announcement per cell rather than a fragment per line. A screen
+        // reader moving through six saved cars should hear six titles, not
+        // twenty-four text nodes.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
     }
 }
 
@@ -358,7 +394,10 @@ struct MeScreen: View {
 
             List {
                 Button(action: onOpenInbox) {
-                    HStack {
+                    HStack(spacing: Space.medium) {
+                        Image(systemName: "envelope")
+                            .font(.system(size: TypeScale.body))
+                            .foregroundStyle(Palette.textMuted)
                         Text("me_messages")
                             .font(.system(size: TypeScale.body))
                             .foregroundStyle(Palette.text)
@@ -394,9 +433,12 @@ struct MeScreen: View {
                         }
                     }
                 } header: {
-                    Text("me_your_listings")
-                        .font(.system(size: TypeScale.caption).weight(.medium))
-                        .foregroundStyle(Palette.text.opacity(0.45))
+                    // Uppercase and faint: a section header is scaffolding
+                    // for the rows under it, not a row of its own.
+                    Text(String(localized: "me_your_listings").uppercased())
+                        .font(.system(size: TypeScale.caption).weight(.semibold))
+                        .kerning(0.6)
+                        .foregroundStyle(Palette.textFaint)
                 }
 
                 Button(action: onSignOut) {
@@ -433,7 +475,8 @@ private struct ListingRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: Space.medium) {
             Poster(url: listing.posterUrl.isEmpty ? nil : listing.posterUrl,
-                   lqip: listing.lqip.isEmpty ? nil : listing.lqip)
+                   lqip: listing.lqip.isEmpty ? nil : listing.lqip,
+                   corner: Radius.card)
                 .frame(width: 44, height: 58)
 
             VStack(alignment: .leading, spacing: Space.hair) {
@@ -486,11 +529,14 @@ private struct StatusPill: View {
 
     var body: some View {
         let (label, colour) = words
+        // A tint rather than a hairline outline. At 9pt a 1-point border is
+        // most of what the eye sees, and seven statuses drawn that way read as
+        // seven boxes before they read as seven words.
         Text(label.uppercased())
             .font(.system(size: TypeScale.micro).weight(.bold))
             .foregroundStyle(colour)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(colour.opacity(0.5), lineWidth: 1))
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(Capsule().fill(colour.opacity(0.15)))
     }
 
     private var words: (String, Color) {

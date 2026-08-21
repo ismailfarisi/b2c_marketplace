@@ -39,6 +39,11 @@
 "nav_saved" = "Saved";
 "nav_me" = "Me";
 "nav_not_built" = "This screen has not been built yet. The tab is here so the shape of the product is visible.";
+"cd_like" = "Like";
+"cd_unlike" = "Remove like";
+"cd_save" = "Save";
+"cd_unsave" = "Remove from saved";
+"cd_back" = "Back";
 "sell_what_listing" = "What are you listing?";
 "sell_nothing_sellable" = "Nothing can be listed from the app yet.";
 "sell_three_fields" = "A few details, then you're live";

@@ -25,6 +25,10 @@ enum Palette {
     static let good = Color(red: 0.298, green: 0.686, blue: 0.314)
     static let bad = Color(red: 0.851, green: 0.325, blue: 0.310)
 
+    /// The filled heart, and only the filled heart. See the Android note: a
+    /// liked heart in the price's orange reads as decoration, not as state.
+    static let heart = Color(red: 1.0, green: 0.188, blue: 0.251)
+
     static let text = Color.white
     static let textMuted = Color.white.opacity(0.55)
     static let textFaint = Color.white.opacity(0.38)
@@ -46,6 +50,23 @@ enum Space {
     /// Apple's minimum tappable size. Smaller than Android's 48dp and it is the
     /// platform's number, not a compromise between them.
     static let touch: CGFloat = 44
+}
+
+/// Corner radii, matching `ui/Theme.kt`'s `Shape`.
+///
+/// Four values and no fifth. A radius picked per view is how two cards on the
+/// same screen end up 8 and 12, which nobody reports and everybody feels.
+enum Radius {
+    static let field: CGFloat = 10
+    static let card: CGFloat = 12
+    static let pill: CGFloat = 4
+    static let thumb: CGFloat = 10
+
+    /// Primary and secondary action buttons.
+    static let button: CGFloat = 10
+
+    /// Bottom sheets.
+    static let sheet: CGFloat = 16
 }
 
 enum TypeScale {

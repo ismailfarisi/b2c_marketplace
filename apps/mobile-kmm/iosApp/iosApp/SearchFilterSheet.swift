@@ -88,9 +88,9 @@ struct SearchFilterSheet: View {
                         Text("filters_apply")
                             .font(.system(size: TypeScale.body).weight(.semibold))
                             .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, minHeight: Space.touch)
-                            .padding(.vertical, 10)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Palette.accent))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(RoundedRectangle(cornerRadius: Radius.button)
+                                .fill(Palette.accent))
                     }
                     .padding(.top, Space.xl)
                     .padding(.bottom, Space.large)
@@ -113,6 +113,7 @@ struct SearchFilterSheet: View {
             }
         }
         .presentationDetents([.large])
+        .presentationCornerRadius(Radius.sheet)
     }
 
     // ── options ──────────────────────────────────────────────────────────────
@@ -154,8 +155,11 @@ struct SearchFilterSheet: View {
     }
 
     private func section(_ key: LocalizedStringKey) -> some View {
+        // Same label treatment as the feed's filter sheet. Two sheets that
+        // ask the same kind of question should not look like two products.
         Text(key)
-            .font(.system(size: TypeScale.micro).weight(.bold))
+            .font(.system(size: TypeScale.caption).weight(.semibold))
+            .kerning(0.6)
             .foregroundStyle(Palette.textFaint)
             .textCase(.uppercase)
             .padding(.top, Space.large)
@@ -175,8 +179,9 @@ struct SearchFilterSheet: View {
                                 .weight(on ? .semibold : .regular))
                             .foregroundStyle(on ? Palette.accent : Palette.textMuted)
                             .padding(.horizontal, 14).padding(.vertical, 10)
-                            .background(Capsule().fill(on ? Palette.accent.opacity(0.12) : .clear))
-                            .overlay(Capsule().stroke(on ? Palette.accent : Palette.line, lineWidth: 1))
+                            .background(Capsule().fill(
+                                on ? Palette.accent.opacity(0.15) : Palette.surface))
+                            .overlay(Capsule().stroke(on ? Palette.accent : .clear, lineWidth: 1))
                     }
                 }
             }

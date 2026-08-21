@@ -44,9 +44,14 @@ struct ReelDetail: View {
             // subject's own badge on every vertical, and a close button there
             // sits directly on top of it.
             Button(action: dismiss) {
+                // On a scrim disc rather than bare. A white glyph over a video
+                // frame is legible until the frame is a white car, and this is
+                // the only way out of the screen.
                 Image(systemName: "xmark")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(.black.opacity(0.45)))
                     .frame(width: Space.touch, height: Space.touch)
             }
             .accessibilityLabel(Text("action_close"))

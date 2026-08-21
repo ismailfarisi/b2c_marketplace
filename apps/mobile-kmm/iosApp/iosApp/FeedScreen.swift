@@ -123,31 +123,40 @@ struct FeedTabsView: View {
     ]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(Self.surfaces, id: \.self) { surface in
-                    let active = surface == selected
-                    VStack(spacing: 4) {
-                        Text(NSLocalizedString(Self.key(surface), comment: ""))
-                            .font(.system(size: 14, weight: active ? .semibold : .regular))
-                            .foregroundStyle(active ? .white : .white.opacity(0.65))
-
-                        // A 2pt rule under the active tab rather than a filled
-                        // chip: the row floats over video, and a filled
-                        // background would need a scrim heavy enough to compete
-                        // with the reel underneath it.
-                        Rectangle()
-                            .fill(active ? Self.accent : .clear)
-                            .frame(width: active ? 20 : 0, height: 2)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onSelect(surface) }
-                }
-            }
-            .padding(.horizontal, 12)
+        // Centred when the labels fit, scrolling when they do not — the same
+        // two-in-one the Compose side gets from `spacedBy(18.dp, Center)`. A row
+        // that always scrolls sits left-aligned with a gap on the right, and a
+        // row that never scrolls truncates "Ending soon" in Arabic.
+        ViewThatFits(in: .horizontal) {
+            row
+            ScrollView(.horizontal, showsIndicators: false) { row }
         }
+    }
+
+    private var row: some View {
+        HStack(spacing: 18) {
+            ForEach(Self.surfaces, id: \.self) { surface in
+                let active = surface == selected
+                VStack(spacing: 4) {
+                    Text(NSLocalizedString(Self.key(surface), comment: ""))
+                        .font(.system(size: 15, weight: active ? .semibold : .regular))
+                        .foregroundStyle(active ? .white : .white.opacity(0.65))
+
+                    // A 2pt rule under the active tab rather than a filled
+                    // chip: the row floats over video, and a filled background
+                    // would need a scrim heavy enough to compete with the reel
+                    // underneath it.
+                    Rectangle()
+                        .fill(active ? Self.accent : .clear)
+                        .frame(width: active ? 20 : 0, height: 2)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+                .onTapGesture { onSelect(surface) }
+            }
+        }
+        .padding(.horizontal, 12)
     }
 
     private static func key(_ surface: FeedSurface) -> String {
@@ -226,9 +235,16 @@ private struct ReelPage: View {
             // every vertical; only the time signal differs between them.
             // navBarHeight is added by the overlay itself; the bar is drawn by
             // RootView over this view and neither knows about the other.
-            ReelOverlay(item: item, skewMillis: skewMillis, chromeBottom: navBarHeight) { action in
-                viewModel.onActionClick(actionId: action.id, reelId: item.id)
-            }
+            ReelOverlay(
+                item: item,
+                skewMillis: skewMillis,
+                chromeBottom: navBarHeight,
+                onAction: { action in
+                    viewModel.onActionClick(actionId: action.id, reelId: item.id)
+                },
+                onLike: { viewModel.toggleLike(reelId: item.id) },
+                onSave: { viewModel.toggleSave(reelId: item.id) }
+            )
         }
     }
 }

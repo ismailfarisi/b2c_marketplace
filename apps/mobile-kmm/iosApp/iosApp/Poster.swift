@@ -16,7 +16,8 @@ struct Poster: View {
     let url: String?
     let lqip: String?
     var contentMode: ContentMode = .fill
-    var corner: CGFloat = 6
+    /// Matches `Shape.Thumb` on the Compose side.
+    var corner: CGFloat = Radius.thumb
 
     var body: some View {
         ZStack {

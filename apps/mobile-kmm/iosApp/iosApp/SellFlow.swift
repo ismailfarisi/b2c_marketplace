@@ -138,8 +138,10 @@ private struct RecordStep: View {
                 HStack {
                     Button(action: onCancel) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(.black.opacity(0.45)))
                             .frame(width: Space.touch, height: Space.touch)
                     }
                     .accessibilityLabel(Text("action_close"))
@@ -209,8 +211,12 @@ private struct RecordStep: View {
                                     .font(.system(size: 34, weight: .bold))
                                     .foregroundStyle(.white)
                             } else {
+                                // Red, not the brand orange. Every camera the
+                                // seller has ever used records on red, and the
+                                // shutter is not the place to teach them a new
+                                // colour.
                                 RoundedRectangle(cornerRadius: recorder.recording ? 6 : 30)
-                                    .fill(Palette.accent)
+                                    .fill(Palette.bad)
                                     .frame(width: recorder.recording ? 32 : 60,
                                            height: recorder.recording ? 32 : 60)
                                     .animation(.easeInOut(duration: 0.15), value: recorder.recording)
@@ -244,7 +250,7 @@ private struct RecordStep: View {
         .overlay(alignment: .leading) {
             if recorder.authorised && !recorder.recording && countdown == nil {
                 VStack(spacing: 18) {
-                    RailControl(system: "timer", label: "sell_length",
+                    RailControl(system: nil, label: "sell_length",
                                 value: String(recorder.maxSeconds) + "s") {
                         recorder.maxSeconds = recorder.maxSeconds == 15 ? 30
                             : recorder.maxSeconds == 30 ? 60 : 15
@@ -256,14 +262,15 @@ private struct RecordStep: View {
                         timerSec = timerSec == 0 ? 3 : timerSec == 3 ? 10 : 0
                     }
                     if recorder.hasTorch {
-                        RailControl(system: recorder.torchOn ? "bolt.fill" : "bolt.slash",
+                        RailControl(system: recorder.torchOn
+                                        ? "flashlight.on.fill" : "flashlight.off.fill",
                                     label: "sell_flash",
-                                    value: recorder.torchOn ? "1" : String(localized: "sell_off"),
+                                    value: "",
                                     active: recorder.torchOn) {
                             recorder.toggleTorch()
                         }
                     }
-                    RailControl(system: "magnifyingglass", label: nil,
+                    RailControl(system: nil, label: nil,
                                 value: zoomedIn ? "2x" : "1x", active: zoomedIn) {
                         zoomedIn.toggle()
                         recorder.setZoom(zoomedIn ? 2 : 1)
@@ -707,7 +714,7 @@ private struct StepScaffold<Content: View>: View {
             Header(title: "", onBack: onBack)
 
             Text(title)
-                .font(.system(size: 21).weight(.semibold))
+                .font(.system(size: TypeScale.heading).weight(.semibold))
                 .foregroundStyle(Palette.text)
                 .padding(.horizontal, Space.edge)
             if let subtitle {
@@ -741,9 +748,8 @@ private struct PrimaryButton: View {
             Text(title)
                 .font(.system(size: TypeScale.body).weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, minHeight: Space.touch)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 10)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(RoundedRectangle(cornerRadius: Radius.button)
                     .fill(enabled ? Palette.accent : Palette.accent.opacity(0.3)))
         }
         .disabled(!enabled)

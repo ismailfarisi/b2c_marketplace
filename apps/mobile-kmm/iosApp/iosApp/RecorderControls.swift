@@ -2,13 +2,17 @@ import AVFoundation
 import PhotosUI
 import SwiftUI
 
-/// A control on the recorder's left rail: glyph, current value, and a name.
+/// A control on the recorder's left rail: a symbol, or the control's own value
+/// on the face when the value is the point, and a name under it.
 ///
 /// The *value* is on the face rather than only the name, because these cycle on
 /// tap. A "Length" button that does not say 30s is a button the seller has to
 /// press in order to discover the state of.
 struct RailControl: View {
-    let system: String
+    /// Nil for the controls whose value *is* the face — length and zoom. "30s"
+    /// and "2x" say in two characters what a stopwatch or a magnifier can only
+    /// hint at.
+    var system: String?
     /// Optional, not empty-string: LocalizedStringKey compares by key and
     /// testing it against "" is a lookup nobody meant to perform.
     let label: LocalizedStringKey?
@@ -21,15 +25,23 @@ struct RailControl: View {
             VStack(spacing: 3) {
                 ZStack {
                     Circle()
-                        .fill(active ? Palette.accent.opacity(0.85) : .black.opacity(0.4))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: system)
-                        .font(.system(size: 17))
+                        .fill(active ? Palette.accent.opacity(0.85) : .black.opacity(0.45))
+                        .frame(width: 40, height: 40)
+                    if let system {
+                        Image(systemName: system)
+                            .font(.system(size: 17))
+                            .foregroundStyle(.white)
+                    } else {
+                        Text(value)
+                            .font(.system(size: 13).weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                if system != nil && !value.isEmpty {
+                    Text(value)
+                        .font(.system(size: 11).weight(.semibold))
                         .foregroundStyle(.white)
                 }
-                Text(value)
-                    .font(.system(size: 11).weight(.semibold))
-                    .foregroundStyle(.white)
                 if let label {
                     Text(label)
                         .font(.system(size: 10))
@@ -51,11 +63,14 @@ struct SideButton: View {
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.black.opacity(0.4))
+                // A disc, like the rail's controls. Two shapes for the same
+                // kind of control on one viewfinder is a difference that
+                // implies a distinction nobody meant.
+                Circle()
+                    .fill(.black.opacity(0.45))
                     .frame(width: 52, height: 52)
                 Image(systemName: system)
-                    .font(.system(size: 20))
+                    .font(.system(size: 22))
                     .foregroundStyle(enabled ? .white : .white.opacity(0.35))
             }
         }

@@ -28,10 +28,21 @@ struct InboxScreen: View {
                 Spacer()
             } else {
                 List(state.items, id: \.id) { c in
-                    HStack {
+                    let title = c.listingTitle.isEmpty
+                        ? String(localized: "inbox_untitled") : c.listingTitle
+                    HStack(spacing: Space.medium) {
+                        // The conversation's initial rather than a photo: there
+                        // is no seller-picture endpoint, and a grey silhouette
+                        // repeated down the list would be decoration pretending
+                        // to be information.
+                        Text(title.prefix(1).uppercased())
+                            .font(.system(size: TypeScale.heading).weight(.semibold))
+                            .foregroundStyle(Palette.textMuted)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Palette.surface))
+
                         VStack(alignment: .leading, spacing: Space.hair) {
-                            Text(c.listingTitle.isEmpty
-                                 ? String(localized: "inbox_untitled") : c.listingTitle)
+                            Text(title)
                                 .font(.system(size: TypeScale.body)
                                     .weight(c.unread > 0 ? .semibold : .regular))
                                 .foregroundStyle(Palette.text)
@@ -140,19 +151,24 @@ struct ThreadScreen: View {
                     .font(.system(size: 14))
                     .onChange(of: draft) { _, new in viewModel.onDraftChanged(text: new) }
                     .padding(.horizontal, 14).padding(.vertical, 11)
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Palette.line, lineWidth: 1))
+                    // Filled rather than outlined. A hairline box around a
+                    // growing multi-line field draws a shape that changes size
+                    // as you type; a fill just gets taller.
+                    .background(Capsule().fill(Palette.surface))
 
                 let canSend = !draft.trimmingCharacters(in: .whitespaces).isEmpty && !state.sending
                 Button { viewModel.sendDraft() } label: {
-                    Text("thread_send")
-                        .font(.system(size: 14).weight(.medium))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, Space.large).padding(.vertical, 11)
-                        .frame(minHeight: Space.touch)
-                        .background(Capsule().fill(
-                            canSend ? Palette.accent : Palette.accent.opacity(0.3)))
+                    // A glyph, not the word "Send". The composer is the one row
+                    // that has to survive a keyboard, an eight-line draft and a
+                    // language that reads the other way.
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(canSend ? .white : Palette.textFaint)
+                        .frame(width: Space.touch, height: Space.touch)
+                        .background(Circle().fill(canSend ? Palette.accent : Palette.surface))
                 }
                 .disabled(!canSend)
+                .accessibilityLabel(Text("thread_send"))
             }
             .padding(.horizontal, Space.medium)
             .padding(.vertical, 10)
@@ -186,13 +202,13 @@ private struct Bubble: View {
                     // the price colour and the CTA colour — at full strength a
                     // chat would be the loudest screen in an app about video.
                     UnevenRoundedRectangle(
-                        topLeadingRadius: 14,
+                        topLeadingRadius: 20,
                         // The corner nearest the speaker is squared off: the
                         // cheapest way to say which side a message is on, and it
                         // survives bright sunlight where a subtle fill does not.
-                        bottomLeadingRadius: message.mine ? 14 : Space.tight,
-                        bottomTrailingRadius: message.mine ? Space.tight : 14,
-                        topTrailingRadius: 14
+                        bottomLeadingRadius: message.mine ? 20 : Space.tight,
+                        bottomTrailingRadius: message.mine ? Space.tight : 20,
+                        topTrailingRadius: 20
                     )
                     .fill(message.mine ? Palette.accent.opacity(0.22) : Palette.surface)
                 )

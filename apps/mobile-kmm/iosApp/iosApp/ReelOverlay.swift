@@ -29,8 +29,11 @@ struct ReelOverlay: View {
     /// price and the CTA sit underneath "Sell".
     var chromeBottom: CGFloat = 0
     let onAction: (ResolvedAction) -> Void
-
-    private static let accent = Color(red: 0.706, green: 0.396, blue: 0.165)
+    /// Flips `viewer.liked` through the shared view model. Optimistic on the
+    /// other side of the boundary, so there is nothing to animate around here.
+    var onLike: () -> Void = {}
+    /// Flips `viewer.saved`. Same contract as `onLike`.
+    var onSave: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,12 +50,18 @@ struct ReelOverlay: View {
 
             Spacer()
 
-            VStack(alignment: .leading, spacing: 6) {
-                ProductLine(item: item)
-                ActionRow(actions: item.actions, onAction: onAction)
+            HStack(alignment: .bottom, spacing: Space.small) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ProductLine(item: item)
+                    ActionRow(actions: item.actions, onAction: onAction)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                ActionRail(item: item, onLike: onLike, onSave: onSave)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(.leading, 16)
+            .padding(.trailing, 8)
+            .padding(.bottom, 16)
             .padding(.bottom, chromeBottom)
         }
     }
@@ -202,6 +211,84 @@ enum ReelLabels {
     }
 }
 
+// MARK: - the action rail
+
+/// Like and save, stacked at the reel's right edge.
+///
+/// Only these two. Both are real state the server holds — `viewer.liked` and
+/// `viewer.saved` — and both revert visibly when the write fails. A share or a
+/// follow glyph would be a button with nothing behind it, which is worse than
+/// an absent one because it is only discovered after the tap.
+private struct ActionRail: View {
+    let item: FeedItem
+    let onLike: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            RailButton(
+                active: item.viewer.liked,
+                activeSymbol: "heart.fill",
+                inactiveSymbol: "heart",
+                activeTint: Palette.heart,
+                count: item.counters.likes,
+                label: NSLocalizedString(item.viewer.liked ? "cd_unlike" : "cd_like", comment: ""),
+                action: onLike
+            )
+            RailButton(
+                active: item.viewer.saved,
+                activeSymbol: "bookmark.fill",
+                inactiveSymbol: "bookmark",
+                activeTint: .white,
+                count: item.counters.saves,
+                label: NSLocalizedString(item.viewer.saved ? "cd_unsave" : "cd_save", comment: ""),
+                action: onSave
+            )
+        }
+        .padding(.bottom, Space.tight)
+    }
+}
+
+private struct RailButton: View {
+    let active: Bool
+    let activeSymbol: String
+    let inactiveSymbol: String
+    let activeTint: Color
+    let count: Int64
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: active ? activeSymbol : inactiveSymbol)
+                    .font(.system(size: 24))
+                    .foregroundStyle(active ? activeTint : .white)
+                Text(compactCount(count))
+                    .font(.system(size: TypeScale.caption, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+            // The whole stack is the target. A 24pt glyph is well under the
+            // 44-point floor, and a heart that misses reads as a dead app.
+            .frame(minWidth: Space.touch, minHeight: Space.touch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+/// 12,340 -> "12.3k". Below a thousand the raw number: "742" is already as
+/// short as it gets, and "0.7k" is longer to read than the thing it shortens.
+private func compactCount(_ count: Int64) -> String {
+    switch count {
+    case ..<1_000: return "\(count)"
+    case ..<10_000: return "\(count / 1000).\((count % 1000) / 100)k"
+    case ..<1_000_000: return "\(count / 1000)k"
+    default: return "\(count / 1_000_000)m"
+    }
+}
+
 // MARK: - chrome
 
 private struct Pill: View {
@@ -288,18 +375,43 @@ private struct ActionRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(actions.sorted { $0.position < $1.position }, id: \.id) { action in
+            let sorted = actions.sorted { $0.position < $1.position }
+            ForEach(Array(sorted.enumerated()), id: \.element.id) { index, action in
                 VStack(alignment: .leading, spacing: 2) {
+                    // The first action by position is the vertical's primary
+                    // and draws filled white — over an arbitrary video frame,
+                    // white is the one fill that never blends into the footage.
+                    // Everything after it draws as a ghost of the same shape so
+                    // a secondary choice never competes for the thumb.
+                    //
+                    // Styled by position, not by kind or target: there is no
+                    // `switch action.targetType` here, because the moment one
+                    // exists, adding a vertical means shipping a release.
                     Button {
                         onAction(action)
                     } label: {
                         // Rendered exactly as the vertical's handler gave it.
                         Text(action.label)
+                            .font(.system(size: TypeScale.body, weight: .semibold))
                             .lineLimit(1)
+                            .foregroundStyle(ctaForeground(index: index, available: action.available))
                             .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: Radius.button)
+                                    .fill(index == 0
+                                          ? Color.white.opacity(action.available ? 1 : 0.35)
+                                          : .clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Radius.button)
+                                    .stroke(
+                                        index == 0 ? .clear : .white.opacity(action.available ? 0.8 : 0.3),
+                                        lineWidth: 1
+                                    )
+                            )
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color(red: 0.706, green: 0.396, blue: 0.165))
+                    .buttonStyle(.plain)
                     .disabled(!action.available)
 
                     // Always shown when a CTA is unavailable. A greyed-out
@@ -314,5 +426,10 @@ private struct ActionRow: View {
             }
         }
         .padding(.top, 6)
+    }
+
+    private func ctaForeground(index: Int, available: Bool) -> Color {
+        if index == 0 { return .black.opacity(available ? 1 : 0.5) }
+        return .white.opacity(available ? 1 : 0.4)
     }
 }
