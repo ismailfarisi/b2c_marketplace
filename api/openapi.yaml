@@ -567,6 +567,58 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ------------------------------------------------------------------ feed --
+  /meals/kitchens:
+    get:
+      tags: [meals]
+      operationId: discoverMealKitchens
+      summary: Meal kitchens a customer can subscribe to
+      description: |
+        Only kitchens with an active vendor, an open branch and at least one plan
+        on sale. When `lat`/`lng` are given they are a hard filter: only kitchens
+        whose delivery area contains the point are returned.
+      security: []
+      parameters:
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: slot, in: query, schema: { $ref: "#/components/schemas/MealSlot" } }
+        - { name: cuisine, in: query, schema: { type: string } }
+        - { name: dietary, in: query, schema: { type: string } }
+        - { name: rotation, in: query, description: Only kitchens with a plan in the 4-kitchen rotation, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Kitchens
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PublicKitchen" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /meals/kitchens/{branchId}:
+    get:
+      tags: [meals]
+      operationId: getMealKitchen
+      summary: A kitchen's storefront page
+      description: |
+        Weekly menu (archived dishes hidden), plans and tiers on sale, and delivery
+        windows. 404 when the kitchen is not currently sellable.
+      security: []
+      parameters:
+        - { name: branchId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+      responses:
+        "200":
+          description: Kitchen
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicKitchenDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /feed:
     get:
       tags: [feed]
@@ -5634,6 +5686,52 @@ components:
                   starts_at: { type: string, example: "12:00" }
                   ends_at: { type: string, example: "14:00" }
 
+    PublicKitchen:
+      type: object
+      required: [branch_id, vendor_id, name, vendor_name, cuisines, dietary_tags, rating_count, currency, meal_slots, plans, from_price_minor]
+      properties:
+        branch_id: { type: string, format: uuid }
+        vendor_id: { type: string, format: uuid }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        vendor_name: { type: string }
+        vendor_name_ar: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        description_ar: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+        dietary_tags: { type: array, items: { type: string } }
+        cover_image_url: { type: [string, "null"] }
+        city: { type: [string, "null"] }
+        rating: { type: [number, "null"] }
+        rating_count: { type: integer }
+        currency: { type: string }
+        meal_slots: { type: array, items: { $ref: "#/components/schemas/MealSlot" } }
+        plans: { type: integer }
+        from_price_minor: { type: integer, format: int64 }
+        rotation_week_price_minor:
+          type: [integer, "null"]
+          format: int64
+          description: Cheapest weekly price inside a 4-kitchen rotation; null when not in the rotation.
+    PublicKitchenDetail:
+      allOf:
+        - $ref: "#/components/schemas/PublicKitchen"
+        - type: object
+          required: [delivery_windows, menu, plan_list]
+          properties:
+            delivers_here: { type: [boolean, "null"] }
+            delivery_windows:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  label: { type: string }
+                  starts_at: { type: string }
+                  ends_at: { type: string }
+            menu: { $ref: "#/components/schemas/WeeklyMenu" }
+            plan_list:
+              type: array
+              items: { $ref: "#/components/schemas/KitchenPlan" }
     KitchenOverview:
       type: object
       properties:

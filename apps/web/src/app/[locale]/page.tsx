@@ -1,185 +1,199 @@
 "use client";
 
+import { formatMoney } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { use, useState } from "react";
 
-import { getFeed, type FeedItem } from "@/lib/feed-api";
+import { useCustomerPoint } from "@/components/meals/location";
+import { getMealKitchens, type PublicKitchen } from "@/lib/meals-api";
 
 /**
- * The front door.
+ * The front door: meal kitchens that deliver to you.
  *
- * Until this QA pass it said *"Scaffold is up. The feed lands in Phase 2."* —
- * seven phases after Phase 2 shipped. The feed endpoint had been serving real
- * reels for months and nothing on the web called it.
- *
- * **What this is and is not.** It is a browse surface: posters, captions,
- * authors and CTAs. It is not a video player, and that is a decision rather
- * than a shortfall — PLAN-VIDEO-FIRST puts the reel experience in the native
- * app, and `apps/mobile-kmm` exists because playback performance is the product
- * and a JS bridge could not deliver it. A web page that autoplayed HLS in a
- * vertical viewport would be a worse version of the thing the KMM app is for.
- *
- * What the web is good for is the part the app is bad at: a link someone shares,
- * a search result, a browser on a laptop. So this renders what can be rendered
- * well and links onward.
+ * Location is a hard filter on the API, so everything listed can actually
+ * reach the customer. The video feed is still one click away at /feed.
  */
 
 const COPY = {
   en: {
-    title: "Near you",
-    subtitle: "Everything here can reach your address right now.",
-    locating: "Finding what is available near you…",
-    fallback: "Showing Dubai Marina — allow location for what is deliverable to you.",
-    empty:
-      "Nothing is available at this location yet. This feed is finite by design: it shows what can actually reach you, so a thin result means thin local supply rather than a filter to loosen.",
-    exhausted: "That is everything available near you.",
-    failed: "Could not load the feed.",
-    sponsored: "Sponsored",
-    seconds: "s",
+    brand: "Meals",
+    feed: "Videos",
+    title: "Kitchens that deliver to you",
+    lede: "Subscribe to a home-style kitchen for the month. Each one cooks a fixed menu by weekday, and some let you pick between two dishes.",
+    locating: "Finding kitchens near you…",
+    fallback: "Showing Dubai Marina. Allow location to see kitchens that deliver to you.",
+    search: "Search kitchens",
+    any: "Any meal",
+    rotation: "In the 4-kitchen rotation",
+    from: "from",
+    perCycle: "per cycle",
+    perWeek: "a week in rotation",
+    empty: "No kitchen delivers here yet with those filters.",
+    failed: "Could not load kitchens.",
+    count: (n: number) => (n === 1 ? "1 kitchen" : `${n} kitchens`),
+    slot: {
+      breakfast: "Breakfast",
+      lunch: "Lunch",
+      dinner: "Dinner",
+      snack: "Snack",
+      suhoor: "Suhoor",
+      iftar: "Iftar",
+    } as Record<string, string>,
   },
   ar: {
-    title: "بالقرب منك",
-    subtitle: "كل ما هنا يمكن أن يصل إلى عنوانك الآن.",
-    locating: "نبحث عمّا هو متاح بالقرب منك…",
-    fallback: "نعرض دبي مارينا — فعّل الموقع لعرض ما يمكن توصيله إليك.",
-    empty:
-      "لا يوجد شيء متاح في هذا الموقع بعد. هذه الخلاصة محدودة بطبيعتها: تعرض ما يمكن أن يصلك فعلًا، لذا فإن قلّة النتائج تعني قلّة المعروض المحلي وليست فلترًا يمكن تخفيفه.",
-    exhausted: "هذا كل ما هو متاح بالقرب منك.",
-    failed: "تعذّر تحميل الخلاصة.",
-    sponsored: "مموّل",
-    seconds: "ث",
+    brand: "وجبات",
+    feed: "فيديو",
+    title: "مطابخ توصل إليك",
+    lede: "اشترك في مطبخ منزلي لمدة شهر. لكل مطبخ قائمة ثابتة حسب أيام الأسبوع، وبعضها يتيح لك الاختيار بين طبقين.",
+    locating: "جارٍ البحث عن مطابخ قريبة…",
+    fallback: "نعرض دبي مارينا. اسمح بالموقع لرؤية المطابخ التي توصل إليك.",
+    search: "ابحث عن مطبخ",
+    any: "أي وجبة",
+    rotation: "ضمن تناوب المطابخ الأربعة",
+    from: "من",
+    perCycle: "لكل دورة",
+    perWeek: "أسبوعيًا ضمن التناوب",
+    empty: "لا يوجد مطبخ يوصل هنا بهذه الخيارات بعد.",
+    failed: "تعذر تحميل المطابخ.",
+    count: (n: number) => `${n} مطبخ`,
+    slot: {
+      breakfast: "فطور",
+      lunch: "غداء",
+      dinner: "عشاء",
+      snack: "وجبة خفيفة",
+      suhoor: "سحور",
+      iftar: "إفطار",
+    } as Record<string, string>,
   },
-} as const;
+};
 
-/**
- * Dubai Marina.
- *
- * The same fallback the KMM app takes, for the same reason: `lat`/`lng` are
- * required by the API because *a feed without a location is a different
- * product*, so there is no "everywhere" to fall back to. A fixed point is more
- * honest than a silent nationwide feed — and the banner says which is being
- * shown, because a viewer who sees laundry from a district they do not live in
- * should be told why.
- */
-const FALLBACK = { lat: 25.08, lng: 55.14 };
+type Copy = (typeof COPY)["en"];
+const FILTER_SLOTS = ["breakfast", "lunch", "dinner", "suhoor", "iftar"];
 
-function useViewerLocation() {
-  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
-  const [precise, setPrecise] = useState(false);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setPoint(FALLBACK);
-      return;
-    }
-    // A short timeout and no high-accuracy request. The feed needs a district,
-    // not a doorstep, and waiting on GPS for a page that could already have
-    // rendered is how a front door feels slow.
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setPrecise(true);
-      },
-      () => setPoint(FALLBACK),
-      { timeout: 4000, maximumAge: 300_000 },
-    );
-  }, []);
-
-  return { point, precise };
-}
-
-type Copy = (typeof COPY)[keyof typeof COPY];
-
-function Card({ item, t }: { item: FeedItem; t: Copy }) {
-  const seconds = Math.round(item.duration_ms / 1000);
-
+function KitchenCard({ k, locale, t }: { k: PublicKitchen; locale: "en" | "ar"; t: Copy }) {
+  const name = (locale === "ar" && k.name_ar) || k.name;
+  const vendor = (locale === "ar" && k.vendor_name_ar) || k.vendor_name;
+  const blurb = (locale === "ar" && k.description_ar) || k.description;
   return (
-    <li className="card reel">
-      <div className="row spread">
-        <strong dir="auto">{item.author.name}</strong>
-        <div className="row">
-          {/* Labelling paid placement is a legal requirement in both markets,
-              not a nicety. The flag reaches this component because the QA pass
-              found the API was not emitting it. */}
-          {item.sponsored && <span className="pill">{t.sponsored}</span>}
-          <span className="muted">
-            {seconds}
-            {t.seconds}
-          </span>
+    <li>
+      <Link className="ms-card" href={`/${locale}/kitchens/${k.branch_id}`}>
+        <div className="ms-cover" aria-hidden>
+          {k.cover_image_url ? <img src={k.cover_image_url} alt="" loading="lazy" /> : <span>{name.slice(0, 1)}</span>}
         </div>
-      </div>
-
-      {/* dir="auto" rather than inheriting the page. A caption is written in
-          whichever language the vendor chose, and an Arabic caption forced
-          left-to-right inside an English page is unreadable. */}
-      <p dir="auto">{item.caption}</p>
-
-      {item.actions.length > 0 && (
-        <div className="row">
-          {item.actions.map((a) => (
-            <button key={a.id} className="cta">
-              {a.label}
-            </button>
-          ))}
+        <div className="ms-card-body">
+          <div className="ms-card-head">
+            <h2 dir="auto">{name}</h2>
+            {name !== vendor && <span className="ms-sub" dir="auto">{vendor}</span>}
+          </div>
+          {blurb && <p className="ms-blurb" dir="auto">{blurb}</p>}
+          <div className="ms-tags">
+            {k.meal_slots.map((s) => (
+              <span key={s} className="ms-tag ms-tag-slot">
+                {t.slot[s] ?? s}
+              </span>
+            ))}
+            {[...k.cuisines, ...k.dietary_tags].map((c) => (
+              <span key={c} className="ms-tag">
+                {c}
+              </span>
+            ))}
+          </div>
+          <div className="ms-price">
+            <span>
+              {t.from} <strong>{formatMoney({ amount: k.from_price_minor, currency: k.currency }, locale)}</strong>{" "}
+              {t.perCycle}
+            </span>
+            {k.rotation_week_price_minor != null && (
+              <span className="ms-rot">
+                {formatMoney({ amount: k.rotation_week_price_minor, currency: k.currency }, locale)} {t.perWeek}
+              </span>
+            )}
+          </div>
         </div>
-      )}
-
-      {item.counters.likes + item.counters.comments > 0 && (
-        <p className="muted">
-          {item.counters.likes} · {item.counters.comments}
-        </p>
-      )}
+      </Link>
     </li>
   );
 }
 
-export default function HomePage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
-  const { locale } = use(params);
-  const t = COPY[locale === "ar" ? "ar" : "en"];
-  const { point, precise } = useViewerLocation();
+export default function MealsHome({ params }: { params: Promise<{ locale: string }> }) {
+  const locale = use(params).locale === "ar" ? "ar" : "en";
+  const t = COPY[locale];
+  const { point, precise } = useCustomerPoint();
+  const [q, setQ] = useState("");
+  const [slot, setSlot] = useState("");
+  const [rotation, setRotation] = useState(false);
 
-  const { data, isPending, error } = useQuery({
-    queryKey: ["feed", point?.lat, point?.lng, locale],
-    queryFn: () => getFeed({ lat: point!.lat, lng: point!.lng, locale }),
-    // Not fetched until a location exists. Firing with a default and
-    // re-fetching when the real one arrives would show a viewer content from
-    // somewhere else first, which is the one impression this product cannot
-    // afford to make.
-    enabled: point !== null,
+  const list = useQuery({
+    queryKey: ["meal-kitchens", point?.lat, point?.lng, q, slot, rotation],
+    queryFn: () => getMealKitchens({ point, q, slot, rotation }),
+    enabled: point != null,
   });
 
-  const items = data?.items ?? [];
-
   return (
-    <main className="page">
-      <h1>{t.title}</h1>
-      <p className="muted">{t.subtitle}</p>
+    <div className="ms">
+      <header className="ms-bar">
+        <Link href={`/${locale}`} className="ms-brand">
+          {t.brand}
+        </Link>
+        <nav className="ms-nav">
+          <Link href={`/${locale}/feed`}>{t.feed}</Link>
+          <Link href={`/${locale === "ar" ? "en" : "ar"}`}>{locale === "ar" ? "English" : "العربية"}</Link>
+        </nav>
+      </header>
 
-      {point && !precise && <p className="warn">{t.fallback}</p>}
+      <main className="ms-main">
+        <section className="ms-intro">
+          <h1>{t.title}</h1>
+          <p>{t.lede}</p>
+          {point && !precise && <p className="ms-note">{t.fallback}</p>}
+        </section>
 
-      {(!point || isPending) && <p className="muted">{t.locating}</p>}
-      {error && <p className="bad">{t.failed}</p>}
+        <form className="ms-filters" role="search" onSubmit={(e) => e.preventDefault()}>
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t.search}
+            aria-label={t.search}
+          />
+          <div className="ms-chips" role="radiogroup" aria-label={t.any}>
+            {["", ...FILTER_SLOTS].map((s) => (
+              <button
+                key={s || "any"}
+                type="button"
+                role="radio"
+                aria-checked={slot === s}
+                className={slot === s ? "on" : undefined}
+                onClick={() => setSlot(s)}
+              >
+                {s ? t.slot[s] : t.any}
+              </button>
+            ))}
+          </div>
+          <label className="ms-toggle">
+            <input type="checkbox" checked={rotation} onChange={(e) => setRotation(e.target.checked)} />
+            {t.rotation}
+          </label>
+        </form>
 
-      {point && !isPending && !error && items.length === 0 && (
-        <p className="muted">{t.empty}</p>
-      )}
-
-      <ul className="stack">
-        {items.map((it) => (
-          <Card key={it.id} item={it} t={t} />
-        ))}
-      </ul>
-
-      {/* A feed that *can* be exhausted is the product promise, not a failure
-          state — finite and locally relevant beats infinite and irrelevant. So
-          the end of the list says so rather than spinning. */}
-      {items.length > 0 && !data?.next_cursor && (
-        <p className="muted">{t.exhausted}</p>
-      )}
-    </main>
+        {!point || list.isPending ? (
+          <p className="ms-note">{t.locating}</p>
+        ) : list.isError ? (
+          <p className="ms-note ms-bad">{t.failed}</p>
+        ) : list.data.items.length === 0 ? (
+          <p className="ms-empty">{t.empty}</p>
+        ) : (
+          <>
+            <p className="ms-count">{t.count(list.data.items.length)}</p>
+            <ul className="ms-grid">
+              {list.data.items.map((k) => (
+                <KitchenCard key={k.branch_id} k={k} locale={locale} t={t} />
+              ))}
+            </ul>
+          </>
+        )}
+      </main>
+    </div>
   );
 }
