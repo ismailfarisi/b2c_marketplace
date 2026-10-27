@@ -425,7 +425,7 @@ func newRouter(
 	r.Use(httpx.Timeout(25 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins(cfg),
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   httpx.RequestHeaders,
 		ExposedHeaders:   httpx.ResponseHeaders,
 		AllowCredentials: false,
