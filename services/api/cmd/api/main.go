@@ -218,9 +218,11 @@ func run() error {
 	// The admin console. `adminview` composes; it owns no tables and cannot
 	// write — see its package comment.
 	handlers.AdminConsole = &api.AdminHandlers{
-		View:   adminview.NewService(pool),
-		Admin:  adminSvc,
-		Issuer: issuer,
+		View:          adminview.NewService(pool),
+		Admin:         adminSvc,
+		Issuer:        issuer,
+		Kitchen:       handlers.Kitchen.Kitchen,
+		Subscriptions: handlers.Subscriptions.Service,
 		Act: api.Actions{
 			Payments: paymentsSvc,
 			Ordering: orderingSvc,

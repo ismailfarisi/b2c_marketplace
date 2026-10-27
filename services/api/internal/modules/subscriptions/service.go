@@ -490,11 +490,26 @@ func (s *Service) Skip(ctx context.Context, userID, subID uuid.UUID, date time.T
 
 // Cancel stops a subscription and returns the unearned remainder of its cycle.
 func (s *Service) Cancel(ctx context.Context, userID, subID uuid.UUID, reason string) error {
+	return s.cancel(ctx, subID, uuid.NullUUID{UUID: userID, Valid: true}, "customer", userID, reason)
+}
+
+// CancelByStaff cancels on the customer's behalf. Same unwinding as the
+// customer path; only the actor recorded against it differs.
+func (s *Service) CancelByStaff(ctx context.Context, actorID, subID uuid.UUID, reason string) error {
+	return s.cancel(ctx, subID, uuid.NullUUID{}, "admin", actorID, reason)
+}
+
+func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUUID,
+	actorType string, actorID uuid.UUID, reason string) error {
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-		live, err := s.loadOwned(ctx, tx, userID, subID)
+		live, err := s.repo.LoadLive(ctx, tx, subID)
 		if err != nil {
 			return err
 		}
+		if owner.Valid && live.UserID != owner.UUID {
+			return httpx.ErrNotFound
+		}
+		userID := live.UserID
 		if live.Status == "cancelled" {
 			return nil
 		}
@@ -550,7 +565,7 @@ func (s *Service) Cancel(ctx context.Context, userID, subID uuid.UUID, reason st
 		}
 
 		return s.repo.RecordEvent(ctx, tx, subID, "cancelled", live.Status, "cancelled",
-			"customer", uuid.NullUUID{UUID: userID, Valid: true},
+			actorType, uuid.NullUUID{UUID: actorID, Valid: true},
 			mustJSON(map[string]any{"reason": reason}))
 	})
 }

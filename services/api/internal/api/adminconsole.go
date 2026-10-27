@@ -13,9 +13,11 @@ import (
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
+	"github.com/marketplace/api/internal/modules/kitchen"
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/modules/payouts"
+	"github.com/marketplace/api/internal/modules/subscriptions"
 )
 
 // AdminHandlers is the admin console's read surface.
@@ -44,6 +46,9 @@ type AdminHandlers struct {
 	// Issuer mints view-as tokens. Nil disables impersonation entirely, which is
 	// a perfectly good state for a deployment to be in.
 	Issuer *auth.Issuer
+	// Meals. Nil disables the Meals section.
+	Kitchen       *kitchen.Service
+	Subscriptions *subscriptions.Service
 }
 
 // caller resolves the staff member and their permission, and logs the read when

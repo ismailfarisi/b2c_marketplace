@@ -408,6 +408,17 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 				r.Get("/admin/config/templates", h.AdminConsole.Templates)
 				r.Post("/admin/config/templates/preview", h.AdminConsole.PreviewSegments)
 				r.Post("/admin/config/templates/{templateId}/revise", h.AdminConsole.ReviseTemplate)
+
+				// Meals. Plans are withdrawn rather than edited: what a kitchen
+				// sells is theirs to change; staff can only take it off sale.
+				if h.AdminConsole.Kitchen != nil && h.AdminConsole.Subscriptions != nil {
+					r.Get("/admin/meals/kitchens", h.AdminConsole.MealKitchens)
+					r.Get("/admin/meals/kitchens/{branchId}", h.AdminConsole.MealKitchen)
+					r.Post("/admin/meals/plans/{planId}/active", h.AdminConsole.SetMealPlanActive)
+					r.Get("/admin/meals/subscriptions", h.AdminConsole.MealSubscriptions)
+					r.Get("/admin/meals/subscriptions/{subscriptionId}", h.AdminConsole.MealSubscription)
+					r.Post("/admin/meals/subscriptions/{subscriptionId}/cancel", h.AdminConsole.CancelMealSubscription)
+				}
 			})
 		}
 
