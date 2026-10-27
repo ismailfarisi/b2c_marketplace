@@ -228,17 +228,14 @@ INSERT INTO app_settings (key, value, description, is_sensitive) VALUES
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- `admin_actions` has been written correctly since Phase 7 and never read back.
--- The console's timeline reads it per subject, and per actor for the staff page.
-CREATE INDEX admin_actions_subject_idx
-    ON admin_actions (subject_type, subject_id, created_at DESC);
-CREATE INDEX admin_actions_actor_idx
-    ON admin_actions (actor_id, created_at DESC);
+-- The console's timeline reads it per subject, and per actor for the staff
+-- page. Both indexes it needs already exist — 000017 created them with the
+-- table — so creating them again here failed the migration.
 
 -- `audit_log` gains the same, plus the index the PII question is actually asked
 -- with: "who looked at this customer".
-CREATE INDEX audit_log_target_idx
-    ON audit_log (target_type, target_id, occurred_at DESC);
-CREATE INDEX audit_log_actor_idx
+-- audit_log_target_idx already exists from 000010.
+CREATE INDEX audit_log_admin_actor_idx
     ON audit_log (actor_id, occurred_at DESC)
     WHERE actor_type = 'admin';
 
@@ -246,8 +243,6 @@ CREATE INDEX audit_log_actor_idx
 -- Search needs to find an order by its number and a listing by its VIN without
 -- scanning. Both are exact-match lookups on columns with no index today.
 CREATE INDEX orders_order_no_idx ON orders (order_no);
-CREATE INDEX vehicle_listings_vin_idx ON vehicle_listings (vin)
-    WHERE vin IS NOT NULL;
 CREATE INDEX payout_statements_ref_idx ON payout_statements (reference_no);
 CREATE INDEX disputes_ref_idx ON disputes (reference_no);
 CREATE INDEX boost_campaigns_ref_idx ON boost_campaigns (reference_no);

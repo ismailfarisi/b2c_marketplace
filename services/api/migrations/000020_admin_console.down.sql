@@ -6,13 +6,9 @@ DROP INDEX IF EXISTS vehicle_listings_ref_idx;
 DROP INDEX IF EXISTS boost_campaigns_ref_idx;
 DROP INDEX IF EXISTS disputes_ref_idx;
 DROP INDEX IF EXISTS payout_statements_ref_idx;
-DROP INDEX IF EXISTS vehicle_listings_vin_idx;
 DROP INDEX IF EXISTS orders_order_no_idx;
 
-DROP INDEX IF EXISTS audit_log_actor_idx;
-DROP INDEX IF EXISTS audit_log_target_idx;
-DROP INDEX IF EXISTS admin_actions_actor_idx;
-DROP INDEX IF EXISTS admin_actions_subject_idx;
+DROP INDEX IF EXISTS audit_log_admin_actor_idx;
 
 DROP TABLE IF EXISTS app_settings;
 DROP TABLE IF EXISTS feature_flags;
