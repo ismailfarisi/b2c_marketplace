@@ -509,6 +509,11 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 		if owner.Valid && live.UserID != owner.UUID {
 			return httpx.ErrNotFound
 		}
+		// Customers retrying a cancel get success; staff get told, so the audit
+		// log does not show two people cancelling the same subscription.
+		if live.Status == "cancelled" && !owner.Valid {
+			return httpx.Coded(httpx.ErrConflict, "already_cancelled", "This subscription is already cancelled.")
+		}
 		userID := live.UserID
 		if live.Status == "cancelled" {
 			return nil
@@ -633,8 +638,11 @@ func (s *Service) insertOutbox(ctx context.Context, tx pgx.Tx, subID uuid.UUID, 
 		return fmt.Errorf("subscriptions: marshal event: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload)
-		VALUES ('subscription', $1, $2, $3)`, subID, eventType, body); err != nil {
+		INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, idempotency_key)
+		VALUES ('subscription', $1, $2, $3, $4)`, subID, eventType, body,
+		// A subscription can be paused or skipped many times, so each occurrence
+		// is its own event rather than one per (subscription, type).
+		fmt.Sprintf("subscription:%s:%s:%s", subID, eventType, uuid.New())); err != nil {
 		return fmt.Errorf("subscriptions: outbox: %w", err)
 	}
 	return nil
