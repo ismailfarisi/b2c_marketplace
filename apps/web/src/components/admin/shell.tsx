@@ -38,6 +38,13 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
     ],
   },
   {
+    title: "Meals",
+    items: [
+      { href: "/meals/kitchens", label: "Kitchens", queues: [] },
+      { href: "/meals/subscriptions", label: "Subscriptions", queues: [] },
+    ],
+  },
+  {
     title: "Marketplace",
     items: [
       // Listings and fraud share a screen: a listing review asks "publish this
@@ -98,6 +105,8 @@ export const TITLES: Record<string, string> = {
   "/payouts": "Payout runs",
   "/cash": "Cash reconciliation",
   "/refunds": "Refunds & invoices",
+  "/meals/kitchens": "Meal kitchens",
+  "/meals/subscriptions": "Meal subscriptions",
 };
 
 /** How often the sidebar counts and every queue refetch. */

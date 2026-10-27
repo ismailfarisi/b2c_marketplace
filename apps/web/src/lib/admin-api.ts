@@ -1,5 +1,7 @@
 import { apiFetch } from "@marketplace/api-client";
 
+import type { Dish, Overview, Plan, Profile, WeeklyMenu } from "./vendor-api";
+
 /**
  * Bindings for the staff surface.
  *
@@ -1364,3 +1366,126 @@ export const viewAs = (userId: string, reason: string) =>
     method: "POST",
     data: { reason },
   });
+
+// ── meals ───────────────────────────────────────────────────────────────────
+
+export interface MealKitchen {
+  branch_id: string;
+  branch_name: string;
+  city: string | null;
+  branch_active: boolean;
+  vendor_id: string;
+  vendor_name: string;
+  vendor_status: string;
+  dishes: number;
+  live_plans: number;
+  rotation_plans: number;
+  active_subscribers: number;
+  created_at: string;
+}
+
+export interface MealKitchenDetail {
+  profile: Profile;
+  overview: Overview;
+  menu: WeeklyMenu;
+  plans: Plan[];
+  dishes: Dish[];
+}
+
+export const SUBSCRIPTION_STATUSES = [
+  "pending_payment",
+  "active",
+  "paused",
+  "suspended",
+  "cancelled",
+  "completed",
+] as const;
+
+export interface MealSubscriptionRow {
+  id: string;
+  subscription_no: string;
+  status: (typeof SUBSCRIPTION_STATUSES)[number];
+  user_id: string;
+  branch_id: string;
+  branch_name: string;
+  vendor_id: string;
+  vendor_name: string;
+  plan_id: string;
+  plan_name: string;
+  start_date: string;
+  end_date: string | null;
+  cycle_no: number | null;
+  cycle_status: string | null;
+  cycle_amount_minor: number | null;
+  currency: string | null;
+  created_at: string;
+}
+
+export interface MealSubscriptionDetail extends MealSubscriptionRow {
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  pause_days_used: number;
+  allowed_pause_days: number;
+  cycles: Array<{
+    cycle_no: number;
+    starts_on: string;
+    ends_on: string;
+    status: string;
+    amount_minor: number;
+    recognised_minor: number;
+    currency: string;
+    order_id: string | null;
+  }>;
+  pauses: Array<{ from_date: string; to_date: string; credit_mode: string; state: string; suppressed_days: number }>;
+  skips: Array<{ skip_date: string; meal_slot: string | null; reason: string | null }>;
+  events: Array<{
+    event_type: string;
+    from_status: string | null;
+    to_status: string | null;
+    actor_type: string;
+    actor_id: string | null;
+    metadata: Record<string, unknown> | null;
+    occurred_at: string;
+  }>;
+}
+
+export const getMealKitchens = (params: { q?: string; rotation?: boolean } = {}) =>
+  apiFetch<{ items: MealKitchen[] }>({
+    url: "/admin/meals/kitchens",
+    method: "GET",
+    params: { q: params.q || undefined, rotation: params.rotation ? "true" : undefined },
+  });
+
+export const getMealKitchen = (branchId: string) =>
+  apiFetch<MealKitchenDetail>({ url: `/admin/meals/kitchens/${branchId}`, method: "GET" });
+
+export const setMealPlanActive = (planId: string, active: boolean, reason: string) =>
+  apiFetch<Plan>({ url: `/admin/meals/plans/${planId}/active`, method: "POST", data: { active, reason } });
+
+export const getMealSubscriptions = (params: { q?: string; status?: string; branch_id?: string } = {}) =>
+  apiFetch<{ items: MealSubscriptionRow[] }>({
+    url: "/admin/meals/subscriptions",
+    method: "GET",
+    params: {
+      q: params.q || undefined,
+      status: params.status || undefined,
+      branch_id: params.branch_id || undefined,
+    },
+  });
+
+export const getMealSubscription = (id: string) =>
+  apiFetch<MealSubscriptionDetail>({ url: `/admin/meals/subscriptions/${id}`, method: "GET" });
+
+export const cancelMealSubscription = (id: string, reason: string) =>
+  apiFetch<{ status: string; note: string }>({
+    url: `/admin/meals/subscriptions/${id}/cancel`,
+    method: "POST",
+    data: { reason },
+  });
+
+export function statusTone(status: string): "ok" | "warn" | "danger" | undefined {
+  if (status === "active") return "ok";
+  if (status === "paused" || status === "pending_payment") return "warn";
+  if (status === "suspended") return "danger";
+  return undefined;
+}
