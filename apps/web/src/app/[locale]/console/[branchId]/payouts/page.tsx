@@ -4,7 +4,7 @@ import { formatMoney } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
 
 import { Panel } from "@/components/admin/detail";
-import { errorText, useBranch } from "@/components/vendor/portal";
+import { errorText, useBranch } from "@/components/kitchen/portal";
 import { listStatements } from "@/lib/api";
 
 /**

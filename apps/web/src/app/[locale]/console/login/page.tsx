@@ -7,7 +7,7 @@ import { Suspense, use, useEffect, useRef, useState, type FormEvent } from "reac
 
 import { listMyBranches } from "@/lib/vendor-api";
 import { logout, requestOtp, verifyOtp } from "@/lib/auth-api";
-import { BRANCHES_KEY } from "@/components/vendor/portal";
+import { BRANCHES_KEY } from "@/components/kitchen/portal";
 
 /**
  * Vendor sign-in. The same phone-and-code flow as the staff console (see

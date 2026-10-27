@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 
-import { SignOut, useBranches } from "@/components/vendor/portal";
+import { SignOut, useBranches } from "@/components/kitchen/portal";
 
 /**
  * Branch picker.

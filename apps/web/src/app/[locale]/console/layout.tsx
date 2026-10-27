@@ -1,6 +1,6 @@
 import { use, type ReactNode } from "react";
 
-import { VendorGate } from "@/components/vendor/portal";
+import { VendorGate } from "@/components/kitchen/portal";
 import "@/app/admin.css";
 
 /**

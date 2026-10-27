@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { Panel } from "@/components/admin/detail";
-import { errorText, useBranch } from "@/components/vendor/portal";
+import { errorText, useBranch } from "@/components/kitchen/portal";
 import { getSummary } from "@/lib/api";
 import { getOverview, WEEKDAYS } from "@/lib/vendor-api";
 

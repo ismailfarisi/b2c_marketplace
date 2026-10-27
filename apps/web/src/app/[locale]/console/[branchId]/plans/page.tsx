@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Panel } from "@/components/admin/detail";
-import { errorText, fieldErrors, useBranch } from "@/components/vendor/portal";
+import { errorText, fieldErrors, useBranch } from "@/components/kitchen/portal";
 import {
   createPlan,
   listPlans,

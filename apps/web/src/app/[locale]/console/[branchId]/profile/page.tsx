@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { Facts, Panel } from "@/components/admin/detail";
-import { errorText, fieldErrors, useBranch } from "@/components/vendor/portal";
+import { errorText, fieldErrors, useBranch } from "@/components/kitchen/portal";
 import { getProfile, updateProfile, type Profile, type ProfileInput } from "@/lib/vendor-api";
 
 const list = (s: string) =>

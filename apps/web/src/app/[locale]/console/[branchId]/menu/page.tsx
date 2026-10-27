@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Panel } from "@/components/admin/detail";
-import { errorText, useBranch } from "@/components/vendor/portal";
+import { errorText, useBranch } from "@/components/kitchen/portal";
 import { getMenu, listDishes, listPlans, setMenuSlot, SLOTS, WEEKDAYS, type MenuSlot, type Slot } from "@/lib/vendor-api";
 
 /**

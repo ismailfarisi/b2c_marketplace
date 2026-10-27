@@ -1,6 +1,6 @@
 import { use, type ReactNode } from "react";
 
-import { VendorShell } from "@/components/vendor/portal";
+import { VendorShell } from "@/components/kitchen/portal";
 
 export default function BranchLayout({
   children,

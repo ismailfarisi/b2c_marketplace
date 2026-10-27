@@ -50,18 +50,18 @@ jobs:
 
       - name: Apply
         working-directory: services/api
-        run: go tool migrate -path migrations -database "$DB_URL" up
+        run: go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path migrations -database "$DB_URL" up
 
       # Rolling all the way back proves the down migrations are real. An
       # untested down migration is discovered during an incident, which is the
       # worst possible time to find out it drops the wrong thing.
       - name: Roll back to zero
         working-directory: services/api
-        run: go tool migrate -path migrations -database "$DB_URL" down -all
+        run: go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path migrations -database "$DB_URL" down -all
 
       - name: Re-apply
         working-directory: services/api
-        run: go tool migrate -path migrations -database "$DB_URL" up
+        run: go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path migrations -database "$DB_URL" up
 
   go:
     name: Go build, vet, test
@@ -104,7 +104,7 @@ jobs:
 
       - name: Migrate
         working-directory: services/api
-        run: go tool migrate -path migrations -database "$DATABASE_URL" up
+        run: go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path migrations -database "$DATABASE_URL" up
 
       # -race is not optional here. Capacity reservation is a contended write
       # path by design, and a data race in it manifests as overbooking that
@@ -262,7 +262,7 @@ jobs:
 
       - name: Migrate
         working-directory: services/api
-        run: go tool migrate -path migrations -database "$DB_URL" up
+        run: go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path migrations -database "$DB_URL" up
 
       # Its own variable, not DATABASE_URL. capacity_test.go writes to
       # capacity_buckets, and pointing it at whatever DATABASE_URL happens to
