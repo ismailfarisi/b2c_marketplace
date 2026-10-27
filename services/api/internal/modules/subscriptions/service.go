@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -125,6 +126,9 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 		if err := validateRules(in.Rules, plan); err != nil {
 			return err
 		}
+		if err := s.checkAddresses(ctx, tx, in, plan.BranchID); err != nil {
+			return err
+		}
 
 		start := dayIn(in.StartDate, loc)
 		if start.Before(dayIn(time.Now(), loc)) {
@@ -178,7 +182,7 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 			return err
 		}
 
-		orderID, cycleID, err := s.openCycle(ctx, tx, subID, plan, in, cycle)
+		orderID, cycleID, err := s.openCycle(ctx, tx, subID, plan, in, cycle, quote)
 		if err != nil {
 			return err
 		}
@@ -238,7 +242,7 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 // prevent. The duplication is fifteen lines of INSERT and it is the cheaper
 // side of that trade.
 func (s *Service) openCycle(ctx context.Context, tx pgx.Tx, subID uuid.UUID,
-	plan PlanTemplate, in SubscribeInput, cycle Cycle) (orderID, cycleID uuid.UUID, err error) {
+	plan PlanTemplate, in SubscribeInput, cycle Cycle, quote servicetype.QuoteResult) (orderID, cycleID uuid.UUID, err error) {
 
 	orderID = uuid.New()
 	for attempt := 0; attempt < 3; attempt++ {
@@ -262,6 +266,21 @@ func (s *Service) openCycle(ctx context.Context, tx pgx.Tx, subID uuid.UUID,
 	}
 	if err != nil {
 		return uuid.Nil, uuid.Nil, fmt.Errorf("subscriptions: could not allocate an order number")
+	}
+
+	// The payment path authorizes against the order's live quote, exactly as
+	// for a one-off order; without one the billing order cannot be paid.
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO price_quotes (
+			order_id, version, state, currency,
+			subtotal_minor, discount_minor, delivery_minor, surcharge_minor,
+			tax_minor, total_minor, tax_inclusive, authorized_minor
+		) VALUES ($1, 1, 'estimated', $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		orderID, plan.Currency,
+		quote.SubtotalMinor, quote.DiscountMinor, quote.DeliveryMinor, quote.SurchargeMinor,
+		quote.TaxMinor, quote.TotalMinor, quote.TaxInclusive, quote.AuthorizeMinor,
+	); err != nil {
+		return uuid.Nil, uuid.Nil, fmt.Errorf("subscriptions: billing quote: %w", err)
 	}
 
 	err = tx.QueryRow(ctx, `
@@ -667,6 +686,18 @@ func validateRules(rules []Rule, plan PlanTemplate) error {
 				Field: "schedule", Code: "invalid_weekday",
 			}}}
 		}
+		if len(plan.Weekdays) > 0 && !slices.Contains(plan.Weekdays, int16(r.Weekday)) {
+			return &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "schedule", Code: "not_a_delivery_day",
+				Message: "the kitchen does not deliver this plan on that day",
+			}}}
+		}
+		if len(plan.MealSlots) > 0 && !slices.Contains(plan.MealSlots, r.Slot) {
+			return &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "schedule", Code: "meal_not_in_plan",
+				Message: "this plan does not include that meal",
+			}}}
+		}
 		days[r.Weekday]++
 	}
 
@@ -696,4 +727,55 @@ func mustJSON(v map[string]any) []byte {
 		return []byte("{}")
 	}
 	return body
+}
+
+// checkAddresses refuses an address the subscriber does not own or the kitchen
+// does not deliver to. Each rule may override the subscription's address, so
+// every one is checked. Not owning one reads as not found, so an address id
+// cannot be probed.
+func (s *Service) checkAddresses(ctx context.Context, tx pgx.Tx, in SubscribeInput, branchID uuid.UUID) error {
+	ids := []uuid.UUID{in.AddressID}
+	for _, r := range in.Rules {
+		if r.AddressID.Valid {
+			ids = append(ids, r.AddressID.UUID)
+		}
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT a.id,
+		       COALESCE(ST_Intersects(b.service_area, a.point), false)
+		  FROM addresses a
+		  JOIN vendor_branches b ON b.id = $3
+		 WHERE a.id = ANY($1) AND a.user_id = $2 AND a.deleted_at IS NULL`,
+		ids, in.UserID, branchID)
+	if err != nil {
+		return fmt.Errorf("subscriptions: check addresses: %w", err)
+	}
+	defer rows.Close()
+	covered := map[uuid.UUID]bool{}
+	for rows.Next() {
+		var id uuid.UUID
+		var ok bool
+		if err := rows.Scan(&id, &ok); err != nil {
+			return fmt.Errorf("subscriptions: scan address: %w", err)
+		}
+		covered[id] = ok
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		ok, found := covered[id]
+		switch {
+		case !found:
+			return &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "address_id", Code: "not_found", Message: "address not found",
+			}}}
+		case !ok:
+			return &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "address_id", Code: "outside_delivery_area",
+				Message: "this kitchen does not deliver to that address",
+			}}}
+		}
+	}
+	return nil
 }

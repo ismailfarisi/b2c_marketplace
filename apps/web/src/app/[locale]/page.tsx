@@ -178,6 +178,9 @@ export default function MealsHome({
         </Link>
         <nav className="ms-nav">
           <Link href={`/${locale}/feed`}>{t.feed}</Link>
+          <Link href={`/${locale}/subscriptions`}>
+            {locale === "ar" ? "اشتراكاتي" : "My subscriptions"}
+          </Link>
           <Link href={`/${locale === "ar" ? "en" : "ar"}`}>
             {locale === "ar" ? "English" : "العربية"}
           </Link>

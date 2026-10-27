@@ -126,6 +126,10 @@ func (s *Service) Authorize(ctx context.Context, userID, orderID uuid.UUID, idem
 			return fmt.Errorf("confirm order: %w", err)
 		}
 
+		if err := activateSubscription(ctx, tx, orderID, userID); err != nil {
+			return err
+		}
+
 		// Capacity moves from reserved to consumed only now. Before this point
 		// the slot was held; now it is genuinely sold and the TTL sweeper must
 		// not take it back.
@@ -354,6 +358,41 @@ func insertOutbox(ctx context.Context, tx pgx.Tx, orderID uuid.UUID, eventType s
 		orderID, eventType, body, fmt.Sprintf("order:%s:%s", orderID, eventType))
 	if err != nil {
 		return fmt.Errorf("insert outbox event: %w", err)
+	}
+	return nil
+}
+
+// activateSubscription settles a subscription billing order: its cycle is paid
+// and, for the first cycle, the subscription goes live so the scheduler starts
+// materialising deliveries. A no-op for any other order.
+func activateSubscription(ctx context.Context, tx pgx.Tx, orderID, userID uuid.UUID) error {
+	var subID uuid.UUID
+	err := tx.QueryRow(ctx, `
+		UPDATE subscription_cycles SET status = 'paid', paid_at = now()
+		 WHERE order_id = $1 AND status IN ('pending', 'past_due')
+		RETURNING subscription_id`, orderID).Scan(&subID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("settle cycle: %w", err)
+	}
+	tag, err := tx.Exec(ctx, `
+		UPDATE subscriptions SET status = 'active', updated_at = now()
+		 WHERE id = $1 AND status = 'pending_payment'`, subID)
+	if err != nil {
+		return fmt.Errorf("activate subscription: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO subscription_events
+		    (subscription_id, event_type, from_status, to_status, actor_type, actor_id, metadata)
+		VALUES ($1, 'activated', 'pending_payment', 'active', 'customer', $2,
+		        jsonb_build_object('order_id', $3::uuid))`, subID, userID, orderID)
+	if err != nil {
+		return fmt.Errorf("record activation: %w", err)
 	}
 	return nil
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/marketplace/api/internal/auth"
 	"github.com/marketplace/api/internal/config"
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/addresses"
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
 	"github.com/marketplace/api/internal/modules/attribution"
@@ -193,6 +194,7 @@ func run() error {
 
 	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc}
 	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen}
+	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
 	handlers.Console = &api.ConsoleHandlers{
 		Console: consoleSvc,

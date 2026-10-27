@@ -21,11 +21,26 @@ export interface BranchAccess {
   role: Role;
 }
 
-export const SLOTS = ["breakfast", "lunch", "dinner", "snack", "suhoor", "iftar"] as const;
+export const SLOTS = [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+  "suhoor",
+  "iftar",
+] as const;
 export type Slot = (typeof SLOTS)[number];
 
 /** Weekday 0 is Sunday, as everywhere in the API. */
-export const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+export const WEEKDAYS = [
+  "Sun",
+  "Mon",
+  "Tue",
+  "Wed",
+  "Thu",
+  "Fri",
+  "Sat",
+] as const;
 
 export interface Dish {
   id: string;
@@ -213,7 +228,11 @@ export const getProfile = (branchId: string) =>
   apiFetch<Profile>({ url: `/branches/${branchId}/profile`, method: "GET" });
 
 export const updateProfile = (branchId: string, body: ProfileInput) =>
-  apiFetch<Profile>({ url: `/branches/${branchId}/profile`, method: "PUT", data: body });
+  apiFetch<Profile>({
+    url: `/branches/${branchId}/profile`,
+    method: "PUT",
+    data: body,
+  });
 
 export const listDishes = (branchId: string) =>
   apiFetch<{ items: Dish[]; allergens: string[] }>({
@@ -222,10 +241,18 @@ export const listDishes = (branchId: string) =>
   });
 
 export const createDish = (branchId: string, body: DishInput) =>
-  apiFetch<Dish>({ url: `/branches/${branchId}/dishes`, method: "POST", data: body });
+  apiFetch<Dish>({
+    url: `/branches/${branchId}/dishes`,
+    method: "POST",
+    data: body,
+  });
 
 export const updateDish = (branchId: string, dishId: string, body: DishInput) =>
-  apiFetch<Dish>({ url: `/branches/${branchId}/dishes/${dishId}`, method: "PUT", data: body });
+  apiFetch<Dish>({
+    url: `/branches/${branchId}/dishes/${dishId}`,
+    method: "PUT",
+    data: body,
+  });
 
 export const getMenu = (branchId: string) =>
   apiFetch<WeeklyMenu>({ url: `/branches/${branchId}/menu`, method: "GET" });
@@ -243,13 +270,24 @@ export const setMenuSlot = (
   });
 
 export const listPlans = (branchId: string) =>
-  apiFetch<{ items: Plan[] }>({ url: `/branches/${branchId}/plans`, method: "GET" });
+  apiFetch<{ items: Plan[] }>({
+    url: `/branches/${branchId}/plans`,
+    method: "GET",
+  });
 
 export const createPlan = (branchId: string, body: PlanInput) =>
-  apiFetch<Plan>({ url: `/branches/${branchId}/plans`, method: "POST", data: body });
+  apiFetch<Plan>({
+    url: `/branches/${branchId}/plans`,
+    method: "POST",
+    data: body,
+  });
 
 export const updatePlan = (branchId: string, planId: string, body: PlanInput) =>
-  apiFetch<Plan>({ url: `/branches/${branchId}/plans/${planId}`, method: "PUT", data: body });
+  apiFetch<Plan>({
+    url: `/branches/${branchId}/plans/${planId}`,
+    method: "PUT",
+    data: body,
+  });
 
 // ── money input ─────────────────────────────────────────────────────────────
 
@@ -275,3 +313,20 @@ export function toMajorInput(minor: number | null, currency: string): string {
   const s = String(minor).padStart(exp + 1, "0");
   return `${s.slice(0, -exp)}.${s.slice(-exp)}`;
 }
+
+export interface PrepLine {
+  meal_slot: string;
+  dish_id: string | null;
+  name: string;
+  name_ar: string | null;
+  portions: number;
+  chosen_by_customer: number;
+}
+
+/** Portions per dish for one day: each subscriber's pick, or the day's default. */
+export const getPrepSheet = (branchId: string, date: string) =>
+  apiFetch<{ date: string; items: PrepLine[] }>({
+    url: `/branches/${branchId}/prep`,
+    method: "GET",
+    params: { date },
+  });

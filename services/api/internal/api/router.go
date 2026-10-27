@@ -113,6 +113,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/subscriptions/{subscriptionId}/pause", h.Subscriptions.Pause)
 			r.Post("/subscriptions/{subscriptionId}/skip", h.Subscriptions.Skip)
 			r.Post("/subscriptions/{subscriptionId}/cancel", h.Subscriptions.Cancel)
+			r.Get("/me/subscriptions", h.Subscriptions.Mine)
+			r.Get("/me/subscriptions/{subscriptionId}", h.Subscriptions.MyDetail)
+			r.Put("/subscriptions/{subscriptionId}/meals/{date}/{slot}", h.Subscriptions.ChooseMeal)
+		}
+		if h.Addresses != nil {
+			r.Get("/me/addresses", h.Addresses.List)
+			r.Post("/me/addresses", h.Addresses.Create)
+			r.Delete("/me/addresses/{addressId}", h.Addresses.Delete)
 		}
 
 		// Phase 6 — classifieds.
@@ -236,6 +244,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/branches/{branchId}/plans", h.Kitchen.CreatePlan)
 			r.Get("/branches/{branchId}/plans/{planId}", h.Kitchen.GetPlan)
 			r.Put("/branches/{branchId}/plans/{planId}", h.Kitchen.UpdatePlan)
+			r.Get("/branches/{branchId}/prep", h.Kitchen.PrepSheet)
 		}
 
 		// Phase 7 — the vendor console.

@@ -43,6 +43,7 @@ type Handlers struct {
 	Subscriptions *SubscriptionHandlers
 	Kitchen       *KitchenHandlers
 	Meals         *MealsHandlers
+	Addresses     *AddressHandlers
 
 	// Vehicles and Chat are the Phase 6 classifieds surface. Nil-safe on the
 	// same principle as everything above, and worth stating for this one in

@@ -30,7 +30,8 @@ export function useBranches() {
     queryKey: BRANCHES_KEY,
     queryFn: listMyBranches,
     staleTime: 5 * 60_000,
-    retry: (count, err) => !(err instanceof ApiError && err.status === 401) && count < 2,
+    retry: (count, err) =>
+      !(err instanceof ApiError && err.status === 401) && count < 2,
   });
 }
 
@@ -85,7 +86,13 @@ export function SignOut({ locale }: { locale: string }) {
   );
 }
 
-export function VendorGate({ locale, children }: { locale: string; children: ReactNode }) {
+export function VendorGate({
+  locale,
+  children,
+}: {
+  locale: string;
+  children: ReactNode;
+}) {
   const pathname = usePathname();
   if (pathname === `/${locale}/console/login`) return <>{children}</>;
   return <Gate locale={locale}>{children}</Gate>;
@@ -99,7 +106,9 @@ function Gate({ locale, children }: { locale: string; children: ReactNode }) {
 
   useEffect(() => {
     if (!unauthenticated) return;
-    router.replace(`/${locale}/console/login?next=${encodeURIComponent(pathname)}`);
+    router.replace(
+      `/${locale}/console/login?next=${encodeURIComponent(pathname)}`,
+    );
   }, [unauthenticated, router, locale, pathname]);
 
   if (isPending) return <Waiting>Checking your access…</Waiting>;
@@ -120,11 +129,13 @@ function Gate({ locale, children }: { locale: string; children: ReactNode }) {
     return (
       <Waiting>
         <div className="state error">
-          <div className="headline">This account is not attached to a kitchen.</div>
+          <div className="headline">
+            This account is not attached to a kitchen.
+          </div>
         </div>
         <p className="muted">
-          Signing in worked. Ask the kitchen&apos;s owner to add this number to their team, or
-          contact the marketplace to onboard a new kitchen.
+          Signing in worked. Ask the kitchen&apos;s owner to add this number to
+          their team, or contact the marketplace to onboard a new kitchen.
         </p>
         <div className="console-gate-actions">
           <SignOut locale={locale} />
@@ -137,7 +148,11 @@ function Gate({ locale, children }: { locale: string; children: ReactNode }) {
 
 // ── the frame ───────────────────────────────────────────────────────────────
 
-type BranchContext = BranchAccess & { editable: boolean; base: string; locale: string };
+type BranchContext = BranchAccess & {
+  editable: boolean;
+  base: string;
+  locale: string;
+};
 
 const Ctx = createContext<BranchContext | null>(null);
 
@@ -147,7 +162,10 @@ export function useBranch(): BranchContext {
   return ctx;
 }
 
-const NAV: Array<{ title: string | null; items: Array<{ href: string; label: string }> }> = [
+const NAV: Array<{
+  title: string | null;
+  items: Array<{ href: string; label: string }>;
+}> = [
   { title: null, items: [{ href: "", label: "Overview" }] },
   {
     title: "Kitchen",
@@ -157,9 +175,18 @@ const NAV: Array<{ title: string | null; items: Array<{ href: string; label: str
       { href: "/plans", label: "Plans & pricing" },
     ],
   },
-  { title: "Operations", items: [{ href: "/deliveries", label: "Deliveries & dispatch" }] },
+  {
+    title: "Operations",
+    items: [
+      { href: "/prep", label: "Prep sheet" },
+      { href: "/deliveries", label: "Deliveries & dispatch" },
+    ],
+  },
   { title: "Money", items: [{ href: "/payouts", label: "Payouts" }] },
-  { title: "Settings", items: [{ href: "/profile", label: "Kitchen profile" }] },
+  {
+    title: "Settings",
+    items: [{ href: "/profile", label: "Kitchen profile" }],
+  },
 ];
 
 const TITLES: Record<string, string> = {
@@ -188,9 +215,10 @@ export function VendorShell({
   const branch = branches.find((b) => b.branch_id === branchId);
   const base = `/${locale}/console/${branchId}`;
   const section = pathname.startsWith(base) ? pathname.slice(base.length) : "";
-  const current = Object.keys(TITLES)
-    .filter((k) => k !== "" && section.startsWith(k))
-    .sort((a, b) => b.length - a.length)[0] ?? "";
+  const current =
+    Object.keys(TITLES)
+      .filter((k) => k !== "" && section.startsWith(k))
+      .sort((a, b) => b.length - a.length)[0] ?? "";
 
   if (!branch) {
     return (
@@ -205,7 +233,12 @@ export function VendorShell({
     );
   }
 
-  const ctx: BranchContext = { ...branch, editable: canEdit(branch.role), base, locale };
+  const ctx: BranchContext = {
+    ...branch,
+    editable: canEdit(branch.role),
+    base,
+    locale,
+  };
 
   return (
     <Ctx.Provider value={ctx}>
@@ -224,11 +257,15 @@ export function VendorShell({
               <select
                 aria-label="Branch"
                 value={branchId}
-                onChange={(e) => router.push(`/${locale}/console/${e.target.value}${current}`)}
+                onChange={(e) =>
+                  router.push(`/${locale}/console/${e.target.value}${current}`)
+                }
               >
                 {branches.map((b) => (
                   <option key={b.branch_id} value={b.branch_id}>
-                    {b.vendor_name === branch.vendor_name ? b.branch_name : `${b.vendor_name} · ${b.branch_name}`}
+                    {b.vendor_name === branch.vendor_name
+                      ? b.branch_name
+                      : `${b.vendor_name} · ${b.branch_name}`}
                   </option>
                 ))}
               </select>
@@ -239,7 +276,9 @@ export function VendorShell({
 
           {NAV.map((group) => (
             <div key={group.title ?? "top"}>
-              {group.title ? <div className="console-group">{group.title}</div> : null}
+              {group.title ? (
+                <div className="console-group">{group.title}</div>
+              ) : null}
               {group.items.map((item) => (
                 <Link
                   key={item.href}
@@ -268,8 +307,8 @@ export function VendorShell({
           <div className="console-content">
             {!ctx.editable ? (
               <div className="vp-readonly">
-                You are signed in as staff, so this portal is read-only. An owner or manager can
-                change the menu, plans and profile.
+                You are signed in as staff, so this portal is read-only. An
+                owner or manager can change the menu, plans and profile.
               </div>
             ) : null}
             {children}

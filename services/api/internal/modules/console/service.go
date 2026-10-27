@@ -278,6 +278,7 @@ func (s *Service) Roster(ctx context.Context, branchID uuid.UUID, date time.Time
 		  LEFT JOIN subscription_meal_selections sms
 		         ON sms.subscription_id = sub.id
 		        AND sms.service_date = f.scheduled_date
+		        AND sms.meal_slot = split_part(COALESCE(f.payload_ref, ''), ':', 1)
 		  LEFT JOIN menu_items mi ON mi.id = sms.menu_item_id
 		 WHERE f.branch_id = $1
 		   AND f.scheduled_date = $2

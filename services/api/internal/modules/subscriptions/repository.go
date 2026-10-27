@@ -39,6 +39,8 @@ type PlanTemplate struct {
 	TaxRateBP        int
 	Timezone         string
 	Country          string
+	Weekdays         []int16
+	MealSlots        []string
 }
 
 // LoadPlan reads a plan and the branch context it belongs to.
@@ -57,7 +59,8 @@ func (r *Repository) LoadPlan(ctx context.Context, tx pgx.Tx, planID uuid.UUID, 
 		       p.allowed_pause_days, p.cutoff_hours, p.is_prepaid,
 		       p.price_minor, p.currency, p.tax_rate_bp,
 		       b.timezone, b.country,
-		       t.price_minor, t.days_per_week, t.meals_per_day
+		       t.price_minor, t.days_per_week, t.meals_per_day,
+		       p.delivery_weekdays, p.meal_slots
 		  FROM subscription_plans p
 		  JOIN vendor_branches b ON b.id = p.branch_id
 		  LEFT JOIN plan_tiers t ON t.id = $2 AND t.plan_id = p.id AND t.is_active
@@ -69,7 +72,8 @@ func (r *Repository) LoadPlan(ctx context.Context, tx pgx.Tx, planID uuid.UUID, 
 		&p.AllowedPauseDays, &p.CutoffHours, &p.IsPrepaid,
 		&p.PriceMinor, &p.Currency, &p.TaxRateBP,
 		&p.Timezone, &p.Country,
-		&tierPrice, &tierDays, &tierMeals)
+		&tierPrice, &tierDays, &tierMeals,
+		&p.Weekdays, &p.MealSlots)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PlanTemplate{}, httpx.ErrNotFound

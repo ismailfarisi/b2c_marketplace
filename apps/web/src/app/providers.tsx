@@ -36,11 +36,33 @@ configureApiClient({
       return;
     }
 
+    // The kitchen portal and the customer pages each have their own sign-in,
+    // and both return the person to where they were.
+    const portal = /^\/(en|ar)\/console(\/|$)/.exec(path);
+    if (portal) {
+      const login = `/${portal[1]}/console/login`;
+      if (path === login) return;
+      window.location.href = `${login}?next=${encodeURIComponent(path)}`;
+      return;
+    }
+    const customer =
+      /^\/(en|ar)\/(subscriptions|kitchens\/[^/]+\/subscribe)(\/|$)/.exec(path);
+    if (customer) {
+      window.location.href = `/${customer[1]}/signin?next=${encodeURIComponent(path)}`;
+      return;
+    }
+
     window.location.href = "/";
   },
 });
 
-export function Providers({ children, locale }: { children: ReactNode; locale: "en" | "ar" }) {
+export function Providers({
+  children,
+  locale,
+}: {
+  children: ReactNode;
+  locale: "en" | "ar";
+}) {
   const [client] = useState(
     () =>
       new QueryClient({

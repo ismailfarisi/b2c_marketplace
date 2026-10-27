@@ -1231,6 +1231,112 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /subscriptions/{subscriptionId}/meals/{date}/{mealSlot}:
+    parameters:
+      - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: date, in: path, required: true, schema: { type: string, format: date } }
+      - { name: mealSlot, in: path, required: true, schema: { type: string, enum: [breakfast, lunch, dinner, snack, suhoor, iftar] } }
+    put:
+      tags: [subscriptions]
+      operationId: chooseSubscriptionMeal
+      summary: Choose between the day's dishes
+      description: |
+        Picks one of the dishes on the kitchen's weekly menu for that weekday and
+        meal. Refused once the plan's cutoff before the delivery window has
+        passed, for a date that is not a scheduled delivery, and for a dish that
+        is not on that day's menu. Without a choice the kitchen cooks the default.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dish_id]
+              properties:
+                dish_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The meal with the saved choice
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpcomingMeal" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /me/subscriptions:
+    get:
+      tags: [subscriptions]
+      operationId: listMySubscriptions
+      summary: The signed-in customer's meal subscriptions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MySubscription" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /me/subscriptions/{subscriptionId}:
+    get:
+      tags: [subscriptions]
+      operationId: getMySubscription
+      summary: One subscription with the next two weeks of meals
+      description: Someone else's subscription answers 404.
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MySubscriptionDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/addresses/{addressId}:
+    delete:
+      tags: [me]
+      operationId: deleteAddress
+      summary: Remove a saved address
+      parameters:
+        - { name: addressId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/prep:
+    parameters: [{ $ref: "#/components/parameters/BranchId" }]
+    get:
+      tags: [kitchen]
+      operationId: getKitchenPrepSheet
+      summary: Portions to cook per dish for a day
+      description: |
+        Each scheduled subscription delivery counts the customer's pick where one
+        was made, otherwise the weekday's default dish. Any branch member may read it.
+      parameters:
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PrepLine" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /reels/{reelId}/like:
     parameters:
       - name: reelId
@@ -5686,6 +5792,88 @@ components:
                   starts_at: { type: string, example: "12:00" }
                   ends_at: { type: string, example: "14:00" }
 
+    MySubscription:
+      type: object
+      required: [id, subscription_no, status, branch_id, kitchen_name, plan_name, start_date, cycle_no, amount_minor, currency]
+      properties:
+        id: { type: string, format: uuid }
+        subscription_no: { type: string }
+        status: { type: string }
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        plan_name: { type: string }
+        plan_name_ar: { type: [string, "null"] }
+        start_date: { type: string, format: date }
+        end_date: { type: [string, "null"], format: date }
+        cycle_no: { type: integer }
+        cycle_ends_on: { type: [string, "null"], format: date }
+        amount_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        pending_order_id:
+          type: [string, "null"]
+          format: uuid
+          description: Set while the current cycle's billing order is unpaid; pay it with createPaymentIntent.
+    MealOption:
+      type: object
+      required: [id, name, allergens, is_default]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        allergens: { type: array, items: { type: string } }
+        calories: { type: [integer, "null"] }
+        is_default: { type: boolean }
+    UpcomingMeal:
+      type: object
+      required: [date, weekday, meal_slot, options, chosen_by, cutoff_at, locked]
+      properties:
+        date: { type: string, format: date }
+        weekday: { type: integer, minimum: 0, maximum: 6, description: 0 is Sunday }
+        meal_slot: { type: string }
+        window_label: { type: string }
+        options: { type: array, items: { $ref: "#/components/schemas/MealOption" } }
+        chosen_dish_id: { type: [string, "null"], format: uuid }
+        chosen_by: { type: string, enum: [customer, default, vendor] }
+        cutoff_at: { type: string, format: date-time }
+        locked: { type: boolean }
+    MySubscriptionDetail:
+      allOf:
+        - $ref: "#/components/schemas/MySubscription"
+        - type: object
+          properties:
+            cutoff_hours: { type: integer }
+            pause_allowance_days: { type: integer }
+            pause_days_used: { type: integer }
+            upcoming: { type: array, items: { $ref: "#/components/schemas/UpcomingMeal" } }
+            cycles:
+              type: array
+              items:
+                type: object
+                properties:
+                  cycle_no: { type: integer }
+                  starts_on: { type: string, format: date }
+                  ends_on: { type: string, format: date }
+                  status: { type: string }
+                  amount_minor: { type: integer, format: int64 }
+                  currency: { type: string }
+            pauses:
+              type: array
+              items:
+                type: object
+                properties:
+                  from_date: { type: string, format: date }
+                  to_date: { type: string, format: date }
+    PrepLine:
+      type: object
+      required: [meal_slot, name, portions, chosen_by_customer]
+      properties:
+        meal_slot: { type: string }
+        dish_id: { type: [string, "null"], format: uuid }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        portions: { type: integer }
+        chosen_by_customer: { type: integer }
     PublicKitchen:
       type: object
       required: [branch_id, vendor_id, name, vendor_name, cuisines, dietary_tags, rating_count, currency, meal_slots, plans, from_price_minor]

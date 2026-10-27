@@ -6,6 +6,7 @@ import Link from "next/link";
 import { use } from "react";
 
 import { useCustomerPoint } from "@/components/meals/location";
+import { CustomerShell } from "@/components/meals/shell";
 import { getMealKitchen, type PublicKitchenDetail } from "@/lib/meals-api";
 import type { MenuChoice } from "@/lib/vendor-api";
 
@@ -29,7 +30,6 @@ const COPY = {
     rotation: "In the 4-kitchen rotation",
     rotationWeek: "a week when this kitchen is in your rotation",
     subscribe: "Subscribe",
-    soon: "Checkout opens in the next release.",
     allergens: "Allergens",
     kcal: "kcal",
     notFound: "This kitchen is not taking subscriptions right now.",
@@ -64,7 +64,6 @@ const COPY = {
     rotation: "ضمن تناوب المطابخ الأربعة",
     rotationWeek: "أسبوعيًا عندما يكون هذا المطبخ ضمن تناوبك",
     subscribe: "اشترك",
-    soon: "يفتح الدفع في الإصدار القادم.",
     allergens: "مسببات الحساسية",
     kcal: "سعرة",
     notFound: "هذا المطبخ لا يقبل اشتراكات حاليًا.",
@@ -292,15 +291,16 @@ export default function KitchenPage({
                       {t.rotationWeek}
                     </p>
                   )}
-                <button
-                  type="button"
-                  className="ms-cta"
-                  disabled
-                  title={t.soon}
-                >
-                  {t.subscribe}
-                </button>
-                <small className="ms-sub">{t.soon}</small>
+                {k.delivers_here === false ? (
+                  <small className="ms-bad">{t.deliversNo}</small>
+                ) : (
+                  <Link
+                    className="ms-cta"
+                    href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}`}
+                  >
+                    {t.subscribe}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
@@ -316,13 +316,8 @@ export default function KitchenPage({
   }
 
   return (
-    <div className="ms">
-      <header className="ms-bar">
-        <Link href={`/${locale}`} className="ms-brand">
-          ← {t.back}
-        </Link>
-      </header>
-      <main className="ms-main">{body}</main>
-    </div>
+    <CustomerShell locale={locale} back={{ href: `/${locale}`, label: t.back }}>
+      {body}
+    </CustomerShell>
   );
 }
