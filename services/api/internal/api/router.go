@@ -213,6 +213,24 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/routes/{routeId}/assign", h.DriverOps.AssignRoute)
 		}
 
+		// The vendor portal's kitchen setup: dishes, weekly menu, plans and the
+		// storefront profile. Writes need owner or manager on the branch.
+		if h.Kitchen != nil {
+			r.Get("/me/branches", h.Kitchen.MyBranches)
+			r.Get("/branches/{branchId}/overview", h.Kitchen.Overview)
+			r.Get("/branches/{branchId}/profile", h.Kitchen.Profile)
+			r.Put("/branches/{branchId}/profile", h.Kitchen.UpdateProfile)
+			r.Get("/branches/{branchId}/dishes", h.Kitchen.ListDishes)
+			r.Post("/branches/{branchId}/dishes", h.Kitchen.CreateDish)
+			r.Put("/branches/{branchId}/dishes/{dishId}", h.Kitchen.UpdateDish)
+			r.Get("/branches/{branchId}/menu", h.Kitchen.Menu)
+			r.Put("/branches/{branchId}/menu/{weekday}/{slot}", h.Kitchen.SetMenuSlot)
+			r.Get("/branches/{branchId}/plans", h.Kitchen.ListPlans)
+			r.Post("/branches/{branchId}/plans", h.Kitchen.CreatePlan)
+			r.Get("/branches/{branchId}/plans/{planId}", h.Kitchen.GetPlan)
+			r.Put("/branches/{branchId}/plans/{planId}", h.Kitchen.UpdatePlan)
+		}
+
 		// Phase 7 — the vendor console.
 		if h.Console != nil {
 			r.Get("/me/memberships", h.Console.Memberships)

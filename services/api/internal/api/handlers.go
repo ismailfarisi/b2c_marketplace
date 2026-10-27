@@ -41,6 +41,7 @@ type Handlers struct {
 	// Subscriptions is nil in a deployment without the food vertical. The
 	// transactional API stays up; the recurring routes are simply not mounted.
 	Subscriptions *SubscriptionHandlers
+	Kitchen       *KitchenHandlers
 
 	// Vehicles and Chat are the Phase 6 classifieds surface. Nil-safe on the
 	// same principle as everything above, and worth stating for this one in

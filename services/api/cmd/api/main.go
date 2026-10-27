@@ -42,6 +42,7 @@ import (
 	"github.com/marketplace/api/internal/modules/driver"
 	"github.com/marketplace/api/internal/modules/identity"
 	"github.com/marketplace/api/internal/modules/invoicing"
+	"github.com/marketplace/api/internal/modules/kitchen"
 	"github.com/marketplace/api/internal/modules/kyc"
 	"github.com/marketplace/api/internal/modules/moderation"
 	"github.com/marketplace/api/internal/modules/ordering"
@@ -190,6 +191,7 @@ func run() error {
 	payoutsSvc := payouts.NewService(pool, nil, app.PayoutGate{KYC: kycSvc})
 	adminSvc := admin.NewService(pool)
 
+	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
 	handlers.Console = &api.ConsoleHandlers{
 		Console: consoleSvc,

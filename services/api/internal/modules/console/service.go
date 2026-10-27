@@ -372,3 +372,68 @@ func (s *Service) Today(ctx context.Context, branchID uuid.UUID, date time.Time)
 
 	return sum, nil
 }
+
+// BranchRole is AuthorizeBranch plus the caller's role, for the routes that
+// distinguish reading a branch from changing it.
+func (s *Service) BranchRole(ctx context.Context, userID, branchID uuid.UUID) (uuid.UUID, string, error) {
+	var vendorID uuid.UUID
+	var role string
+	// The strongest membership wins when someone holds both a vendor-wide and a
+	// branch-scoped row.
+	err := s.pool.QueryRow(ctx, `
+		SELECT b.vendor_id, vu.role
+		  FROM vendor_branches b
+		  JOIN vendor_users vu ON vu.vendor_id = b.vendor_id
+		 WHERE b.id = $1 AND vu.user_id = $2
+		   AND (vu.branch_id IS NULL OR vu.branch_id = b.id)
+		   AND b.deleted_at IS NULL
+		 ORDER BY CASE vu.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END
+		 LIMIT 1`,
+		branchID, userID).Scan(&vendorID, &role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, "", httpx.ErrNotFound
+	}
+	if err != nil {
+		return uuid.Nil, "", fmt.Errorf("authorize branch role: %w", err)
+	}
+	return vendorID, role, nil
+}
+
+// BranchAccess is one branch the caller can open in the vendor portal.
+type BranchAccess struct {
+	BranchID     uuid.UUID `json:"branch_id"`
+	BranchName   string    `json:"branch_name"`
+	City         *string   `json:"city"`
+	VendorID     uuid.UUID `json:"vendor_id"`
+	VendorName   string    `json:"vendor_name"`
+	VendorStatus string    `json:"vendor_status"`
+	Role         string    `json:"role"`
+}
+
+// Branches expands memberships into concrete branches: a vendor-wide row
+// grants every branch of that vendor, which is what the portal's switcher
+// needs and what Memberships deliberately does not do.
+func (s *Service) Branches(ctx context.Context, userID uuid.UUID) ([]BranchAccess, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (b.id) b.id, b.name, b.city, v.id, v.trade_name, v.status, vu.role
+		  FROM vendor_users vu
+		  JOIN vendors v ON v.id = vu.vendor_id AND v.deleted_at IS NULL
+		  JOIN vendor_branches b ON b.vendor_id = v.id AND b.deleted_at IS NULL
+		       AND (vu.branch_id IS NULL OR vu.branch_id = b.id)
+		 WHERE vu.user_id = $1
+		 ORDER BY b.id, CASE vu.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("load branches: %w", err)
+	}
+	defer rows.Close()
+	out := []BranchAccess{}
+	for rows.Next() {
+		var b BranchAccess
+		if err := rows.Scan(&b.BranchID, &b.BranchName, &b.City, &b.VendorID, &b.VendorName,
+			&b.VendorStatus, &b.Role); err != nil {
+			return nil, fmt.Errorf("scan branch: %w", err)
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
