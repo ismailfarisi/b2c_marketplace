@@ -22,7 +22,8 @@ const COPY = {
     title: "Kitchens that deliver to you",
     lede: "Subscribe to a home-style kitchen for the month. Each one cooks a fixed menu by weekday, and some let you pick between two dishes.",
     locating: "Finding kitchens near you…",
-    fallback: "Showing Dubai Marina. Allow location to see kitchens that deliver to you.",
+    fallback:
+      "Showing Dubai Marina. Allow location to see kitchens that deliver to you.",
     search: "Search kitchens",
     any: "Any meal",
     rotation: "In the 4-kitchen rotation",
@@ -71,7 +72,15 @@ const COPY = {
 type Copy = (typeof COPY)["en"];
 const FILTER_SLOTS = ["breakfast", "lunch", "dinner", "suhoor", "iftar"];
 
-function KitchenCard({ k, locale, t }: { k: PublicKitchen; locale: "en" | "ar"; t: Copy }) {
+function KitchenCard({
+  k,
+  locale,
+  t,
+}: {
+  k: PublicKitchen;
+  locale: "en" | "ar";
+  t: Copy;
+}) {
   const name = (locale === "ar" && k.name_ar) || k.name;
   const vendor = (locale === "ar" && k.vendor_name_ar) || k.vendor_name;
   const blurb = (locale === "ar" && k.description_ar) || k.description;
@@ -79,14 +88,31 @@ function KitchenCard({ k, locale, t }: { k: PublicKitchen; locale: "en" | "ar"; 
     <li>
       <Link className="ms-card" href={`/${locale}/kitchens/${k.branch_id}`}>
         <div className="ms-cover" aria-hidden>
-          {k.cover_image_url ? <img src={k.cover_image_url} alt="" loading="lazy" /> : <span>{name.slice(0, 1)}</span>}
+          {k.cover_image_url ? (
+            <img
+              src={k.cover_image_url}
+              alt=""
+              loading="lazy"
+              onError={(e) => (e.currentTarget.hidden = true)}
+            />
+          ) : (
+            <span>{name.slice(0, 1)}</span>
+          )}
         </div>
         <div className="ms-card-body">
           <div className="ms-card-head">
             <h2 dir="auto">{name}</h2>
-            {name !== vendor && <span className="ms-sub" dir="auto">{vendor}</span>}
+            {name !== vendor && (
+              <span className="ms-sub" dir="auto">
+                {vendor}
+              </span>
+            )}
           </div>
-          {blurb && <p className="ms-blurb" dir="auto">{blurb}</p>}
+          {blurb && (
+            <p className="ms-blurb" dir="auto">
+              {blurb}
+            </p>
+          )}
           <div className="ms-tags">
             {k.meal_slots.map((s) => (
               <span key={s} className="ms-tag ms-tag-slot">
@@ -101,12 +127,22 @@ function KitchenCard({ k, locale, t }: { k: PublicKitchen; locale: "en" | "ar"; 
           </div>
           <div className="ms-price">
             <span>
-              {t.from} <strong>{formatMoney({ amount: k.from_price_minor, currency: k.currency }, locale)}</strong>{" "}
+              {t.from}{" "}
+              <strong>
+                {formatMoney(
+                  { amount: k.from_price_minor, currency: k.currency },
+                  locale,
+                )}
+              </strong>{" "}
               {t.perCycle}
             </span>
             {k.rotation_week_price_minor != null && (
               <span className="ms-rot">
-                {formatMoney({ amount: k.rotation_week_price_minor, currency: k.currency }, locale)} {t.perWeek}
+                {formatMoney(
+                  { amount: k.rotation_week_price_minor, currency: k.currency },
+                  locale,
+                )}{" "}
+                {t.perWeek}
               </span>
             )}
           </div>
@@ -116,7 +152,11 @@ function KitchenCard({ k, locale, t }: { k: PublicKitchen; locale: "en" | "ar"; 
   );
 }
 
-export default function MealsHome({ params }: { params: Promise<{ locale: string }> }) {
+export default function MealsHome({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
   const locale = use(params).locale === "ar" ? "ar" : "en";
   const t = COPY[locale];
   const { point, precise } = useCustomerPoint();
@@ -138,7 +178,9 @@ export default function MealsHome({ params }: { params: Promise<{ locale: string
         </Link>
         <nav className="ms-nav">
           <Link href={`/${locale}/feed`}>{t.feed}</Link>
-          <Link href={`/${locale === "ar" ? "en" : "ar"}`}>{locale === "ar" ? "English" : "العربية"}</Link>
+          <Link href={`/${locale === "ar" ? "en" : "ar"}`}>
+            {locale === "ar" ? "English" : "العربية"}
+          </Link>
         </nav>
       </header>
 
@@ -149,7 +191,11 @@ export default function MealsHome({ params }: { params: Promise<{ locale: string
           {point && !precise && <p className="ms-note">{t.fallback}</p>}
         </section>
 
-        <form className="ms-filters" role="search" onSubmit={(e) => e.preventDefault()}>
+        <form
+          className="ms-filters"
+          role="search"
+          onSubmit={(e) => e.preventDefault()}
+        >
           <input
             type="search"
             value={q}
@@ -172,7 +218,11 @@ export default function MealsHome({ params }: { params: Promise<{ locale: string
             ))}
           </div>
           <label className="ms-toggle">
-            <input type="checkbox" checked={rotation} onChange={(e) => setRotation(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={rotation}
+              onChange={(e) => setRotation(e.target.checked)}
+            />
             {t.rotation}
           </label>
         </form>

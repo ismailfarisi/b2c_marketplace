@@ -361,6 +361,7 @@ button.ghost {
 @media (min-width: 52rem) {
   .ms-hero:has(.ms-hero-img) { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; }
 }
+.ms-hero-img[hidden] { display: none; }
 .ms-hero-img { inline-size: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--ms-radius); }
 
 .ms-plans {

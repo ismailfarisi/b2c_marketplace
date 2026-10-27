@@ -16,7 +16,8 @@ const COPY = {
     deliversNo: "Does not deliver to your location",
     windows: "Delivery windows",
     menu: "Weekly menu",
-    menuNote: "The same dish every week on the same day. Where two dishes are listed you choose one before the cutoff.",
+    menuNote:
+      "The same dish every week on the same day. Where two dishes are listed you choose one before the cutoff.",
     or: "or",
     noMenu: "This kitchen has not published its menu yet.",
     plans: "Plans",
@@ -35,7 +36,14 @@ const COPY = {
     failed: "Could not load this kitchen.",
     loading: "Loading…",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-    slot: { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", suhoor: "Suhoor", iftar: "Iftar" } as Record<string, string>,
+    slot: {
+      breakfast: "Breakfast",
+      lunch: "Lunch",
+      dinner: "Dinner",
+      snack: "Snack",
+      suhoor: "Suhoor",
+      iftar: "Iftar",
+    } as Record<string, string>,
   },
   ar: {
     back: "كل المطابخ",
@@ -43,7 +51,8 @@ const COPY = {
     deliversNo: "لا يوصل إلى موقعك",
     windows: "أوقات التوصيل",
     menu: "القائمة الأسبوعية",
-    menuNote: "الطبق نفسه كل أسبوع في اليوم نفسه. عند وجود طبقين تختار أحدهما قبل الموعد النهائي.",
+    menuNote:
+      "الطبق نفسه كل أسبوع في اليوم نفسه. عند وجود طبقين تختار أحدهما قبل الموعد النهائي.",
     or: "أو",
     noMenu: "لم ينشر هذا المطبخ قائمته بعد.",
     plans: "الباقات",
@@ -61,13 +70,36 @@ const COPY = {
     notFound: "هذا المطبخ لا يقبل اشتراكات حاليًا.",
     failed: "تعذر تحميل المطبخ.",
     loading: "جارٍ التحميل…",
-    weekdays: ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
-    slot: { breakfast: "فطور", lunch: "غداء", dinner: "عشاء", snack: "وجبة خفيفة", suhoor: "سحور", iftar: "إفطار" } as Record<string, string>,
+    weekdays: [
+      "الأحد",
+      "الاثنين",
+      "الثلاثاء",
+      "الأربعاء",
+      "الخميس",
+      "الجمعة",
+      "السبت",
+    ],
+    slot: {
+      breakfast: "فطور",
+      lunch: "غداء",
+      dinner: "عشاء",
+      snack: "وجبة خفيفة",
+      suhoor: "سحور",
+      iftar: "إفطار",
+    } as Record<string, string>,
   },
 };
 type Copy = (typeof COPY)["en"];
 
-function Dish({ d, locale, t }: { d: MenuChoice; locale: "en" | "ar"; t: Copy }) {
+function Dish({
+  d,
+  locale,
+  t,
+}: {
+  d: MenuChoice;
+  locale: "en" | "ar";
+  t: Copy;
+}) {
   return (
     <span className="ms-dish">
       <span dir="auto">{(locale === "ar" && d.name_ar) || d.name}</span>
@@ -84,10 +116,20 @@ function Dish({ d, locale, t }: { d: MenuChoice; locale: "en" | "ar"; t: Copy })
   );
 }
 
-function Menu({ k, locale, t }: { k: PublicKitchenDetail; locale: "en" | "ar"; t: Copy }) {
+function Menu({
+  k,
+  locale,
+  t,
+}: {
+  k: PublicKitchenDetail;
+  locale: "en" | "ar";
+  t: Copy;
+}) {
   const slots = [...new Set(k.menu.slots.map((s) => s.slot))];
   if (slots.length === 0) return <p className="ms-note">{t.noMenu}</p>;
-  const days = [0, 1, 2, 3, 4, 5, 6].filter((d) => k.menu.slots.some((s) => s.weekday === d));
+  const days = [0, 1, 2, 3, 4, 5, 6].filter((d) =>
+    k.menu.slots.some((s) => s.weekday === d),
+  );
   return (
     <div className="ms-menu">
       {slots.map((slot) => (
@@ -95,12 +137,18 @@ function Menu({ k, locale, t }: { k: PublicKitchenDetail; locale: "en" | "ar"; t
           <h3>{t.slot[slot] ?? slot}</h3>
           <dl>
             {days.map((day) => {
-              const cell = k.menu.slots.find((s) => s.weekday === day && s.slot === slot);
+              const cell = k.menu.slots.find(
+                (s) => s.weekday === day && s.slot === slot,
+              );
               return (
                 <div key={day} className="ms-menu-row">
                   <dt>{t.weekdays[day]}</dt>
                   <dd>
-                    {cell?.default ? <Dish d={cell.default} locale={locale} t={t} /> : <span className="ms-sub">—</span>}
+                    {cell?.default ? (
+                      <Dish d={cell.default} locale={locale} t={t} />
+                    ) : (
+                      <span className="ms-sub">—</span>
+                    )}
                     {cell?.alternative && (
                       <>
                         <span className="ms-or">{t.or}</span>
@@ -118,24 +166,38 @@ function Menu({ k, locale, t }: { k: PublicKitchenDetail; locale: "en" | "ar"; t
   );
 }
 
-export default function KitchenPage({ params }: { params: Promise<{ locale: string; branchId: string }> }) {
+export default function KitchenPage({
+  params,
+}: {
+  params: Promise<{ locale: string; branchId: string }>;
+}) {
   const p = use(params);
   const locale = p.locale === "ar" ? "ar" : "en";
   const t = COPY[locale];
   const { point, precise } = useCustomerPoint();
   const q = useQuery({
-    queryKey: ["meal-kitchen", p.branchId, precise ? point?.lat : null, precise ? point?.lng : null],
+    queryKey: [
+      "meal-kitchen",
+      p.branchId,
+      precise ? point?.lat : null,
+      precise ? point?.lng : null,
+    ],
     queryFn: () => getMealKitchen(p.branchId, precise ? point : null),
     enabled: point != null,
   });
 
-  const money = (amount: number, currency: string) => formatMoney({ amount, currency }, locale);
+  const money = (amount: number, currency: string) =>
+    formatMoney({ amount, currency }, locale);
 
   let body;
   if (!point || q.isPending) body = <p className="ms-note">{t.loading}</p>;
   else if (q.isError)
     body = (
-      <p className="ms-empty">{q.error instanceof ApiError && q.error.status === 404 ? t.notFound : t.failed}</p>
+      <p className="ms-empty">
+        {q.error instanceof ApiError && q.error.status === 404
+          ? t.notFound
+          : t.failed}
+      </p>
     );
   else {
     const k = q.data;
@@ -144,7 +206,14 @@ export default function KitchenPage({ params }: { params: Promise<{ locale: stri
     body = (
       <>
         <section className="ms-hero">
-          {k.cover_image_url && <img src={k.cover_image_url} alt="" className="ms-hero-img" />}
+          {k.cover_image_url && (
+            <img
+              src={k.cover_image_url}
+              alt=""
+              className="ms-hero-img"
+              onError={(e) => (e.currentTarget.hidden = true)}
+            />
+          )}
           <div>
             <h1 dir="auto">{name}</h1>
             <p className="ms-sub" dir="auto">
@@ -160,11 +229,16 @@ export default function KitchenPage({ params }: { params: Promise<{ locale: stri
               ))}
             </div>
             {k.delivers_here != null && (
-              <p className={k.delivers_here ? "ms-ok" : "ms-bad"}>{k.delivers_here ? t.deliversYes : t.deliversNo}</p>
+              <p className={k.delivers_here ? "ms-ok" : "ms-bad"}>
+                {k.delivers_here ? t.deliversYes : t.deliversNo}
+              </p>
             )}
             {k.delivery_windows.length > 0 && (
               <p className="ms-sub">
-                {t.windows}: {k.delivery_windows.map((w) => `${w.starts_at}–${w.ends_at}`).join(", ")}
+                {t.windows}:{" "}
+                {k.delivery_windows
+                  .map((w) => `${w.starts_at}–${w.ends_at}`)
+                  .join(", ")}
               </p>
             )}
           </div>
@@ -175,35 +249,55 @@ export default function KitchenPage({ params }: { params: Promise<{ locale: stri
           <ul className="ms-plans">
             {k.plan_list.map((plan) => (
               <li key={plan.id} className="ms-plan">
-                <h3 dir="auto">{(locale === "ar" && plan.name_ar) || plan.name}</h3>
-                {plan.description && <p dir="auto">{(locale === "ar" && plan.description_ar) || plan.description}</p>}
+                <h3 dir="auto">
+                  {(locale === "ar" && plan.name_ar) || plan.name}
+                </h3>
+                {plan.description && (
+                  <p dir="auto">
+                    {(locale === "ar" && plan.description_ar) ||
+                      plan.description}
+                  </p>
+                )}
                 <p className="ms-sub">
                   {plan.delivery_weekdays.map((d) => t.weekdays[d]).join(" · ")}
                   <br />
-                  {plan.meal_slots.map((s) => t.slot[s] ?? s).join(", ")} · {t.meals(plan.meals_per_day)}
+                  {plan.meal_slots.map((s) => t.slot[s] ?? s).join(", ")} ·{" "}
+                  {t.meals(plan.meals_per_day)}
                   <br />
                   {t.cutoff(plan.cutoff_hours)}
-                  {plan.allowed_pause_days > 0 && ` · ${t.pause(plan.allowed_pause_days)}`}
+                  {plan.allowed_pause_days > 0 &&
+                    ` · ${t.pause(plan.allowed_pause_days)}`}
                 </p>
                 <p className="ms-plan-price">
-                  <strong>{money(plan.price_minor, plan.currency)}</strong> {t.cycle(plan.cycle_days)}
+                  <strong>{money(plan.price_minor, plan.currency)}</strong>{" "}
+                  {t.cycle(plan.cycle_days)}
                 </p>
                 {plan.tiers.length > 1 && (
                   <ul className="ms-tiers">
                     {plan.tiers.map((tier) => (
                       <li key={tier.id}>
-                        <span dir="auto">{(locale === "ar" && tier.name_ar) || tier.name}</span>
+                        <span dir="auto">
+                          {(locale === "ar" && tier.name_ar) || tier.name}
+                        </span>
                         <span>{money(tier.price_minor, plan.currency)}</span>
                       </li>
                     ))}
                   </ul>
                 )}
-                {plan.rotation_enabled && plan.rotation_week_price_minor != null && (
-                  <p className="ms-rot">
-                    {t.rotation}: {money(plan.rotation_week_price_minor, plan.currency)} {t.rotationWeek}
-                  </p>
-                )}
-                <button type="button" className="ms-cta" disabled title={t.soon}>
+                {plan.rotation_enabled &&
+                  plan.rotation_week_price_minor != null && (
+                    <p className="ms-rot">
+                      {t.rotation}:{" "}
+                      {money(plan.rotation_week_price_minor, plan.currency)}{" "}
+                      {t.rotationWeek}
+                    </p>
+                  )}
+                <button
+                  type="button"
+                  className="ms-cta"
+                  disabled
+                  title={t.soon}
+                >
                   {t.subscribe}
                 </button>
                 <small className="ms-sub">{t.soon}</small>
