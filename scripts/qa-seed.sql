@@ -192,6 +192,48 @@ VALUES ('fc000000-0000-0000-0000-000000000001', 'DSP-2607-QA0001', 'fulfillment'
         'not_delivered', 'open', now() + interval '1 day')
 ON CONFLICT (id) DO NOTHING;
 
+-- ── a meal kitchen ──────────────────────────────────────────────────────────
+--
+-- The marketplace's core vertical. A second vendor rather than a second branch
+-- of the laundry, because a kitchen and a laundry are different businesses with
+-- different owners — and the vendor portal's branch switcher should show that.
+-- Kitchen Manager owns it, so the same QA login opens both.
+
+INSERT INTO vendors (id, slug, legal_name, trade_name, trade_name_ar, status, onboarding_stage,
+                     trade_licence_no, trade_licence_expires, country, default_currency)
+VALUES ('11111111-1111-1111-1111-111111111112', 'spice-route-kitchen', 'Spice Route Kitchen LLC',
+        'Spice Route Kitchen', 'مطبخ طريق التوابل', 'active', 'complete',
+        'CN-7654321', current_date + interval '1 year', 'AE', 'AED')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO vendor_branches (id, vendor_id, name, name_ar, timezone, point, service_area,
+                             address_line, city, emirate, country, phone, is_active,
+                             kitchen_description, cuisines, dietary_tags)
+VALUES ('22222222-2222-2222-2222-222222222223', '11111111-1111-1111-1111-111111111112',
+        'Spice Route — Al Quoz', 'طريق التوابل — القوز', 'Asia/Dubai',
+        ST_SetSRID(ST_MakePoint(55.2300, 25.1400), 4326)::geography,
+        ST_Multi(ST_Buffer(ST_SetSRID(ST_MakePoint(55.2300, 25.1400), 4326)::geography, 15000)::geometry)::geography,
+        'Warehouse 12, Al Quoz 3', 'Dubai', 'Dubai', 'AE', '+97145556666', true,
+        'Home-style Indian and Arabic lunches, cooked fresh every morning.',
+        '{indian,arabic}', '{halal}')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO time_windows (id, branch_id, label, starts_at, ends_at, sort_order)
+VALUES ('33333333-3333-3333-3333-333333333341', '22222222-2222-2222-2222-222222222223',
+        '12:00 – 14:00', TIME '12:00', TIME '14:00', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO vendor_users (vendor_id, user_id, role, branch_id) VALUES
+    ('11111111-1111-1111-1111-111111111112', 'a0000000-0000-0000-0000-000000000004', 'owner', NULL)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO menu_items (id, branch_id, name, allergens, tags, calories) VALUES
+    ('d0000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222223', 'Chicken biryani', '{milk}', '{spicy}', 720),
+    ('d0000000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222223', 'Vegetable biryani', '{milk}', '{vegetarian}', 610),
+    ('d0000000-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222223', 'Chicken machboos', '{}', '{}', 680),
+    ('d0000000-0000-0000-0000-000000000004', '22222222-2222-2222-2222-222222222223', 'Dal tadka with rice', '{}', '{vegetarian}', 540)
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 \echo '--- seeded ---'
