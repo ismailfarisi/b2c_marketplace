@@ -45,6 +45,8 @@ tags:
   - name: driver
   - name: dispatch
   - name: console
+  - name: kitchen
+    description: Vendor portal kitchen setup — dishes, weekly menu, plans, profile.
   - name: disputes
 
 security:
@@ -2598,6 +2600,267 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/Membership" }
+
+  /me/branches:
+    get:
+      tags: [kitchen]
+      operationId: listMyBranches
+      summary: Every branch this user can open in the vendor portal
+      description: |
+        Memberships expanded to concrete branches: a vendor-wide membership lists
+        every branch of that vendor. When a user holds both a vendor-wide and a
+        branch row, the strongest role wins.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/BranchAccess" }
+
+  /branches/{branchId}/overview:
+    get:
+      tags: [kitchen]
+      operationId: getKitchenOverview
+      summary: Subscriber counts and the setup checklist
+      parameters: [{ $ref: "#/components/parameters/BranchId" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KitchenOverview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/profile:
+    parameters: [{ $ref: "#/components/parameters/BranchId" }]
+    get:
+      tags: [kitchen]
+      operationId: getKitchenProfile
+      summary: The kitchen's storefront card
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KitchenProfile" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [kitchen]
+      operationId: updateKitchenProfile
+      summary: Edit the storefront card (owner or manager)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KitchenProfileInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KitchenProfile" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /branches/{branchId}/dishes:
+    parameters: [{ $ref: "#/components/parameters/BranchId" }]
+    get:
+      tags: [kitchen]
+      operationId: listDishes
+      summary: Every dish this branch cooks, archived ones last
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Dish" }
+                  allergens:
+                    type: array
+                    description: The closed allergen list a dish may declare.
+                    items: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [kitchen]
+      operationId: createDish
+      summary: Add a dish (owner or manager)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DishInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dish" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /branches/{branchId}/dishes/{dishId}:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+      - { name: dishId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [kitchen]
+      operationId: updateDish
+      summary: Edit, archive (is_active false) or restore a dish
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DishInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dish" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /branches/{branchId}/menu:
+    get:
+      tags: [kitchen]
+      operationId: getWeeklyMenu
+      summary: The branch's fixed weekly menu
+      description: |
+        One cell per weekday (0 = Sunday) and meal slot that has a dish: a
+        default and optionally one alternative. Customers who do not choose get
+        the default.
+      parameters: [{ $ref: "#/components/parameters/BranchId" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyMenu" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/menu/{weekday}/{slot}:
+    put:
+      tags: [kitchen]
+      operationId: setMenuSlot
+      summary: Replace one cell of the weekly menu
+      description: |
+        Both null clears the cell. An alternative without a default, or the same
+        dish twice, is a 422. Dishes must be active and belong to the branch.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - { name: weekday, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 6 } }
+        - { name: slot, in: path, required: true, schema: { $ref: "#/components/schemas/MealSlot" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                default_dish_id: { type: [string, "null"], format: uuid }
+                alternative_dish_id: { type: [string, "null"], format: uuid }
+      responses:
+        "200":
+          description: The whole menu after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyMenu" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /branches/{branchId}/plans:
+    parameters: [{ $ref: "#/components/parameters/BranchId" }]
+    get:
+      tags: [kitchen]
+      operationId: listKitchenPlans
+      summary: The branch's meal plans with tiers
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/KitchenPlan" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [kitchen]
+      operationId: createKitchenPlan
+      summary: Create a plan (owner or manager)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KitchenPlanInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KitchenPlan" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /branches/{branchId}/plans/{planId}:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+      - { name: planId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [kitchen]
+      operationId: getKitchenPlan
+      summary: One plan with tiers
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KitchenPlan" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [kitchen]
+      operationId: updateKitchenPlan
+      summary: Edit a plan; tiers are replaced by key, removed tiers deactivated
+      description: |
+        `409 plan_has_subscribers` when the plan has live subscriptions and the
+        change touches cycle_days, days_per_week or meal_slots.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KitchenPlanInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KitchenPlan" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Plan shape locked by live subscribers }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /branches/{branchId}/summary:
     get:
@@ -5198,6 +5461,197 @@ components:
           description: Scheduled work with no route. The board's left-hand column.
 
     # ── Phase 7 · console ───────────────────────────────────────────────────
+
+    BranchAccess:
+      type: object
+      properties:
+        branch_id: { type: string, format: uuid }
+        branch_name: { type: string }
+        city: { type: [string, "null"] }
+        vendor_id: { type: string, format: uuid }
+        vendor_name: { type: string }
+        vendor_status: { type: string }
+        role: { type: string, enum: [owner, manager, staff] }
+
+    MealSlot:
+      type: string
+      enum: [breakfast, lunch, dinner, snack, suhoor, iftar]
+
+    Allergen:
+      type: string
+      enum: [gluten, crustaceans, eggs, fish, peanuts, soy, milk, tree_nuts, celery, mustard, sesame, sulphites, lupin, molluscs]
+
+    DishInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 120 }
+        name_ar: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        description_ar: { type: [string, "null"] }
+        image_url: { type: [string, "null"], format: uri, description: https only }
+        calories: { type: [integer, "null"], minimum: 0, maximum: 5000 }
+        protein_g: { type: [number, "null"], minimum: 0 }
+        carbs_g: { type: [number, "null"], minimum: 0 }
+        fat_g: { type: [number, "null"], minimum: 0 }
+        allergens: { type: array, items: { $ref: "#/components/schemas/Allergen" } }
+        tags: { type: array, maxItems: 20, items: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,31}$" } }
+        is_active: { type: [boolean, "null"], description: Omit to leave unchanged; defaults true on create. }
+
+    Dish:
+      allOf:
+        - $ref: "#/components/schemas/DishInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            branch_id: { type: string, format: uuid }
+            is_active: { type: boolean }
+            menu_slots: { type: integer, description: Menu cells currently serving this dish. }
+
+    MenuChoice:
+      type: object
+      properties:
+        dish_id: { type: string, format: uuid }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        allergens: { type: array, items: { $ref: "#/components/schemas/Allergen" } }
+        calories: { type: [integer, "null"] }
+        image_url: { type: [string, "null"] }
+        is_active: { type: boolean }
+
+    WeeklyMenu:
+      type: object
+      properties:
+        cycle_id: { type: [string, "null"], format: uuid }
+        slots:
+          type: array
+          items:
+            type: object
+            properties:
+              weekday: { type: integer, minimum: 0, maximum: 6, description: 0 is Sunday. }
+              slot: { $ref: "#/components/schemas/MealSlot" }
+              default: { oneOf: [{ $ref: "#/components/schemas/MenuChoice" }, { type: "null" }] }
+              alternative: { oneOf: [{ $ref: "#/components/schemas/MenuChoice" }, { type: "null" }] }
+
+    PlanTierInput:
+      type: object
+      required: [key, name, price_minor]
+      properties:
+        key: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,31}$" }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        days_per_week: { type: [integer, "null"], minimum: 1, maximum: 7 }
+        meals_per_day: { type: [integer, "null"], minimum: 1, maximum: 6 }
+        portion_size: { type: [string, "null"], enum: [small, regular, large, null] }
+        price_minor: { type: integer, format: int64, minimum: 1 }
+
+    KitchenPlanInput:
+      type: object
+      required: [name, cycle_days, days_per_week, meal_slots, delivery_weekdays, price_minor]
+      properties:
+        name: { type: string, maxLength: 120 }
+        name_ar: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        description_ar: { type: [string, "null"] }
+        image_url: { type: [string, "null"], format: uri }
+        cycle_days: { type: integer, minimum: 7, maximum: 365 }
+        days_per_week: { type: integer, minimum: 1, maximum: 7, description: At most the number of delivery_weekdays. }
+        meal_slots: { type: array, minItems: 1, items: { $ref: "#/components/schemas/MealSlot" } }
+        delivery_weekdays: { type: array, minItems: 1, items: { type: integer, minimum: 0, maximum: 6 } }
+        allowed_pause_days: { type: integer, minimum: 0 }
+        cutoff_hours: { type: integer, minimum: 0, maximum: 168 }
+        price_minor: { type: integer, format: int64, minimum: 1, description: Per billing cycle, before VAT. }
+        rotation_enabled: { type: boolean }
+        rotation_week_price_minor:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            This kitchen's price for one week inside a four-kitchen rotation.
+            Required when rotation_enabled. A rotation customer pays the sum of
+            the four kitchens' weekly prices; commission applies per week.
+        is_active: { type: [boolean, "null"] }
+        tiers: { type: array, items: { $ref: "#/components/schemas/PlanTierInput" } }
+
+    KitchenPlan:
+      allOf:
+        - $ref: "#/components/schemas/KitchenPlanInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            branch_id: { type: string, format: uuid }
+            meals_per_day: { type: integer, description: Always the number of meal_slots. }
+            currency: { type: string }
+            tax_rate_bp: { type: integer }
+            is_active: { type: boolean }
+            active_subscribers: { type: integer }
+            tiers:
+              type: array
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/PlanTierInput"
+                  - type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      sort_order: { type: integer }
+                      is_active: { type: boolean }
+
+    KitchenProfileInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        description: { type: [string, "null"], maxLength: 1000 }
+        description_ar: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+        dietary_tags: { type: array, items: { type: string } }
+        cover_image_url: { type: [string, "null"], format: uri }
+        phone: { type: [string, "null"] }
+
+    KitchenProfile:
+      allOf:
+        - $ref: "#/components/schemas/KitchenProfileInput"
+        - type: object
+          properties:
+            branch_id: { type: string, format: uuid }
+            vendor_id: { type: string, format: uuid }
+            vendor_name: { type: string }
+            vendor_status: { type: string }
+            address_line: { type: [string, "null"] }
+            city: { type: [string, "null"] }
+            emirate: { type: [string, "null"] }
+            timezone: { type: string }
+            currency: { type: string }
+            is_active: { type: boolean }
+            has_service_area: { type: boolean }
+            delivery_windows:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  label: { type: string }
+                  starts_at: { type: string, example: "12:00" }
+                  ends_at: { type: string, example: "14:00" }
+
+    KitchenOverview:
+      type: object
+      properties:
+        active_subscribers: { type: integer }
+        paused_subscribers: { type: integer }
+        pending_payment: { type: integer }
+        active_plans: { type: integer }
+        rotation_plans: { type: integer }
+        active_dishes: { type: integer }
+        profile_complete: { type: boolean }
+        menu_gaps:
+          type: array
+          description: Weekday/slot cells a live plan delivers but the menu leaves without a default dish.
+          items:
+            type: object
+            properties:
+              weekday: { type: integer }
+              slot: { $ref: "#/components/schemas/MealSlot" }
 
     Membership:
       type: object
