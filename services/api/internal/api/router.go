@@ -31,6 +31,13 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		r.Get("/branches/{branchId}/offerings", h.Catalog.ListOfferings)
 		r.Get("/branches/{branchId}/availability", h.Catalog.GetAvailability)
 
+		// Meals storefront: which kitchens deliver here, and what each one
+		// cooks on which day for how much.
+		if h.Meals != nil {
+			r.Get("/meals/kitchens", h.Meals.KitchenList)
+			r.Get("/meals/kitchens/{branchId}", h.Meals.KitchenPage)
+		}
+
 		if h.Reels != nil {
 			// The feed itself. Anonymous viewers get it keyed by device;
 			// signed-in viewers additionally get block filtering.

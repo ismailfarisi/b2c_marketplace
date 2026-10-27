@@ -192,6 +192,7 @@ func run() error {
 	adminSvc := admin.NewService(pool)
 
 	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc}
+	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
 	handlers.Console = &api.ConsoleHandlers{
 		Console: consoleSvc,
