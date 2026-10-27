@@ -1668,6 +1668,10 @@ table.menu-grid td {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
