@@ -1,85 +1,63 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { use } from "react";
+import { useRouter } from "next/navigation";
+import { use, useEffect } from "react";
 
-import { listMemberships } from "@/lib/api";
+import { SignOut, useBranches } from "@/components/vendor/portal";
 
 /**
  * Branch picker.
  *
- * The console is branch-scoped everywhere below this page, not vendor-scoped,
- * because that is how the operation actually runs: a chain's three kitchens have
- * independent capacity, independent drivers and independent days, and a combined
- * view is a screen nobody can act on. `vendor_users.branch_id` already encodes
- * the same idea — a null there means vendor-wide.
+ * The portal is branch-scoped everywhere below this page, because that is how
+ * a kitchen runs: a chain's branches have independent menus, capacity and
+ * drivers. Someone with a single branch never sees this page — they are sent
+ * straight to it.
  */
-export default function ConsoleHome({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default function ConsoleHome({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = use(params);
-  const isAr = locale === "ar";
-
-  const { data, isPending, error } = useQuery({
-    queryKey: ["memberships"],
-    queryFn: listMemberships,
-  });
-
-  if (isPending) return <main className="page">{isAr ? "جارٍ التحميل…" : "Loading…"}</main>;
-
-  if (error) {
-    return (
-      <main className="page">
-        <h1>{isAr ? "تعذّر التحميل" : "Could not load"}</h1>
-        <p className="muted">
-          {isAr
-            ? "سجّل الدخول بحساب موظّف لدى بائع."
-            : "Sign in with an account that belongs to a vendor."}
-        </p>
-      </main>
-    );
-  }
-
+  const router = useRouter();
+  const { data } = useBranches();
   const items = data?.items ?? [];
+  const only = items.length === 1 ? items[0] : undefined;
+
+  useEffect(() => {
+    if (only) router.replace(`/${locale}/console/${only.branch_id}`);
+  }, [only, router, locale]);
 
   return (
-    <main className="page">
-      <h1>{isAr ? "لوحة التحكّم" : "Console"}</h1>
-
-      {items.length === 0 && (
-        <p className="muted">
-          {isAr
-            ? "هذا الحساب غير مرتبط بأي بائع."
-            : "This account is not attached to any vendor."}
-        </p>
-      )}
-
-      <ul className="stack">
-        {items.map((m) => (
-          <li key={`${m.vendor_id}:${m.branch_id ?? "all"}`} className="card">
-            <div className="row">
-              <span className="mono">{m.branch_id ?? m.vendor_id}</span>
-              <span className="pill">{m.role}</span>
+    <div className="console-gate">
+      <div className="console-gate-card">
+        <div className="console-login-brand">
+          <span>Kitchen portal</span>
+          <span className="env">{process.env.NEXT_PUBLIC_ENV ?? "dev"}</span>
+        </div>
+        {only ? (
+          <p className="muted">Opening {only.branch_name}…</p>
+        ) : (
+          <>
+            <p className="muted">Choose a branch.</p>
+            <div className="vp-picker">
+              {items.map((b) => (
+                <Link key={b.branch_id} href={`/${locale}/console/${b.branch_id}`}>
+                  <span>
+                    <strong dir="auto">{b.vendor_name}</strong>
+                    <br />
+                    <span className="muted" dir="auto">
+                      {b.branch_name}
+                      {b.city ? ` · ${b.city}` : ""}
+                    </span>
+                  </span>
+                  <span className="tag">{b.role}</span>
+                </Link>
+              ))}
             </div>
-            {m.branch_id ? (
-              <Link href={`/${locale}/console/${m.branch_id}`}>
-                {isAr ? "افتح الفرع" : "Open branch"}
-              </Link>
-            ) : (
-              <p className="muted">
-                {/* A vendor-wide membership has no single branch to open. Saying
-                    so beats rendering a dead link. */}
-                {isAr
-                  ? "صلاحية على مستوى البائع — افتح فرعًا من الرابط المباشر."
-                  : "Vendor-wide access — open a specific branch by its link."}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
-    </main>
+          </>
+        )}
+        <div className="console-gate-actions">
+          <SignOut locale={locale} />
+        </div>
+      </div>
+    </div>
   );
 }

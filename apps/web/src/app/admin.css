@@ -1516,3 +1516,241 @@ table.data .nowrap {
   color: var(--a-text-muted);
   resize: vertical;
 }
+
+/* ── vendor portal ─────────────────────────────────────────────────────────── */
+
+.vp-branch {
+  margin: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--a-nav-text);
+}
+
+.vp-branch select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--a-nav-text-active);
+  background: var(--a-nav-hover);
+  border: 1px solid var(--a-nav-active);
+  border-radius: var(--a-radius-sm);
+  padding: 6px 8px;
+}
+
+.vp-branch .vendor {
+  color: var(--a-nav-text-active);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vp-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px 18px;
+}
+
+.vp-form .wide {
+  grid-column: 1 / -1;
+}
+
+.vp-form label,
+.vp-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--a-text-muted);
+}
+
+.vp-form label .field,
+.vp-form textarea.field {
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+
+.vp-form .err {
+  color: var(--a-danger);
+  font-weight: 500;
+}
+
+.vp-form .hint {
+  font-weight: 400;
+  color: var(--a-text-faint);
+}
+
+.vp-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.vp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vp-chip {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--a-border-strong);
+  background: var(--a-surface);
+  color: var(--a-text);
+  cursor: pointer;
+}
+
+.vp-chip[aria-pressed="true"] {
+  background: var(--a-accent);
+  border-color: var(--a-accent);
+  color: #fff;
+}
+
+.vp-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.vp-readonly {
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: var(--a-radius-sm);
+  background: var(--a-warn-soft);
+  color: var(--a-warn);
+}
+
+/* The weekly grid. Columns are weekdays because that is how a kitchen plans
+   ("what are we cooking on Monday"); rows are meals. */
+table.menu-grid {
+  inline-size: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+table.menu-grid th {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--a-text-muted);
+  padding: 8px;
+  text-align: start;
+  background: var(--a-surface-2);
+  border-block-end: 1px solid var(--a-border);
+}
+
+table.menu-grid th.slot {
+  inline-size: 96px;
+}
+
+table.menu-grid td {
+  padding: 4px;
+  border-block-end: 1px solid var(--a-border);
+  vertical-align: top;
+}
+
+.menu-cell {
+  inline-size: 100%;
+  min-block-size: 64px;
+  text-align: start;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 8px;
+  border-radius: var(--a-radius-sm);
+  border: 1px dashed var(--a-border-strong);
+  background: var(--a-surface);
+  color: var(--a-text);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.menu-cell.filled {
+  border-style: solid;
+  border-color: var(--a-border);
+}
+
+.menu-cell.gap {
+  border-color: var(--a-warn);
+  background: var(--a-warn-soft);
+}
+
+.menu-cell.selected {
+  outline: 2px solid var(--a-accent);
+  outline-offset: -1px;
+}
+
+.menu-cell .default {
+  font-weight: 600;
+}
+
+.menu-cell .alt {
+  color: var(--a-text-muted);
+}
+
+.menu-cell .empty {
+  color: var(--a-text-faint);
+}
+
+.menu-cell.archived .default {
+  color: var(--a-danger);
+  text-decoration: line-through;
+}
+
+.vp-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vp-checklist li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.vp-checklist .mark {
+  inline-size: 18px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.vp-checklist .done .mark {
+  color: var(--a-ok);
+}
+
+.vp-checklist .todo .mark {
+  color: var(--a-warn);
+}
+
+.vp-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-start: 12px;
+}
+
+.vp-picker a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  color: var(--a-text);
+  text-decoration: none;
+}
+
+.vp-picker a:hover {
+  background: var(--a-surface-2);
+}
