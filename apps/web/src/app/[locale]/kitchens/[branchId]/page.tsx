@@ -9,8 +9,10 @@ import { KitchenCover } from "@/components/meals/cover";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
 import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
+import { RatingBadge, SafetyBadge } from "@/components/meals/trust";
 import {
   getKitchenOffers,
+  getKitchenReviews,
   getMealKitchen,
   type PublicKitchenDetail,
 } from "@/lib/meals-api";
@@ -28,6 +30,9 @@ const COPY = {
     or: "or",
     noMenu: "This kitchen has not published its menu yet.",
     plans: "Plans",
+    reviews: "Reviews from subscribers",
+    noReviews: "No reviews yet. Only customers who have had a delivery can rate a kitchen.",
+    kitchenReply: "Kitchen's reply",
     days: "days",
     meals: (n: number) => (n === 1 ? "1 meal a day" : `${n} meals a day`),
     cutoff: (h: number) => `Changes up to ${h}h before delivery`,
@@ -63,6 +68,9 @@ const COPY = {
     or: "أو",
     noMenu: "لم ينشر هذا المطبخ قائمته بعد.",
     plans: "الباقات",
+    reviews: "تقييمات المشتركين",
+    noReviews: "لا توجد تقييمات بعد. يمكن فقط للعملاء الذين استلموا توصيلة تقييم المطبخ.",
+    kitchenReply: "رد المطبخ",
     days: "أيام",
     meals: (n: number) => (n === 1 ? "وجبة يوميًا" : `${n} وجبات يوميًا`),
     cutoff: (h: number) => `التعديل حتى ${h} ساعة قبل التوصيل`,
@@ -206,6 +214,10 @@ export default function KitchenPage({
     queryKey: ["meal-kitchen-offers", p.branchId],
     queryFn: () => getKitchenOffers(p.branchId),
   });
+  const reviews = useQuery({
+    queryKey: ["meal-kitchen-reviews", p.branchId],
+    queryFn: () => getKitchenReviews(p.branchId),
+  });
   const subOffers = (offers.data?.items ?? []).filter(
     (o) => o.applies_to !== "rotations",
   );
@@ -251,6 +263,12 @@ export default function KitchenPage({
                 </span>
               ))}
             </div>
+            {(k.rating_count > 0 || k.food_safety_verified) && (
+              <div className="ms-trust">
+                <RatingBadge rating={k.rating} count={k.rating_count} locale={locale} />
+                {k.food_safety_verified && <SafetyBadge locale={locale} />}
+              </div>
+            )}
             <ul className="ms-facts">
               {k.delivers_here != null && (
                 <li className={k.delivers_here ? "ms-ok" : "ms-bad"}>
@@ -352,6 +370,37 @@ export default function KitchenPage({
           <h2>{t.menu}</h2>
           <p className="ms-sub">{t.menuNote}</p>
           <Menu k={k} locale={locale} t={t} />
+        </section>
+
+        <section className="ms-k-menu">
+          <h2>{t.reviews}</h2>
+          {(reviews.data?.items ?? []).length === 0 ? (
+            <p className="ms-sub">{t.noReviews}</p>
+          ) : (
+            <ul className="ms-reviews">
+              {reviews.data!.items.map((r) => (
+                <li key={r.id} className="ms-review">
+                  <span className="ms-rating" aria-label={`${r.rating}/5`}>
+                    <span aria-hidden="true">{"★".repeat(r.rating)}</span>
+                    <span className="ms-rating-count">
+                      {" "}
+                      {new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar" : "en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </span>
+                  {r.comment && <p dir="auto">{r.comment}</p>}
+                  {r.reply && (
+                    <p className="ms-review-reply" dir="auto">
+                      <strong>{t.kitchenReply}:</strong> {r.reply}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     );

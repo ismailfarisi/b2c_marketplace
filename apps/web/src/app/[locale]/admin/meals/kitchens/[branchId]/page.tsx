@@ -14,6 +14,8 @@ import { SLOTS, WEEKDAYS } from "@/lib/vendor-api";
  * Read-only apart from taking a plan off sale — the menu and prices are the
  * kitchen's to change, from their own portal.
  */
+import { FoodSafetyPanel } from "@/components/admin/food-safety";
+
 export default function MealKitchenPage({
   params,
 }: {
@@ -60,6 +62,8 @@ export default function MealKitchenPage({
         </Panel>
       }
     >
+      <FoodSafetyPanel branchId={branchId} />
+
       <Panel title="Ready to sell" note={overview.profile_complete && profile.has_service_area ? undefined : "not yet"}>
         <Facts
           rows={[

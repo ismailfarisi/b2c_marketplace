@@ -180,6 +180,7 @@ const NAV: Array<{
     items: [
       { href: "/prep", label: "Prep sheet" },
       { href: "/deliveries", label: "Deliveries & dispatch" },
+      { href: "/reviews", label: "Reviews" },
     ],
   },
   { title: "Money", items: [{ href: "/payouts", label: "Payouts" }] },
@@ -196,6 +197,7 @@ const TITLES: Record<string, string> = {
   "/plans": "Plans & pricing",
   "/prep": "Prep sheet",
   "/deliveries": "Deliveries & dispatch",
+  "/reviews": "Reviews",
   "/payouts": "Payouts",
   "/profile": "Kitchen profile",
 };

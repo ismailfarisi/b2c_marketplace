@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState, type FormEvent } from "react";
 
+import { RateKitchen } from "@/components/meals/rate-kitchen";
 import {
   CustomerShell,
   STATUS,
@@ -279,6 +280,10 @@ function Detail({
             ))}
           </ul>
         </section>
+      )}
+
+      {s.status !== "pending_payment" && (
+        <RateKitchen subscriptionId={s.id} locale={locale} />
       )}
 
       {s.status === "active" && !s.rotation_id && (
