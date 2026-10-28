@@ -231,6 +231,21 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 	if live.Status == "pending_payment" {
 		sub.Suspended = false
 	}
+	// Only paid days (or the first cycle awaiting payment) are shown, matching
+	// what the scheduler will cook; a renewal's meals appear once it is paid.
+	var through *time.Time
+	if err := tx.QueryRow(ctx, `
+		SELECT max(ends_on) FROM subscription_cycles
+		 WHERE subscription_id = $1
+		   AND (status = 'paid' OR (status = 'pending' AND cycle_no = 1))`, live.ID).Scan(&through); err != nil {
+		return nil, fmt.Errorf("subscriptions: shown through: %w", err)
+	}
+	if through == nil {
+		return []UpcomingMeal{}, nil
+	}
+	if limit := dayIn(*through, live.Location); sub.End.IsZero() || limit.Before(sub.End) {
+		sub.End = limit
+	}
 	occ := Plan(sub, live.Rules, live.Pauses, live.Skips, from, to, now)
 	out := []UpcomingMeal{}
 	if len(occ) == 0 {

@@ -732,7 +732,9 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 				return err
 			}
 		}
-		if err := voidUnpaidRenewals(ctx, tx, subID); err != nil {
+		// Nothing unpaid stays payable once the subscription is cancelled,
+		// including the first cycle of one that was never paid.
+		if err := voidUnpaidCycles(ctx, tx, subID, 1); err != nil {
 			return err
 		}
 

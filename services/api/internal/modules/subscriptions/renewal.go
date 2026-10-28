@@ -169,12 +169,18 @@ func (s *Service) OpenRenewals(ctx context.Context, now time.Time, batch int) (i
 // voidUnpaidRenewals cancels a subscription's unpaid renewal cycles and their
 // billing orders so they can no longer be paid.
 func voidUnpaidRenewals(ctx context.Context, tx pgx.Tx, subID uuid.UUID) error {
+	return voidUnpaidCycles(ctx, tx, subID, 2)
+}
+
+// voidUnpaidCycles cancels the unpaid cycles numbered fromCycle and up, with
+// their billing orders and quotes.
+func voidUnpaidCycles(ctx context.Context, tx pgx.Tx, subID uuid.UUID, fromCycle int) error {
 	rows, err := tx.Query(ctx, `
 		UPDATE subscription_cycles SET status = 'cancelled'
-		 WHERE subscription_id = $1 AND cycle_no > 1 AND status IN ('pending', 'past_due')
-		RETURNING order_id`, subID)
+		 WHERE subscription_id = $1 AND cycle_no >= $2 AND status IN ('pending', 'past_due')
+		RETURNING order_id`, subID, fromCycle)
 	if err != nil {
-		return fmt.Errorf("subscriptions: void renewal: %w", err)
+		return fmt.Errorf("subscriptions: void unpaid cycles: %w", err)
 	}
 	orders, err := pgx.CollectRows(rows, pgx.RowTo[*uuid.UUID])
 	if err != nil {
