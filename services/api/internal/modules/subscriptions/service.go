@@ -413,7 +413,7 @@ func (s *Service) Pause(ctx context.Context, in PauseInput) error {
 				return fmt.Errorf("subscriptions: extend end date: %w", err)
 			}
 			if _, err := tx.Exec(ctx,
-				`UPDATE subscription_cycles SET ends_on = ends_on + ($2 || ' days')::interval
+				`UPDATE subscription_cycles SET ends_on = ends_on + $2::int
 				  WHERE id = $1`, cycle.ID, days); err != nil {
 				return fmt.Errorf("subscriptions: extend cycle: %w", err)
 			}
