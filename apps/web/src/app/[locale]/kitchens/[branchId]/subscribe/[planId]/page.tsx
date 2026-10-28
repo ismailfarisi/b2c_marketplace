@@ -348,7 +348,9 @@ function Checkout({
             >
               {k.delivery_windows.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.label} ({w.starts_at}–{w.ends_at})
+                  {w.label && w.label !== `${w.starts_at}–${w.ends_at}`
+                    ? `${w.label} (${w.starts_at}–${w.ends_at})`
+                    : `${w.starts_at}–${w.ends_at}`}
                 </option>
               ))}
             </select>

@@ -9,6 +9,8 @@ import {
   CustomerShell,
   STATUS,
   asLocale,
+  formatDay,
+  formatRange,
   type Locale,
 } from "@/components/meals/shell";
 import {
@@ -205,8 +207,12 @@ function Detail({
           </span>{" "}
           {cycle && (
             <span className="ms-sub">
-              {t.cycle(cycle.cycle_no, cycle.starts_on, cycle.ends_on)} ·{" "}
-              {money(cycle.amount_minor)}
+              {t.cycle(
+                cycle.cycle_no,
+                formatDay(locale, cycle.starts_on),
+                formatDay(locale, cycle.ends_on),
+              )}{" "}
+              · {money(cycle.amount_minor)}
             </span>
           )}
         </p>
@@ -268,7 +274,7 @@ function Detail({
           <ul className="ms-pauses">
             {s.pauses.map((p) => (
               <li key={p.from_date}>
-                {p.from_date} – {p.to_date}
+                {formatRange(locale, p.from_date, p.to_date)}
               </li>
             ))}
           </ul>
@@ -491,8 +497,8 @@ function Cancel({
     onError: (err) => setError(problemText(err, t.failed)),
   });
   return (
-    <section className="ms-danger">
-      <h2>{t.cancel}</h2>
+    <details className="ms-danger">
+      <summary>{t.cancel}</summary>
       <p className="ms-sub">{t.cancelNote}</p>
       <label className="ms-field">
         <span>{t.reason}</span>
@@ -522,6 +528,6 @@ function Cancel({
       >
         {t.cancelBtn}
       </button>
-    </section>
+    </details>
   );
 }

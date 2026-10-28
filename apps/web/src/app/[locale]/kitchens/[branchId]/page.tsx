@@ -28,7 +28,8 @@ const COPY = {
     pause: (d: number) => `Pause up to ${d} days`,
     cycle: (d: number) => `per ${d}-day cycle`,
     rotation: "In the 4-kitchen rotation",
-    rotationWeek: "a week when this kitchen is in your rotation",
+    choice: "Choose 1 of 2",
+    rotationWeek: "a week",
     subscribe: "Subscribe",
     allergens: "Allergens",
     kcal: "kcal",
@@ -62,7 +63,8 @@ const COPY = {
     pause: (d: number) => `إيقاف حتى ${d} يومًا`,
     cycle: (d: number) => `لكل دورة ${d} يومًا`,
     rotation: "ضمن تناوب المطابخ الأربعة",
-    rotationWeek: "أسبوعيًا عندما يكون هذا المطبخ ضمن تناوبك",
+    choice: "اختر طبقًا من اثنين",
+    rotationWeek: "أسبوعيًا",
     subscribe: "اشترك",
     allergens: "مسببات الحساسية",
     kcal: "سعرة",
@@ -140,8 +142,18 @@ function Menu({
                 (s) => s.weekday === day && s.slot === slot,
               );
               return (
-                <div key={day} className="ms-menu-row">
-                  <dt>{t.weekdays[day]}</dt>
+                <div
+                  key={day}
+                  className={
+                    cell?.alternative ? "ms-menu-row has-choice" : "ms-menu-row"
+                  }
+                >
+                  <dt>
+                    {t.weekdays[day]}
+                    {cell?.alternative && (
+                      <small className="ms-choice-tag">{t.choice}</small>
+                    )}
+                  </dt>
                   <dd>
                     {cell?.default ? (
                       <Dish d={cell.default} locale={locale} t={t} />
@@ -203,8 +215,8 @@ export default function KitchenPage({
     const name = (locale === "ar" && k.name_ar) || k.name;
     const blurb = (locale === "ar" && k.description_ar) || k.description;
     body = (
-      <>
-        <section className="ms-hero">
+      <div className="ms-kitchen">
+        <section className="ms-hero ms-k-hero">
           {k.cover_image_url && (
             <img
               src={k.cover_image_url}
@@ -227,23 +239,25 @@ export default function KitchenPage({
                 </span>
               ))}
             </div>
-            {k.delivers_here != null && (
-              <p className={k.delivers_here ? "ms-ok" : "ms-bad"}>
-                {k.delivers_here ? t.deliversYes : t.deliversNo}
-              </p>
-            )}
-            {k.delivery_windows.length > 0 && (
-              <p className="ms-sub">
-                {t.windows}:{" "}
-                {k.delivery_windows
-                  .map((w) => `${w.starts_at}–${w.ends_at}`)
-                  .join(", ")}
-              </p>
-            )}
+            <ul className="ms-facts">
+              {k.delivers_here != null && (
+                <li className={k.delivers_here ? "ms-ok" : "ms-bad"}>
+                  {k.delivers_here ? t.deliversYes : t.deliversNo}
+                </li>
+              )}
+              {k.delivery_windows.length > 0 && (
+                <li>
+                  {t.windows}:{" "}
+                  {k.delivery_windows
+                    .map((w) => `${w.starts_at}–${w.ends_at}`)
+                    .join(", ")}
+                </li>
+              )}
+            </ul>
           </div>
         </section>
 
-        <section>
+        <aside className="ms-k-plans">
           <h2>{t.plans}</h2>
           <ul className="ms-plans">
             {k.plan_list.map((plan) => (
@@ -304,14 +318,14 @@ export default function KitchenPage({
               </li>
             ))}
           </ul>
-        </section>
+        </aside>
 
-        <section>
+        <section className="ms-k-menu">
           <h2>{t.menu}</h2>
           <p className="ms-sub">{t.menuNote}</p>
           <Menu k={k} locale={locale} t={t} />
         </section>
-      </>
+      </div>
     );
   }
 

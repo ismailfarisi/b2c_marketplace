@@ -7,7 +7,12 @@ import { use, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useCustomerPoint } from "@/components/meals/location";
 import { ADDRESS_COPY, NewAddress } from "@/components/meals/new-address";
-import { CustomerShell, asLocale, type Locale } from "@/components/meals/shell";
+import {
+  CustomerShell,
+  asLocale,
+  formatRange,
+  type Locale,
+} from "@/components/meals/shell";
 import {
   createRotation,
   describeAddress,
@@ -39,6 +44,7 @@ const COPY = {
       "These kitchens don't share enough delivery days or meals. Swap one to continue.",
     schedule: "Your four weeks",
     pickFour: "Choose four kitchens and your schedule to see the weekly order.",
+    emptyPick: "Choose a kitchen",
     week: (n: number) => `Week ${n}`,
     total: "Total for 28 days",
     pay: "Start rotation and pay",
@@ -74,6 +80,7 @@ const COPY = {
       "هذه المطابخ لا تشترك في أيام توصيل أو وجبات كافية. استبدل أحدها للمتابعة.",
     schedule: "أسابيعك الأربعة",
     pickFour: "اختر أربعة مطابخ وجدولك لعرض ترتيب الأسابيع.",
+    emptyPick: "اختر مطبخًا",
     week: (n: number) => `الأسبوع ${n}`,
     total: "المجموع لـ28 يومًا",
     pay: "ابدأ التناوب وادفع",
@@ -450,7 +457,25 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
       <aside className="ms-summary">
         <h2>{t.schedule}</h2>
         {!input ? (
-          <p className="ms-sub">{t.pickFour}</p>
+          <>
+            <ol className="ms-picks">
+              {[0, 1, 2, 3].map((i) => {
+                const id = picked[i];
+                const k = kitchens.data?.items.find((x) => x.branch_id === id);
+                return (
+                  <li key={i} className={id ? "on" : undefined}>
+                    <b>{i + 1}</b>
+                    <span dir="auto">
+                      {k
+                        ? (locale === "ar" && k.name_ar) || k.name
+                        : t.emptyPick}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="ms-sub">{t.pickFour}</p>
+          </>
         ) : preview.isPending ? (
           <p className="ms-note">{t.loading}</p>
         ) : preview.isError ? (
@@ -465,7 +490,7 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                   <span>
                     <strong>{t.week(w.week)}</strong>{" "}
                     <span className="ms-sub">
-                      {w.starts_on} – {w.ends_on}
+                      {formatRange(locale, w.starts_on, w.ends_on)}
                     </span>
                     <br />
                     <span dir="auto">

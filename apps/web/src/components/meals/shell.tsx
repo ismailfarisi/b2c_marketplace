@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { logout } from "@/lib/auth-api";
@@ -8,12 +9,18 @@ import { tokenStore } from "@/lib/token-store";
 
 const COPY = {
   en: {
+    brand: "Meals",
+    feed: "Videos",
+    other: "العربية",
     home: "Kitchens",
     mine: "My subscriptions",
     signIn: "Sign in",
     signOut: "Sign out",
   },
   ar: {
+    brand: "وجبات",
+    feed: "فيديو",
+    other: "English",
     home: "المطابخ",
     mine: "اشتراكاتي",
     signIn: "تسجيل الدخول",
@@ -43,6 +50,35 @@ export const STATUS = {
     completed: "مكتمل",
   } as Record<string, string>,
 };
+
+/** "30 Oct 2026" from a plain YYYY-MM-DD date, without a timezone shift. */
+export function formatDay(
+  locale: Locale,
+  iso: string,
+  opts: Intl.DateTimeFormatOptions = {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  },
+) {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-AE" : "en-GB", {
+    ...opts,
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+/** "30 Oct – 26 Nov 2026"; the year only once when both ends share it. */
+export function formatRange(locale: Locale, from: string, to: string) {
+  const sameYear = from.slice(0, 4) === to.slice(0, 4);
+  const start = formatDay(
+    locale,
+    from,
+    sameYear ? { day: "numeric", month: "short" } : undefined,
+  );
+  return `${start} – ${formatDay(locale, to)}`;
+}
 
 export const asLocale = (l: string): Locale => (l === "ar" ? "ar" : "en");
 
@@ -89,18 +125,40 @@ export function CustomerShell({
 }) {
   const t = COPY[locale];
   const signedIn = useHasSession();
+  const path = usePathname() ?? `/${locale}`;
+  const otherLocale = locale === "ar" ? "en" : "ar";
+  const switchHref = path.replace(/^\/(en|ar)(?=\/|$)/, `/${otherLocale}`);
+  const here = (href: string) =>
+    path === href || path.startsWith(`${href}/`) ? "page" : undefined;
   return (
     <div className="ms">
       <header className="ms-bar">
-        <Link href={back?.href ?? `/${locale}`} className="ms-brand">
-          {back ? `← ${back.label}` : t.home}
+        <Link href={`/${locale}`} className="ms-brand">
+          {t.brand}
         </Link>
         <nav className="ms-nav">
-          <Link href={`/${locale}/subscriptions`}>{t.mine}</Link>
+          <Link
+            href={`/${locale}`}
+            className="ms-nav-wide"
+            aria-current={path === `/${locale}` ? "page" : undefined}
+          >
+            {t.home}
+          </Link>
+          <Link href={`/${locale}/feed`} className="ms-nav-wide">
+            {t.feed}
+          </Link>
+          <Link
+            href={`/${locale}/subscriptions`}
+            aria-current={here(`/${locale}/subscriptions`)}
+          >
+            {t.mine}
+          </Link>
+          <Link href={switchHref} lang={otherLocale} hrefLang={otherLocale}>
+            {t.other}
+          </Link>
           {signedIn ? (
             <button
               type="button"
-              className="ms-link"
               onClick={async () => {
                 await logout().catch(() => undefined);
                 window.location.href = `/${locale}`;
@@ -115,7 +173,14 @@ export function CustomerShell({
           )}
         </nav>
       </header>
-      <main className="ms-main">{children}</main>
+      <main className="ms-main">
+        {back && (
+          <Link href={back.href} className="ms-back">
+            <span aria-hidden>{locale === "ar" ? "→" : "←"}</span> {back.label}
+          </Link>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

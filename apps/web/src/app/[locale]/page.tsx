@@ -6,6 +6,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 
 import { useCustomerPoint } from "@/components/meals/location";
+import { CustomerShell } from "@/components/meals/shell";
 import { getMealKitchens, type PublicKitchen } from "@/lib/meals-api";
 
 /**
@@ -17,8 +18,6 @@ import { getMealKitchens, type PublicKitchen } from "@/lib/meals-api";
 
 const COPY = {
   en: {
-    brand: "Meals",
-    feed: "Videos",
     title: "Kitchens that deliver to you",
     lede: "Subscribe to a home-style kitchen for the month. Each one cooks a fixed menu by weekday, and some let you pick between two dishes.",
     locating: "Finding kitchens near you…",
@@ -27,7 +26,12 @@ const COPY = {
     search: "Search kitchens",
     any: "Any meal",
     rotation: "In the 4-kitchen rotation",
-    build: "Build a 4-kitchen rotation →",
+    rotationChip: "Rotation kitchens",
+    promoEyebrow: "4-kitchen rotation",
+    promoTitle: "Can't pick one kitchen? Rotate four.",
+    promoBody:
+      "Choose four kitchens for the month. Each one cooks a week, we set the order, and you pay each kitchen's weekly price.",
+    promoCta: "Build a rotation",
     from: "from",
     perCycle: "per cycle",
     perWeek: "a week in rotation",
@@ -44,8 +48,6 @@ const COPY = {
     } as Record<string, string>,
   },
   ar: {
-    brand: "وجبات",
-    feed: "فيديو",
     title: "مطابخ توصل إليك",
     lede: "اشترك في مطبخ منزلي لمدة شهر. لكل مطبخ قائمة ثابتة حسب أيام الأسبوع، وبعضها يتيح لك الاختيار بين طبقين.",
     locating: "جارٍ البحث عن مطابخ قريبة…",
@@ -53,7 +55,12 @@ const COPY = {
     search: "ابحث عن مطبخ",
     any: "أي وجبة",
     rotation: "ضمن تناوب المطابخ الأربعة",
-    build: "اختر تناوب ٤ مطابخ ←",
+    rotationChip: "مطابخ التناوب",
+    promoEyebrow: "تناوب ٤ مطابخ",
+    promoTitle: "محتار بين المطابخ؟ جرّب أربعة.",
+    promoBody:
+      "اختر أربعة مطابخ للشهر. كل مطبخ يطبخ أسبوعًا، ونحن نحدد الترتيب، وتدفع السعر الأسبوعي لكل مطبخ.",
+    promoCta: "ابدأ التناوب",
     from: "من",
     perCycle: "لكل دورة",
     perWeek: "أسبوعيًا ضمن التناوب",
@@ -89,13 +96,19 @@ function KitchenCard({
   return (
     <li>
       <Link className="ms-card" href={`/${locale}/kitchens/${k.branch_id}`}>
-        <div className="ms-cover" aria-hidden>
+        <div
+          className={k.cover_image_url ? "ms-cover" : "ms-cover ms-cover-empty"}
+          aria-hidden
+        >
           {k.cover_image_url ? (
             <img
               src={k.cover_image_url}
               alt=""
               loading="lazy"
-              onError={(e) => (e.currentTarget.hidden = true)}
+              onError={(e) => {
+                e.currentTarget.hidden = true;
+                e.currentTarget.parentElement?.classList.add("ms-cover-empty");
+              }}
             />
           ) : (
             <span>{name.slice(0, 1)}</span>
@@ -139,7 +152,7 @@ function KitchenCard({
               {t.perCycle}
             </span>
             {k.rotation_week_price_minor != null && (
-              <span className="ms-rot">
+              <span className="ms-rot-pill">
                 {formatMoney(
                   { amount: k.rotation_week_price_minor, currency: k.currency },
                   locale,
@@ -173,42 +186,37 @@ export default function MealsHome({
   });
 
   return (
-    <div className="ms">
-      <header className="ms-bar">
-        <Link href={`/${locale}`} className="ms-brand">
-          {t.brand}
-        </Link>
-        <nav className="ms-nav">
-          <Link href={`/${locale}/feed`}>{t.feed}</Link>
-          <Link href={`/${locale}/subscriptions`}>
-            {locale === "ar" ? "اشتراكاتي" : "My subscriptions"}
-          </Link>
-          <Link href={`/${locale === "ar" ? "en" : "ar"}`}>
-            {locale === "ar" ? "English" : "العربية"}
-          </Link>
-        </nav>
-      </header>
-
-      <main className="ms-main">
-        <section className="ms-intro">
+    <CustomerShell locale={locale}>
+      <section className="ms-home-head">
+        <div className="ms-intro">
           <h1>{t.title}</h1>
           <p>{t.lede}</p>
           {point && !precise && <p className="ms-note">{t.fallback}</p>}
-        </section>
+        </div>
+        <aside className="ms-promo">
+          <p className="ms-eyebrow">{t.promoEyebrow}</p>
+          <h2>{t.promoTitle}</h2>
+          <p>{t.promoBody}</p>
+          <Link className="ms-cta" href={`/${locale}/rotation`}>
+            {t.promoCta}
+          </Link>
+        </aside>
+      </section>
 
-        <form
-          className="ms-filters"
-          role="search"
-          onSubmit={(e) => e.preventDefault()}
-        >
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t.search}
-            aria-label={t.search}
-          />
-          <div className="ms-chips" role="radiogroup" aria-label={t.any}>
+      <form
+        className="ms-filters"
+        role="search"
+        onSubmit={(e) => e.preventDefault()}
+      >
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t.search}
+          aria-label={t.search}
+        />
+        <div className="ms-chips ms-chips-scroll">
+          <div role="radiogroup" aria-label={t.any} className="ms-chips">
             {["", ...FILTER_SLOTS].map((s) => (
               <button
                 key={s || "any"}
@@ -222,36 +230,34 @@ export default function MealsHome({
               </button>
             ))}
           </div>
-          <label className="ms-toggle">
-            <input
-              type="checkbox"
-              checked={rotation}
-              onChange={(e) => setRotation(e.target.checked)}
-            />
-            {t.rotation}
-          </label>
-          <Link className="ms-link" href={`/${locale}/rotation`}>
-            {t.build}
-          </Link>
-        </form>
+          <button
+            type="button"
+            aria-pressed={rotation}
+            className={rotation ? "on ms-chip-rot" : "ms-chip-rot"}
+            onClick={() => setRotation(!rotation)}
+            title={t.rotation}
+          >
+            {t.rotationChip}
+          </button>
+        </div>
+      </form>
 
-        {!point || list.isPending ? (
-          <p className="ms-note">{t.locating}</p>
-        ) : list.isError ? (
-          <p className="ms-note ms-bad">{t.failed}</p>
-        ) : list.data.items.length === 0 ? (
-          <p className="ms-empty">{t.empty}</p>
-        ) : (
-          <>
-            <p className="ms-count">{t.count(list.data.items.length)}</p>
-            <ul className="ms-grid">
-              {list.data.items.map((k) => (
-                <KitchenCard key={k.branch_id} k={k} locale={locale} t={t} />
-              ))}
-            </ul>
-          </>
-        )}
-      </main>
-    </div>
+      {!point || list.isPending ? (
+        <p className="ms-note">{t.locating}</p>
+      ) : list.isError ? (
+        <p className="ms-note ms-bad">{t.failed}</p>
+      ) : list.data.items.length === 0 ? (
+        <p className="ms-empty">{t.empty}</p>
+      ) : (
+        <>
+          <p className="ms-count">{t.count(list.data.items.length)}</p>
+          <ul className="ms-grid">
+            {list.data.items.map((k) => (
+              <KitchenCard key={k.branch_id} k={k} locale={locale} t={t} />
+            ))}
+          </ul>
+        </>
+      )}
+    </CustomerShell>
   );
 }

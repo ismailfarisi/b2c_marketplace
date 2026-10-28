@@ -10,6 +10,7 @@ import {
   STATUS,
   asLocale,
   type Locale,
+  formatRange,
 } from "@/components/meals/shell";
 import {
   cancelRotation,
@@ -122,7 +123,7 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
         <h1>{t.title}</h1>
         <p className="ms-sub">
           <span className="mono">{r.rotation_no}</span> ·{" "}
-          {t.period(r.start_date, r.end_date)}
+          {formatRange(locale, r.start_date, r.end_date)}
         </p>
         <p>
           <span className={`ms-status ms-status-${r.status}`}>
@@ -150,27 +151,21 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
       )}
 
       <section>
-        <ol className="ms-weeks">
+        <ol className="ms-weeks ms-timeline">
           {r.weeks.map((w) => (
             <li key={w.week}>
-              <span>
-                <strong>{t.week(w.week)}</strong>{" "}
-                <span className="ms-sub">
-                  {w.starts_on} – {w.ends_on}
-                </span>
-                <br />
-                <span dir="auto">
+              <span className="ms-week-no">{t.week(w.week)}</span>
+              <span className="ms-week-body">
+                <strong dir="auto">
                   {(locale === "ar" && w.kitchen_name_ar) || w.kitchen_name}
+                </strong>
+                <span className="ms-sub">
+                  {formatRange(locale, w.starts_on, w.ends_on)}
                 </span>
                 {w.subscription_id && (
-                  <>
-                    <br />
-                    <Link
-                      href={`/${locale}/subscriptions/${w.subscription_id}`}
-                    >
-                      → {t.open}
-                    </Link>
-                  </>
+                  <Link href={`/${locale}/subscriptions/${w.subscription_id}`}>
+                    {t.open}
+                  </Link>
                 )}
               </span>
               <span className="ms-sub-side">
@@ -187,8 +182,8 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
       </section>
 
       {(r.status === "active" || r.status === "pending_payment") && (
-        <section className="ms-danger">
-          <h2>{t.cancel}</h2>
+        <details className="ms-danger">
+          <summary>{t.cancel}</summary>
           <p className="ms-sub">{t.cancelNote}</p>
           <label className="ms-field">
             <span>{t.reason}</span>
@@ -210,7 +205,7 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
           >
             {t.cancel}
           </button>
-        </section>
+        </details>
       )}
     </div>
   );
