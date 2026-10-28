@@ -1325,3 +1325,10 @@ details.ms-danger[open] > summary {
 .ms-kitchen .ms-plans {
   grid-template-columns: minmax(0, 1fr);
 }
+.ms-card-head h2,
+.ms-card-head h3 {
+  margin: 0;
+}
+.ms-cover-empty {
+  display: none;
+}
