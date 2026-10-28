@@ -715,11 +715,6 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 			return nil
 		}
 
-		cycle, err := s.currentCycle(ctx, tx, subID)
-		if err != nil && cycle.ID == uuid.Nil {
-			return err
-		}
-
 		if _, err := tx.Exec(ctx, `
 			UPDATE subscriptions
 			   SET status = 'cancelled', cancelled_at = now(),
@@ -753,17 +748,23 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 		// The unearned remainder has to go somewhere explicit. Leaving it to age
 		// quietly in deferred revenue is how a liability account stops meaning
 		// anything.
-		if cycle.ID != uuid.Nil && cycle.Status == "paid" {
-			if unearned := cycle.AmountMinor - cycle.RecognisedMinor; unearned > 0 {
+		// Every paid cycle, not only the latest: a renewal paid ahead of time
+		// sits beside the cycle still being delivered.
+		paid, err := s.paidCycles(ctx, tx, subID)
+		if err != nil {
+			return err
+		}
+		for _, c := range paid {
+			if unearned := c.AmountMinor - c.RecognisedMinor; unearned > 0 {
 				if _, err := ledger.PostSubscriptionCancelled(ctx, tx, ledger.SubscriptionCredit{
-					SubscriptionID: subID, CycleID: cycle.ID, UserID: userID,
-					Currency: cycle.Currency, AmountMinor: unearned,
+					SubscriptionID: subID, CycleID: c.ID, UserID: userID,
+					Currency: c.Currency, AmountMinor: unearned,
 				}); err != nil {
 					return err
 				}
 				if _, err := tx.Exec(ctx,
 					`UPDATE subscription_cycles SET status = 'cancelled' WHERE id = $1`,
-					cycle.ID); err != nil {
+					c.ID); err != nil {
 					return fmt.Errorf("subscriptions: close cycle: %w", err)
 				}
 			}
@@ -809,6 +810,30 @@ func (s *Service) currentCycle(ctx context.Context, tx pgx.Tx, subID uuid.UUID) 
 		return c, fmt.Errorf("subscriptions: current cycle: %w", err)
 	}
 	return c, nil
+}
+
+// paidCycles are a subscription's paid cycles, oldest first.
+func (s *Service) paidCycles(ctx context.Context, tx pgx.Tx, subID uuid.UUID) ([]cycleRow, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT id, cycle_no, starts_on, ends_on, status,
+		       amount_minor, recognised_minor, deliverable_days, currency
+		  FROM subscription_cycles
+		 WHERE subscription_id = $1 AND status = 'paid'
+		 ORDER BY cycle_no`, subID)
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: paid cycles: %w", err)
+	}
+	defer rows.Close()
+	var out []cycleRow
+	for rows.Next() {
+		var c cycleRow
+		if err := rows.Scan(&c.ID, &c.No, &c.Starts, &c.Ends, &c.Status,
+			&c.AmountMinor, &c.RecognisedMinor, &c.DeliverableDays, &c.Currency); err != nil {
+			return nil, fmt.Errorf("subscriptions: paid cycles: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
 
 func (s *Service) pauseAllowance(ctx context.Context, tx pgx.Tx, subID uuid.UUID) (allowance, used int, err error) {
