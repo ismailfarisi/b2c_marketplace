@@ -74,6 +74,9 @@ type SubscribeInput struct {
 
 	RenewalMode string
 
+	// renewedFrom links a one-tap renewal to the subscription it renews.
+	renewedFrom uuid.NullUUID
+
 	// Promo is an optional code or public offer to apply to the first cycle.
 	Promo promo.Ref
 
@@ -167,7 +170,7 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 		if err := s.repo.InsertSubscription(ctx, tx, insertParams{
 			ID: subID, UserID: in.UserID, Plan: plan, TierID: in.TierID,
 			AddressID: in.AddressID, Start: start, End: endDate,
-			RenewalMode: in.RenewalMode,
+			RenewalMode: in.RenewalMode, RenewedFrom: in.renewedFrom,
 		}); err != nil {
 			return err
 		}
@@ -729,6 +732,9 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 				return err
 			}
 		}
+		if err := voidUnpaidRenewals(ctx, tx, subID); err != nil {
+			return err
+		}
 
 		// Future work only. Meals already delivered stay delivered, and a
 		// cancellation that retroactively cancelled yesterday's fulfillment
@@ -792,7 +798,7 @@ func (s *Service) currentCycle(ctx context.Context, tx pgx.Tx, subID uuid.UUID) 
 		SELECT id, cycle_no, starts_on, ends_on, status,
 		       amount_minor, recognised_minor, deliverable_days, currency
 		  FROM subscription_cycles
-		 WHERE subscription_id = $1
+		 WHERE subscription_id = $1 AND NOT (cycle_no > 1 AND paid_at IS NULL)
 		 ORDER BY cycle_no DESC
 		 LIMIT 1`, subID,
 	).Scan(&c.ID, &c.No, &c.Starts, &c.Ends, &c.Status,

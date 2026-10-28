@@ -172,3 +172,43 @@ func (h *RotationHandlers) Pay(w http.ResponseWriter, r *http.Request) {
 		"redirect_url":  nullable(intent.RedirectURL),
 	})
 }
+
+// SetRenewal answers PUT /rotations/{rotationId}/renewal.
+func (h *RotationHandlers) SetRenewal(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := rotationTarget(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Auto *bool `json:"auto"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if body.Auto == nil {
+		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "auto", Code: "required", Message: "auto is required"}}})
+		return
+	}
+	if err := h.Service.SetRotationRenewal(r.Context(), userID, id, *body.Auto); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Renew answers POST /rotations/{rotationId}/renew: the next rotation with the
+// same four kitchens, pending payment.
+func (h *RotationHandlers) Renew(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := rotationTarget(w, r)
+	if !ok {
+		return
+	}
+	rot, err := h.Service.RenewRotation(r.Context(), userID, id, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, "", rot)
+}

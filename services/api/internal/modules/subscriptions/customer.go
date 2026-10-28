@@ -39,6 +39,12 @@ type MySubscription struct {
 	// Set when this subscription is one week of a four-kitchen rotation.
 	RotationID   *uuid.UUID `json:"rotation_id"`
 	RotationWeek *int       `json:"rotation_week"`
+	// auto bills each next cycle ahead of time; manual and none end with the
+	// last paid cycle.
+	RenewalMode string `json:"renewal_mode"`
+	// The subscription a one-tap renew created from this one, if any.
+	RenewedByID *uuid.UUID `json:"renewed_by_id"`
+	CanRenew    bool       `json:"can_renew"`
 }
 
 // Dish is one option a customer can be served on a given day.
@@ -97,13 +103,16 @@ const mySelect = `
 	       COALESCE(c.cycle_no, 0), c.ends_on, COALESCE(c.amount_minor, 0),
 	       COALESCE(c.currency, p.currency),
 	       CASE WHEN c.status IN ('pending', 'past_due') THEN c.order_id END,
-	       s.rotation_id, s.rotation_week
+	       s.rotation_id, s.rotation_week, s.renewal_mode,
+	       (SELECT n.id FROM subscriptions n
+	         WHERE n.renewed_from_id = s.id AND n.status <> 'cancelled' LIMIT 1)
 	  FROM subscriptions s
 	  JOIN vendor_branches b ON b.id = s.branch_id
 	  JOIN subscription_plans p ON p.id = s.plan_id
 	  LEFT JOIN LATERAL (
 	       SELECT cycle_no, ends_on, amount_minor, currency, status, order_id
 	         FROM subscription_cycles WHERE subscription_id = s.id
+	          AND NOT (cycle_no > 1 AND status = 'cancelled' AND paid_at IS NULL)
 	        ORDER BY cycle_no DESC LIMIT 1) c ON true`
 
 func scanMine(row pgx.Row) (MySubscription, error) {
@@ -113,9 +122,10 @@ func scanMine(row pgx.Row) (MySubscription, error) {
 	if err := row.Scan(&m.ID, &m.SubscriptionNo, &m.Status, &m.BranchID, &m.KitchenName,
 		&m.KitchenNameAr, &m.PlanName, &m.PlanNameAr, &start, &end,
 		&m.CycleNo, &cycleEnd, &m.AmountMinor, &m.Currency, &m.PendingOrderID,
-		&m.RotationID, &m.RotationWeek); err != nil {
+		&m.RotationID, &m.RotationWeek, &m.RenewalMode, &m.RenewedByID); err != nil {
 		return m, err
 	}
+	m.CanRenew = canRenew(m.Status, m.RenewalMode, m.RotationID, m.RenewedByID)
 	m.StartDate = start.Format("2006-01-02")
 	m.EndDate = datePtr(end)
 	m.CycleEndsOn = datePtr(cycleEnd)
@@ -187,7 +197,9 @@ func (s *Service) MyDetail(ctx context.Context, userID, subID uuid.UUID, now tim
 func myCycles(ctx context.Context, tx pgx.Tx, subID uuid.UUID) ([]MyCycle, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT cycle_no, starts_on, ends_on, status, amount_minor, currency
-		  FROM subscription_cycles WHERE subscription_id = $1 ORDER BY cycle_no DESC`, subID)
+		  FROM subscription_cycles WHERE subscription_id = $1
+		   AND NOT (cycle_no > 1 AND status = 'cancelled' AND paid_at IS NULL)
+		 ORDER BY cycle_no DESC`, subID)
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: load cycles: %w", err)
 	}

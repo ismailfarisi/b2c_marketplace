@@ -1374,6 +1374,75 @@ paths:
                     items: { $ref: "#/components/schemas/MySubscription" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /subscriptions/{subscriptionId}/renewal:
+    put:
+      tags: [subscriptions]
+      operationId: setSubscriptionRenewal
+      summary: Turn automatic renewal on or off
+      description: >
+        On bills the next cycle three days before the current one ends, for the
+        customer to pay. Off ends the subscription with its last paid cycle and
+        voids an unpaid next cycle. Not available for rotation weeks.
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [auto]
+              properties:
+                auto: { type: boolean }
+      responses:
+        "204": { description: Updated }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Not in a state that allows this
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /subscriptions/{subscriptionId}/renew:
+    post:
+      tags: [subscriptions]
+      operationId: renewSubscription
+      summary: One-tap renew of a subscription that has ended or will end
+      description: >
+        Creates a new subscription with the same plan, address and schedule,
+        starting after the old one's last paid day (or tomorrow), pending
+        payment. Pay its order_id with createPaymentIntent.
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, subscription_no, status, start_date, order_id, amount_minor, currency]
+                properties:
+                  id: { type: string, format: uuid }
+                  subscription_no: { type: string }
+                  status: { type: string }
+                  start_date: { type: string, format: date }
+                  order_id: { type: string, format: uuid }
+                  amount_minor: { type: integer, format: int64 }
+                  discount_minor: { type: integer, format: int64 }
+                  trial_days: { type: [integer, "null"] }
+                  currency: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Not in a state that allows this
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /me/subscriptions/{subscriptionId}:
     get:
       tags: [subscriptions]
@@ -1474,6 +1543,60 @@ paths:
         "204": { description: Cancelled }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /rotations/{rotationId}/renewal:
+    put:
+      tags: [subscriptions]
+      operationId: setRotationRenewal
+      summary: Turn automatic renewal of a rotation on or off
+      description: Off also cancels an automatic renewal that has not been paid.
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [auto]
+              properties:
+                auto: { type: boolean }
+      responses:
+        "204": { description: Updated }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Not in a state that allows this
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /rotations/{rotationId}/renew:
+    post:
+      tags: [subscriptions]
+      operationId: renewRotation
+      summary: Start the next rotation with the same four kitchens
+      description: >
+        Starts the day after this rotation ends (or tomorrow). When the two run
+        back to back, the kitchen that cooked the last week does not cook the
+        first. Pending payment; pay with the rotation payment-intent call.
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rotation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Not in a state that allows this
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /me/rotations:
     get:
@@ -6037,6 +6160,12 @@ components:
           format: uuid
           description: Set when this subscription is one week of a four-kitchen rotation.
         rotation_week: { type: [integer, "null"], minimum: 1, maximum: 4 }
+        renewal_mode: { type: string, enum: [auto, manual, none] }
+        renewed_by_id:
+          type: [string, "null"]
+          format: uuid
+          description: The subscription a one-tap renew created from this one.
+        can_renew: { type: boolean, description: Whether renewSubscription is offered. }
     RotationInput:
       type: object
       required: [plan_ids, address_id, start_date, delivery_weekdays, meal_slots]
@@ -6140,6 +6269,10 @@ components:
             meal_slots: { type: array, items: { type: string } }
             delivery_weekdays: { type: array, items: { type: integer } }
             created_at: { type: string, format: date-time }
+            auto_renew: { type: boolean }
+            renewed_from_id: { type: [string, "null"], format: uuid }
+            renewed_by_id: { type: [string, "null"], format: uuid }
+            renewed_by_status: { type: [string, "null"] }
     MealOption:
       type: object
       required: [id, name, allergens, is_default]

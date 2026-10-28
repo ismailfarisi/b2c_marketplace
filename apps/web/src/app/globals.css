@@ -765,6 +765,21 @@ a.ms-cta {
 .ms-callout p {
   margin: 0;
 }
+.ms-renewal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.ms-renewal p {
+  margin: 0;
+}
+.ms-renew {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
 .ms-meals {
   list-style: none;
   padding: 0;

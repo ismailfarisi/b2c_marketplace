@@ -3,6 +3,7 @@
 import { ApiError, formatMoney } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 
 import {
@@ -16,6 +17,8 @@ import {
   cancelRotation,
   getMyRotation,
   payRotation,
+  renewRotation,
+  setRotationRenewal,
   type Rotation,
 } from "@/lib/customer-api";
 
@@ -37,6 +40,18 @@ const COPY = {
     reason: "Reason (optional)",
     cancelConfirm: "Cancel this rotation? All future deliveries stop.",
     cancelFailed: "Could not cancel. Try again.",
+    renewal: "Renewal",
+    autoRenew: "Renew automatically",
+    autoNote:
+      "Your next 4 weeks, with the same kitchens, are set up 3 days before this rotation ends for you to pay with one tap. The kitchen that cooks the last week won't cook the first week of the next rotation.",
+    renew: "Renew rotation",
+    renewing: "Renewing…",
+    renewNote:
+      "Same 4 kitchens, address, days and meals, at each kitchen's current weekly price.",
+    nextReady: "Your next rotation is ready. Pay to keep your meals coming.",
+    nextOn: "Your next rotation is booked.",
+    viewNext: "View next rotation",
+    renewFailed: "Could not renew. Try again.",
     loading: "Loading…",
     notFound: "Rotation not found.",
     failed: "Could not load this rotation.",
@@ -58,6 +73,18 @@ const COPY = {
     reason: "السبب (اختياري)",
     cancelConfirm: "إلغاء هذا التناوب؟ ستتوقف كل التوصيلات القادمة.",
     cancelFailed: "تعذر الإلغاء. حاول مرة أخرى.",
+    renewal: "التجديد",
+    autoRenew: "التجديد التلقائي",
+    autoNote:
+      "تُجهَّز الأسابيع الأربعة التالية بنفس المطابخ قبل انتهاء هذا التناوب بثلاثة أيام لتدفعها بلمسة واحدة. المطبخ الذي يطبخ الأسبوع الأخير لن يطبخ الأسبوع الأول من التناوب التالي.",
+    renew: "جدّد التناوب",
+    renewing: "جارٍ التجديد…",
+    renewNote:
+      "نفس المطابخ الأربعة والعنوان والأيام والوجبات، بالسعر الأسبوعي الحالي لكل مطبخ.",
+    nextReady: "تناوبك التالي جاهز. ادفع لتستمر وجباتك.",
+    nextOn: "تم حجز تناوبك التالي.",
+    viewNext: "عرض التناوب التالي",
+    renewFailed: "تعذر التجديد. حاول مرة أخرى.",
     loading: "جارٍ التحميل…",
     notFound: "التناوب غير موجود.",
     failed: "تعذر تحميل هذا التناوب.",
@@ -181,6 +208,8 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
         </ol>
       </section>
 
+      <Renewal r={r} locale={locale} t={t} onDone={refresh} />
+
       {(r.status === "active" || r.status === "pending_payment") && (
         <details className="ms-danger">
           <summary>{t.cancel}</summary>
@@ -208,5 +237,91 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
         </details>
       )}
     </div>
+  );
+}
+
+function Renewal({
+  r,
+  locale,
+  t,
+  onDone,
+}: {
+  r: Rotation;
+  locale: Locale;
+  t: Copy;
+  onDone: () => Promise<unknown>;
+}) {
+  const router = useRouter();
+  const toggle = useMutation({
+    mutationFn: (auto: boolean) => setRotationRenewal(r.id, auto),
+    onSuccess: onDone,
+  });
+  const renew = useMutation({
+    mutationFn: async () => {
+      const next = await renewRotation(r.id);
+      try {
+        await payRotation(next.id);
+      } catch {
+        // The new rotation shows its own pay button.
+      }
+      return next;
+    },
+    onSuccess: async (next) => {
+      await onDone();
+      router.push(`/${locale}/rotations/${next.id}`);
+    },
+  });
+  const running = r.status === "active" || r.status === "pending_payment";
+  const canRenew = !r.renewed_by_id && r.status !== "pending_payment";
+  if (!running && !canRenew && !r.renewed_by_id) return null;
+
+  return (
+    <section className="ms-renewal">
+      <h2>{t.renewal}</h2>
+      {r.renewed_by_id ? (
+        <p>
+          {r.renewed_by_status === "pending_payment" ? t.nextReady : t.nextOn}{" "}
+          <Link href={`/${locale}/rotations/${r.renewed_by_id}`}>
+            → {t.viewNext}
+          </Link>
+        </p>
+      ) : null}
+      {running && (
+        <>
+          <label className="ms-toggle">
+            <input
+              type="checkbox"
+              checked={r.auto_renew}
+              disabled={toggle.isPending}
+              onChange={(e) => toggle.mutate(e.target.checked)}
+            />
+            <span>{t.autoRenew}</span>
+          </label>
+          <p className="ms-sub">{t.autoNote}</p>
+        </>
+      )}
+      {canRenew && (
+        <div className="ms-renew">
+          <button
+            type="button"
+            className="ms-cta"
+            disabled={renew.isPending}
+            onClick={() => renew.mutate()}
+          >
+            {renew.isPending ? t.renewing : t.renew}
+          </button>
+          <p className="ms-sub">{t.renewNote}</p>
+        </div>
+      )}
+      {(toggle.isError || renew.isError) && (
+        <p className="ms-bad" role="alert">
+          {renew.error instanceof ApiError
+            ? (renew.error.problem?.errors?.[0]?.message ??
+              renew.error.problem?.detail ??
+              t.renewFailed)
+            : t.renewFailed}
+        </p>
+      )}
+    </section>
   );
 }

@@ -67,6 +67,13 @@ type Rotation struct {
 	MealSlots  []string  `json:"meal_slots"`
 	Weekdays   []int     `json:"delivery_weekdays"`
 	CreatedAt  time.Time `json:"created_at"`
+	// AutoRenew bills the next rotation, with the same four kitchens, before
+	// this one ends.
+	AutoRenew     bool       `json:"auto_renew"`
+	RenewedFromID *uuid.UUID `json:"renewed_from_id"`
+	// The rotation that renews this one, and its status.
+	RenewedByID     *uuid.UUID `json:"renewed_by_id"`
+	RenewedByStatus *string    `json:"renewed_by_status"`
 	RotationQuote
 }
 
@@ -216,7 +223,17 @@ func rotationLoad(ctx context.Context, tx pgx.Tx, plans []rotationPlan, start ti
 // busiest kitchen-week as light as possible, then the lightest overall. Ties
 // keep the customer's own order. order[w] is the kitchen index for week w.
 func AssignWeeks(load [RotationKitchens][RotationKitchens]int) [RotationKitchens]int {
+	return AssignWeeksAvoiding(load, -1)
+}
+
+// AssignWeeksAvoiding is AssignWeeks with kitchen index notFirst kept out of
+// week 1, so a renewal never has the same kitchen cook two weeks in a row.
+// Pass -1 for no restriction.
+func AssignWeeksAvoiding(load [RotationKitchens][RotationKitchens]int, notFirst int) [RotationKitchens]int {
 	best := [RotationKitchens]int{0, 1, 2, 3}
+	if notFirst == 0 {
+		best = [RotationKitchens]int{1, 0, 2, 3}
+	}
 	bestMax, bestSum := -1, -1
 	var perm [RotationKitchens]int
 	used := [RotationKitchens]bool{}
@@ -235,7 +252,7 @@ func AssignWeeks(load [RotationKitchens][RotationKitchens]int) [RotationKitchens
 			return
 		}
 		for k := 0; k < RotationKitchens; k++ {
-			if used[k] {
+			if used[k] || (w == 0 && k == notFirst) {
 				continue
 			}
 			used[k], perm[w] = true, k
@@ -329,6 +346,12 @@ func (s *Service) PreviewRotation(ctx context.Context, in RotationInput) (Rotati
 // week's money and meals belong to the kitchen that cooks it. All four start
 // pending payment and are paid together.
 func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotation, error) {
+	return s.createRotation(ctx, in, uuid.NullUUID{}, uuid.Nil)
+}
+
+// createRotation is CreateRotation for a new rotation or a renewal. A renewal
+// links back to the rotation it renews and keeps notFirstBranch out of week 1.
+func (s *Service) createRotation(ctx context.Context, in RotationInput, renewedFrom uuid.NullUUID, notFirstBranch uuid.UUID) (Rotation, error) {
 	var id uuid.UUID
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		plans, start, loc, err := s.prepareRotation(ctx, tx, in)
@@ -339,7 +362,13 @@ func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotatio
 		if err != nil {
 			return err
 		}
-		order := AssignWeeks(load)
+		notFirst := -1
+		for k, p := range plans {
+			if p.BranchID == notFirstBranch {
+				notFirst = k
+			}
+		}
+		order := AssignWeeksAvoiding(load, notFirst)
 		quote := buildQuote(plans, order, start)
 		pr, shares, subsidies, err := s.rotationPromo(ctx, tx, in, plans, &quote)
 		if err != nil {
@@ -354,16 +383,24 @@ func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotatio
 		}
 		slices.Sort(weekdays)
 		id = uuid.New()
+		var from any
+		if renewedFrom.Valid {
+			from = renewedFrom.UUID
+		}
 		for attempt := 0; ; attempt++ {
 			_, err = tx.Exec(ctx, `
 				INSERT INTO meal_rotations (
 					id, rotation_no, user_id, address_id, start_date, end_date,
-					meal_slots, delivery_weekdays, amount_minor, currency
-				) VALUES ($1, generate_rotation_no(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+					meal_slots, delivery_weekdays, amount_minor, currency,
+					auto_renew, renewed_from_id
+				) VALUES ($1, generate_rotation_no(), $2, $3, $4, $5, $6, $7, $8, $9, true, $10)`,
 				id, in.UserID, in.AddressID, start, start.AddDate(0, 0, 7*RotationKitchens-1),
-				in.Slots, weekdays, quote.AmountMinor, quote.Currency)
+				in.Slots, weekdays, quote.AmountMinor, quote.Currency, from)
 			if err == nil {
 				break
+			}
+			if renewedFrom.Valid && isUniqueViolation(err, "meal_rotations_renewed_from_key") {
+				return httpx.Coded(httpx.ErrConflict, "already_renewed", "This rotation has already been renewed.")
 			}
 			if attempt == 2 || !isUniqueViolation(err, "meal_rotations_no_key") {
 				return fmt.Errorf("subscriptions: insert rotation: %w", err)
@@ -425,15 +462,21 @@ func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotatio
 
 const rotationSelect = `
 	SELECT r.id, r.rotation_no, r.status, r.meal_slots, r.delivery_weekdays,
-	       r.created_at, r.start_date, r.end_date, r.amount_minor, r.currency
-	  FROM meal_rotations r`
+	       r.created_at, r.start_date, r.end_date, r.amount_minor, r.currency,
+	       r.auto_renew, r.renewed_from_id, n.id, n.status
+	  FROM meal_rotations r
+	  LEFT JOIN LATERAL (
+	       SELECT id, status FROM meal_rotations
+	        WHERE renewed_from_id = r.id AND status <> 'cancelled'
+	        ORDER BY created_at DESC LIMIT 1) n ON true`
 
 func scanRotation(row pgx.Row) (Rotation, error) {
 	var r Rotation
 	var weekdays []int16
 	var start, end time.Time
 	if err := row.Scan(&r.ID, &r.RotationNo, &r.Status, &r.MealSlots, &weekdays,
-		&r.CreatedAt, &start, &end, &r.AmountMinor, &r.Currency); err != nil {
+		&r.CreatedAt, &start, &end, &r.AmountMinor, &r.Currency,
+		&r.AutoRenew, &r.RenewedFromID, &r.RenewedByID, &r.RenewedByStatus); err != nil {
 		return r, err
 	}
 	for _, d := range weekdays {

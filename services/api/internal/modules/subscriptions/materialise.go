@@ -44,6 +44,20 @@ func (s *Service) MaterialiseOne(ctx context.Context, subID uuid.UUID, now time.
 		if live.Suspended || live.Status == "paused" {
 			return nil
 		}
+		// Only paid cycles are cooked. An open-ended auto-renewing subscription
+		// stops at its last paid day until the next cycle is paid.
+		var paidThrough *time.Time
+		if err := tx.QueryRow(ctx, `
+			SELECT max(ends_on) FROM subscription_cycles
+			 WHERE subscription_id = $1 AND status = 'paid'`, subID).Scan(&paidThrough); err != nil {
+			return fmt.Errorf("subscriptions: paid through: %w", err)
+		}
+		if paidThrough == nil {
+			return nil
+		}
+		if limit := dayIn(*paidThrough, live.Location); live.End.IsZero() || limit.Before(live.End) {
+			live.End = limit
+		}
 
 		from := now
 		if live.Materialised != nil {
@@ -56,13 +70,19 @@ func (s *Service) MaterialiseOne(ctx context.Context, subID uuid.UUID, now time.
 			}
 		}
 		to := dayIn(now, live.Location).Add(Horizon)
+		// The horizon never runs past the last paid day, so paying the next
+		// cycle later picks up from there instead of skipping it.
+		through := to
+		if live.End.Before(through) {
+			through = live.End
+		}
 
 		occurrences := Plan(live.Subscription, live.Rules, live.Pauses, live.Skips, from, to, now)
 		if len(occurrences) == 0 {
 			// Still advance the horizon. A subscription whose window contains no
 			// delivery days — a Ramadan pause, a plan between cycles — would
 			// otherwise be re-planned from scratch on every run forever.
-			return s.repo.SetMaterialisedThrough(ctx, tx, subID, to)
+			return s.repo.SetMaterialisedThrough(ctx, tx, subID, through)
 		}
 
 		addressIDs := make([]uuid.UUID, 0, len(occurrences))
@@ -109,7 +129,7 @@ func (s *Service) MaterialiseOne(ctx context.Context, subID uuid.UUID, now time.
 			}
 		}
 
-		return s.repo.SetMaterialisedThrough(ctx, tx, subID, to)
+		return s.repo.SetMaterialisedThrough(ctx, tx, subID, through)
 	})
 
 	return created, err

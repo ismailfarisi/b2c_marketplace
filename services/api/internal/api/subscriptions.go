@@ -267,3 +267,53 @@ func userAndSubscription(w http.ResponseWriter, r *http.Request) (uuid.UUID, uui
 	}
 	return userID, subID, true
 }
+
+// SetRenewal answers PUT /subscriptions/{subscriptionId}/renewal.
+func (h *SubscriptionHandlers) SetRenewal(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Auto *bool `json:"auto"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if body.Auto == nil {
+		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "auto", Code: "required", Message: "auto is required"}}})
+		return
+	}
+	if err := h.Service.SetRenewal(r.Context(), userID, subID, *body.Auto, time.Now()); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Renew answers POST /subscriptions/{subscriptionId}/renew: a new subscription
+// with the same kitchen, plan, address and schedule, pending payment.
+func (h *SubscriptionHandlers) Renew(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.Service.Renew(r.Context(), userID, subID, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, "", map[string]any{
+		"id":              res.ID,
+		"subscription_no": res.SubscriptionNo,
+		"status":          res.Status,
+		"start_date":      res.StartDate.Format("2006-01-02"),
+		"order_id":        res.OrderID,
+		"amount_minor":    res.AmountMinor,
+		"discount_minor":  res.DiscountMinor,
+		"trial_days":      res.TrialDays,
+		"currency":        res.Currency,
+	})
+}

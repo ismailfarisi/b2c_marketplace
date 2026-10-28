@@ -144,6 +144,9 @@ export interface MySubscription {
   pending_order_id: string | null;
   rotation_id: string | null;
   rotation_week: number | null;
+  renewal_mode: "auto" | "manual" | "none";
+  renewed_by_id: string | null;
+  can_renew: boolean;
 }
 
 export interface MealOption {
@@ -228,6 +231,22 @@ export const cancelSubscription = (id: string, reason: string) =>
     data: { reason },
   });
 
+/** Automatic renewal on or off; off ends with the last paid cycle. */
+export const setRenewal = (id: string, auto: boolean) =>
+  apiFetch<void>({
+    url: `/subscriptions/${id}/renewal`,
+    method: "PUT",
+    data: { auto },
+  });
+
+/** A new subscription like this one, pending payment of its order_id. */
+export const renewSubscription = (id: string) =>
+  apiFetch<Subscribed>({
+    url: `/subscriptions/${id}/renew`,
+    method: "POST",
+    data: {},
+  });
+
 export interface RotationInput {
   plan_ids: string[];
   address_id: string;
@@ -269,6 +288,10 @@ export interface Rotation extends RotationQuote {
   meal_slots: string[];
   delivery_weekdays: number[];
   created_at: string;
+  auto_renew: boolean;
+  renewed_from_id: string | null;
+  renewed_by_id: string | null;
+  renewed_by_status: string | null;
 }
 
 /** Which kitchen the platform would give each week, and the total. */
@@ -320,4 +343,19 @@ export const writeReview = (
     url: `/subscriptions/${subscriptionId}/review`,
     method: "PUT",
     data,
+  });
+
+export const setRotationRenewal = (id: string, auto: boolean) =>
+  apiFetch<void>({
+    url: `/rotations/${id}/renewal`,
+    method: "PUT",
+    data: { auto },
+  });
+
+/** The next rotation with the same four kitchens, pending payment. */
+export const renewRotation = (id: string) =>
+  apiFetch<Rotation>({
+    url: `/rotations/${id}/renew`,
+    method: "POST",
+    data: {},
   });

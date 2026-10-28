@@ -102,107 +102,27 @@ func activatePaidSubscriptions(ctx context.Context, pool *pgxpool.Pool) {
 	}
 }
 
-// openRenewalCycles bills the next period before the current one ends.
+// openRenewals bills the next cycle of auto-renewing subscriptions and the
+// next rotation of auto-renewing rotations, RenewalLeadDays before they end,
+// then moves unpaid renewals into dunning and closes what has ended.
 //
 // Three days of lead time, and the number is set by PLAN.md §6's constraint
 // rather than by convenience: "Meal customers must know *before* the delivery
-// doesn't arrive." A renewal charged on the last day of a cycle leaves the
-// dunning schedule no room to run before the first meal of the next one is due.
-// Three days is enough for two retries and a notification.
-func openRenewalCycles(ctx context.Context, pool *pgxpool.Pool) {
-	rows, err := pool.Query(ctx, `
-		SELECT c.id, c.subscription_id, c.cycle_no, c.ends_on,
-		       c.amount_minor, c.currency, s.branch_id, s.vendor_id,
-		       s.user_id, s.service_type, p.cycle_days, b.country, s.timezone
-		  FROM subscription_cycles c
-		  JOIN subscriptions s ON s.id = c.subscription_id
-		  JOIN subscription_plans p ON p.id = s.plan_id
-		  JOIN vendor_branches b ON b.id = s.branch_id
-		 WHERE c.status = 'paid'
-		   AND s.status = 'active'
-		   AND s.renewal_mode = 'auto'
-		   AND c.ends_on <= CURRENT_DATE + 3
-		   -- No successor yet. Without this the sweep re-bills the same
-		   -- subscription every fifteen minutes for three days.
-		   AND NOT EXISTS (
-		       SELECT 1 FROM subscription_cycles n
-		        WHERE n.subscription_id = c.subscription_id
-		          AND n.cycle_no = c.cycle_no + 1)
-		 ORDER BY c.ends_on
-		 LIMIT 200`)
-	if err != nil {
-		slog.ErrorContext(ctx, "renewal query failed", "error", err)
-		return
+// doesn't arrive."
+func openRenewals(ctx context.Context, svc *subscriptions.Service) {
+	now := time.Now()
+	if n, err := svc.OpenRenewals(ctx, now, 200); err != nil {
+		slog.ErrorContext(ctx, "renewal sweep failed", "error", err)
+	} else if n > 0 {
+		slog.InfoContext(ctx, "opened renewal cycles", "count", n)
 	}
-
-	type renewal struct {
-		cycleID, subID, branchID, vendorID, userID uuid.UUID
-		cycleNo                                    int
-		endsOn                                     time.Time
-		amount                                     int64
-		currency, serviceType, country, timezone   string
-		cycleDays                                  int
+	if n, err := svc.OpenRotationRenewals(ctx, now, 200); err != nil {
+		slog.ErrorContext(ctx, "rotation renewal sweep failed", "error", err)
+	} else if n > 0 {
+		slog.InfoContext(ctx, "opened rotation renewals", "count", n)
 	}
-	var due []renewal
-	for rows.Next() {
-		var r renewal
-		if err := rows.Scan(&r.cycleID, &r.subID, &r.cycleNo, &r.endsOn,
-			&r.amount, &r.currency, &r.branchID, &r.vendorID, &r.userID,
-			&r.serviceType, &r.cycleDays, &r.country, &r.timezone); err != nil {
-			rows.Close()
-			slog.ErrorContext(ctx, "renewal scan failed", "error", err)
-			return
-		}
-		due = append(due, r)
-	}
-	rows.Close()
-
-	for _, r := range due {
-		// One statement per renewal, with the billing order and the cycle
-		// created together. A cycle without its order is a period nobody is
-		// charged for; an order without its cycle is a charge nothing explains.
-		if _, err := pool.Exec(ctx, `
-			WITH new_order AS (
-			    INSERT INTO orders (
-			        order_no, user_id, branch_id, vendor_id, service_type,
-			        status, kind, source_subscription_id, currency
-			    ) VALUES (
-			        generate_order_no($8), $2, $3, $4, $5,
-			        'pending_payment', 'subscription_generated', $1, $6
-			    )
-			    RETURNING id
-			)
-			INSERT INTO subscription_cycles (
-			    subscription_id, cycle_no, starts_on, ends_on, order_id,
-			    status, amount_minor, currency, deliverable_days
-			)
-			SELECT $1, $7, $9::date, $9::date + ($10 - 1),
-			       new_order.id, 'pending', $11, $6,
-			       -- The recognition divisor, frozen when the cycle opens so a
-			       -- mid-cycle pause cannot retroactively change the daily rate
-			       -- applied to days already recognised.
-			       --
-			       -- EXTRACT(DOW) is 0 = Sunday, which is the convention this
-			       -- schema uses throughout. ISO's Monday-first numbering here
-			       -- would count the wrong days and misprice every cycle.
-			       (SELECT count(*)
-			          FROM generate_series($9::date, $9::date + ($10 - 1), interval '1 day') d
-			         WHERE EXTRACT(DOW FROM d)::int IN (
-			                   SELECT DISTINCT weekday
-			                     FROM subscription_schedule_rules
-			                    WHERE subscription_id = $1))
-			  FROM new_order
-			ON CONFLICT (subscription_id, cycle_no) DO NOTHING`,
-			r.subID, r.userID, r.branchID, r.vendorID, r.serviceType,
-			r.currency, r.cycleNo+1, r.country, r.endsOn.AddDate(0, 0, 1),
-			r.cycleDays, r.amount,
-		); err != nil {
-			slog.ErrorContext(ctx, "renewal failed",
-				"subscription_id", r.subID, "cycle_no", r.cycleNo+1, "error", err)
-			continue
-		}
-		slog.InfoContext(ctx, "opened renewal cycle",
-			"subscription_id", r.subID, "cycle_no", r.cycleNo+1)
+	if err := svc.SettleRenewals(ctx); err != nil {
+		slog.ErrorContext(ctx, "renewal settlement failed", "error", err)
 	}
 }
 
@@ -337,6 +257,7 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 	ensureMealSelectionPartitions(startupCtx, pool)
 	activatePaidSubscriptions(startupCtx, pool)
 	materialiseSubscriptions(startupCtx, svc)
+	openRenewals(startupCtx, svc)
 	cancel()
 
 	ticker := time.NewTicker(subscriptionTick)
@@ -357,7 +278,7 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 			activatePaidSubscriptions(tickCtx, pool)
 			materialiseSubscriptions(tickCtx, svc)
 
-			openRenewalCycles(tickCtx, pool)
+			openRenewals(tickCtx, svc)
 			runDunning(tickCtx, pool)
 			recogniseSubscriptionRevenue(tickCtx, svc)
 

@@ -387,7 +387,7 @@ func activateSubscription(ctx context.Context, tx pgx.Tx, orderID, userID uuid.U
 	}
 	tag, err := tx.Exec(ctx, `
 		UPDATE subscriptions SET status = 'active', updated_at = now()
-		 WHERE id = $1 AND status = 'pending_payment'`, subID)
+		 WHERE id = $1 AND status IN ('pending_payment', 'suspended')`, subID)
 	if err != nil {
 		return fmt.Errorf("activate subscription: %w", err)
 	}

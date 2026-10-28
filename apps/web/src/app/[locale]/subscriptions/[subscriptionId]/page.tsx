@@ -3,6 +3,7 @@
 import { ApiError, formatMoney } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useState, type FormEvent } from "react";
 
 import { RateKitchen } from "@/components/meals/rate-kitchen";
@@ -20,6 +21,8 @@ import {
   getMySubscription,
   pauseSubscription,
   payOrder,
+  renewSubscription,
+  setRenewal,
   skipMeal,
   type MySubscriptionDetail,
   type UpcomingMeal,
@@ -56,6 +59,21 @@ const COPY = {
     rotation: (n: number) =>
       `Week ${n} of a 4-kitchen rotation. Payment, pausing and cancelling are managed on the rotation.`,
     manageRotation: "Manage rotation",
+    renewalDue: (d: string) =>
+      `Your next cycle starts ${d}. Pay now to keep your meals coming.`,
+    renewal: "Renewal",
+    autoRenew: "Renew automatically",
+    autoOn: (d: string) =>
+      `Your next cycle is billed 3 days before ${d} at the plan's current price. Pay it with one tap and your meals continue.`,
+    autoOff: (d: string) =>
+      `This subscription ends after ${d}. Turn on automatic renewal or renew below to keep your meals coming.`,
+    renew: "Renew with this kitchen",
+    continueTrial: "Continue with this kitchen",
+    renewNote:
+      "Same plan, address and delivery days, at the plan's current price.",
+    renewing: "Renewing…",
+    renewed: "You've renewed this subscription.",
+    viewRenewal: "View the new subscription",
     loading: "Loading…",
     notFound: "Subscription not found.",
     failed: "Something went wrong. Try again.",
@@ -100,6 +118,20 @@ const COPY = {
     rotation: (n: number) =>
       `الأسبوع ${n} من تناوب ٤ مطابخ. يتم الدفع والإلغاء من صفحة التناوب.`,
     manageRotation: "إدارة التناوب",
+    renewalDue: (d: string) =>
+      `تبدأ دورتك التالية في ${d}. ادفع الآن لتستمر وجباتك.`,
+    renewal: "التجديد",
+    autoRenew: "التجديد التلقائي",
+    autoOn: (d: string) =>
+      `تُصدر فاتورة دورتك التالية قبل ${d} بثلاثة أيام بالسعر الحالي للخطة. ادفعها بلمسة واحدة وتستمر وجباتك.`,
+    autoOff: (d: string) =>
+      `ينتهي هذا الاشتراك بعد ${d}. فعّل التجديد التلقائي أو جدّد أدناه لتستمر وجباتك.`,
+    renew: "جدّد مع هذا المطبخ",
+    continueTrial: "استمر مع هذا المطبخ",
+    renewNote: "نفس الخطة والعنوان وأيام التوصيل، بالسعر الحالي للخطة.",
+    renewing: "جارٍ التجديد…",
+    renewed: "لقد جدّدت هذا الاشتراك.",
+    viewRenewal: "عرض الاشتراك الجديد",
     loading: "جارٍ التحميل…",
     notFound: "الاشتراك غير موجود.",
     failed: "حدث خطأ. حاول مرة أخرى.",
@@ -235,7 +267,11 @@ function Detail({
 
       {s.pending_order_id && !s.rotation_id && (
         <section className="ms-callout">
-          <p>{t.payNote}</p>
+          <p>
+            {s.cycle_no > 1 && cycle
+              ? t.renewalDue(formatDay(locale, cycle.starts_on))
+              : t.payNote}
+          </p>
           {pay.isError && <p className="ms-bad">{t.payFailed}</p>}
           <button
             type="button"
@@ -282,6 +318,10 @@ function Detail({
         </section>
       )}
 
+      {!s.rotation_id && (
+        <Renewal s={s} locale={locale} t={t} onDone={refresh} />
+      )}
+
       {s.status !== "pending_payment" && (
         <RateKitchen subscriptionId={s.id} locale={locale} />
       )}
@@ -291,6 +331,110 @@ function Detail({
       )}
       {live && !s.rotation_id && <Cancel s={s} t={t} onDone={refresh} />}
     </div>
+  );
+}
+
+function Renewal({
+  s,
+  locale,
+  t,
+  onDone,
+}: {
+  s: MySubscriptionDetail;
+  locale: Locale;
+  t: Copy;
+  onDone: () => Promise<unknown>;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const toggle = useMutation({
+    mutationFn: (auto: boolean) => setRenewal(s.id, auto),
+    onSuccess: onDone,
+    onError: (err) => setError(problemText(err, t.failed)),
+  });
+  const renew = useMutation({
+    mutationFn: async () => {
+      const next = await renewSubscription(s.id);
+      try {
+        await payOrder(next.order_id);
+      } catch {
+        // The new subscription shows its own pay button.
+      }
+      return next;
+    },
+    onSuccess: async (next) => {
+      await onDone();
+      router.push(`/${locale}/subscriptions/${next.id}`);
+    },
+    onError: (err) => setError(problemText(err, t.failed)),
+  });
+  const running = s.status === "active" || s.status === "paused";
+  const paidEnd = s.cycles.find((c) => c.status === "paid")?.ends_on;
+  if (!s.renewed_by_id && !running && !s.can_renew) return null;
+
+  return (
+    <section className="ms-renewal">
+      <h2>{t.renewal}</h2>
+      {s.renewed_by_id ? (
+        <p>
+          {t.renewed}{" "}
+          <Link href={`/${locale}/subscriptions/${s.renewed_by_id}`}>
+            → {t.viewRenewal}
+          </Link>
+        </p>
+      ) : (
+        <>
+          {running && (
+            <>
+              <label className="ms-toggle">
+                <input
+                  type="checkbox"
+                  checked={s.renewal_mode === "auto"}
+                  disabled={toggle.isPending}
+                  onChange={(e) => {
+                    setError(null);
+                    toggle.mutate(e.target.checked);
+                  }}
+                />
+                <span>{t.autoRenew}</span>
+              </label>
+              {paidEnd && (
+                <p className="ms-sub">
+                  {s.renewal_mode === "auto"
+                    ? t.autoOn(formatDay(locale, paidEnd))
+                    : t.autoOff(formatDay(locale, paidEnd))}
+                </p>
+              )}
+            </>
+          )}
+          {s.can_renew && (
+            <div className="ms-renew">
+              <button
+                type="button"
+                className="ms-cta"
+                disabled={renew.isPending}
+                onClick={() => {
+                  setError(null);
+                  renew.mutate();
+                }}
+              >
+                {renew.isPending
+                  ? t.renewing
+                  : s.renewal_mode === "none" && running
+                    ? t.continueTrial
+                    : t.renew}
+              </button>
+              <p className="ms-sub">{t.renewNote}</p>
+            </div>
+          )}
+        </>
+      )}
+      {error && (
+        <p className="ms-bad" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
 

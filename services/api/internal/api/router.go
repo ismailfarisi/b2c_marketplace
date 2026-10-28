@@ -124,6 +124,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/subscriptions/{subscriptionId}/pause", h.Subscriptions.Pause)
 			r.Post("/subscriptions/{subscriptionId}/skip", h.Subscriptions.Skip)
 			r.Post("/subscriptions/{subscriptionId}/cancel", h.Subscriptions.Cancel)
+			r.Put("/subscriptions/{subscriptionId}/renewal", h.Subscriptions.SetRenewal)
+			r.Post("/subscriptions/{subscriptionId}/renew", h.Subscriptions.Renew)
 			r.Get("/me/subscriptions", h.Subscriptions.Mine)
 			r.Get("/me/subscriptions/{subscriptionId}", h.Subscriptions.MyDetail)
 			if h.Subscriptions.Reviews != nil {
@@ -137,6 +139,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/rotations", h.Rotations.Create)
 			r.Post("/rotations/{rotationId}/payment-intent", h.Rotations.Pay)
 			r.Post("/rotations/{rotationId}/cancel", h.Rotations.Cancel)
+			r.Put("/rotations/{rotationId}/renewal", h.Rotations.SetRenewal)
+			r.Post("/rotations/{rotationId}/renew", h.Rotations.Renew)
 			r.Get("/me/rotations", h.Rotations.Mine)
 			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
 		}

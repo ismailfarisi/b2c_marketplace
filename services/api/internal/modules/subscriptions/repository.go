@@ -111,6 +111,7 @@ type insertParams struct {
 	// Set for one week of a four-kitchen rotation.
 	RotationID   uuid.NullUUID
 	RotationWeek int
+	RenewedFrom  uuid.NullUUID
 }
 
 func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insertParams) error {
@@ -122,9 +123,12 @@ func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insert
 	if p.TierID.Valid {
 		tierID = p.TierID.UUID
 	}
-	var rotationID, rotationWeek any
+	var rotationID, rotationWeek, renewedFrom any
 	if p.RotationID.Valid {
 		rotationID, rotationWeek = p.RotationID.UUID, p.RotationWeek
+	}
+	if p.RenewedFrom.Valid {
+		renewedFrom = p.RenewedFrom.UUID
 	}
 
 	// Retried like order numbers, and for the same reason: the generator is
@@ -137,16 +141,16 @@ func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insert
 				id, subscription_no, user_id, branch_id, vendor_id,
 				plan_id, tier_id, service_type, status,
 				start_date, end_date, renewal_mode, timezone, address_id,
-				rotation_id, rotation_week
+				rotation_id, rotation_week, renewed_from_id
 			) VALUES (
 				$1, generate_subscription_no(), $2, $3, $4,
 				$5, $6, $7, 'pending_payment',
-				$8, $9, $10, $11, $12, $13, $14
+				$8, $9, $10, $11, $12, $13, $14, $15
 			)`,
 			p.ID, p.UserID, p.Plan.BranchID, p.Plan.VendorID,
 			p.Plan.ID, tierID, p.Plan.ServiceType,
 			p.Start, end, p.RenewalMode, p.Plan.Timezone, p.AddressID,
-			rotationID, rotationWeek)
+			rotationID, rotationWeek, renewedFrom)
 		if err == nil {
 			return nil
 		}
