@@ -25,6 +25,7 @@ export const COPY = {
     promoCta: "Build a rotation",
     from: "from",
     perCycle: "per cycle",
+    perMeal: "a meal",
     perWeek: "a week in rotation",
     empty: "No kitchen delivers here yet with those filters.",
     failed: "Could not load kitchens.",
@@ -54,6 +55,7 @@ export const COPY = {
     promoCta: "ابدأ التناوب",
     from: "من",
     perCycle: "لكل دورة",
+    perMeal: "للوجبة",
     perWeek: "أسبوعيًا ضمن التناوب",
     empty: "لا يوجد مطبخ يوصل هنا بهذه الخيارات بعد.",
     failed: "تعذر تحميل المطابخ.",
@@ -109,7 +111,11 @@ export function KitchenCard({
           )}
           {(k.rating_count > 0 || k.food_safety_verified) && (
             <div className="ms-trust">
-              <RatingBadge rating={k.rating} count={k.rating_count} locale={locale} />
+              <RatingBadge
+                rating={k.rating}
+                count={k.rating_count}
+                locale={locale}
+              />
               {k.food_safety_verified && <SafetyBadge locale={locale} />}
             </div>
           )}
@@ -126,14 +132,21 @@ export function KitchenCard({
             ))}
           </div>
           <div className="ms-price">
-            <span>
+            <span className="ms-meal-price">
               {t.from}{" "}
               <strong>
                 {formatMoney(
-                  { amount: k.from_price_minor, currency: k.currency },
+                  { amount: k.from_meal_price_minor, currency: k.currency },
                   locale,
                 )}
               </strong>{" "}
+              {t.perMeal}
+            </span>
+            <span className="ms-sub">
+              {formatMoney(
+                { amount: k.from_price_minor, currency: k.currency },
+                locale,
+              )}{" "}
               {t.perCycle}
             </span>
             {k.rotation_week_price_minor != null && (

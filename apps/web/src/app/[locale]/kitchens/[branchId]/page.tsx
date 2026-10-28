@@ -31,13 +31,16 @@ const COPY = {
     noMenu: "This kitchen has not published its menu yet.",
     plans: "Plans",
     reviews: "Reviews from subscribers",
-    noReviews: "No reviews yet. Only customers who have had a delivery can rate a kitchen.",
+    noReviews:
+      "No reviews yet. Only customers who have had a delivery can rate a kitchen.",
     kitchenReply: "Kitchen's reply",
     days: "days",
     meals: (n: number) => (n === 1 ? "1 meal a day" : `${n} meals a day`),
     cutoff: (h: number) => `Changes up to ${h}h before delivery`,
     pause: (d: number) => `Pause up to ${d} days`,
     cycle: (d: number) => `per ${d}-day cycle`,
+    perMeal: (m: string, n: number) => `${m} a meal · ${n} meals`,
+    rotationMeal: (m: string) => `${m} a meal`,
     rotation: "In the 4-kitchen rotation",
     choice: "Choose 1 of 2",
     rotationWeek: "a week",
@@ -69,13 +72,16 @@ const COPY = {
     noMenu: "لم ينشر هذا المطبخ قائمته بعد.",
     plans: "الباقات",
     reviews: "تقييمات المشتركين",
-    noReviews: "لا توجد تقييمات بعد. يمكن فقط للعملاء الذين استلموا توصيلة تقييم المطبخ.",
+    noReviews:
+      "لا توجد تقييمات بعد. يمكن فقط للعملاء الذين استلموا توصيلة تقييم المطبخ.",
     kitchenReply: "رد المطبخ",
     days: "أيام",
     meals: (n: number) => (n === 1 ? "وجبة يوميًا" : `${n} وجبات يوميًا`),
     cutoff: (h: number) => `التعديل حتى ${h} ساعة قبل التوصيل`,
     pause: (d: number) => `إيقاف حتى ${d} يومًا`,
     cycle: (d: number) => `لكل دورة ${d} يومًا`,
+    perMeal: (m: string, n: number) => `${m} للوجبة · ${n} وجبة`,
+    rotationMeal: (m: string) => `${m} للوجبة`,
     rotation: "ضمن تناوب المطابخ الأربعة",
     choice: "اختر طبقًا من اثنين",
     rotationWeek: "أسبوعيًا",
@@ -265,7 +271,11 @@ export default function KitchenPage({
             </div>
             {(k.rating_count > 0 || k.food_safety_verified) && (
               <div className="ms-trust">
-                <RatingBadge rating={k.rating} count={k.rating_count} locale={locale} />
+                <RatingBadge
+                  rating={k.rating}
+                  count={k.rating_count}
+                  locale={locale}
+                />
                 {k.food_safety_verified && <SafetyBadge locale={locale} />}
               </div>
             )}
@@ -315,6 +325,15 @@ export default function KitchenPage({
                   <strong>{money(plan.price_minor, plan.currency)}</strong>{" "}
                   {t.cycle(plan.cycle_days)}
                 </p>
+                <p className="ms-meal-price">
+                  {t.perMeal(
+                    money(
+                      Math.round(plan.price_minor / mealsPerCycle(plan)),
+                      plan.currency,
+                    ),
+                    mealsPerCycle(plan),
+                  )}
+                </p>
                 {plan.tiers.length > 1 && (
                   <ul className="ms-tiers">
                     {plan.tiers.map((tier) => (
@@ -332,7 +351,19 @@ export default function KitchenPage({
                     <p className="ms-rot">
                       {t.rotation}:{" "}
                       {money(plan.rotation_week_price_minor, plan.currency)}{" "}
-                      {t.rotationWeek}
+                      {t.rotationWeek} ·{" "}
+                      {t.rotationMeal(
+                        money(
+                          Math.round(
+                            plan.rotation_week_price_minor /
+                              Math.max(
+                                1,
+                                plan.days_per_week * plan.meals_per_day,
+                              ),
+                          ),
+                          plan.currency,
+                        ),
+                      )}
                     </p>
                   )}
                 {k.delivers_here === false ? (
@@ -384,11 +415,14 @@ export default function KitchenPage({
                     <span aria-hidden="true">{"★".repeat(r.rating)}</span>
                     <span className="ms-rating-count">
                       {" "}
-                      {new Date(r.created_at).toLocaleDateString(locale === "ar" ? "ar" : "en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {new Date(r.created_at).toLocaleDateString(
+                        locale === "ar" ? "ar" : "en-GB",
+                        {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        },
+                      )}
                     </span>
                   </span>
                   {r.comment && <p dir="auto">{r.comment}</p>}
@@ -410,5 +444,17 @@ export default function KitchenPage({
     <CustomerShell locale={locale} back={{ href: `/${locale}`, label: t.back }}>
       {body}
     </CustomerShell>
+  );
+}
+
+/** Meals one cycle delivers: delivery days in the cycle times meals a day. */
+function mealsPerCycle(p: {
+  cycle_days: number;
+  days_per_week: number;
+  meals_per_day: number;
+}) {
+  return Math.max(
+    1,
+    Math.round((p.cycle_days * p.days_per_week) / 7) * p.meals_per_day,
   );
 }

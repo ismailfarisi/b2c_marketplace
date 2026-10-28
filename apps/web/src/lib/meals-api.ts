@@ -26,6 +26,7 @@ export interface PublicKitchen {
   meal_slots: string[];
   plans: number;
   from_price_minor: number;
+  from_meal_price_minor: number;
   rotation_week_price_minor: number | null;
   /** Staff checked a current food-safety licence. */
   food_safety_verified: boolean;

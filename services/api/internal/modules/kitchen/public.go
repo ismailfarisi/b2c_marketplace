@@ -38,6 +38,9 @@ type PublicKitchen struct {
 	MealSlots      []string  `json:"meal_slots"`
 	Plans          int       `json:"plans"`
 	FromPriceMinor int64     `json:"from_price_minor"`
+	// The cheapest price of one meal across the kitchen's plans: a cycle's
+	// price over the meals it delivers.
+	FromMealPriceMinor int64 `json:"from_meal_price_minor"`
 	// The cheapest weekly price this kitchen charges inside a 4-kitchen
 	// rotation, or nil when none of its plans has joined the rotation.
 	RotationWeekPriceMinor *int64 `json:"rotation_week_price_minor"`
@@ -61,7 +64,7 @@ const publicKitchenColumns = `
 	b.id, v.id, b.name, b.name_ar, v.trade_name, v.trade_name_ar,
 	b.kitchen_description, b.kitchen_description_ar, b.cuisines, b.dietary_tags,
 	b.cover_image_url, b.city, b.rating::float8, b.rating_count, v.default_currency,
-	p.slots, p.plans, p.from_price, p.rotation_price,
+	p.slots, p.plans, p.from_price, p.rotation_price, p.meal_price,
 	(b.food_safety_verified_at IS NOT NULL AND b.food_safety_expires_on >= CURRENT_DATE)`
 
 // livePlans aggregates the plans on sale per branch. Joined LATERAL so a
@@ -71,6 +74,8 @@ const livePlans = `
 		SELECT count(*)::int AS plans,
 		       min(sp.price_minor) AS from_price,
 		       min(sp.rotation_week_price_minor) FILTER (WHERE sp.rotation_enabled) AS rotation_price,
+		       min(round(sp.price_minor::numeric / greatest(1,
+		           round(sp.cycle_days * sp.days_per_week / 7.0) * sp.meals_per_day)))::bigint AS meal_price,
 		       COALESCE(array(SELECT DISTINCT s FROM subscription_plans x, unnest(x.meal_slots) s
 		                       WHERE x.branch_id = b.id AND x.service_type = $1 AND x.is_active
 		                       ORDER BY s), '{}') AS slots
@@ -84,7 +89,7 @@ func scanPublicKitchen(row pgx.Row) (PublicKitchen, error) {
 	err := row.Scan(&k.BranchID, &k.VendorID, &k.Name, &k.NameAr, &k.VendorName, &k.VendorNameAr,
 		&k.Description, &k.DescriptionAr, &k.Cuisines, &k.DietaryTags,
 		&k.CoverImageURL, &k.City, &k.Rating, &k.RatingCount, &k.Currency,
-		&k.MealSlots, &k.Plans, &k.FromPriceMinor, &k.RotationWeekPriceMinor, &k.FoodSafetyVerified)
+		&k.MealSlots, &k.Plans, &k.FromPriceMinor, &k.RotationWeekPriceMinor, &k.FromMealPriceMinor, &k.FoodSafetyVerified)
 	return k, err
 }
 
@@ -166,7 +171,7 @@ func (s *Service) PublicKitchen(ctx context.Context, branchID uuid.UUID, lat, ln
 	err := row.Scan(&d.BranchID, &d.VendorID, &d.Name, &d.NameAr, &d.VendorName, &d.VendorNameAr,
 		&d.Description, &d.DescriptionAr, &d.Cuisines, &d.DietaryTags,
 		&d.CoverImageURL, &d.City, &d.Rating, &d.RatingCount, &d.Currency,
-		&d.MealSlots, &d.Plans, &d.FromPriceMinor, &d.RotationWeekPriceMinor, &d.FoodSafetyVerified,
+		&d.MealSlots, &d.Plans, &d.FromPriceMinor, &d.RotationWeekPriceMinor, &d.FromMealPriceMinor, &d.FoodSafetyVerified,
 		&d.DeliversHere)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PublicKitchenDetail{}, httpx.ErrNotFound
