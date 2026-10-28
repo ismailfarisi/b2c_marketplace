@@ -1805,14 +1805,26 @@ a.ms-offer:focus-visible {
   justify-content: space-between;
   gap: 0.5rem;
 }
+.ms-promo {
+  min-inline-size: 0;
+}
+.ms-promo .ms-field {
+  margin: 0;
+}
 .ms-promo-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.4rem;
+  min-inline-size: 0;
+  font-weight: 400;
 }
 .ms-promo-row input {
-  flex: 1;
-  min-width: 0;
+  inline-size: 100%;
+  min-inline-size: 0;
   text-transform: uppercase;
+}
+.ms-promo-row button {
+  white-space: nowrap;
 }
 .ms-promo-row button,
 .ms-link {

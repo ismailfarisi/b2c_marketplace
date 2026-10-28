@@ -254,6 +254,19 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, ref Ref, userID uuid.U
 			return nil, invalid("promo_code", "new_customers_only", "this promo is for first-time subscribers")
 		}
 	}
+	if p.PerCustomerLimit != nil {
+		// Only paid uses count here: unpaid ones are released by Reserve when
+		// the customer checks out again, so they must not block a preview.
+		var used int
+		if err := tx.QueryRow(ctx, `
+			SELECT count(*) FROM promo_redemptions
+			 WHERE promo_id = $1 AND user_id = $2 AND status = 'redeemed'`, p.ID, userID).Scan(&used); err != nil {
+			return nil, fmt.Errorf("promo: count uses: %w", err)
+		}
+		if used >= *p.PerCustomerLimit {
+			return nil, invalid("promo_code", "already_used", "you have already used this promo")
+		}
+	}
 	return &p, nil
 }
 
