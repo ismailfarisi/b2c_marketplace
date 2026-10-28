@@ -41,6 +41,8 @@ type PublicKitchen struct {
 	// The cheapest weekly price this kitchen charges inside a 4-kitchen
 	// rotation, or nil when none of its plans has joined the rotation.
 	RotationWeekPriceMinor *int64 `json:"rotation_week_price_minor"`
+	// Staff checked a current food-safety licence for this kitchen.
+	FoodSafetyVerified bool `json:"food_safety_verified"`
 }
 
 // DiscoverFilter narrows the storefront. A location, when given, is a hard
@@ -58,8 +60,9 @@ type DiscoverFilter struct {
 const publicKitchenColumns = `
 	b.id, v.id, b.name, b.name_ar, v.trade_name, v.trade_name_ar,
 	b.kitchen_description, b.kitchen_description_ar, b.cuisines, b.dietary_tags,
-	b.cover_image_url, b.city, v.rating::float8, v.rating_count, v.default_currency,
-	p.slots, p.plans, p.from_price, p.rotation_price`
+	b.cover_image_url, b.city, b.rating::float8, b.rating_count, v.default_currency,
+	p.slots, p.plans, p.from_price, p.rotation_price,
+	(b.food_safety_verified_at IS NOT NULL AND b.food_safety_expires_on >= CURRENT_DATE)`
 
 // livePlans aggregates the plans on sale per branch. Joined LATERAL so a
 // branch with none drops out of the result rather than showing zeroes.
@@ -81,7 +84,7 @@ func scanPublicKitchen(row pgx.Row) (PublicKitchen, error) {
 	err := row.Scan(&k.BranchID, &k.VendorID, &k.Name, &k.NameAr, &k.VendorName, &k.VendorNameAr,
 		&k.Description, &k.DescriptionAr, &k.Cuisines, &k.DietaryTags,
 		&k.CoverImageURL, &k.City, &k.Rating, &k.RatingCount, &k.Currency,
-		&k.MealSlots, &k.Plans, &k.FromPriceMinor, &k.RotationWeekPriceMinor)
+		&k.MealSlots, &k.Plans, &k.FromPriceMinor, &k.RotationWeekPriceMinor, &k.FoodSafetyVerified)
 	return k, err
 }
 
@@ -111,7 +114,7 @@ func (s *Service) Discover(ctx context.Context, f DiscoverFilter) ([]PublicKitch
 		   AND ($6 = '' OR $6 = ANY (b.cuisines))
 		   AND ($7 = '' OR $7 = ANY (b.dietary_tags))
 		   AND (NOT $8 OR p.rotation_price IS NOT NULL)
-		 ORDER BY v.rating DESC NULLS LAST, v.rating_count DESC, b.name
+		 ORDER BY b.rating DESC NULLS LAST, b.rating_count DESC, b.name
 		 LIMIT 200`,
 		planServiceType, lat, lng, q, f.Slot, strings.ToLower(f.Cuisine), strings.ToLower(f.Dietary), f.Rotation)
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/modules/payouts"
 	"github.com/marketplace/api/internal/modules/promo"
+	"github.com/marketplace/api/internal/modules/reviews"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 )
 
@@ -55,6 +56,8 @@ type AdminHandlers struct {
 	Merch *merch.Service
 	// Promos are discount codes and trials. Nil hides them.
 	Promos *promo.Service
+	// Reviews are kitchen ratings and food-safety verification. Nil hides them.
+	Reviews *reviews.Service
 }
 
 // caller resolves the staff member and their permission, and logs the read when

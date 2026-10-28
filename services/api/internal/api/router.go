@@ -40,6 +40,9 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 				r.Get("/meals/home", h.Meals.Home)
 				r.Get("/meals/collections/{slug}", h.Meals.Collection)
 			}
+			if h.Meals.Reviews != nil {
+				r.Get("/meals/kitchens/{branchId}/reviews", h.Meals.KitchenReviews)
+			}
 			if h.Meals.Promos != nil {
 				r.Get("/meals/kitchens/{branchId}/offers", h.Meals.Offers)
 			}
@@ -123,6 +126,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/subscriptions/{subscriptionId}/cancel", h.Subscriptions.Cancel)
 			r.Get("/me/subscriptions", h.Subscriptions.Mine)
 			r.Get("/me/subscriptions/{subscriptionId}", h.Subscriptions.MyDetail)
+			if h.Subscriptions.Reviews != nil {
+				r.Get("/me/subscriptions/{subscriptionId}/review", h.Subscriptions.MyReview)
+				r.Put("/subscriptions/{subscriptionId}/review", h.Subscriptions.WriteReview)
+			}
 			r.Put("/subscriptions/{subscriptionId}/meals/{date}/{slot}", h.Subscriptions.ChooseMeal)
 		}
 		if h.Rotations != nil {
@@ -261,6 +268,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/branches/{branchId}/plans/{planId}", h.Kitchen.GetPlan)
 			r.Put("/branches/{branchId}/plans/{planId}", h.Kitchen.UpdatePlan)
 			r.Get("/branches/{branchId}/prep", h.Kitchen.PrepSheet)
+			if h.Kitchen.Reviews != nil {
+				r.Get("/branches/{branchId}/reviews", h.Kitchen.ListReviews)
+				r.Put("/branches/{branchId}/reviews/{reviewId}/reply", h.Kitchen.ReplyReview)
+			}
 		}
 
 		// Phase 7 — the vendor console.
@@ -469,6 +480,12 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 					r.Post("/admin/meals/layout/preview", h.AdminConsole.PreviewMerchLayout)
 					r.Post("/admin/meals/layout/publish", h.AdminConsole.PublishMerchLayout)
 					r.Post("/admin/meals/layout/versions/{versionId}/restore", h.AdminConsole.RestoreMerchVersion)
+				}
+				if h.AdminConsole.Reviews != nil {
+					r.Get("/admin/meals/reviews", h.AdminConsole.MealReviews)
+					r.Put("/admin/meals/reviews/{reviewId}/visibility", h.AdminConsole.HideMealReview)
+					r.Get("/admin/meals/kitchens/{branchId}/food-safety", h.AdminConsole.FoodSafety)
+					r.Put("/admin/meals/kitchens/{branchId}/food-safety", h.AdminConsole.SetFoodSafety)
 				}
 				if h.AdminConsole.Promos != nil {
 					r.Get("/admin/meals/promos", h.AdminConsole.ListPromos)

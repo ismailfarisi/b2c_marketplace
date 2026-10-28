@@ -52,6 +52,7 @@ import (
 	"github.com/marketplace/api/internal/modules/payouts"
 	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/modules/property"
+	"github.com/marketplace/api/internal/modules/reviews"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/tax"
 	"github.com/marketplace/api/internal/modules/timesignal"
@@ -152,6 +153,7 @@ func run() error {
 	identitySvc := identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho)
 
 	promoSvc := promo.NewService(pool)
+	reviewsSvc := reviews.NewService(pool)
 
 	handlers := &api.Handlers{
 		Identity: identitySvc,
@@ -167,6 +169,7 @@ func run() error {
 				ReserveCapacity: true,
 				Promos:          promoSvc,
 			}),
+			Reviews: reviewsSvc,
 		},
 		Catalog: api.NewCatalogQueries(pool),
 	}
@@ -197,9 +200,9 @@ func run() error {
 	payoutsSvc := payouts.NewService(pool, nil, app.PayoutGate{KYC: kycSvc})
 	adminSvc := admin.NewService(pool)
 
-	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc}
+	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc, Reviews: reviewsSvc}
 	merchSvc := merch.NewService(pool, handlers.Kitchen.Kitchen)
-	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc, Promos: promoSvc}
+	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc, Promos: promoSvc, Reviews: reviewsSvc}
 	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}
 	handlers.Rotations = &api.RotationHandlers{Service: handlers.Subscriptions.Service, Payments: paymentsSvc}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
@@ -235,6 +238,7 @@ func run() error {
 		Subscriptions: handlers.Subscriptions.Service,
 		Merch:         merchSvc,
 		Promos:        promoSvc,
+		Reviews:       reviewsSvc,
 		Act: api.Actions{
 			Payments: paymentsSvc,
 			Ordering: orderingSvc,

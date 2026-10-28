@@ -9,6 +9,7 @@ import (
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/promo"
+	"github.com/marketplace/api/internal/modules/reviews"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 )
 
@@ -20,6 +21,8 @@ import (
 // named for one-off purchases.
 type SubscriptionHandlers struct {
 	Service *subscriptions.Service
+	// Reviews lets a subscriber rate the kitchen. Nil disables it.
+	Reviews *reviews.Service
 }
 
 type subscribeBody struct {

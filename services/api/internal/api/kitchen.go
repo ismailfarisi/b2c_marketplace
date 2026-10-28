@@ -10,6 +10,7 @@ import (
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/console"
 	"github.com/marketplace/api/internal/modules/kitchen"
+	"github.com/marketplace/api/internal/modules/reviews"
 )
 
 // KitchenHandlers is the vendor portal's setup surface: dishes, the weekly
@@ -22,6 +23,7 @@ import (
 type KitchenHandlers struct {
 	Kitchen *kitchen.Service
 	Console *console.Service
+	Reviews *reviews.Service
 }
 
 func (h *KitchenHandlers) authorise(w http.ResponseWriter, r *http.Request, write bool) (uuid.UUID, bool) {
