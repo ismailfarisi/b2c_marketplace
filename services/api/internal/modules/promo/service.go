@@ -247,7 +247,7 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, ref Ref, userID uuid.U
 			SELECT EXISTS (
 				SELECT 1 FROM subscription_cycles c
 				  JOIN subscriptions s ON s.id = c.subscription_id
-				 WHERE s.user_id = $1 AND c.status IN ('paid', 'refunded'))`, userID).Scan(&paid); err != nil {
+				 WHERE s.user_id = $1 AND (c.paid_at IS NOT NULL OR c.status IN ('paid', 'refunded')))`, userID).Scan(&paid); err != nil {
 			return nil, fmt.Errorf("promo: new customer: %w", err)
 		}
 		if paid {
