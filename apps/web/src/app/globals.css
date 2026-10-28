@@ -1049,7 +1049,7 @@ a.ms-cta {
   display: grid;
   gap: 0 2.5rem;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "hero" "plans" "menu";
+  grid-template-areas: "hero" "plans" "menu" "reviews";
 }
 .ms-k-hero {
   grid-area: hero;
@@ -1057,13 +1057,17 @@ a.ms-cta {
 .ms-k-plans {
   grid-area: plans;
 }
+.ms-k-reviews {
+  grid-area: reviews;
+  min-inline-size: 0;
+}
 .ms-k-menu {
   grid-area: menu;
 }
 @media (min-width: 60rem) {
   .ms-kitchen {
     grid-template-columns: minmax(0, 1fr) 22rem;
-    grid-template-areas: "hero plans" "menu plans";
+    grid-template-areas: "hero plans" "menu plans" "reviews plans";
     align-items: start;
   }
   .ms-k-plans {

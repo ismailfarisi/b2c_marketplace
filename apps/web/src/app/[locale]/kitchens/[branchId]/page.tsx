@@ -372,7 +372,7 @@ export default function KitchenPage({
           <Menu k={k} locale={locale} t={t} />
         </section>
 
-        <section className="ms-k-menu">
+        <section className="ms-k-reviews">
           <h2>{t.reviews}</h2>
           {(reviews.data?.items ?? []).length === 0 ? (
             <p className="ms-sub">{t.noReviews}</p>
