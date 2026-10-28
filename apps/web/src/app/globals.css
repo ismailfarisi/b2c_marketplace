@@ -1605,3 +1605,150 @@ details.ms-danger[open] > summary {
 .ms-auth .ms-form input {
   inline-size: 100%;
 }
+
+/* ---- Merchandised home: banners, kitchen rails, cuisine strip ---------- */
+
+.ms-home-solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ms-rail {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  padding: 0.25rem 0.125rem 0.75rem;
+  margin: 0;
+  list-style: none;
+}
+
+.ms-rail > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
+
+.ms-rail-cards > * {
+  inline-size: min(18rem, 78vw);
+}
+
+.ms-shelf,
+.ms-banners,
+.ms-promo-wide {
+  margin-block: 1.75rem;
+}
+
+.ms-shelf-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 0.75rem;
+}
+
+.ms-shelf-head h2 {
+  font-family: var(--ms-font-display);
+  font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ms-shelf-head p {
+  margin: 0.25rem 0 0;
+  color: var(--ms-muted);
+}
+
+.ms-link {
+  color: var(--ms-accent-deep);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ms-banner {
+  inline-size: min(40rem, 88vw);
+  border-radius: var(--ms-radius);
+  background: var(--ms-accent-soft);
+  color: var(--ms-ink);
+  overflow: hidden;
+  box-shadow: var(--ms-shadow);
+}
+
+.ms-banner > a,
+.ms-banner > div {
+  position: relative;
+  display: grid;
+  min-block-size: 11rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ms-banner img {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.ms-banner-copy {
+  position: relative;
+  align-self: end;
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.ms-banner-img .ms-banner-copy {
+  color: var(--ms-accent-ink);
+  background: linear-gradient(to top, rgb(31 27 22 / 0.78), rgb(31 27 22 / 0));
+}
+
+.ms-banner-copy h2 {
+  font-family: var(--ms-font-display);
+  font-size: clamp(1.3rem, 3vw, 1.9rem);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ms-banner-copy p {
+  margin: 0;
+  max-inline-size: 34rem;
+}
+
+.ms-cuisines > button {
+  display: grid;
+  gap: 0.15rem;
+  min-inline-size: 8rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  background: var(--ms-surface);
+  color: var(--ms-ink);
+  text-align: start;
+  text-transform: capitalize;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ms-cuisines > button small {
+  color: var(--ms-muted);
+  font-weight: 400;
+}
+
+.ms-cuisines > button.on,
+.ms-cuisines > button:hover {
+  border-color: var(--ms-accent);
+  background: var(--ms-accent-soft);
+}
+
+.ms-promo-wide .ms-promo {
+  max-inline-size: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-rail {
+    scroll-behavior: auto;
+  }
+}

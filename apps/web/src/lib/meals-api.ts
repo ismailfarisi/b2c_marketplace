@@ -46,6 +46,7 @@ export interface KitchenQuery {
   q?: string | undefined;
   slot?: string | undefined;
   dietary?: string | undefined;
+  cuisine?: string | undefined;
   rotation?: boolean | undefined;
 }
 
@@ -59,6 +60,7 @@ export const getMealKitchens = (f: KitchenQuery) =>
       q: f.q || undefined,
       slot: f.slot || undefined,
       dietary: f.dietary || undefined,
+      cuisine: f.cuisine || undefined,
       rotation: f.rotation ? "true" : undefined,
     },
   });
@@ -66,6 +68,96 @@ export const getMealKitchens = (f: KitchenQuery) =>
 export const getMealKitchen = (branchId: string, point?: Point | null) =>
   apiFetch<PublicKitchenDetail>({
     url: `/meals/kitchens/${branchId}`,
+    method: "GET",
+    params: { lat: point?.lat, lng: point?.lng },
+  });
+
+export type SectionType =
+  | "banner_carousel"
+  | "kitchen_rail"
+  | "cuisine_strip"
+  | "rotation_promo"
+  | "all_kitchens";
+
+export interface SectionSettings {
+  title?: string;
+  title_ar?: string;
+  collection_id?: string;
+  banner_ids?: string[];
+}
+
+export interface Section {
+  id: string;
+  type: SectionType;
+  enabled: boolean;
+  settings: SectionSettings;
+}
+
+export interface CollectionRules {
+  cuisines?: string[];
+  dietary?: string[];
+  slots?: string[];
+  rotation_only?: boolean;
+  max_price_minor?: number;
+}
+
+export interface Collection {
+  id: string;
+  slug: string;
+  title: string;
+  title_ar: string | null;
+  subtitle: string | null;
+  subtitle_ar: string | null;
+  rules: CollectionRules;
+  sort: "rating" | "price_asc" | "price_desc" | "newest";
+  max_items: number | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_active: boolean;
+  items:
+    { branch_id: string; role: "pin" | "exclude"; position: number }[] | null;
+  updated_at: string;
+}
+
+export interface Banner {
+  id: string;
+  title: string;
+  title_ar: string | null;
+  body: string | null;
+  body_ar: string | null;
+  cta: string | null;
+  cta_ar: string | null;
+  image_url: string | null;
+  link_url: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_active: boolean;
+  updated_at: string;
+}
+
+export interface HomeSection extends Section {
+  collection?: Collection;
+  kitchens?: PublicKitchen[];
+  banners?: Banner[];
+  cuisines?: { cuisine: string; kitchens: number }[];
+}
+
+/** `sections` is null when nothing is published: render the default home. */
+export interface MealsHome {
+  version_id: string | null;
+  sections: HomeSection[] | null;
+}
+
+export const getMealsHome = (point?: Point | null) =>
+  apiFetch<MealsHome>({
+    url: "/meals/home",
+    method: "GET",
+    params: { lat: point?.lat, lng: point?.lng },
+  });
+
+export const getMealCollection = (slug: string, point?: Point | null) =>
+  apiFetch<Collection & { kitchens: PublicKitchen[] }>({
+    url: `/meals/collections/${slug}`,
     method: "GET",
     params: { lat: point?.lat, lng: point?.lng },
   });

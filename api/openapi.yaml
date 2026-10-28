@@ -619,6 +619,51 @@ paths:
               schema: { $ref: "#/components/schemas/PublicKitchenDetail" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /meals/home:
+    get:
+      tags: [meals]
+      operationId: getMealsHome
+      summary: The merchandised storefront home for a location
+      description: |
+        The live home layout with every section resolved for the point: rails
+        list only kitchens that deliver there, carousels only banners in their
+        window. Empty sections are dropped. `sections` is null when nothing is
+        published, and clients render their default home.
+      security: []
+      parameters:
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+      responses:
+        "200":
+          description: Home
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MealsHome" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /meals/collections/{slug}:
+    get:
+      tags: [meals]
+      operationId: getMealCollection
+      summary: A kitchen collection page
+      description: 404 when the collection is inactive or outside its window.
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+      responses:
+        "200":
+          description: Collection with its kitchens
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/MerchCollection" }
+                  - type: object
+                    required: [kitchens]
+                    properties:
+                      kitchens: { type: array, items: { $ref: "#/components/schemas/PublicKitchen" } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /feed:
     get:
       tags: [feed]
@@ -6060,6 +6105,116 @@ components:
         name_ar: { type: [string, "null"] }
         portions: { type: integer }
         chosen_by_customer: { type: integer }
+    MerchItem:
+      type: object
+      required: [branch_id, role]
+      properties:
+        branch_id: { type: string, format: uuid }
+        role: { type: string, enum: [pin, exclude] }
+        position: { type: integer }
+    MerchRules:
+      type: object
+      properties:
+        cuisines: { type: array, items: { type: string } }
+        dietary: { type: array, items: { type: string } }
+        slots: { type: array, items: { type: string } }
+        rotation_only: { type: boolean }
+        max_price_minor: { type: integer, format: int64 }
+    MerchCollectionInput:
+      type: object
+      required: [slug, title, rules, is_active]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" }
+        title: { type: string }
+        title_ar: { type: [string, "null"] }
+        subtitle: { type: [string, "null"] }
+        subtitle_ar: { type: [string, "null"] }
+        rules: { $ref: "#/components/schemas/MerchRules" }
+        sort: { type: string, enum: [rating, price_asc, price_desc, newest] }
+        max_items: { type: [integer, "null"], minimum: 1, maximum: 48 }
+        starts_at: { type: [string, "null"], format: date-time }
+        ends_at: { type: [string, "null"], format: date-time }
+        is_active: { type: boolean }
+    MerchCollection:
+      allOf:
+        - { $ref: "#/components/schemas/MerchCollectionInput" }
+        - type: object
+          required: [id, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            items: { type: [array, "null"], items: { $ref: "#/components/schemas/MerchItem" } }
+            updated_at: { type: string, format: date-time }
+    MerchBannerInput:
+      type: object
+      required: [title, is_active]
+      properties:
+        title: { type: string }
+        title_ar: { type: [string, "null"] }
+        body: { type: [string, "null"] }
+        body_ar: { type: [string, "null"] }
+        cta: { type: [string, "null"] }
+        cta_ar: { type: [string, "null"] }
+        image_url: { type: [string, "null"], description: https only }
+        link_url: { type: [string, "null"], description: a /path on the storefront or an https URL }
+        starts_at: { type: [string, "null"], format: date-time }
+        ends_at: { type: [string, "null"], format: date-time }
+        is_active: { type: boolean }
+    MerchBanner:
+      allOf:
+        - { $ref: "#/components/schemas/MerchBannerInput" }
+        - type: object
+          required: [id, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            updated_at: { type: string, format: date-time }
+    MerchSection:
+      type: object
+      required: [type, enabled, settings]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [banner_carousel, kitchen_rail, cuisine_strip, rotation_promo, all_kitchens] }
+        enabled: { type: boolean }
+        settings:
+          type: object
+          properties:
+            title: { type: string }
+            title_ar: { type: string }
+            collection_id: { type: string, format: uuid }
+            banner_ids: { type: array, items: { type: string, format: uuid } }
+    MerchVersion:
+      type: object
+      required: [id, version_number, status, sections]
+      properties:
+        id: { type: string, format: uuid }
+        version_number: { type: integer }
+        status: { type: string, enum: [draft, published] }
+        sections: { type: array, items: { $ref: "#/components/schemas/MerchSection" } }
+        publish_at: { type: [string, "null"], format: date-time }
+        published_by: { type: [string, "null"], format: uuid }
+        note: { type: [string, "null"] }
+        updated_at: { type: string, format: date-time }
+    MealsHome:
+      type: object
+      required: [version_id, sections]
+      properties:
+        version_id: { type: [string, "null"], format: uuid }
+        sections:
+          type: [array, "null"]
+          items:
+            allOf:
+              - { $ref: "#/components/schemas/MerchSection" }
+              - type: object
+                properties:
+                  collection: { $ref: "#/components/schemas/MerchCollection" }
+                  kitchens: { type: array, items: { $ref: "#/components/schemas/PublicKitchen" } }
+                  banners: { type: array, items: { $ref: "#/components/schemas/MerchBanner" } }
+                  cuisines:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        cuisine: { type: string }
+                        kitchens: { type: integer }
     PublicKitchen:
       type: object
       required: [branch_id, vendor_id, name, vendor_name, cuisines, dietary_tags, rating_count, currency, meal_slots, plans, from_price_minor]

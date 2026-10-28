@@ -5,7 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { adminSearch, getQueues, type QueueDepth, type SearchHit } from "@/lib/admin-api";
+import {
+  adminSearch,
+  getQueues,
+  type QueueDepth,
+  type SearchHit,
+} from "@/lib/admin-api";
 import { SessionMenu } from "@/components/admin/session";
 
 /**
@@ -42,6 +47,9 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
     items: [
       { href: "/meals/kitchens", label: "Kitchens", queues: [] },
       { href: "/meals/subscriptions", label: "Subscriptions", queues: [] },
+      { href: "/meals/layout", label: "Home layout", queues: [] },
+      { href: "/meals/collections", label: "Collections", queues: [] },
+      { href: "/meals/banners", label: "Banners", queues: [] },
     ],
   },
   {
@@ -107,6 +115,9 @@ export const TITLES: Record<string, string> = {
   "/refunds": "Refunds & invoices",
   "/meals/kitchens": "Meal kitchens",
   "/meals/subscriptions": "Meal subscriptions",
+  "/meals/layout": "Storefront home layout",
+  "/meals/collections": "Kitchen collections",
+  "/meals/banners": "Storefront banners",
 };
 
 /** How often the sidebar counts and every queue refetch. */
@@ -163,9 +174,12 @@ function Search({ locale }: { locale: string }) {
   const hits = term.length >= 3 ? (data?.items ?? []) : [];
 
   return (
-    <div className="console-search" onBlur={(e) => {
-      if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
-    }}>
+    <div
+      className="console-search"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+      }}
+    >
       <input
         type="search"
         value={q}
@@ -273,7 +287,10 @@ export function ConsoleShell({
           <span className="env">{process.env.NEXT_PUBLIC_ENV ?? "dev"}</span>
         </div>
 
-        <Link href={base} className={`console-link ${section === "" ? "active" : ""}`}>
+        <Link
+          href={base}
+          className={`console-link ${section === "" ? "active" : ""}`}
+        >
           <span className="label">Overview</span>
         </Link>
 
@@ -305,7 +322,9 @@ export function ConsoleShell({
               <span className="danger">counts unavailable</span>
             ) : (
               <>
-                <span className={`console-pulse ${isFetching ? "fetching" : ""}`} />
+                <span
+                  className={`console-pulse ${isFetching ? "fetching" : ""}`}
+                />
                 <span>every {POLL_MS / 1000}s</span>
               </>
             )}

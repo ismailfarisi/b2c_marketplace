@@ -1,6 +1,14 @@
 import { apiFetch } from "@marketplace/api-client";
 
 import type { Dish, Overview, Plan, Profile, WeeklyMenu } from "./vendor-api";
+import type {
+  Banner as MerchBanner,
+  Collection as MerchCollection,
+  CollectionRules,
+  MealsHome,
+  PublicKitchen,
+  Section as MerchSection,
+} from "@/lib/meals-api";
 
 /**
  * Bindings for the staff surface.
@@ -30,7 +38,10 @@ export interface QueueDepth {
 }
 
 export const getQueues = () =>
-  apiFetch<{ queues: QueueDepth[] }>({ url: "/moderation/queues", method: "GET" });
+  apiFetch<{ queues: QueueDepth[] }>({
+    url: "/moderation/queues",
+    method: "GET",
+  });
 
 // ── reels ───────────────────────────────────────────────────────────────────
 
@@ -49,9 +60,16 @@ export interface ReelQueueItem {
 }
 
 export const getReelQueue = () =>
-  apiFetch<{ items: ReelQueueItem[] }>({ url: "/moderation/queue", method: "GET" });
+  apiFetch<{ items: ReelQueueItem[] }>({
+    url: "/moderation/queue",
+    method: "GET",
+  });
 
-export const decideReel = (reelId: string, decision: "approve" | "reject", notes: string) =>
+export const decideReel = (
+  reelId: string,
+  decision: "approve" | "reject",
+  notes: string,
+) =>
   apiFetch<{ status: string }>({
     url: `/moderation/${reelId}/decide`,
     method: "POST",
@@ -72,7 +90,10 @@ export interface CommentQueueItem {
 }
 
 export const getCommentQueue = () =>
-  apiFetch<{ items: CommentQueueItem[] }>({ url: "/moderation/comments", method: "GET" });
+  apiFetch<{ items: CommentQueueItem[] }>({
+    url: "/moderation/comments",
+    method: "GET",
+  });
 
 export const decideComment = (
   commentId: string,
@@ -101,7 +122,10 @@ export interface MessageQueueItem {
 }
 
 export const getMessageQueue = () =>
-  apiFetch<{ items: MessageQueueItem[] }>({ url: "/moderation/messages", method: "GET" });
+  apiFetch<{ items: MessageQueueItem[] }>({
+    url: "/moderation/messages",
+    method: "GET",
+  });
 
 export const decideMessage = (messageId: string, release: boolean) =>
   apiFetch<{ status: string }>({
@@ -137,9 +161,16 @@ export interface ListingQueueItem {
 }
 
 export const getListingQueue = () =>
-  apiFetch<{ items: ListingQueueItem[] }>({ url: "/moderation/listings", method: "GET" });
+  apiFetch<{ items: ListingQueueItem[] }>({
+    url: "/moderation/listings",
+    method: "GET",
+  });
 
-export const decideListing = (listingId: string, approve: boolean, reason: string) =>
+export const decideListing = (
+  listingId: string,
+  approve: boolean,
+  reason: string,
+) =>
   apiFetch<{ status: string }>({
     url: `/moderation/listings/${listingId}/decide`,
     method: "POST",
@@ -163,14 +194,22 @@ export interface FraudSignal {
 }
 
 export const getFraudQueue = () =>
-  apiFetch<{ items: FraudSignal[] }>({ url: "/moderation/fraud", method: "GET" });
+  apiFetch<{ items: FraudSignal[] }>({
+    url: "/moderation/fraud",
+    method: "GET",
+  });
 
 export const decideFraud = (body: {
   subject_type: string;
   subject_id: string;
   kind: string;
   confirm: boolean;
-}) => apiFetch<{ status: string }>({ url: "/moderation/fraud/decide", method: "POST", data: body });
+}) =>
+  apiFetch<{ status: string }>({
+    url: "/moderation/fraud/decide",
+    method: "POST",
+    data: body,
+  });
 
 // ── appeals ─────────────────────────────────────────────────────────────────
 
@@ -185,9 +224,16 @@ export interface OverdueAppeal {
 }
 
 export const getAppealQueue = () =>
-  apiFetch<{ items: OverdueAppeal[] }>({ url: "/moderation/appeals", method: "GET" });
+  apiFetch<{ items: OverdueAppeal[] }>({
+    url: "/moderation/appeals",
+    method: "GET",
+  });
 
-export const decideAppeal = (appealId: string, overturn: boolean, note: string) =>
+export const decideAppeal = (
+  appealId: string,
+  overturn: boolean,
+  note: string,
+) =>
   apiFetch<void>({
     url: `/moderation/appeals/${appealId}/decide`,
     method: "POST",
@@ -247,7 +293,10 @@ export interface PendingPayoutAccount {
 }
 
 export const getPayoutAccountQueue = () =>
-  apiFetch<{ items: PendingPayoutAccount[] }>({ url: "/payout-accounts", method: "GET" });
+  apiFetch<{ items: PendingPayoutAccount[] }>({
+    url: "/payout-accounts",
+    method: "GET",
+  });
 
 export const verifyPayoutAccount = (accountId: string, approve: boolean) =>
   apiFetch<void>({
@@ -277,9 +326,16 @@ export interface PendingCampaign {
 }
 
 export const getCampaignQueue = () =>
-  apiFetch<{ items: PendingCampaign[] }>({ url: "/moderation/boosts", method: "GET" });
+  apiFetch<{ items: PendingCampaign[] }>({
+    url: "/moderation/boosts",
+    method: "GET",
+  });
 
-export const reviewCampaign = (campaignId: string, approve: boolean, note: string) =>
+export const reviewCampaign = (
+  campaignId: string,
+  approve: boolean,
+  note: string,
+) =>
   apiFetch<void>({
     url: `/moderation/boosts/${campaignId}/decide`,
     method: "POST",
@@ -317,7 +373,10 @@ export const resolveDispute = (
 // ── analytics ───────────────────────────────────────────────────────────────
 
 export const getPlatformFunnel = () =>
-  apiFetch<Record<string, unknown>>({ url: "/analytics/feed-funnel", method: "GET" });
+  apiFetch<Record<string, unknown>>({
+    url: "/analytics/feed-funnel",
+    method: "GET",
+  });
 
 export const getRankingProfile = () =>
   apiFetch<Record<string, unknown>>({ url: "/ranking/profile", method: "GET" });
@@ -345,7 +404,8 @@ export interface Whoami {
   permissions: string[];
 }
 
-export const getWhoami = () => apiFetch<Whoami>({ url: "/admin/whoami", method: "GET" });
+export const getWhoami = () =>
+  apiFetch<Whoami>({ url: "/admin/whoami", method: "GET" });
 
 export interface SearchHit {
   kind: string;
@@ -384,7 +444,12 @@ export interface OrderDetail {
   placed_at: string;
   notes: string | null;
   customer: { id: string; name: string | null; phone: string | null } | null;
-  branch: { id: string; name: string; vendor: string; vendor_id: string } | null;
+  branch: {
+    id: string;
+    name: string;
+    vendor: string;
+    vendor_id: string;
+  } | null;
   lines: Array<{ name: string; quantity: number; options: string | null }>;
   quote: {
     state: string;
@@ -458,7 +523,10 @@ export const getOrderTimeline = (id: string) =>
     method: "GET",
   });
 
-export const refundOrder = (id: string, body: { amount_minor?: number; reason: string }) =>
+export const refundOrder = (
+  id: string,
+  body: { amount_minor?: number; reason: string },
+) =>
   apiFetch<{ refund_id: string; status: string }>({
     url: `/admin/orders/${id}/refund`,
     method: "POST",
@@ -552,7 +620,11 @@ export interface VendorDetail {
     expires: string | null;
     expired: boolean;
   } | null;
-  reels: { published: number; pending_review: number; last_published: string | null };
+  reels: {
+    published: number;
+    pending_review: number;
+    last_published: string | null;
+  };
   branches: Array<{
     id: string;
     name: string;
@@ -602,7 +674,12 @@ export const grantRole = (body: {
   role: string;
   reason: string;
   expires_at?: string;
-}) => apiFetch<{ status: string }>({ url: "/admin/staff/grants", method: "POST", data: body });
+}) =>
+  apiFetch<{ status: string }>({
+    url: "/admin/staff/grants",
+    method: "POST",
+    data: body,
+  });
 
 export const revokeRole = (userId: string, role: string) =>
   apiFetch<{ status: string }>({
@@ -675,11 +752,24 @@ export interface Journal {
 }
 
 export const getJournals = (
-  params: { event_type?: string; reference_id?: string; from?: string; to?: string; limit?: number } = {},
-) => apiFetch<{ items: Journal[] }>({ url: `/admin/ledger${query(params)}`, method: "GET" });
+  params: {
+    event_type?: string;
+    reference_id?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  } = {},
+) =>
+  apiFetch<{ items: Journal[] }>({
+    url: `/admin/ledger${query(params)}`,
+    method: "GET",
+  });
 
 export const getLedgerEventTypes = () =>
-  apiFetch<{ items: string[] }>({ url: "/admin/ledger/event-types", method: "GET" });
+  apiFetch<{ items: string[] }>({
+    url: "/admin/ledger/event-types",
+    method: "GET",
+  });
 
 export interface RefundRow {
   id: string;
@@ -696,8 +786,13 @@ export interface RefundRow {
   actor: string | null;
 }
 
-export const getRefunds = (params: { from?: string; to?: string; limit?: number } = {}) =>
-  apiFetch<{ items: RefundRow[] }>({ url: `/admin/refunds${query(params)}`, method: "GET" });
+export const getRefunds = (
+  params: { from?: string; to?: string; limit?: number } = {},
+) =>
+  apiFetch<{ items: RefundRow[] }>({
+    url: `/admin/refunds${query(params)}`,
+    method: "GET",
+  });
 
 export interface PayoutRun {
   id: string;
@@ -713,7 +808,10 @@ export interface PayoutRun {
 }
 
 export const getPayoutRuns = () =>
-  apiFetch<{ items: PayoutRun[] }>({ url: "/admin/payouts/runs", method: "GET" });
+  apiFetch<{ items: PayoutRun[] }>({
+    url: "/admin/payouts/runs",
+    method: "GET",
+  });
 
 export interface PayoutStatement {
   id: string;
@@ -736,7 +834,9 @@ export interface PayoutStatement {
   blocked: string | null;
 }
 
-export const getStatements = (params: { run_id?: string; vendor_id?: string } = {}) =>
+export const getStatements = (
+  params: { run_id?: string; vendor_id?: string } = {},
+) =>
   apiFetch<{ items: PayoutStatement[] }>({
     url: params.run_id
       ? `/admin/payouts/runs/${params.run_id}/statements`
@@ -781,7 +881,10 @@ export interface Remittance {
 }
 
 export const getRemittances = (params: { driver_id?: string } = {}) =>
-  apiFetch<{ items: Remittance[] }>({ url: `/admin/cod/remittances${query(params)}`, method: "GET" });
+  apiFetch<{ items: Remittance[] }>({
+    url: `/admin/cod/remittances${query(params)}`,
+    method: "GET",
+  });
 
 export interface InvoiceRow {
   id: string;
@@ -805,8 +908,13 @@ export interface InvoiceRow {
   has_pdf: boolean;
 }
 
-export const getInvoices = (params: { q?: string; from?: string; to?: string } = {}) =>
-  apiFetch<{ items: InvoiceRow[] }>({ url: `/admin/invoices${query(params)}`, method: "GET" });
+export const getInvoices = (
+  params: { q?: string; from?: string; to?: string } = {},
+) =>
+  apiFetch<{ items: InvoiceRow[] }>({
+    url: `/admin/invoices${query(params)}`,
+    method: "GET",
+  });
 
 /** Builds a query string, dropping empties so a blank filter is absent rather
  *  than present-and-empty — the server treats those differently. */
@@ -864,14 +972,23 @@ export interface ReelDetail {
     playlist_url: string;
   }>;
   reports: number;
-  engagement: { views: number; likes: number; comments: number; shares: number; saves: number };
+  engagement: {
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    saves: number;
+  };
 }
 
 export const getReelDetail = (id: string) =>
   apiFetch<ReelDetail>({ url: `/admin/reels/${id}`, method: "GET" });
 
 export const getReelTimeline = (id: string) =>
-  apiFetch<{ items: TimelineEntry[] }>({ url: `/admin/reels/${id}/timeline`, method: "GET" });
+  apiFetch<{ items: TimelineEntry[] }>({
+    url: `/admin/reels/${id}/timeline`,
+    method: "GET",
+  });
 
 /**
  * A short-lived playback URL for staff.
@@ -881,7 +998,12 @@ export const getReelTimeline = (id: string) =>
  * looked at this video". Every call is recorded server-side.
  */
 export const getReelMedia = (id: string, kind?: "source" | "poster") =>
-  apiFetch<{ url: string; mime_type: string | null; expires_in: number; state: string }>({
+  apiFetch<{
+    url: string;
+    mime_type: string | null;
+    expires_in: number;
+    state: string;
+  }>({
     url: `/admin/reels/${id}/media${kind === "poster" ? "?kind=poster" : ""}`,
     method: "GET",
   });
@@ -913,7 +1035,10 @@ export interface CoverageArea {
 }
 
 export const getCoverage = () =>
-  apiFetch<{ items: CoverageArea[] }>({ url: "/admin/supply/coverage", method: "GET" });
+  apiFetch<{ items: CoverageArea[] }>({
+    url: "/admin/supply/coverage",
+    method: "GET",
+  });
 
 // ── configuration and health (§4.5, §4.6) ───────────────────────────────────
 
@@ -928,7 +1053,10 @@ export interface FeatureFlag {
 }
 
 export const getFlags = () =>
-  apiFetch<{ items: FeatureFlag[] }>({ url: "/admin/config/flags", method: "GET" });
+  apiFetch<{ items: FeatureFlag[] }>({
+    url: "/admin/config/flags",
+    method: "GET",
+  });
 
 export const setFlag = (
   key: string,
@@ -953,9 +1081,15 @@ export interface AppSetting {
 }
 
 export const getSettings = () =>
-  apiFetch<{ items: AppSetting[] }>({ url: "/admin/config/settings", method: "GET" });
+  apiFetch<{ items: AppSetting[] }>({
+    url: "/admin/config/settings",
+    method: "GET",
+  });
 
-export const setSetting = (key: string, body: { value: unknown; reason: string }) =>
+export const setSetting = (
+  key: string,
+  body: { value: unknown; reason: string },
+) =>
   apiFetch<{ status: string }>({
     url: `/admin/config/settings/${encodeURIComponent(key)}`,
     method: "PUT",
@@ -984,7 +1118,12 @@ export interface Health {
      *  job has become a permanent one. */
     trapped: boolean;
   }>;
-  loops: Array<{ loop: string; last_seen: string | null; pending: number; stale: boolean }>;
+  loops: Array<{
+    loop: string;
+    last_seen: string | null;
+    pending: number;
+    stale: boolean;
+  }>;
   delivery: Array<{
     channel: string;
     sent: number;
@@ -1002,7 +1141,8 @@ export interface Health {
   generated_at: string;
 }
 
-export const getHealth = () => apiFetch<Health>({ url: "/admin/health", method: "GET" });
+export const getHealth = () =>
+  apiFetch<Health>({ url: "/admin/health", method: "GET" });
 
 // ── payout actions ──────────────────────────────────────────────────────────
 //
@@ -1022,7 +1162,12 @@ export interface IssueRunResult {
   issued: number;
   /** Returned rather than swallowed: eighteen skips that all read the same is a
    *  process problem, and that is only visible as a list. */
-  skipped: Array<{ statement_id: string; vendor_id: string; vendor: string; reason: string }>;
+  skipped: Array<{
+    statement_id: string;
+    vendor_id: string;
+    vendor: string;
+    reason: string;
+  }>;
 }
 
 export const issueRun = (runId: string, reason: string) =>
@@ -1068,11 +1213,19 @@ export interface TaxRate {
 }
 
 export const getTaxRates = () =>
-  apiFetch<{ items: TaxRate[] }>({ url: "/admin/config/tax-rates", method: "GET" });
+  apiFetch<{ items: TaxRate[] }>({
+    url: "/admin/config/tax-rates",
+    method: "GET",
+  });
 
 export const supersedeTaxRate = (
   id: string,
-  body: { rate_bp: number; label?: string; effective_from: string; reason: string },
+  body: {
+    rate_bp: number;
+    label?: string;
+    effective_from: string;
+    reason: string;
+  },
 ) =>
   apiFetch<{ status: string; note: string }>({
     url: `/admin/config/tax-rates/${id}/supersede`,
@@ -1092,7 +1245,10 @@ export interface RateCard {
 }
 
 export const getRateCards = () =>
-  apiFetch<{ items: RateCard[] }>({ url: "/admin/config/rate-cards", method: "GET" });
+  apiFetch<{ items: RateCard[] }>({
+    url: "/admin/config/rate-cards",
+    method: "GET",
+  });
 
 export const supersedeRateCard = (
   id: string,
@@ -1219,7 +1375,10 @@ export const getListingDetail = (id: string) =>
   apiFetch<ListingDetail>({ url: `/admin/listings/${id}`, method: "GET" });
 
 export const getListingTimeline = (id: string) =>
-  apiFetch<{ items: TimelineEntry[] }>({ url: `/admin/listings/${id}/timeline`, method: "GET" });
+  apiFetch<{ items: TimelineEntry[] }>({
+    url: `/admin/listings/${id}/timeline`,
+    method: "GET",
+  });
 
 export interface DriverDetail {
   id: string;
@@ -1238,7 +1397,11 @@ export interface DriverDetail {
    *  and no position at all are different faults needing different calls. */
   last_ping_at: string | null;
   shift: { on: boolean; from: string | null; until: string | null };
-  workload: { open_stops: number; completed_today: number; failed_today: number };
+  workload: {
+    open_stops: number;
+    completed_today: number;
+    failed_today: number;
+  };
   cash: { held: Money; stops: number; oldest: string | null };
   documents: Array<{
     kind: string;
@@ -1252,7 +1415,10 @@ export const getDriverDetail = (id: string) =>
   apiFetch<DriverDetail>({ url: `/admin/drivers/${id}`, method: "GET" });
 
 export const getDriverTimeline = (id: string) =>
-  apiFetch<{ items: TimelineEntry[] }>({ url: `/admin/drivers/${id}/timeline`, method: "GET" });
+  apiFetch<{ items: TimelineEntry[] }>({
+    url: `/admin/drivers/${id}/timeline`,
+    method: "GET",
+  });
 
 export interface FeedInspection {
   profile: string;
@@ -1312,7 +1478,10 @@ export const inspectFeed = (params: {
 // role with `money.write`: the person who can change the number on an account
 // and the person who can move money out of it should be two people.
 
-export const changePhone = (userId: string, body: { phone: string; reason: string }) =>
+export const changePhone = (
+  userId: string,
+  body: { phone: string; reason: string },
+) =>
   apiFetch<{ status: string; note: string }>({
     url: `/admin/users/${userId}/phone`,
     method: "POST",
@@ -1436,8 +1605,18 @@ export interface MealSubscriptionDetail extends MealSubscriptionRow {
     currency: string;
     order_id: string | null;
   }>;
-  pauses: Array<{ from_date: string; to_date: string; credit_mode: string; state: string; suppressed_days: number }>;
-  skips: Array<{ skip_date: string; meal_slot: string | null; reason: string | null }>;
+  pauses: Array<{
+    from_date: string;
+    to_date: string;
+    credit_mode: string;
+    state: string;
+    suppressed_days: number;
+  }>;
+  skips: Array<{
+    skip_date: string;
+    meal_slot: string | null;
+    reason: string | null;
+  }>;
   events: Array<{
     event_type: string;
     from_status: string | null;
@@ -1449,20 +1628,38 @@ export interface MealSubscriptionDetail extends MealSubscriptionRow {
   }>;
 }
 
-export const getMealKitchens = (params: { q?: string; rotation?: boolean } = {}) =>
+export const getMealKitchens = (
+  params: { q?: string; rotation?: boolean } = {},
+) =>
   apiFetch<{ items: MealKitchen[] }>({
     url: "/admin/meals/kitchens",
     method: "GET",
-    params: { q: params.q || undefined, rotation: params.rotation ? "true" : undefined },
+    params: {
+      q: params.q || undefined,
+      rotation: params.rotation ? "true" : undefined,
+    },
   });
 
 export const getMealKitchen = (branchId: string) =>
-  apiFetch<MealKitchenDetail>({ url: `/admin/meals/kitchens/${branchId}`, method: "GET" });
+  apiFetch<MealKitchenDetail>({
+    url: `/admin/meals/kitchens/${branchId}`,
+    method: "GET",
+  });
 
-export const setMealPlanActive = (planId: string, active: boolean, reason: string) =>
-  apiFetch<Plan>({ url: `/admin/meals/plans/${planId}/active`, method: "POST", data: { active, reason } });
+export const setMealPlanActive = (
+  planId: string,
+  active: boolean,
+  reason: string,
+) =>
+  apiFetch<Plan>({
+    url: `/admin/meals/plans/${planId}/active`,
+    method: "POST",
+    data: { active, reason },
+  });
 
-export const getMealSubscriptions = (params: { q?: string; status?: string; branch_id?: string } = {}) =>
+export const getMealSubscriptions = (
+  params: { q?: string; status?: string; branch_id?: string } = {},
+) =>
   apiFetch<{ items: MealSubscriptionRow[] }>({
     url: "/admin/meals/subscriptions",
     method: "GET",
@@ -1474,7 +1671,10 @@ export const getMealSubscriptions = (params: { q?: string; status?: string; bran
   });
 
 export const getMealSubscription = (id: string) =>
-  apiFetch<MealSubscriptionDetail>({ url: `/admin/meals/subscriptions/${id}`, method: "GET" });
+  apiFetch<MealSubscriptionDetail>({
+    url: `/admin/meals/subscriptions/${id}`,
+    method: "GET",
+  });
 
 export const cancelMealSubscription = (id: string, reason: string) =>
   apiFetch<{ status: string; note: string }>({
@@ -1483,9 +1683,119 @@ export const cancelMealSubscription = (id: string, reason: string) =>
     data: { reason },
   });
 
-export function statusTone(status: string): "ok" | "warn" | "danger" | undefined {
+export function statusTone(
+  status: string,
+): "ok" | "warn" | "danger" | undefined {
   if (status === "active") return "ok";
   if (status === "paused" || status === "pending_payment") return "warn";
   if (status === "suspended") return "danger";
   return undefined;
 }
+
+// ---- Meals merchandising --------------------------------------------------
+
+export type { MerchBanner, MerchCollection, MerchSection, CollectionRules };
+
+export type MerchCollectionInput = Omit<
+  MerchCollection,
+  "id" | "items" | "updated_at"
+>;
+export type MerchBannerInput = Omit<MerchBanner, "id" | "updated_at">;
+
+export interface MerchVersion {
+  id: string;
+  version_number: number;
+  status: "draft" | "published";
+  sections: MerchSection[];
+  publish_at: string | null;
+  published_by: string | null;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface MerchLayoutState {
+  draft: MerchVersion | null;
+  live_id: string | null;
+  versions: MerchVersion[];
+  section_types: string[];
+}
+
+type Pt = { lat: number; lng: number } | null | undefined;
+
+export const getMerchCollections = () =>
+  apiFetch<{ items: MerchCollection[] }>({
+    url: "/admin/meals/collections",
+    method: "GET",
+  });
+export const getMerchCollection = (id: string) =>
+  apiFetch<MerchCollection>({
+    url: `/admin/meals/collections/${id}`,
+    method: "GET",
+  });
+export const saveMerchCollection = (
+  id: string | null,
+  data: MerchCollectionInput,
+) =>
+  apiFetch<MerchCollection>({
+    url: id ? `/admin/meals/collections/${id}` : "/admin/meals/collections",
+    method: id ? "PUT" : "POST",
+    data,
+  });
+export const setMerchCollectionItems = (
+  id: string,
+  items: { branch_id: string; role: "pin" | "exclude" }[],
+) =>
+  apiFetch<MerchCollection>({
+    url: `/admin/meals/collections/${id}/items`,
+    method: "PUT",
+    data: { items },
+  });
+export const deleteMerchCollection = (id: string) =>
+  apiFetch<void>({ url: `/admin/meals/collections/${id}`, method: "DELETE" });
+export const previewMerchCollection = (id: string, p: Pt) =>
+  apiFetch<{ items: PublicKitchen[] }>({
+    url: `/admin/meals/collections/${id}/preview`,
+    method: "GET",
+    params: { lat: p?.lat, lng: p?.lng },
+  });
+
+export const getMerchBanners = () =>
+  apiFetch<{ items: MerchBanner[] }>({
+    url: "/admin/meals/banners",
+    method: "GET",
+  });
+export const saveMerchBanner = (id: string | null, data: MerchBannerInput) =>
+  apiFetch<MerchBanner>({
+    url: id ? `/admin/meals/banners/${id}` : "/admin/meals/banners",
+    method: id ? "PUT" : "POST",
+    data,
+  });
+export const deleteMerchBanner = (id: string) =>
+  apiFetch<void>({ url: `/admin/meals/banners/${id}`, method: "DELETE" });
+
+export const getMerchLayout = () =>
+  apiFetch<MerchLayoutState>({ url: "/admin/meals/layout", method: "GET" });
+export const saveMerchDraft = (sections: MerchSection[]) =>
+  apiFetch<MerchVersion>({
+    url: "/admin/meals/layout/draft",
+    method: "PUT",
+    data: { sections },
+  });
+export const previewMerchLayout = (sections: MerchSection[], p: Pt) =>
+  apiFetch<MealsHome>({
+    url: "/admin/meals/layout/preview",
+    method: "POST",
+    data: { sections },
+    params: { lat: p?.lat, lng: p?.lng },
+  });
+export const publishMerchLayout = (publishAt: string | null, note: string) =>
+  apiFetch<MerchVersion>({
+    url: "/admin/meals/layout/publish",
+    method: "POST",
+    data: { publish_at: publishAt, note },
+  });
+export const restoreMerchVersion = (versionId: string) =>
+  apiFetch<MerchVersion>({
+    url: `/admin/meals/layout/versions/${versionId}/restore`,
+    method: "POST",
+  });
