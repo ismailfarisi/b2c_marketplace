@@ -126,6 +126,18 @@ func openRenewals(ctx context.Context, svc *subscriptions.Service) {
 	}
 }
 
+// sendMealMessages sends tomorrow's menu, dish-choice reminders and delivery
+// updates to subscribers. Every message is deduplicated, so the sweep can run
+// on every tick.
+func sendMealMessages(ctx context.Context, svc *subscriptions.Service) {
+	if _, err := svc.SendMealReminders(ctx, time.Now(), 500); err != nil {
+		slog.ErrorContext(ctx, "meal reminders failed", "error", err)
+	}
+	if _, err := svc.NotifyDeliveries(ctx, 500); err != nil {
+		slog.ErrorContext(ctx, "delivery updates failed", "error", err)
+	}
+}
+
 // runDunning walks the retry schedule on unpaid cycles.
 //
 // PLAN.md §6: failed renewal → retry schedule → grace period → **suspend
@@ -258,6 +270,7 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 	activatePaidSubscriptions(startupCtx, pool)
 	materialiseSubscriptions(startupCtx, svc)
 	openRenewals(startupCtx, svc)
+	sendMealMessages(startupCtx, svc)
 	cancel()
 
 	ticker := time.NewTicker(subscriptionTick)
@@ -279,6 +292,7 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 			materialiseSubscriptions(tickCtx, svc)
 
 			openRenewals(tickCtx, svc)
+			sendMealMessages(tickCtx, svc)
 			runDunning(tickCtx, pool)
 			recogniseSubscriptionRevenue(tickCtx, svc)
 

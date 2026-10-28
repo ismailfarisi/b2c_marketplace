@@ -112,3 +112,19 @@ func (n AuctionNotifier) Enqueue(ctx context.Context, tx pgx.Tx, m auctions.Noti
 	})
 	return err
 }
+
+// MealNotifier sends meal-subscription messages through notify.
+type MealNotifier struct{ Svc *notify.Service }
+
+func (n MealNotifier) Notify(ctx context.Context, tx pgx.Tx, userID uuid.UUID, templateKey string,
+	transactional bool, params map[string]string, dedupeKey string) error {
+	cat := notify.CategoryDelivery
+	if transactional {
+		cat = notify.CategoryTransactional
+	}
+	_, err := n.Svc.Enqueue(ctx, tx, notify.Message{
+		UserID: userID.String(), TemplateKey: templateKey, Category: cat,
+		Params: params, DedupeKey: dedupeKey,
+	})
+	return err
+}

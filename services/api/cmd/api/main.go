@@ -168,6 +168,7 @@ func run() error {
 				PlatformVATBP:   platformVATBP,
 				ReserveCapacity: true,
 				Promos:          promoSvc,
+				Notifier:        app.MealNotifier{Svc: app.BuildNotify(cfg, pool)},
 			}),
 			Reviews: reviewsSvc,
 		},

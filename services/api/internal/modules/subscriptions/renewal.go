@@ -115,6 +115,9 @@ func (s *Service) openRenewal(ctx context.Context, tx pgx.Tx, subID uuid.UUID, n
 	if err != nil {
 		return false, err
 	}
+	if err := s.notifyRenewalDue(ctx, tx, subID, userID, plan, cycle, quote.TotalMinor); err != nil {
+		return false, err
+	}
 	if err := s.repo.RecordEvent(ctx, tx, subID, "renewal_opened", "active", "active",
 		"system", uuid.NullUUID{}, mustJSON(map[string]any{
 			"cycle_id": cycleID, "cycle_no": cycle.No, "order_id": orderID})); err != nil {

@@ -123,6 +123,7 @@ func run() error {
 			CommissionBP:    commissionBP,
 			PlatformVATBP:   platformVATBP,
 			ReserveCapacity: true,
+			Notifier:        app.MealNotifier{Svc: app.BuildNotify(cfg, pool)},
 		}))
 
 	// Auctions run on their own, much tighter, loop. See auctionTick: a lot

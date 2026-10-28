@@ -32,6 +32,7 @@ type Service struct {
 	platformVATBP    int
 	reservationsHeld bool
 	promos           *promo.Service
+	notifier         Notifier
 }
 
 type Config struct {
@@ -48,6 +49,8 @@ type Config struct {
 	ReserveCapacity bool
 	// Promos prices discounts and trials at checkout. Nil disables promo codes.
 	Promos *promo.Service
+	// Notifier sends meal messages to subscribers. Nil sends nothing.
+	Notifier Notifier
 }
 
 func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry, cfg Config) *Service {
@@ -59,6 +62,7 @@ func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry, cfg Config)
 		platformVATBP:    cfg.PlatformVATBP,
 		reservationsHeld: cfg.ReserveCapacity,
 		promos:           cfg.Promos,
+		notifier:         cfg.Notifier,
 	}
 }
 
