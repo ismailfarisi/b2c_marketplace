@@ -330,3 +330,28 @@ export const getPrepSheet = (branchId: string, date: string) =>
     method: "GET",
     params: { date },
   });
+
+export interface BranchReview {
+  id: string;
+  branch_id: string;
+  rating: number;
+  comment: string;
+  status: "published" | "hidden";
+  hidden_reason?: string | null;
+  reply: string | null;
+  replied_at: string | null;
+  created_at: string;
+}
+
+export const listBranchReviews = (branchId: string) =>
+  apiFetch<{ items: BranchReview[] }>({
+    url: `/branches/${branchId}/reviews`,
+    method: "GET",
+  });
+
+export const replyToReview = (branchId: string, reviewId: string, reply: string) =>
+  apiFetch<BranchReview>({
+    url: `/branches/${branchId}/reviews/${reviewId}/reply`,
+    method: "PUT",
+    data: { reply },
+  });

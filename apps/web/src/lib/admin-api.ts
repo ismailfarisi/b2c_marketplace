@@ -1860,3 +1860,56 @@ export const getPromoRedemptions = (id: string) =>
     url: `/admin/meals/promos/${id}/redemptions`,
     method: "GET",
   });
+
+// ---- kitchen reviews & food safety ----------------------------------------
+
+export interface AdminReview {
+  id: string;
+  branch_id: string;
+  subscription_id: string;
+  user_id: string;
+  kitchen_name: string;
+  rating: number;
+  comment: string;
+  status: "published" | "hidden";
+  hidden_reason?: string | null;
+  reply: string | null;
+  created_at: string;
+}
+
+export const getMealReviews = (status = "") =>
+  apiFetch<{ items: AdminReview[] }>({
+    url: "/admin/meals/reviews",
+    method: "GET",
+    params: { status: status || undefined },
+  });
+
+export const setMealReviewHidden = (id: string, hidden: boolean, reason: string) =>
+  apiFetch<AdminReview>({
+    url: `/admin/meals/reviews/${id}/visibility`,
+    method: "PUT",
+    data: { hidden, reason },
+  });
+
+export interface FoodSafety {
+  ref: string | null;
+  expires_on: string | null;
+  verified_at: string | null;
+  verified: boolean;
+}
+
+export const getFoodSafety = (branchId: string) =>
+  apiFetch<FoodSafety>({
+    url: `/admin/meals/kitchens/${branchId}/food-safety`,
+    method: "GET",
+  });
+
+export const setFoodSafety = (
+  branchId: string,
+  data: { verified: boolean; ref: string; expires_on: string },
+) =>
+  apiFetch<FoodSafety>({
+    url: `/admin/meals/kitchens/${branchId}/food-safety`,
+    method: "PUT",
+    data,
+  });

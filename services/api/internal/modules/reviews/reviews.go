@@ -28,7 +28,7 @@ func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
 type Review struct {
 	ID             uuid.UUID  `json:"id"`
 	BranchID       uuid.UUID  `json:"branch_id"`
-	SubscriptionID uuid.UUID  `json:"subscription_id,omitempty"`
+	SubscriptionID *uuid.UUID `json:"subscription_id,omitempty"`
 	UserID         *uuid.UUID `json:"user_id,omitempty"`
 	KitchenName    string     `json:"kitchen_name,omitempty"`
 	Rating         int        `json:"rating"`
@@ -87,8 +87,10 @@ const reviewCols = `r.id, r.branch_id, r.subscription_id, r.rating, r.comment, r
 
 func scanReview(row pgx.Row) (Review, error) {
 	var r Review
-	err := row.Scan(&r.ID, &r.BranchID, &r.SubscriptionID, &r.Rating, &r.Comment, &r.Status,
+	var sub uuid.UUID
+	err := row.Scan(&r.ID, &r.BranchID, &sub, &r.Rating, &r.Comment, &r.Status,
 		&r.HiddenReason, &r.Reply, &r.RepliedAt, &r.CreatedAt, &r.UpdatedAt)
+	r.SubscriptionID = &sub
 	return r, err
 }
 
@@ -173,7 +175,7 @@ func (s *Service) Public(ctx context.Context, branchID uuid.UUID, limit int) ([]
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Review, error) {
 		x, err := scanReview(r)
-		x.SubscriptionID, x.Status, x.HiddenReason = uuid.Nil, "", nil
+		x.SubscriptionID, x.Status, x.HiddenReason = nil, "", nil
 		return x, err
 	})
 	if err != nil {
@@ -221,8 +223,9 @@ func (s *Service) Admin(ctx context.Context, status string) ([]Review, error) {
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Review, error) {
 		var r Review
-		var uid uuid.UUID
-		err := row.Scan(&r.ID, &r.BranchID, &r.SubscriptionID, &r.Rating, &r.Comment, &r.Status,
+		var uid, sub uuid.UUID
+		r.SubscriptionID = &sub
+		err := row.Scan(&r.ID, &r.BranchID, &sub, &r.Rating, &r.Comment, &r.Status,
 			&r.HiddenReason, &r.Reply, &r.RepliedAt, &r.CreatedAt, &r.UpdatedAt, &uid, &r.KitchenName)
 		r.UserID = &uid
 		return r, err

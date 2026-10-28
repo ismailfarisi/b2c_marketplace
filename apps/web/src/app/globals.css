@@ -1846,3 +1846,77 @@ a.ms-offer:focus-visible {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Trust: subscriber ratings and food-safety verification */
+.ms-trust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+}
+.ms-rating {
+  font-weight: 600;
+  color: var(--ms-ink);
+}
+.ms-rating > span[aria-hidden] {
+  color: var(--ms-accent);
+}
+.ms-rating-count {
+  font-weight: 400;
+  color: var(--ms-muted);
+}
+.ms-safety {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ms-ok) 12%, transparent);
+  color: var(--ms-ok);
+  padding: 0.15rem 0.6rem;
+  font-weight: 600;
+}
+.ms-safety::before {
+  content: "✓";
+}
+.ms-reviews {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.ms-review {
+  border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  background: var(--ms-surface);
+  padding: 0.85rem 1rem;
+}
+.ms-review p {
+  margin: 0.35rem 0 0;
+}
+.ms-review-reply {
+  border-inline-start: 3px solid var(--ms-accent-soft);
+  padding-inline-start: 0.75rem;
+  color: var(--ms-muted);
+}
+.ms-stars {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.ms-stars button {
+  border: 0;
+  background: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--ms-line);
+  cursor: pointer;
+  padding: 0.1rem;
+}
+.ms-stars button.on {
+  color: var(--ms-accent);
+}
+.ms-stars button:focus-visible {
+  outline: 2px solid var(--ms-accent);
+  border-radius: 0.25rem;
+}

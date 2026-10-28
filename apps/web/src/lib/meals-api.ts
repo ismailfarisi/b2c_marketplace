@@ -27,6 +27,8 @@ export interface PublicKitchen {
   plans: number;
   from_price_minor: number;
   rotation_week_price_minor: number | null;
+  /** Staff checked a current food-safety licence. */
+  food_safety_verified: boolean;
 }
 
 export interface PublicKitchenDetail extends PublicKitchen {
@@ -188,5 +190,23 @@ export interface Offer {
 export const getKitchenOffers = (branchId: string) =>
   apiFetch<{ items: Offer[] }>({
     url: `/meals/kitchens/${branchId}/offers`,
+    method: "GET",
+  });
+
+/** A published review from a verified subscriber. */
+export interface KitchenReview {
+  id: string;
+  branch_id: string;
+  rating: number;
+  comment: string;
+  reply: string | null;
+  replied_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getKitchenReviews = (branchId: string) =>
+  apiFetch<{ items: KitchenReview[] }>({
+    url: `/meals/kitchens/${branchId}/reviews`,
     method: "GET",
   });

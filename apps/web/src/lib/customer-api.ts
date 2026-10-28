@@ -1,6 +1,6 @@
 import { apiFetch } from "@marketplace/api-client";
 
-import type { Offer } from "./meals-api";
+import type { KitchenReview, Offer } from "./meals-api";
 
 /**
  * The signed-in customer: saved addresses, subscribing and paying, and managing
@@ -298,4 +298,26 @@ export const cancelRotation = (id: string, reason: string) =>
     url: `/rotations/${id}/cancel`,
     method: "POST",
     data: { reason },
+  });
+
+export interface MyReview {
+  can_review: boolean;
+  reason?: string;
+  review: (KitchenReview & { status: string }) | null;
+}
+
+export const getMyReview = (subscriptionId: string) =>
+  apiFetch<MyReview>({
+    url: `/me/subscriptions/${subscriptionId}/review`,
+    method: "GET",
+  });
+
+export const writeReview = (
+  subscriptionId: string,
+  data: { rating: number; comment: string },
+) =>
+  apiFetch<KitchenReview>({
+    url: `/subscriptions/${subscriptionId}/review`,
+    method: "PUT",
+    data,
   });

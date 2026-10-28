@@ -166,7 +166,8 @@ func (s *Service) PublicKitchen(ctx context.Context, branchID uuid.UUID, lat, ln
 	err := row.Scan(&d.BranchID, &d.VendorID, &d.Name, &d.NameAr, &d.VendorName, &d.VendorNameAr,
 		&d.Description, &d.DescriptionAr, &d.Cuisines, &d.DietaryTags,
 		&d.CoverImageURL, &d.City, &d.Rating, &d.RatingCount, &d.Currency,
-		&d.MealSlots, &d.Plans, &d.FromPriceMinor, &d.RotationWeekPriceMinor, &d.DeliversHere)
+		&d.MealSlots, &d.Plans, &d.FromPriceMinor, &d.RotationWeekPriceMinor, &d.FoodSafetyVerified,
+		&d.DeliversHere)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PublicKitchenDetail{}, httpx.ErrNotFound
 	}

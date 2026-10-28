@@ -2,6 +2,7 @@ import { formatMoney } from "@marketplace/api-client";
 import Link from "next/link";
 
 import { KitchenCover } from "@/components/meals/cover";
+import { RatingBadge, SafetyBadge } from "@/components/meals/trust";
 import type { Banner, HomeSection, PublicKitchen } from "@/lib/meals-api";
 
 /** Kitchen card and copy shared by the home page and collection pages. */
@@ -105,6 +106,12 @@ export function KitchenCard({
             <p className="ms-blurb" dir="auto">
               {blurb}
             </p>
+          )}
+          {(k.rating_count > 0 || k.food_safety_verified) && (
+            <div className="ms-trust">
+              <RatingBadge rating={k.rating} count={k.rating_count} locale={locale} />
+              {k.food_safety_verified && <SafetyBadge locale={locale} />}
+            </div>
           )}
           <div className="ms-tags">
             {k.meal_slots.map((s) => (
