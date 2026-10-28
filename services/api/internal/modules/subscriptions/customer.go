@@ -259,7 +259,7 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 	for _, o := range occ {
 		date := o.Date.Format("2006-01-02")
 		w := windows[o.WindowID]
-		cutoff := CutoffAt(o.Date, w.startsAt, live.CutoffHours, live.Location)
+		cutoff := CutoffAt(o.Date, live.CutoffHours, live.Location)
 		m := UpcomingMeal{
 			Date: date, Weekday: int(o.Date.Weekday()), Slot: o.Slot,
 			WindowLabel: w.label, Options: menu[menuKey{int(o.Date.Weekday()), o.Slot}],
@@ -277,10 +277,10 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 }
 
 // CutoffAt is the last moment a meal can still be changed: the plan's cutoff
-// hours before its delivery window opens, in the kitchen's timezone.
-func CutoffAt(day time.Time, windowStart time.Duration, cutoffHours int, loc *time.Location) time.Time {
-	start := dayIn(day, loc).Add(windowStart)
-	return start.Add(-time.Duration(cutoffHours) * time.Hour)
+// hours before the start of the delivery day, in the kitchen's timezone. It is
+// the same deadline CanModify enforces for skips and pauses.
+func CutoffAt(day time.Time, cutoffHours int, loc *time.Location) time.Time {
+	return dayIn(day, loc).Add(-time.Duration(cutoffHours) * time.Hour)
 }
 
 // branchMenu is the kitchen's active weekly menu, active dishes only, default
@@ -327,14 +327,12 @@ func branchMenu(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (map[menuKey
 }
 
 type window struct {
-	label    string
-	startsAt time.Duration
+	label string
 }
 
 func windowsByID(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (map[uuid.UUID]window, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT id, label, extract(epoch FROM starts_at)::bigint
-		  FROM time_windows WHERE branch_id = $1`, branchID)
+		SELECT id, label FROM time_windows WHERE branch_id = $1`, branchID)
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: load windows: %w", err)
 	}
@@ -343,11 +341,9 @@ func windowsByID(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (map[uuid.U
 	for rows.Next() {
 		var id uuid.UUID
 		var w window
-		var secs int64
-		if err := rows.Scan(&id, &w.label, &secs); err != nil {
+		if err := rows.Scan(&id, &w.label); err != nil {
 			return nil, fmt.Errorf("subscriptions: scan window: %w", err)
 		}
-		w.startsAt = time.Duration(secs) * time.Second
 		out[id] = w
 	}
 	return out, rows.Err()

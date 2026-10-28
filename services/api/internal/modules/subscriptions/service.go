@@ -408,7 +408,7 @@ func (s *Service) Pause(ctx context.Context, in PauseInput) error {
 			if _, err := tx.Exec(ctx, `
 				UPDATE subscriptions
 				   SET end_date = CASE WHEN end_date IS NULL THEN NULL
-				                       ELSE end_date + ($2 || ' days')::interval END
+				                       ELSE end_date + $2::int END
 				 WHERE id = $1`, in.SubscriptionID, days); err != nil {
 				return fmt.Errorf("subscriptions: extend end date: %w", err)
 			}

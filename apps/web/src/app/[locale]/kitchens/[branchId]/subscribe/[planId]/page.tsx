@@ -422,6 +422,21 @@ function Checkout({
   );
 }
 
+function pinText(p: { lat: number; lng: number }) {
+  return { lat: String(p.lat), lng: String(p.lng) };
+}
+
+function parsePin(
+  c: { lat: string; lng: string } | null,
+): { lat: number; lng: number } | null {
+  if (!c || !c.lat.trim() || !c.lng.trim()) return null;
+  const lat = Number(c.lat);
+  const lng = Number(c.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
 function NewAddress({
   t,
   initial,
@@ -441,13 +456,16 @@ function NewAddress({
     area: "",
     city: "Dubai",
   });
-  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [coords, setCoords] = useState<{ lat: string; lng: string } | null>(
+    null,
+  );
+  const pin = parsePin(coords);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!pin && initial) setPin(initial);
-  }, [initial, pin]);
+    if (!coords && initial) setCoords(pinText(initial));
+  }, [initial, coords]);
 
   if (!open) {
     return (
@@ -535,18 +553,18 @@ function NewAddress({
             aria-label="Latitude"
             inputMode="decimal"
             dir="ltr"
-            value={pin?.lat ?? ""}
+            value={coords?.lat ?? ""}
             onChange={(e) =>
-              setPin({ lat: Number(e.target.value), lng: pin?.lng ?? 0 })
+              setCoords({ lat: e.target.value, lng: coords?.lng ?? "" })
             }
           />
           <input
             aria-label="Longitude"
             inputMode="decimal"
             dir="ltr"
-            value={pin?.lng ?? ""}
+            value={coords?.lng ?? ""}
             onChange={(e) =>
-              setPin({ lat: pin?.lat ?? 0, lng: Number(e.target.value) })
+              setCoords({ lat: coords?.lat ?? "", lng: e.target.value })
             }
           />
         </div>
@@ -556,7 +574,12 @@ function NewAddress({
           onClick={() =>
             navigator.geolocation?.getCurrentPosition(
               (pos) =>
-                setPin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                setCoords(
+                  pinText({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                  }),
+                ),
               () => undefined,
               { enableHighAccuracy: true, timeout: 8000 },
             )

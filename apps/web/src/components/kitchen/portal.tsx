@@ -194,6 +194,7 @@ const TITLES: Record<string, string> = {
   "/menu": "Weekly menu",
   "/dishes": "Dishes",
   "/plans": "Plans & pricing",
+  "/prep": "Prep sheet",
   "/deliveries": "Deliveries & dispatch",
   "/payouts": "Payouts",
   "/profile": "Kitchen profile",
@@ -284,7 +285,12 @@ export function VendorShell({
                   key={item.href}
                   href={`${base}${item.href}`}
                   className={`console-link ${current === item.href ? "active" : ""}`}
+                  title={item.label}
+                  aria-label={item.label}
                 >
+                  <span className="abbr" aria-hidden="true">
+                    {item.label.slice(0, 2)}
+                  </span>
                   <span className="label">{item.label}</span>
                 </Link>
               ))}

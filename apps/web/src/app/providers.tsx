@@ -16,7 +16,7 @@ configureApiClient({
   // browser get the weaker-but-correct answer (sessionStorage) without
   // dragging it into anyone else's bundle.
   tokens: tokenStore,
-  onUnauthenticated: () => {
+  onUnauthenticated: (reason) => {
     // A hard redirect rather than a router push. The refresh token is already
     // gone at this point, so every in-flight query is about to fail too, and
     // tearing the page down is the only state that is definitely consistent.
@@ -52,7 +52,8 @@ configureApiClient({
       return;
     }
 
-    window.location.href = "/";
+    // A signed-out visitor on a public page just sees the public page.
+    if (reason === "expired") window.location.href = "/";
   },
 });
 

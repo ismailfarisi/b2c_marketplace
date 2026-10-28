@@ -55,8 +55,12 @@ export interface TokenStore {
 interface ClientConfig {
   baseUrl: string;
   tokens?: TokenStore;
-  /** Called when refresh fails and the user must sign in again. */
-  onUnauthenticated?: () => void;
+  /**
+   * Called when a request is unauthorised and no session can be restored:
+   * `expired` when a refresh token was rejected, `signedOut` when there was
+   * never one.
+   */
+  onUnauthenticated?: (reason: "expired" | "signedOut") => void;
   locale?: () => string;
 }
 
@@ -80,7 +84,10 @@ async function refreshTokens(): Promise<boolean> {
 
   refreshInFlight = (async () => {
     const refresh = await config.tokens?.getRefreshToken();
-    if (!refresh) return false;
+    if (!refresh) {
+      config.onUnauthenticated?.("signedOut");
+      return false;
+    }
 
     const res = await fetch(`${config.baseUrl}/auth/refresh`, {
       method: "POST",
@@ -90,7 +97,7 @@ async function refreshTokens(): Promise<boolean> {
 
     if (!res.ok) {
       await config.tokens?.clear();
-      config.onUnauthenticated?.();
+      config.onUnauthenticated?.("expired");
       return false;
     }
 

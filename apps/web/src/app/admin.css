@@ -789,9 +789,19 @@ table.data .nowrap {
  * manager glancing at depth, and for that the *counts* are the whole content —
  * hiding them behind a tap is the wrong trade.
  */
+/* Two-letter stand-ins for links that have no icon, shown only when narrow. */
+.console-link .abbr {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .console {
     grid-template-columns: 60px 1fr;
+  }
+
+  .console-link .abbr {
+    display: inline;
+    font-weight: 600;
   }
 
   .console-brand span:not(.env),
