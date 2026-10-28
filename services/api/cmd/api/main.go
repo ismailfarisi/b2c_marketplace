@@ -45,6 +45,7 @@ import (
 	"github.com/marketplace/api/internal/modules/invoicing"
 	"github.com/marketplace/api/internal/modules/kitchen"
 	"github.com/marketplace/api/internal/modules/kyc"
+	"github.com/marketplace/api/internal/modules/merch"
 	"github.com/marketplace/api/internal/modules/moderation"
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
@@ -193,7 +194,8 @@ func run() error {
 	adminSvc := admin.NewService(pool)
 
 	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc}
-	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen}
+	merchSvc := merch.NewService(pool, handlers.Kitchen.Kitchen)
+	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc}
 	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}
 	handlers.Rotations = &api.RotationHandlers{Service: handlers.Subscriptions.Service, Payments: paymentsSvc}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
@@ -227,6 +229,7 @@ func run() error {
 		Issuer:        issuer,
 		Kitchen:       handlers.Kitchen.Kitchen,
 		Subscriptions: handlers.Subscriptions.Service,
+		Merch:         merchSvc,
 		Act: api.Actions{
 			Payments: paymentsSvc,
 			Ordering: orderingSvc,

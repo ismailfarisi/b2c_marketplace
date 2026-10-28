@@ -36,6 +36,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		if h.Meals != nil {
 			r.Get("/meals/kitchens", h.Meals.KitchenList)
 			r.Get("/meals/kitchens/{branchId}", h.Meals.KitchenPage)
+			if h.Meals.Merch != nil {
+				r.Get("/meals/home", h.Meals.Home)
+				r.Get("/meals/collections/{slug}", h.Meals.Collection)
+			}
 		}
 
 		if h.Reels != nil {
@@ -442,6 +446,25 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 					r.Get("/admin/meals/subscriptions", h.AdminConsole.MealSubscriptions)
 					r.Get("/admin/meals/subscriptions/{subscriptionId}", h.AdminConsole.MealSubscription)
 					r.Post("/admin/meals/subscriptions/{subscriptionId}/cancel", h.AdminConsole.CancelMealSubscription)
+				}
+				// Merchandising: what the storefront home shows, and in what order.
+				if h.AdminConsole.Merch != nil {
+					r.Get("/admin/meals/collections", h.AdminConsole.MerchCollections)
+					r.Post("/admin/meals/collections", h.AdminConsole.SaveMerchCollection)
+					r.Get("/admin/meals/collections/{collectionId}", h.AdminConsole.MerchCollection)
+					r.Put("/admin/meals/collections/{collectionId}", h.AdminConsole.SaveMerchCollection)
+					r.Delete("/admin/meals/collections/{collectionId}", h.AdminConsole.DeleteMerchCollection)
+					r.Put("/admin/meals/collections/{collectionId}/items", h.AdminConsole.SetMerchCollectionItems)
+					r.Get("/admin/meals/collections/{collectionId}/preview", h.AdminConsole.PreviewMerchCollection)
+					r.Get("/admin/meals/banners", h.AdminConsole.MerchBanners)
+					r.Post("/admin/meals/banners", h.AdminConsole.SaveMerchBanner)
+					r.Put("/admin/meals/banners/{bannerId}", h.AdminConsole.SaveMerchBanner)
+					r.Delete("/admin/meals/banners/{bannerId}", h.AdminConsole.DeleteMerchBanner)
+					r.Get("/admin/meals/layout", h.AdminConsole.MerchLayout)
+					r.Put("/admin/meals/layout/draft", h.AdminConsole.SaveMerchDraft)
+					r.Post("/admin/meals/layout/preview", h.AdminConsole.PreviewMerchLayout)
+					r.Post("/admin/meals/layout/publish", h.AdminConsole.PublishMerchLayout)
+					r.Post("/admin/meals/layout/versions/{versionId}/restore", h.AdminConsole.RestoreMerchVersion)
 				}
 			})
 		}

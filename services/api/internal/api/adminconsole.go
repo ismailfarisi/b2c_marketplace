@@ -14,6 +14,7 @@ import (
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
 	"github.com/marketplace/api/internal/modules/kitchen"
+	"github.com/marketplace/api/internal/modules/merch"
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/modules/payouts"
@@ -49,6 +50,8 @@ type AdminHandlers struct {
 	// Meals. Nil disables the Meals section.
 	Kitchen       *kitchen.Service
 	Subscriptions *subscriptions.Service
+	// Merch is storefront merchandising. Nil hides it.
+	Merch *merch.Service
 }
 
 // caller resolves the staff member and their permission, and logs the read when

@@ -6,6 +6,7 @@ import (
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/kitchen"
+	"github.com/marketplace/api/internal/modules/merch"
 )
 
 // MealsHandlers is the customer storefront for meal subscriptions.
@@ -14,6 +15,8 @@ import (
 // shared in a WhatsApp group has to open the kitchen, not a login wall.
 type MealsHandlers struct {
 	Kitchen *kitchen.Service
+	// Merch serves the merchandised home and collection pages. Nil disables them.
+	Merch *merch.Service
 }
 
 // point reads an optional lat/lng pair. Half a pair, or a value off the
