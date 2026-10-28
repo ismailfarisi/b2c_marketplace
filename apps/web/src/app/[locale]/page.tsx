@@ -46,6 +46,8 @@ export default function MealsHome({
     queryKey: ["meals-home", point?.lat, point?.lng],
     queryFn: () => getMealsHome(point),
     enabled: point != null,
+    // Picks up a scheduled layout in a tab left open across its publish time.
+    refetchInterval: 60_000,
   });
   // A failed or empty merchandising response falls back to the default home.
   const sections: HomeSection[] | null = home.data?.sections ?? null;
