@@ -348,9 +348,7 @@ function Checkout({
             >
               {k.delivery_windows.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.label && w.label !== `${w.starts_at}–${w.ends_at}`
-                    ? `${w.label} (${w.starts_at}–${w.ends_at})`
-                    : `${w.starts_at}–${w.ends_at}`}
+                  {windowLabel(w)}
                 </option>
               ))}
             </select>
@@ -420,4 +418,14 @@ function Checkout({
       </aside>
     </form>
   );
+}
+
+const sameRange = (a: string, b: string) =>
+  a.replace(/[\s\u2013\u2014-]/g, "") === b.replace(/[\s\u2013\u2014-]/g, "");
+
+function windowLabel(w: { label: string; starts_at: string; ends_at: string }) {
+  const range = `${w.starts_at}–${w.ends_at}`;
+  return w.label && !sameRange(w.label, range)
+    ? `${w.label} (${range})`
+    : range;
 }

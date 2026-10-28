@@ -1332,3 +1332,10 @@ details.ms-danger[open] > summary {
 .ms-cover-empty {
   display: none;
 }
+.ms-filters {
+  flex-wrap: nowrap;
+}
+.ms-filters > * {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
