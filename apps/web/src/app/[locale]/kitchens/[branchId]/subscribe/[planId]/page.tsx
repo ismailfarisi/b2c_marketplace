@@ -8,11 +8,14 @@ import { use, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell, asLocale, type Locale } from "@/components/meals/shell";
 import { NewAddress } from "@/components/meals/new-address";
+import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
 import {
   describeAddress,
   listAddresses,
   payOrder,
+  previewSubscription,
   subscribe,
+  type SubscribeInput,
 } from "@/lib/customer-api";
 import { getMealKitchen } from "@/lib/meals-api";
 
@@ -43,6 +46,13 @@ const COPY = {
     total: "Total for the first cycle",
     cycle: (d: number) =>
       `${d}-day cycle, renews automatically. Pause, skip or cancel any time before the cutoff.`,
+    promo: "Promo code",
+    apply: "Apply",
+    remove: "Remove",
+    subtotal: "Meals",
+    discount: "Discount",
+    delivery: "Delivery",
+    once: (from: string, to: string) => `${from} – ${to}, does not renew.`,
     pay: "Subscribe and pay",
     paying: "Processing…",
     loading: "Loading…",
@@ -86,6 +96,13 @@ const COPY = {
     total: "الإجمالي للدورة الأولى",
     cycle: (d: number) =>
       `دورة ${d} يومًا تتجدد تلقائيًا. يمكنك الإيقاف أو التخطي أو الإلغاء قبل الموعد النهائي.`,
+    promo: "رمز الخصم",
+    apply: "تطبيق",
+    remove: "إزالة",
+    subtotal: "الوجبات",
+    discount: "الخصم",
+    delivery: "التوصيل",
+    once: (from: string, to: string) => `${from} – ${to}، لا يتجدد.`,
     pay: "اشترك وادفع",
     paying: "جارٍ المعالجة…",
     loading: "جارٍ التحميل…",
@@ -180,6 +197,13 @@ function Checkout({
   const [addressId, setAddressId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A public offer arrives as ?promo=<id> from the kitchen page; a code is typed.
+  const [promoId, setPromoId] = useState<string | null>(null);
+  const [codeDraft, setCodeDraft] = useState("");
+  const [code, setCode] = useState("");
+  useEffect(() => {
+    setPromoId(new URLSearchParams(window.location.search).get("promo"));
+  }, []);
 
   // Defaults once the plan arrives: the plan's own days and meals in order,
   // the first window, and the earliest start the cutoff allows.
@@ -205,6 +229,42 @@ function Checkout({
     return tiers.find((x) => x.id === tierId)?.price_minor ?? plan.price_minor;
   }, [plan, tiers, tierId]);
 
+  const input: SubscribeInput | null =
+    plan &&
+    days.length === plan.days_per_week &&
+    slots.length === plan.meals_per_day &&
+    windowId !== "" &&
+    addressId !== "" &&
+    start !== ""
+      ? {
+          plan_id: plan.id,
+          ...(tierId ? { tier_id: tierId } : {}),
+          address_id: addressId,
+          start_date: start,
+          schedule: days.flatMap((weekday) =>
+            slots.map((meal_slot) => ({
+              weekday,
+              meal_slot,
+              window_id: windowId,
+            })),
+          ),
+          ...(code ? { promo_code: code } : promoId ? { promo_id: promoId } : {}),
+        }
+      : null;
+  const preview = useQuery({
+    queryKey: ["subscription-preview", input],
+    queryFn: () => previewSubscription(input!),
+    enabled: input != null,
+    retry: false,
+  });
+  const previewProblem =
+    preview.error instanceof ApiError
+      ? (preview.error.problem?.errors?.[0]?.message ?? null)
+      : null;
+  const promoRejected =
+    preview.error instanceof ApiError &&
+    preview.error.fieldErrors["promo_code"] != null;
+
   if (kitchen.isPending || addresses.isPending)
     return <p className="ms-note">{t.loading}</p>;
   if (kitchen.isError || !plan) {
@@ -220,32 +280,15 @@ function Checkout({
   const k = kitchen.data;
   const money = (n: number) =>
     formatMoney({ amount: n, currency: plan.currency }, locale);
-  const ready =
-    days.length === plan.days_per_week &&
-    slots.length === plan.meals_per_day &&
-    windowId !== "" &&
-    addressId !== "" &&
-    start !== "";
+  const ready = input != null && !preview.isError;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!plan || !ready) return;
+    if (!plan || !ready || !input) return;
     setBusy(true);
     setError(null);
     try {
-      const sub = await subscribe({
-        plan_id: plan.id,
-        ...(tierId ? { tier_id: tierId } : {}),
-        address_id: addressId,
-        start_date: start,
-        schedule: days.flatMap((weekday) =>
-          slots.map((meal_slot) => ({
-            weekday,
-            meal_slot,
-            window_id: windowId,
-          })),
-        ),
-      });
+      const sub = await subscribe(input!);
       // A failed payment still leaves a subscription awaiting payment, which
       // its page offers to pay again; it is not lost.
       try {
@@ -402,11 +445,86 @@ function Checkout({
       </div>
 
       <aside className="ms-summary">
+        {preview.data?.promo && (
+          <p className="ms-offer on">
+            <strong dir="auto">{offerLabel(preview.data.promo, locale)}</strong>
+            <span dir="auto">{offerName(preview.data.promo, locale)}</span>
+          </p>
+        )}
+        {preview.data ? (
+          <dl className="ms-lines">
+            <dt>{t.subtotal}</dt>
+            <dd>{money(preview.data.subtotal_minor)}</dd>
+            {preview.data.discount_minor > 0 && (
+              <>
+                <dt>{t.discount}</dt>
+                <dd className="ms-ok">−{money(preview.data.discount_minor)}</dd>
+              </>
+            )}
+            <dt>{t.delivery}</dt>
+            <dd>{money(preview.data.delivery_minor)}</dd>
+          </dl>
+        ) : null}
         <p className="ms-sub">{t.total}</p>
         <p className="ms-plan-price">
-          <strong>{money(price)}</strong>
+          <strong>{money(preview.data?.total_minor ?? price)}</strong>
         </p>
-        <p className="ms-sub">{t.cycle(plan.cycle_days)}</p>
+        <p className="ms-sub">
+          {preview.data?.promo?.trial_days
+            ? OFFER_COPY[locale].trialNote(preview.data.promo.trial_days)
+            : preview.data && !preview.data.renews
+              ? t.once(preview.data.starts_on, preview.data.ends_on)
+              : t.cycle(plan.cycle_days)}
+        </p>
+        <div className="ms-promo">
+          {code || promoId ? (
+            <p>
+              <span dir="auto">{code ||
+                  (preview.data?.promo
+                    ? offerName(preview.data.promo, locale)
+                    : "")}</span>
+              <button
+                type="button"
+                className="ms-link"
+                onClick={() => {
+                  setCode("");
+                  setCodeDraft("");
+                  setPromoId(null);
+                }}
+              >
+                {t.remove}
+              </button>
+            </p>
+          ) : (
+            <label className="ms-field">
+              <span>{t.promo}</span>
+              <span className="ms-promo-row">
+                <input
+                  value={codeDraft}
+                  autoCapitalize="characters"
+                  onChange={(e) => setCodeDraft(e.target.value)}
+                />
+                <button
+                  type="button"
+                  disabled={!codeDraft.trim()}
+                  onClick={() => setCode(codeDraft.trim().toUpperCase())}
+                >
+                  {t.apply}
+                </button>
+              </span>
+            </label>
+          )}
+          {promoRejected && previewProblem && (
+            <p className="ms-bad" role="alert">
+              {previewProblem}
+            </p>
+          )}
+        </div>
+        {preview.isError && !promoRejected && previewProblem && (
+          <p className="ms-bad" role="alert">
+            {previewProblem}
+          </p>
+        )}
         {error && (
           <p className="ms-bad" role="alert">
             {error}

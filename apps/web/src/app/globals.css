@@ -1752,3 +1752,85 @@ details.ms-danger[open] > summary {
     scroll-behavior: auto;
   }
 }
+
+/* Promos and trials */
+.ms-offer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border: 1px dashed var(--ms-accent);
+  border-radius: var(--ms-radius);
+  background: var(--ms-accent-soft);
+  color: var(--ms-ink);
+  padding: 0.55rem 0.75rem;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.ms-offer strong {
+  color: var(--ms-accent-deep);
+}
+.ms-offer span {
+  color: var(--ms-muted);
+  font-size: 0.82rem;
+}
+a.ms-offer:hover,
+a.ms-offer:focus-visible {
+  border-style: solid;
+}
+.ms-lines {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3rem 1rem;
+  margin: 0;
+  font-size: 0.92rem;
+}
+.ms-lines dt {
+  color: var(--ms-muted);
+}
+.ms-lines dd {
+  margin: 0;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.ms-lines .ms-ok {
+  color: var(--ms-ok);
+}
+.ms-promo {
+  border-block-start: 1px solid var(--ms-line);
+  padding-block-start: 0.6rem;
+}
+.ms-promo p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.ms-promo-row {
+  display: flex;
+  gap: 0.4rem;
+}
+.ms-promo-row input {
+  flex: 1;
+  min-width: 0;
+  text-transform: uppercase;
+}
+.ms-promo-row button,
+.ms-link {
+  border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  background: var(--ms-surface);
+  color: var(--ms-ink);
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+.ms-link {
+  border: 0;
+  background: none;
+  color: var(--ms-accent);
+  text-decoration: underline;
+  padding: 0;
+}
+.ms-promo-row button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

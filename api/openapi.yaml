@@ -598,6 +598,24 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/PublicKitchen" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /meals/kitchens/{branchId}/offers:
+    get:
+      tags: [meals]
+      operationId: getKitchenOffers
+      summary: Public promos and trials usable at a kitchen now
+      security: []
+      parameters:
+        - { name: branchId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PromoOffer" } }
   /meals/kitchens/{branchId}:
     get:
       tags: [meals]
@@ -1070,6 +1088,28 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   # --------------------------------------------------------- subscriptions --
+  /subscriptions/preview:
+    post:
+      tags: [subscriptions]
+      operationId: previewSubscription
+      summary: Price the first cycle, with any promo, without subscribing
+      description: >-
+        Takes the createSubscription body and runs the same checks. A promo
+        problem comes back as a 422 on `promo_code`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionPreview" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /subscriptions:
     post:
       tags: [subscriptions]
@@ -1104,6 +1144,13 @@ paths:
               required: [plan_id, address_id, start_date, schedule]
               properties:
                 plan_id: { type: string, format: uuid }
+                promo_code:
+                  type: string
+                  description: A promo code typed at checkout. Case-insensitive.
+                promo_id:
+                  type: string
+                  format: uuid
+                  description: A public offer from getKitchenOffers. Ignored when promo_code is set.
                 tier_id:
                   type: [string, "null"]
                   format: uuid
@@ -5125,6 +5172,13 @@ components:
             `POST /v1/orders/{orderId}/payment-intent` — the same call a one-off
             order uses.
         amount_minor: { type: integer, format: int64 }
+        discount_minor:
+          type: integer
+          format: int64
+          description: Promo discount already taken off amount_minor.
+        trial_days:
+          type: [integer, "null"]
+          description: Set when a trial promo shortened the first cycle; the subscription does not renew.
         currency: { type: string, minLength: 3, maxLength: 3 }
         first_cycle:
           type: object
@@ -6002,6 +6056,9 @@ components:
         meal_slots:
           type: array
           items: { type: string, enum: [breakfast, lunch, dinner, snack, suhoor, iftar] }
+        promo_code:
+          type: string
+          description: A promo for rotations; the discount is split across the four kitchens by price.
     RotationWeek:
       type: object
       required: [week, starts_on, ends_on, branch_id, kitchen_name, plan_id, plan_name, price_minor]
@@ -6031,8 +6088,46 @@ components:
         amount_minor:
           type: integer
           format: int64
-          description: Sum of the four weekly prices.
+          description: Sum of the four weekly prices, less discount_minor.
+        discount_minor: { type: integer, format: int64 }
+        promo: { $ref: "#/components/schemas/PromoOffer" }
         currency: { type: string }
+    PromoOffer:
+      type: object
+      required: [id, name, discount_type, percent_bp, amount_minor, currency, applies_to, audience]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: [string, "null"], description: Present only when the customer typed it. }
+        name: { type: string }
+        name_ar: { type: string }
+        description: { type: string }
+        description_ar: { type: string }
+        discount_type: { type: string, enum: [percent, fixed, none] }
+        percent_bp: { type: integer, description: "Basis points: 2000 = 20%." }
+        amount_minor: { type: integer, format: int64 }
+        max_discount_minor: { type: [integer, "null"], format: int64 }
+        currency: { type: string }
+        trial_days: { type: [integer, "null"] }
+        applies_to: { type: string, enum: [subscriptions, rotations, both] }
+        audience: { type: string, enum: [everyone, new_customers] }
+        ends_at: { type: [string, "null"], format: date-time }
+    SubscriptionPreview:
+      type: object
+      required: [subtotal_minor, discount_minor, delivery_minor, total_minor, currency, starts_on, ends_on, deliverable_days, renews]
+      properties:
+        subtotal_minor: { type: integer, format: int64 }
+        discount_minor: { type: integer, format: int64 }
+        delivery_minor: { type: integer, format: int64 }
+        total_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date }
+        deliverable_days: { type: integer }
+        renews: { type: boolean }
+        promo:
+          oneOf:
+            - $ref: "#/components/schemas/PromoOffer"
+            - type: "null"
     Rotation:
       allOf:
         - $ref: "#/components/schemas/RotationQuote"

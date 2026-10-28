@@ -40,6 +40,9 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 				r.Get("/meals/home", h.Meals.Home)
 				r.Get("/meals/collections/{slug}", h.Meals.Collection)
 			}
+			if h.Meals.Promos != nil {
+				r.Get("/meals/kitchens/{branchId}/offers", h.Meals.Offers)
+			}
 		}
 
 		if h.Reels != nil {
@@ -114,6 +117,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// it with the same payment-intent call a one-off order uses.
 		if h.Subscriptions != nil {
 			r.Post("/subscriptions", h.Subscriptions.Subscribe)
+			r.Post("/subscriptions/preview", h.Subscriptions.Preview)
 			r.Post("/subscriptions/{subscriptionId}/pause", h.Subscriptions.Pause)
 			r.Post("/subscriptions/{subscriptionId}/skip", h.Subscriptions.Skip)
 			r.Post("/subscriptions/{subscriptionId}/cancel", h.Subscriptions.Cancel)
@@ -465,6 +469,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 					r.Post("/admin/meals/layout/preview", h.AdminConsole.PreviewMerchLayout)
 					r.Post("/admin/meals/layout/publish", h.AdminConsole.PublishMerchLayout)
 					r.Post("/admin/meals/layout/versions/{versionId}/restore", h.AdminConsole.RestoreMerchVersion)
+				}
+				if h.AdminConsole.Promos != nil {
+					r.Get("/admin/meals/promos", h.AdminConsole.ListPromos)
+					r.Post("/admin/meals/promos", h.AdminConsole.SavePromo)
+					r.Get("/admin/meals/promos/{promoId}", h.AdminConsole.Promo)
+					r.Put("/admin/meals/promos/{promoId}", h.AdminConsole.SavePromo)
+					r.Delete("/admin/meals/promos/{promoId}", h.AdminConsole.DeletePromo)
+					r.Get("/admin/meals/promos/{promoId}/redemptions", h.AdminConsole.PromoRedemptions)
 				}
 			})
 		}

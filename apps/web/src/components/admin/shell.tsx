@@ -50,6 +50,7 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
       { href: "/meals/layout", label: "Home layout", queues: [] },
       { href: "/meals/collections", label: "Collections", queues: [] },
       { href: "/meals/banners", label: "Banners", queues: [] },
+      { href: "/meals/promos", label: "Promos & trials", queues: [] },
     ],
   },
   {
@@ -118,6 +119,7 @@ export const TITLES: Record<string, string> = {
   "/meals/layout": "Storefront home layout",
   "/meals/collections": "Kitchen collections",
   "/meals/banners": "Storefront banners",
+  "/meals/promos": "Promos & trials",
 };
 
 /** How often the sidebar counts and every queue refetch. */

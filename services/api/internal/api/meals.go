@@ -7,6 +7,7 @@ import (
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/kitchen"
 	"github.com/marketplace/api/internal/modules/merch"
+	"github.com/marketplace/api/internal/modules/promo"
 )
 
 // MealsHandlers is the customer storefront for meal subscriptions.
@@ -17,6 +18,8 @@ type MealsHandlers struct {
 	Kitchen *kitchen.Service
 	// Merch serves the merchandised home and collection pages. Nil disables them.
 	Merch *merch.Service
+	// Promos serves a kitchen's public offers. Nil disables them.
+	Promos *promo.Service
 }
 
 // point reads an optional lat/lng pair. Half a pair, or a value off the

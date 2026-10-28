@@ -242,14 +242,16 @@ func (s *Service) RecogniseDelivered(ctx context.Context, batch int) (int, error
 		currency   string
 		amount     int64
 		recognised int64
+		subsidy    int64
+		recSubsidy int64
 		deliver    int
 		delivered  int
 	}
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.id, c.subscription_id, s.vendor_id, c.currency,
-		       c.amount_minor, c.recognised_minor, c.deliverable_days,
-		       COALESCE(f.delivered, 0)
+		       c.amount_minor, c.recognised_minor, c.promo_subsidy_minor,
+		       c.recognised_subsidy_minor, c.deliverable_days, COALESCE(f.delivered, 0)
 		  FROM subscription_cycles c
 		  JOIN subscriptions s ON s.id = c.subscription_id
 		  LEFT JOIN LATERAL (
@@ -260,7 +262,8 @@ func (s *Service) RecogniseDelivered(ctx context.Context, batch int) (int, error
 		         AND f.scheduled_date BETWEEN c.starts_on AND c.ends_on
 		  ) f ON true
 		 WHERE c.status = 'paid'
-		   AND c.recognised_minor < c.amount_minor
+		   AND (c.recognised_minor < c.amount_minor
+		        OR c.recognised_subsidy_minor < c.promo_subsidy_minor)
 		   AND c.deliverable_days > 0
 		 ORDER BY c.starts_on
 		 LIMIT $1`, batch)
@@ -272,7 +275,7 @@ func (s *Service) RecogniseDelivered(ctx context.Context, batch int) (int, error
 	for rows.Next() {
 		var t target
 		if err := rows.Scan(&t.cycleID, &t.subID, &t.vendorID, &t.currency,
-			&t.amount, &t.recognised, &t.deliver, &t.delivered); err != nil {
+			&t.amount, &t.recognised, &t.subsidy, &t.recSubsidy, &t.deliver, &t.delivered); err != nil {
 			rows.Close()
 			return 0, fmt.Errorf("subscriptions: scan recognition: %w", err)
 		}
@@ -285,29 +288,35 @@ func (s *Service) RecogniseDelivered(ctx context.Context, batch int) (int, error
 
 	posted := 0
 	for _, t := range targets {
-		step := RecogniseStep(t.amount, t.delivered, t.deliver, t.recognised)
+		step := RecogniseStep(t.amount, t.delivered, t.deliver, t.recognised) +
+			RecogniseStep(t.subsidy, t.delivered, t.deliver, t.recSubsidy)
 		if step <= 0 {
 			continue
 		}
-
-		commission := money.Percentage(money.New(step, t.currency), s.commissionBP).Minor
-		commissionVAT := money.ExtractTax(money.New(commission, t.currency), s.platformVATBP).Minor
 
 		err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 			// Re-read under lock. Two runs of this job overlapping would
 			// otherwise both compute the same step from the same stale
 			// `recognised_minor` and post it twice, and the CHECK on the column
 			// would only catch it on the second one.
-			var current int64
+			var current, currentSubsidy int64
 			if err := tx.QueryRow(ctx,
-				`SELECT recognised_minor FROM subscription_cycles WHERE id = $1 FOR UPDATE`,
-				t.cycleID).Scan(&current); err != nil {
+				`SELECT recognised_minor, recognised_subsidy_minor FROM subscription_cycles WHERE id = $1 FOR UPDATE`,
+				t.cycleID).Scan(&current, &currentSubsidy); err != nil {
 				return fmt.Errorf("subscriptions: lock cycle: %w", err)
 			}
 			amount := RecogniseStep(t.amount, t.delivered, t.deliver, current)
+			subsidy := RecogniseStep(t.subsidy, t.delivered, t.deliver, currentSubsidy)
 			if amount <= 0 {
+				// The ledger needs customer money in every recognition; a
+				// subsidy alone waits for the next delivery's step.
 				return nil
 			}
+
+			// Commission on what the meals were worth, so a platform-funded
+			// promo does not also cut the platform's take from the kitchen.
+			commission := money.Percentage(money.New(amount+subsidy, t.currency), s.commissionBP).Minor
+			commissionVAT := money.ExtractTax(money.New(commission, t.currency), s.platformVATBP).Minor
 
 			if _, err := ledger.PostSubscriptionRecognised(ctx, tx, ledger.SubscriptionRecognition{
 				SubscriptionID:     t.subID,
@@ -315,6 +324,7 @@ func (s *Service) RecogniseDelivered(ctx context.Context, batch int) (int, error
 				VendorID:           t.vendorID,
 				Currency:           t.currency,
 				AmountMinor:        amount,
+				SubsidyMinor:       subsidy,
 				CommissionMinor:    commission,
 				CommissionVATMinor: commissionVAT,
 			}); err != nil {
@@ -322,8 +332,9 @@ func (s *Service) RecogniseDelivered(ctx context.Context, batch int) (int, error
 			}
 
 			if _, err := tx.Exec(ctx,
-				`UPDATE subscription_cycles SET recognised_minor = recognised_minor + $2
-				  WHERE id = $1`, t.cycleID, amount); err != nil {
+				`UPDATE subscription_cycles SET recognised_minor = recognised_minor + $2,
+				        recognised_subsidy_minor = recognised_subsidy_minor + $3
+				  WHERE id = $1`, t.cycleID, amount, subsidy); err != nil {
 				return fmt.Errorf("subscriptions: advance recognition: %w", err)
 			}
 			return nil

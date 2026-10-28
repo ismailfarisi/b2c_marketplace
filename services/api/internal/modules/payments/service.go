@@ -377,6 +377,14 @@ func activateSubscription(ctx context.Context, tx pgx.Tx, orderID, userID uuid.U
 	if err != nil {
 		return fmt.Errorf("settle cycle: %w", err)
 	}
+	// A promo held at checkout counts as used once the checkout is paid.
+	if _, err := tx.Exec(ctx, `
+		UPDATE promo_redemptions SET status = 'redeemed', redeemed_at = now()
+		 WHERE status = 'pending'
+		   AND (subscription_id = $1
+		        OR rotation_id = (SELECT rotation_id FROM subscriptions WHERE id = $1))`, subID); err != nil {
+		return fmt.Errorf("redeem promo: %w", err)
+	}
 	tag, err := tx.Exec(ctx, `
 		UPDATE subscriptions SET status = 'active', updated_at = now()
 		 WHERE id = $1 AND status = 'pending_payment'`, subID)

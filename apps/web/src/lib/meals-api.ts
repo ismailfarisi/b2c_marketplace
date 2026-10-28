@@ -164,3 +164,29 @@ export const getMealCollection = (slug: string, point?: Point | null) =>
 
 /** Dubai Marina, the same fallback the feed and the mobile app use. */
 export const FALLBACK_POINT: Point = { lat: 25.08, lng: 55.14 };
+
+/** A public promo or trial, as a customer sees it. */
+export interface Offer {
+  id: string;
+  code?: string | null;
+  name: string;
+  name_ar: string;
+  description: string;
+  description_ar: string;
+  discount_type: "percent" | "fixed" | "none";
+  percent_bp: number;
+  amount_minor: number;
+  max_discount_minor: number | null;
+  currency: string;
+  trial_days: number | null;
+  applies_to: "subscriptions" | "rotations" | "both";
+  audience: "everyone" | "new_customers";
+  ends_at: string | null;
+}
+
+/** Public promos and trials usable at a kitchen right now. */
+export const getKitchenOffers = (branchId: string) =>
+  apiFetch<{ items: Offer[] }>({
+    url: `/meals/kitchens/${branchId}/offers`,
+    method: "GET",
+  });

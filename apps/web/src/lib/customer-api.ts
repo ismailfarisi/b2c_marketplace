@@ -1,5 +1,7 @@
 import { apiFetch } from "@marketplace/api-client";
 
+import type { Offer } from "./meals-api";
+
 /**
  * The signed-in customer: saved addresses, subscribing and paying, and managing
  * a meal subscription. Every call is scoped to the token's user on the server;
@@ -65,6 +67,8 @@ export interface SubscribeInput {
   address_id: string;
   start_date: string;
   schedule: ScheduleRule[];
+  promo_code?: string;
+  promo_id?: string;
 }
 
 export interface Subscribed {
@@ -74,8 +78,31 @@ export interface Subscribed {
   start_date: string;
   order_id: string;
   amount_minor: number;
+  discount_minor: number;
+  trial_days: number | null;
   currency: string;
 }
+
+export interface SubscriptionPreview {
+  subtotal_minor: number;
+  discount_minor: number;
+  delivery_minor: number;
+  total_minor: number;
+  currency: string;
+  starts_on: string;
+  ends_on: string;
+  deliverable_days: number;
+  renews: boolean;
+  promo: Offer | null;
+}
+
+/** Prices the first cycle, with any promo, without creating anything. */
+export const previewSubscription = (data: SubscribeInput) =>
+  apiFetch<SubscriptionPreview>({
+    url: "/subscriptions/preview",
+    method: "POST",
+    data,
+  });
 
 export const subscribe = (data: SubscribeInput) =>
   apiFetch<Subscribed>({ url: "/subscriptions", method: "POST", data });
@@ -207,6 +234,7 @@ export interface RotationInput {
   start_date: string;
   delivery_weekdays: number[];
   meal_slots: string[];
+  promo_code?: string;
 }
 
 export interface RotationWeek {
@@ -229,6 +257,8 @@ export interface RotationQuote {
   end_date: string;
   weeks: RotationWeek[];
   amount_minor: number;
+  discount_minor: number;
+  promo?: Offer;
   currency: string;
 }
 

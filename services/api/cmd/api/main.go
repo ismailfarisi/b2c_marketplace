@@ -50,6 +50,7 @@ import (
 	"github.com/marketplace/api/internal/modules/ordering"
 	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/modules/payouts"
+	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/modules/property"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/tax"
@@ -150,6 +151,8 @@ func run() error {
 
 	identitySvc := identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho)
 
+	promoSvc := promo.NewService(pool)
+
 	handlers := &api.Handlers{
 		Identity: identitySvc,
 		Ordering: orderingSvc,
@@ -162,6 +165,7 @@ func run() error {
 				CommissionBP:    commissionBP,
 				PlatformVATBP:   platformVATBP,
 				ReserveCapacity: true,
+				Promos:          promoSvc,
 			}),
 		},
 		Catalog: api.NewCatalogQueries(pool),
@@ -195,7 +199,7 @@ func run() error {
 
 	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc}
 	merchSvc := merch.NewService(pool, handlers.Kitchen.Kitchen)
-	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc}
+	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc, Promos: promoSvc}
 	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}
 	handlers.Rotations = &api.RotationHandlers{Service: handlers.Subscriptions.Service, Payments: paymentsSvc}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
@@ -230,6 +234,7 @@ func run() error {
 		Kitchen:       handlers.Kitchen.Kitchen,
 		Subscriptions: handlers.Subscriptions.Service,
 		Merch:         merchSvc,
+		Promos:        promoSvc,
 		Act: api.Actions{
 			Payments: paymentsSvc,
 			Ordering: orderingSvc,

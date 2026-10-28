@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/seam/servicetype"
 )
@@ -26,6 +27,7 @@ type RotationInput struct {
 	StartDate time.Time
 	Weekdays  []int
 	Slots     []string
+	Promo     promo.Ref
 }
 
 // RotationWeek is one week of a rotation and the kitchen the platform gave it.
@@ -51,7 +53,10 @@ type RotationQuote struct {
 	EndDate     string         `json:"end_date"`
 	Weeks       []RotationWeek `json:"weeks"`
 	AmountMinor int64          `json:"amount_minor"`
-	Currency    string         `json:"currency"`
+	// DiscountMinor is already taken off AmountMinor; week prices are before it.
+	DiscountMinor int64        `json:"discount_minor"`
+	Promo         *promo.Offer `json:"promo,omitempty"`
+	Currency      string       `json:"currency"`
 }
 
 // Rotation is a purchased rotation.
@@ -263,6 +268,43 @@ func buildQuote(plans []rotationPlan, order [RotationKitchens]int, start time.Ti
 	return q
 }
 
+// rotationPromo resolves the customer's promo for these four kitchens and
+// takes the discount off the quote and off each kitchen's own billing quote,
+// split in proportion to the kitchens' prices. Returns per-plan discount and
+// platform subsidy, indexed like plans.
+func (s *Service) rotationPromo(ctx context.Context, tx pgx.Tx, in RotationInput, plans []rotationPlan,
+	q *RotationQuote) (*promo.Promo, []int64, []int64, error) {
+	if in.Promo.Empty() {
+		return nil, nil, nil, nil
+	}
+	if s.promos == nil {
+		return nil, nil, nil, rotationInvalid("promo_code", "unavailable", "promo codes are not available")
+	}
+	branches := make([]uuid.UUID, len(plans))
+	weights := make([]int64, len(plans))
+	var subtotal int64
+	for i, p := range plans {
+		branches[i] = p.BranchID
+		weights[i] = p.Quote.SubtotalMinor
+		subtotal += p.Quote.SubtotalMinor
+	}
+	pr, err := s.promos.Resolve(ctx, tx, in.Promo, in.UserID, branches, promo.ForRotations)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	discount := pr.Discount(subtotal)
+	shares := promo.Spread(discount, weights)
+	subsidies := make([]int64, len(plans))
+	for i := range plans {
+		subsidies[i] = pr.PlatformFunded(shares[i])
+		promo.ApplyToQuote(&plans[i].Quote, shares[i], plans[i].TaxRateBP)
+	}
+	q.DiscountMinor = discount
+	q.AmountMinor -= discount
+	q.Promo = pr.Offer(in.Promo.Code != "")
+	return pr, shares, subsidies, nil
+}
+
 // PreviewRotation shows the week order and prices without creating anything.
 func (s *Service) PreviewRotation(ctx context.Context, in RotationInput) (RotationQuote, error) {
 	var q RotationQuote
@@ -276,7 +318,8 @@ func (s *Service) PreviewRotation(ctx context.Context, in RotationInput) (Rotati
 			return err
 		}
 		q = buildQuote(plans, AssignWeeks(load), start)
-		return nil
+		_, _, _, err = s.rotationPromo(ctx, tx, in, plans, &q)
+		return err
 	})
 	return q, err
 }
@@ -298,6 +341,12 @@ func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotatio
 		}
 		order := AssignWeeks(load)
 		quote := buildQuote(plans, order, start)
+		pr, shares, subsidies, err := s.rotationPromo(ctx, tx, in, plans, &quote)
+		if err != nil {
+			return err
+		}
+		var cycleIDs []uuid.UUID
+		var cycleDiscounts, cycleSubsidies []int64
 
 		weekdays := make([]int16, 0, len(in.Weekdays))
 		for _, d := range in.Weekdays {
@@ -342,6 +391,11 @@ func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotatio
 			if err != nil {
 				return err
 			}
+			if pr != nil {
+				cycleIDs = append(cycleIDs, cycleID)
+				cycleDiscounts = append(cycleDiscounts, shares[k])
+				cycleSubsidies = append(cycleSubsidies, subsidies[k])
+			}
 			if err := s.repo.RecordEvent(ctx, tx, subID, "created", "", "pending_payment",
 				"customer", uuid.NullUUID{UUID: in.UserID, Valid: true},
 				mustJSON(map[string]any{"plan_id": p.ID, "cycle_id": cycleID,
@@ -356,6 +410,10 @@ func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotatio
 			}); err != nil {
 				return err
 			}
+		}
+		if pr != nil {
+			return s.holdPromo(ctx, tx, pr, in.UserID, promo.Target{RotationID: &id},
+				cycleIDs, cycleDiscounts, cycleSubsidies, quote.Currency)
 		}
 		return nil
 	})
@@ -484,6 +542,11 @@ func (s *Service) CancelRotation(ctx context.Context, userID, id uuid.UUID, reas
 		       cancellation_reason = NULLIF($2, ''), updated_at = now()
 		 WHERE id = $1 AND status <> 'cancelled'`, id, reason); err != nil {
 		return fmt.Errorf("subscriptions: cancel rotation: %w", err)
+	}
+	if r.Status == "pending_payment" {
+		return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+			return promo.ReleaseUnpaid(ctx, tx, promo.Target{RotationID: &id})
+		})
 	}
 	return nil
 }

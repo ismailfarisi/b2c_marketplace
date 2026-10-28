@@ -15,6 +15,7 @@ import (
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/ledger"
+	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/seam/servicetype"
 )
@@ -30,6 +31,7 @@ type Service struct {
 	commissionBP     int
 	platformVATBP    int
 	reservationsHeld bool
+	promos           *promo.Service
 }
 
 type Config struct {
@@ -44,6 +46,8 @@ type Config struct {
 	// contend with one-off orders, and the kitchen discovers the overbooking on
 	// the day.
 	ReserveCapacity bool
+	// Promos prices discounts and trials at checkout. Nil disables promo codes.
+	Promos *promo.Service
 }
 
 func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry, cfg Config) *Service {
@@ -54,6 +58,7 @@ func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry, cfg Config)
 		commissionBP:     cfg.CommissionBP,
 		platformVATBP:    cfg.PlatformVATBP,
 		reservationsHeld: cfg.ReserveCapacity,
+		promos:           cfg.Promos,
 	}
 }
 
@@ -68,6 +73,9 @@ type SubscribeInput struct {
 	Rules     []Rule
 
 	RenewalMode string
+
+	// Promo is an optional code or public offer to apply to the first cycle.
+	Promo promo.Ref
 
 	// Attribution, carried exactly as an order carries it. A subscription is
 	// the highest-value conversion the feed produces and measuring it through a
@@ -87,6 +95,8 @@ type Result struct {
 	FirstCycle     Cycle
 	OrderID        uuid.UUID
 	AmountMinor    int64
+	DiscountMinor  int64
+	TrialDays      *int
 	Currency       string
 }
 
@@ -139,33 +149,15 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 			}}}
 		}
 
-		// Price the cycle through the vertical's own pricing strategy rather
-		// than reading plan.price_minor directly. The strategy is what knows
-		// whether a delivery fee applies, how VAT is extracted, and whether the
-		// amount is final — and routing around it here would be the first place
-		// subscription money stopped agreeing with order money.
-		vertical, err := s.verticals.Get(plan.ServiceType)
+		pr, err := s.priceFirstCycle(ctx, tx, plan, in, start, loc)
 		if err != nil {
-			return fmt.Errorf("%w: service type %q", httpx.ErrNotFound, plan.ServiceType)
+			return err
 		}
-		quote, err := vertical.Pricing.Quote(ctx, servicetype.PricingContext{
-			BranchID:    plan.BranchID,
-			ServiceType: plan.ServiceType,
-			Currency:    plan.Currency,
-			Lines: []servicetype.PricingLine{{
-				OfferingID:     plan.ID,
-				Name:           plan.Name,
-				UnitPriceMinor: plan.PriceMinor,
-				TaxRateBP:      plan.TaxRateBP,
-				Quantity:       1,
-			}},
-		})
-		if err != nil {
-			return fmt.Errorf("subscriptions: quote: %w", err)
+		if pr.Promo != nil && pr.Promo.TrialDays != nil {
+			in.RenewalMode = "none"
 		}
-
+		quote, cycle := pr.Quote, pr.Cycle
 		subID := uuid.New()
-		cycle := FirstCycle(start, plan.CycleDays, in.Rules, loc, quote.TotalMinor, plan.Currency)
 
 		var endDate time.Time
 		if in.RenewalMode == "none" {
@@ -188,6 +180,12 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 			return err
 		}
 		cycle.No = 1
+		if pr.Promo != nil {
+			if err := s.holdPromo(ctx, tx, pr.Promo, in.UserID, promo.Target{SubscriptionID: &subID},
+				[]uuid.UUID{cycleID}, []int64{pr.Discount}, []int64{pr.Subsidy}, plan.Currency); err != nil {
+				return err
+			}
+		}
 
 		if err := s.repo.RecordEvent(ctx, tx, subID, "created", "", "pending_payment",
 			"customer", uuid.NullUUID{UUID: in.UserID, Valid: true},
@@ -215,7 +213,10 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 		out = &Result{
 			ID: subID, Status: "pending_payment", StartDate: start,
 			FirstCycle: cycle, OrderID: orderID,
-			AmountMinor: quote.TotalMinor, Currency: plan.Currency,
+			AmountMinor: quote.TotalMinor, DiscountMinor: pr.Discount, Currency: plan.Currency,
+		}
+		if pr.Promo != nil {
+			out.TrialDays = pr.Promo.TrialDays
 		}
 		return tx.QueryRow(ctx,
 			`SELECT subscription_no FROM subscriptions WHERE id = $1`, subID).
@@ -226,6 +227,159 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 		return nil, err
 	}
 	return out, nil
+}
+
+// firstCyclePrice is the priced first cycle, with any promo applied.
+type firstCyclePrice struct {
+	Quote    servicetype.QuoteResult
+	Cycle    Cycle
+	Promo    *promo.Promo
+	Discount int64
+	Subsidy  int64
+}
+
+// priceFirstCycle prices the cycle through the vertical's own pricing
+// strategy rather than reading plan.price_minor directly. The strategy is what
+// knows whether a delivery fee applies, how VAT is extracted, and whether the
+// amount is final — routing around it would be the first place subscription
+// money stopped agreeing with order money. A trial promo shortens the cycle
+// and prorates its price; a discount comes off the meals, never delivery.
+func (s *Service) priceFirstCycle(ctx context.Context, tx pgx.Tx, plan PlanTemplate,
+	in SubscribeInput, start time.Time, loc *time.Location) (firstCyclePrice, error) {
+	var out firstCyclePrice
+	if !in.Promo.Empty() {
+		if s.promos == nil {
+			return out, &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "promo_code", Code: "unavailable", Message: "promo codes are not available"}}}
+		}
+		p, err := s.promos.Resolve(ctx, tx, in.Promo, in.UserID, []uuid.UUID{plan.BranchID}, promo.ForSubscriptions)
+		if err != nil {
+			return out, err
+		}
+		out.Promo = p
+	}
+
+	cycleDays, price := plan.CycleDays, plan.PriceMinor
+	if out.Promo != nil && out.Promo.TrialDays != nil && *out.Promo.TrialDays < cycleDays {
+		cycleDays = *out.Promo.TrialDays
+		price = promo.TrialPrice(plan.PriceMinor, cycleDays, plan.CycleDays)
+	}
+
+	vertical, err := s.verticals.Get(plan.ServiceType)
+	if err != nil {
+		return out, fmt.Errorf("%w: service type %q", httpx.ErrNotFound, plan.ServiceType)
+	}
+	quote, err := vertical.Pricing.Quote(ctx, servicetype.PricingContext{
+		BranchID:    plan.BranchID,
+		ServiceType: plan.ServiceType,
+		Currency:    plan.Currency,
+		Lines: []servicetype.PricingLine{{
+			OfferingID:     plan.ID,
+			Name:           plan.Name,
+			UnitPriceMinor: price,
+			TaxRateBP:      plan.TaxRateBP,
+			Quantity:       1,
+		}},
+	})
+	if err != nil {
+		if out.Promo != nil && out.Promo.TrialDays != nil {
+			return out, &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "promo_code", Code: "trial_too_small", Message: "this trial is too small for this plan: " + err.Error()}}}
+		}
+		return out, fmt.Errorf("subscriptions: quote: %w", err)
+	}
+	if out.Promo != nil {
+		out.Discount = out.Promo.Discount(quote.SubtotalMinor)
+		out.Subsidy = out.Promo.PlatformFunded(out.Discount)
+		promo.ApplyToQuote(&quote, out.Discount, plan.TaxRateBP)
+	}
+	out.Quote = quote
+	out.Cycle = FirstCycle(start, cycleDays, in.Rules, loc, quote.TotalMinor, plan.Currency)
+	if out.Cycle.DeliverableDays == 0 {
+		return out, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "start_date", Code: "no_deliveries",
+			Message: "no delivery falls inside this period; pick another start date or days"}}}
+	}
+	return out, nil
+}
+
+// holdPromo records the redemption and the platform-funded subsidy on each
+// cycle it paid for.
+func (s *Service) holdPromo(ctx context.Context, tx pgx.Tx, p *promo.Promo, userID uuid.UUID,
+	t promo.Target, cycleIDs []uuid.UUID, discounts, subsidies []int64, currency string) error {
+	var discount, subsidy int64
+	for i, id := range cycleIDs {
+		discount += discounts[i]
+		subsidy += subsidies[i]
+		if subsidies[i] > 0 {
+			if _, err := tx.Exec(ctx,
+				`UPDATE subscription_cycles SET promo_subsidy_minor = $2 WHERE id = $1`, id, subsidies[i]); err != nil {
+				return fmt.Errorf("subscriptions: promo subsidy: %w", err)
+			}
+		}
+	}
+	return s.promos.Reserve(ctx, tx, p, userID, t, discount, subsidy, currency)
+}
+
+// SubscriptionPreview is the price of a checkout before it is placed.
+type SubscriptionPreview struct {
+	SubtotalMinor   int64        `json:"subtotal_minor"`
+	DiscountMinor   int64        `json:"discount_minor"`
+	DeliveryMinor   int64        `json:"delivery_minor"`
+	TotalMinor      int64        `json:"total_minor"`
+	Currency        string       `json:"currency"`
+	StartsOn        string       `json:"starts_on"`
+	EndsOn          string       `json:"ends_on"`
+	DeliverableDays int          `json:"deliverable_days"`
+	Renews          bool         `json:"renews"`
+	Promo           *promo.Offer `json:"promo"`
+}
+
+// PreviewSubscription runs every check Subscribe runs and prices the first
+// cycle, without creating anything.
+func (s *Service) PreviewSubscription(ctx context.Context, in SubscribeInput) (SubscriptionPreview, error) {
+	var out SubscriptionPreview
+	if len(in.Rules) == 0 {
+		return out, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "schedule", Code: "required", Message: "a subscription needs at least one delivery day"}}}
+	}
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		plan, err := s.repo.LoadPlan(ctx, tx, in.PlanID, in.TierID)
+		if err != nil {
+			return err
+		}
+		loc, lerr := time.LoadLocation(plan.Timezone)
+		if lerr != nil {
+			loc = time.UTC
+		}
+		if err := validateRules(in.Rules, plan); err != nil {
+			return err
+		}
+		if err := s.checkAddresses(ctx, tx, in, plan.BranchID); err != nil {
+			return err
+		}
+		start := dayIn(in.StartDate, loc)
+		if start.Before(dayIn(time.Now(), loc)) {
+			return &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "start_date", Code: "in_the_past", Message: "a subscription cannot start before today"}}}
+		}
+		pr, err := s.priceFirstCycle(ctx, tx, plan, in, start, loc)
+		if err != nil {
+			return err
+		}
+		out = SubscriptionPreview{
+			SubtotalMinor: pr.Quote.SubtotalMinor, DiscountMinor: pr.Discount,
+			DeliveryMinor: pr.Quote.DeliveryMinor, TotalMinor: pr.Quote.TotalMinor,
+			Currency: plan.Currency, StartsOn: pr.Cycle.Starts.Format("2006-01-02"),
+			EndsOn: pr.Cycle.Ends.Format("2006-01-02"), DeliverableDays: pr.Cycle.DeliverableDays,
+			Renews: in.RenewalMode != "none" && (pr.Promo == nil || pr.Promo.TrialDays == nil),
+		}
+		if pr.Promo != nil {
+			out.Promo = pr.Promo.Offer(in.Promo.Code != "")
+		}
+		return nil
+	})
+	return out, err
 }
 
 // openCycle creates a billing period and the order that carries its money.
@@ -569,6 +723,11 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 			       cancellation_reason = NULLIF($2,'')
 			 WHERE id = $1`, subID, reason); err != nil {
 			return fmt.Errorf("subscriptions: cancel: %w", err)
+		}
+		if live.Status == "pending_payment" {
+			if err := promo.ReleaseUnpaid(ctx, tx, promo.Target{SubscriptionID: &subID}); err != nil {
+				return err
+			}
 		}
 
 		// Future work only. Meals already delivered stay delivered, and a

@@ -8,7 +8,12 @@ import { use } from "react";
 import { KitchenCover } from "@/components/meals/cover";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
-import { getMealKitchen, type PublicKitchenDetail } from "@/lib/meals-api";
+import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
+import {
+  getKitchenOffers,
+  getMealKitchen,
+  type PublicKitchenDetail,
+} from "@/lib/meals-api";
 import type { MenuChoice } from "@/lib/vendor-api";
 
 const COPY = {
@@ -197,6 +202,13 @@ export default function KitchenPage({
     queryFn: () => getMealKitchen(p.branchId, precise ? point : null),
     enabled: point != null,
   });
+  const offers = useQuery({
+    queryKey: ["meal-kitchen-offers", p.branchId],
+    queryFn: () => getKitchenOffers(p.branchId),
+  });
+  const subOffers = (offers.data?.items ?? []).filter(
+    (o) => o.applies_to !== "rotations",
+  );
 
   const money = (amount: number, currency: string) =>
     formatMoney({ amount, currency }, locale);
@@ -308,12 +320,28 @@ export default function KitchenPage({
                 {k.delivers_here === false ? (
                   <small className="ms-bad">{t.deliversNo}</small>
                 ) : (
-                  <Link
-                    className="ms-cta"
-                    href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}`}
-                  >
-                    {t.subscribe}
-                  </Link>
+                  <>
+                    {subOffers.map((o) => (
+                      <Link
+                        key={o.id}
+                        className="ms-offer"
+                        href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}?promo=${o.id}`}
+                      >
+                        <strong dir="auto">{offerLabel(o, locale)}</strong>
+                        <span dir="auto">
+                          {offerName(o, locale)}
+                          {o.audience === "new_customers" &&
+                            ` · ${OFFER_COPY[locale].newOnly}`}
+                        </span>
+                      </Link>
+                    ))}
+                    <Link
+                      className="ms-cta"
+                      href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}`}
+                    >
+                      {t.subscribe}
+                    </Link>
+                  </>
                 )}
               </li>
             ))}

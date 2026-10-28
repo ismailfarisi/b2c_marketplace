@@ -21,6 +21,7 @@ import {
   previewRotation,
   type RotationInput,
 } from "@/lib/customer-api";
+import { offerLabel } from "@/components/meals/offers";
 import { getMealKitchen, getMealKitchens } from "@/lib/meals-api";
 import type { Plan } from "@/lib/vendor-api";
 
@@ -47,6 +48,10 @@ const COPY = {
     emptyPick: "Choose a kitchen",
     week: (n: number) => `Week ${n}`,
     total: "Total for 28 days",
+    promo: "Promo code",
+    apply: "Apply",
+    remove: "Remove",
+    discount: "Discount",
     pay: "Start rotation and pay",
     paying: "Processing…",
     loading: "Loading…",
@@ -83,6 +88,10 @@ const COPY = {
     emptyPick: "اختر مطبخًا",
     week: (n: number) => `الأسبوع ${n}`,
     total: "المجموع لـ28 يومًا",
+    promo: "رمز الخصم",
+    apply: "تطبيق",
+    remove: "إزالة",
+    discount: "الخصم",
     pay: "ابدأ التناوب وادفع",
     paying: "جارٍ المعالجة…",
     loading: "جارٍ التحميل…",
@@ -154,6 +163,8 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   const [start, setStart] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [codeDraft, setCodeDraft] = useState("");
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     const list = addresses.data?.items ?? [];
@@ -253,6 +264,7 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
           start_date: start,
           delivery_weekdays: [...days].sort(),
           meal_slots: slots,
+          ...(code ? { promo_code: code } : {}),
         }
       : null;
 
@@ -501,11 +513,57 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                 </li>
               ))}
             </ol>
+            {preview.data.discount_minor > 0 && (
+              <dl className="ms-lines">
+                <dt dir="auto">
+                  {t.discount}
+                  {preview.data.promo && ` · ${offerLabel(preview.data.promo, locale)}`}
+                </dt>
+                <dd className="ms-ok">−{money(preview.data.discount_minor)}</dd>
+              </dl>
+            )}
             <p className="ms-sub">{t.total}</p>
             <p className="ms-plan-price">
               <strong>{money(preview.data.amount_minor)}</strong>
             </p>
           </>
+        )}
+        {input && (
+          <div className="ms-promo">
+            {code ? (
+              <p>
+                <span>{code}</span>
+                <button
+                  type="button"
+                  className="ms-link"
+                  onClick={() => {
+                    setCode("");
+                    setCodeDraft("");
+                  }}
+                >
+                  {t.remove}
+                </button>
+              </p>
+            ) : (
+              <label className="ms-field">
+                <span>{t.promo}</span>
+                <span className="ms-promo-row">
+                  <input
+                    value={codeDraft}
+                    autoCapitalize="characters"
+                    onChange={(e) => setCodeDraft(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    disabled={!codeDraft.trim()}
+                    onClick={() => setCode(codeDraft.trim().toUpperCase())}
+                  >
+                    {t.apply}
+                  </button>
+                </span>
+              </label>
+            )}
+          </div>
         )}
         {error && (
           <p className="ms-bad" role="alert">

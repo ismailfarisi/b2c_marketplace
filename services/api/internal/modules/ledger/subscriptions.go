@@ -91,6 +91,9 @@ type SubscriptionRecognition struct {
 	// from CommissionMinor rather than added to it — VAT is displayed
 	// tax-inclusive in every GCC market.
 	CommissionVATMinor int64
+	// SubsidyMinor is the platform-funded promo discount recognised alongside
+	// AmountMinor, paid to the kitchen out of platform revenue.
+	SubsidyMinor int64
 }
 
 // PostSubscriptionRecognised moves earned revenue out of deferred.
@@ -110,9 +113,15 @@ func PostSubscriptionRecognised(ctx context.Context, tx pgx.Tx, r SubscriptionRe
 	if r.AmountMinor <= 0 {
 		return uuid.Nil, fmt.Errorf("ledger: recognition must be positive, got %d", r.AmountMinor)
 	}
-	if r.CommissionMinor > r.AmountMinor {
+	if r.SubsidyMinor < 0 {
+		return uuid.Nil, fmt.Errorf("ledger: promo subsidy must not be negative, got %d", r.SubsidyMinor)
+	}
+	// The kitchen earns on what the meals were worth before a platform-funded
+	// promo: the customer's money plus the subsidy.
+	gross := r.AmountMinor + r.SubsidyMinor
+	if r.CommissionMinor > gross {
 		return uuid.Nil, fmt.Errorf("ledger: commission %d exceeds recognised %d on cycle %s",
-			r.CommissionMinor, r.AmountMinor, r.CycleID)
+			r.CommissionMinor, gross, r.CycleID)
 	}
 	if r.CommissionVATMinor > r.CommissionMinor {
 		return uuid.Nil, fmt.Errorf("ledger: commission VAT %d exceeds commission %d on cycle %s",
@@ -128,21 +137,26 @@ func PostSubscriptionRecognised(ctx context.Context, tx pgx.Tx, r SubscriptionRe
 		},
 	}
 
-	// Each component is omitted when it rounds to zero: the schema rejects
-	// zero-amount entries, and on a daily recognition of a few hundred fils a
-	// low commission rate legitimately rounds to nothing.
-	if vendorNet := r.AmountMinor - r.CommissionMinor; vendorNet > 0 {
+	if vendorNet := gross - r.CommissionMinor; vendorNet > 0 {
 		postings = append(postings, Posting{
 			Account:     AccountRef{Type: VendorPayable, OwnerType: OwnerVendor, OwnerID: &vendorID, Currency: r.Currency},
 			Direction:   Credit,
 			AmountMinor: vendorNet,
 		})
 	}
-	if net := r.CommissionMinor - r.CommissionVATMinor; net > 0 {
+	// Platform revenue nets the commission against the promo it paid for; a
+	// promo bigger than the commission is a debit — the platform's cost.
+	if net := r.CommissionMinor - r.CommissionVATMinor - r.SubsidyMinor; net > 0 {
 		postings = append(postings, Posting{
 			Account:     AccountRef{Type: PlatformRevenue, OwnerType: OwnerPlatform, Currency: r.Currency},
 			Direction:   Credit,
 			AmountMinor: net,
+		})
+	} else if net < 0 {
+		postings = append(postings, Posting{
+			Account:     AccountRef{Type: PlatformRevenue, OwnerType: OwnerPlatform, Currency: r.Currency},
+			Direction:   Debit,
+			AmountMinor: -net,
 		})
 	}
 	if r.CommissionVATMinor > 0 {

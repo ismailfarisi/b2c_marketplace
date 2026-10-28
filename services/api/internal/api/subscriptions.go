@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 )
 
@@ -39,19 +40,23 @@ type subscribeBody struct {
 
 	SourceReelID   *uuid.UUID `json:"source_reel_id"`
 	SourceActionID *uuid.UUID `json:"source_action_id"`
+
+	PromoCode string     `json:"promo_code"`
+	PromoID   *uuid.UUID `json:"promo_id"`
 }
 
-func (h *SubscriptionHandlers) Subscribe(w http.ResponseWriter, r *http.Request) {
+// input decodes a checkout body; shared by Subscribe and Preview.
+func (h *SubscriptionHandlers) input(w http.ResponseWriter, r *http.Request) (subscriptions.SubscribeInput, bool) {
 	userID, ok := httpx.UserIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
-		return
+		return subscriptions.SubscribeInput{}, false
 	}
 
 	var body subscribeBody
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.WriteProblem(w, r, err)
-		return
+		return subscriptions.SubscribeInput{}, false
 	}
 
 	start, err := time.Parse("2006-01-02", body.StartDate)
@@ -60,7 +65,7 @@ func (h *SubscriptionHandlers) Subscribe(w http.ResponseWriter, r *http.Request)
 			Field: "start_date", Code: "invalid_date",
 			Message: "expected YYYY-MM-DD",
 		}}})
-		return
+		return subscriptions.SubscribeInput{}, false
 	}
 
 	rules := make([]subscriptions.Rule, 0, len(body.Schedule))
@@ -85,7 +90,7 @@ func (h *SubscriptionHandlers) Subscribe(w http.ResponseWriter, r *http.Request)
 
 	_, viewerKey := viewerIdentity(r)
 
-	res, err := h.Service.Subscribe(r.Context(), subscriptions.SubscribeInput{
+	return subscriptions.SubscribeInput{
 		UserID:         userID,
 		PlanID:         body.PlanID,
 		TierID:         tierID,
@@ -93,10 +98,34 @@ func (h *SubscriptionHandlers) Subscribe(w http.ResponseWriter, r *http.Request)
 		StartDate:      start,
 		Rules:          rules,
 		RenewalMode:    body.RenewalMode,
+		Promo:          promo.Ref{Code: body.PromoCode, ID: body.PromoID},
 		SourceReelID:   body.SourceReelID,
 		SourceActionID: body.SourceActionID,
 		ViewerKey:      viewerKey,
-	})
+	}, true
+}
+
+// Preview answers POST /subscriptions/preview: the first cycle's price,
+// with any promo applied, without creating anything.
+func (h *SubscriptionHandlers) Preview(w http.ResponseWriter, r *http.Request) {
+	in, ok := h.input(w, r)
+	if !ok {
+		return
+	}
+	p, err := h.Service.PreviewSubscription(r.Context(), in)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", p)
+}
+
+func (h *SubscriptionHandlers) Subscribe(w http.ResponseWriter, r *http.Request) {
+	in, ok := h.input(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.Service.Subscribe(r.Context(), in)
 	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
@@ -113,6 +142,8 @@ func (h *SubscriptionHandlers) Subscribe(w http.ResponseWriter, r *http.Request)
 		"start_date":      res.StartDate.Format("2006-01-02"),
 		"order_id":        res.OrderID,
 		"amount_minor":    res.AmountMinor,
+		"discount_minor":  res.DiscountMinor,
+		"trial_days":      res.TrialDays,
 		"currency":        res.Currency,
 		"first_cycle": map[string]any{
 			"cycle_no":         res.FirstCycle.No,

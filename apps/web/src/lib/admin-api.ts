@@ -1799,3 +1799,64 @@ export const restoreMerchVersion = (versionId: string) =>
     url: `/admin/meals/layout/versions/${versionId}/restore`,
     method: "POST",
   });
+
+// ---- promos & trials ------------------------------------------------------
+
+export interface MerchPromoInput {
+  code: string | null;
+  name: string;
+  name_ar: string;
+  description: string;
+  description_ar: string;
+  discount_type: "percent" | "fixed" | "none";
+  percent_bp: number;
+  amount_minor: number;
+  max_discount_minor: number | null;
+  currency: string;
+  trial_days: number | null;
+  applies_to: "subscriptions" | "rotations" | "both";
+  audience: "everyone" | "new_customers";
+  kitchen_share_bp: number;
+  usage_limit: number | null;
+  per_customer_limit: number | null;
+  is_public: boolean;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  branch_ids: string[];
+}
+
+export interface MerchPromo extends MerchPromoInput {
+  id: string;
+  usage_count: number;
+  updated_at: string;
+}
+
+export interface PromoRedemption {
+  id: string;
+  user_id: string;
+  subscription_id: string | null;
+  rotation_id: string | null;
+  reference: string;
+  discount_minor: number;
+  platform_funded_minor: number;
+  currency: string;
+  status: "pending" | "redeemed" | "released";
+  created_at: string;
+}
+
+export const getPromos = () =>
+  apiFetch<{ items: MerchPromo[] }>({ url: "/admin/meals/promos", method: "GET" });
+export const savePromo = (id: string | null, data: MerchPromoInput) =>
+  apiFetch<MerchPromo>({
+    url: id ? `/admin/meals/promos/${id}` : "/admin/meals/promos",
+    method: id ? "PUT" : "POST",
+    data,
+  });
+export const deletePromo = (id: string) =>
+  apiFetch<void>({ url: `/admin/meals/promos/${id}`, method: "DELETE" });
+export const getPromoRedemptions = (id: string) =>
+  apiFetch<{ items: PromoRedemption[] }>({
+    url: `/admin/meals/promos/${id}/redemptions`,
+    method: "GET",
+  });

@@ -9,6 +9,7 @@ import (
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/payments"
+	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 )
 
@@ -25,6 +26,8 @@ type rotationBody struct {
 	StartDate string      `json:"start_date"`
 	Weekdays  []int       `json:"delivery_weekdays"`
 	MealSlots []string    `json:"meal_slots"`
+	PromoCode string      `json:"promo_code"`
+	PromoID   *uuid.UUID  `json:"promo_id"`
 }
 
 func (h *RotationHandlers) input(w http.ResponseWriter, r *http.Request) (subscriptions.RotationInput, bool) {
@@ -48,6 +51,7 @@ func (h *RotationHandlers) input(w http.ResponseWriter, r *http.Request) (subscr
 	return subscriptions.RotationInput{
 		UserID: userID, AddressID: body.AddressID, PlanIDs: body.PlanIDs,
 		StartDate: start, Weekdays: body.Weekdays, Slots: body.MealSlots,
+		Promo: promo.Ref{Code: body.PromoCode, ID: body.PromoID},
 	}, true
 }
 
