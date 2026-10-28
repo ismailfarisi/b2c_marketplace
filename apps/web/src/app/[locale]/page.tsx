@@ -6,6 +6,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 
 import { useCustomerPoint } from "@/components/meals/location";
+import { KitchenCover } from "@/components/meals/cover";
 import { CustomerShell } from "@/components/meals/shell";
 import { getMealKitchens, type PublicKitchen } from "@/lib/meals-api";
 
@@ -96,24 +97,12 @@ function KitchenCard({
   return (
     <li>
       <Link className="ms-card" href={`/${locale}/kitchens/${k.branch_id}`}>
-        <div
-          className={k.cover_image_url ? "ms-cover" : "ms-cover ms-cover-empty"}
-          aria-hidden
-        >
-          {k.cover_image_url ? (
-            <img
-              src={k.cover_image_url}
-              alt=""
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.hidden = true;
-                e.currentTarget.parentElement?.classList.add("ms-cover-empty");
-              }}
-            />
-          ) : (
-            <span>{name.slice(0, 1)}</span>
-          )}
-        </div>
+        <KitchenCover
+          id={k.branch_id}
+          name={name}
+          src={k.cover_image_url}
+          caption={k.cuisines.slice(0, 3).join(" · ")}
+        />
         <div className="ms-card-body">
           <div className="ms-card-head">
             <h2 dir="auto">{name}</h2>
@@ -196,6 +185,12 @@ export default function MealsHome({
         <aside className="ms-promo">
           <p className="ms-eyebrow">{t.promoEyebrow}</p>
           <h2>{t.promoTitle}</h2>
+          <div className="ms-promo-weeks" aria-hidden>
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
           <p>{t.promoBody}</p>
           <Link className="ms-cta" href={`/${locale}/rotation`}>
             {t.promoCta}

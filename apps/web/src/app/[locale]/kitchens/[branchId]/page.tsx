@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
 
+import { KitchenCover } from "@/components/meals/cover";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
 import { getMealKitchen, type PublicKitchenDetail } from "@/lib/meals-api";
@@ -217,14 +218,13 @@ export default function KitchenPage({
     body = (
       <div className="ms-kitchen">
         <section className="ms-hero ms-k-hero">
-          {k.cover_image_url && (
-            <img
-              src={k.cover_image_url}
-              alt=""
-              className="ms-hero-img"
-              onError={(e) => (e.currentTarget.hidden = true)}
-            />
-          )}
+          <KitchenCover
+            id={k.branch_id}
+            name={name}
+            src={k.cover_image_url}
+            caption={k.cuisines.join(" · ")}
+            className="ms-hero-img"
+          />
           <div>
             <h1 dir="auto">{name}</h1>
             <p className="ms-sub" dir="auto">

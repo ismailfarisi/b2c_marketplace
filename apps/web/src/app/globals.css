@@ -1339,3 +1339,269 @@ details.ms-danger[open] > summary {
   min-inline-size: 0;
   max-inline-size: 100%;
 }
+
+/* Visual layer: display type, drawn covers, warmer surfaces. */
+.ms {
+  --ms-font-display:
+    ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia,
+    "Noto Naskh Arabic", serif;
+  --ms-accent-deep: #8a3b1b;
+  --ms-accent-soft: #f6e3d6;
+  --ms-surface: #fffdf9;
+  --ms-shadow: 0 1px 2px rgb(31 27 22 / 0.06), 0 8px 24px rgb(31 27 22 / 0.06);
+  --ms-cover-1: #e9c9a8;
+  --ms-cover-1-ink: #7a3e17;
+  --ms-cover-2: #cfdcc0;
+  --ms-cover-2-ink: #3d5a2a;
+  --ms-cover-3: #f0d48f;
+  --ms-cover-3-ink: #6e4e0c;
+  --ms-cover-4: #e7bcb0;
+  --ms-cover-4-ink: #7d2e22;
+}
+.ms h1,
+.ms-intro h1,
+.ms-promo h2,
+.ms-plan-price strong {
+  font-family: var(--ms-font-display);
+  font-style: normal;
+  letter-spacing: -0.01em;
+}
+.ms h1 {
+  font-weight: 600;
+}
+.ms-intro h1 {
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1.05;
+}
+
+/* Drawn cover */
+.ms-cover-drawn {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.ms-cover-drawn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(currentColor 1px, transparent 1.5px);
+  background-size: 14px 14px;
+  opacity: 0.18;
+}
+.ms-cover-p1 {
+  background: var(--ms-cover-1);
+  color: var(--ms-cover-1-ink);
+}
+.ms-cover-p2 {
+  background: var(--ms-cover-2);
+  color: var(--ms-cover-2-ink);
+}
+.ms-cover-p3 {
+  background: var(--ms-cover-3);
+  color: var(--ms-cover-3-ink);
+}
+.ms-cover-p4 {
+  background: var(--ms-cover-4);
+  color: var(--ms-cover-4-ink);
+}
+.ms .ms-cover-drawn {
+  display: grid;
+}
+.ms-cover-mark {
+  position: relative;
+  font-family: var(--ms-font-display);
+  font-size: clamp(3rem, 9vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1;
+  inline-size: 1.6em;
+  block-size: 1.6em;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  background: var(--ms-surface);
+}
+.ms-cover-cap {
+  position: absolute;
+  inset-block-end: 0.75rem;
+  inset-inline-start: 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ms-cover img {
+  display: block;
+}
+
+/* Cards */
+.ms-card {
+  background: var(--ms-surface);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+.ms-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ms-shadow);
+  border-color: var(--ms-accent-soft);
+}
+.ms-card:hover .ms-card-head h2 {
+  color: var(--ms-accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-card,
+  .ms-card:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Home head: tinted band, promo on dark ink */
+.ms-home-head {
+  background: var(--ms-accent-soft);
+  border-radius: calc(var(--ms-radius) * 1.5);
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+}
+.ms-promo {
+  background: var(--ms-ink);
+  border-color: var(--ms-ink);
+  color: var(--ms-paper);
+}
+.ms-promo h2 {
+  color: var(--ms-paper);
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+.ms .ms-promo p {
+  color: var(--ms-line);
+}
+.ms .ms-promo .ms-eyebrow {
+  color: var(--ms-cover-3);
+}
+.ms-promo-weeks {
+  display: flex;
+  gap: 0.35rem;
+  margin-block: 0.25rem;
+}
+.ms-promo-weeks span {
+  flex: 1;
+  block-size: 0.4rem;
+  border-radius: 999px;
+}
+.ms-promo-weeks span:nth-child(1) {
+  background: var(--ms-cover-1);
+}
+.ms-promo-weeks span:nth-child(2) {
+  background: var(--ms-cover-2);
+}
+.ms-promo-weeks span:nth-child(3) {
+  background: var(--ms-cover-3);
+}
+.ms-promo-weeks span:nth-child(4) {
+  background: var(--ms-cover-4);
+}
+.ms-filters {
+  border-block-start: 0;
+}
+
+/* Kitchen page: wide banner cover */
+.ms-k-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.ms-k-hero > .ms-hero-img {
+  inline-size: 100%;
+  aspect-ratio: 21 / 8;
+  border-radius: calc(var(--ms-radius) * 1.5);
+  overflow: hidden;
+}
+.ms-k-hero > .ms-hero-img img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+@media (max-width: 36rem) {
+  .ms-k-hero > .ms-hero-img {
+    aspect-ratio: 16 / 9;
+  }
+}
+.ms-plan {
+  background: var(--ms-surface);
+  border-block-start: 3px solid var(--ms-accent);
+  box-shadow: var(--ms-shadow);
+}
+.ms-plan-price strong {
+  font-size: 1.75rem;
+}
+.ms-menu-row.has-choice {
+  background: var(--ms-accent-soft);
+  border-radius: 0.5rem;
+  padding-inline: 0.6rem;
+}
+
+/* Account surfaces */
+.ms-sub-card,
+.ms-rot-card,
+.ms-summary,
+.ms-meal {
+  background: var(--ms-surface);
+}
+.ms-summary {
+  box-shadow: var(--ms-shadow);
+}
+.ms-rot-weeks li:nth-child(1) .ms-week-no {
+  color: var(--ms-cover-1-ink);
+}
+.ms-rot-weeks li:nth-child(2) .ms-week-no {
+  color: var(--ms-cover-2-ink);
+}
+.ms-rot-weeks li:nth-child(3) .ms-week-no {
+  color: var(--ms-cover-3-ink);
+}
+.ms-rot-weeks li:nth-child(4) .ms-week-no {
+  color: var(--ms-cover-4-ink);
+}
+.ms-rot-weeks li {
+  border-block-start: 3px solid transparent;
+}
+.ms-rot-weeks li:nth-child(1) {
+  border-block-start-color: var(--ms-cover-1);
+}
+.ms-rot-weeks li:nth-child(2) {
+  border-block-start-color: var(--ms-cover-2);
+}
+.ms-rot-weeks li:nth-child(3) {
+  border-block-start-color: var(--ms-cover-3);
+}
+.ms-rot-weeks li:nth-child(4) {
+  border-block-start-color: var(--ms-cover-4);
+}
+.ms-promo-weeks {
+  align-self: stretch;
+}
+.ms-cover {
+  overflow: hidden;
+}
+.ms-cover > img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+@media (min-width: 56rem) {
+  .ms-home-head {
+    align-items: center;
+  }
+}
+.ms-auth .ms-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+.ms-auth .ms-form input {
+  inline-size: 100%;
+}
