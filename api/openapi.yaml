@@ -1299,6 +1299,125 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /rotations/preview:
+    post:
+      tags: [subscriptions]
+      operationId: previewRotation
+      summary: Which kitchen would cook which week, and the total
+      description: >-
+        Checks the four plans the same way createRotation does (all in the
+        rotation, four different kitchens, the schedule fits every plan, every
+        kitchen delivers to the address) and returns the week order the
+        platform would assign. Creates nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RotationInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RotationQuote" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /rotations:
+    post:
+      tags: [subscriptions]
+      operationId: createRotation
+      summary: Buy a four-kitchen rotation
+      description: >-
+        Creates the rotation and one subscription per week, each with its own
+        billing order at that kitchen's weekly price. All start pending payment;
+        pay them together with payRotation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RotationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rotation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /rotations/{rotationId}/payment-intent:
+    post:
+      tags: [payments]
+      operationId: payRotation
+      summary: One payment for all four weeks of a rotation
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentIntent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: The rotation is not awaiting payment }
+
+  /rotations/{rotationId}/cancel:
+    post:
+      tags: [subscriptions]
+      operationId: cancelRotation
+      summary: Cancel every unfinished week of a rotation
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "204": { description: Cancelled }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/rotations:
+    get:
+      tags: [subscriptions]
+      operationId: listMyRotations
+      summary: The signed-in customer's rotations
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Rotation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /me/rotations/{rotationId}:
+    get:
+      tags: [subscriptions]
+      operationId: getMyRotation
+      summary: One rotation with its four weeks
+      description: Someone else's rotation answers 404.
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rotation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /me/addresses/{addressId}:
     delete:
       tags: [me]
@@ -5814,6 +5933,73 @@ components:
           type: [string, "null"]
           format: uuid
           description: Set while the current cycle's billing order is unpaid; pay it with createPaymentIntent.
+        rotation_id:
+          type: [string, "null"]
+          format: uuid
+          description: Set when this subscription is one week of a four-kitchen rotation.
+        rotation_week: { type: [integer, "null"], minimum: 1, maximum: 4 }
+    RotationInput:
+      type: object
+      required: [plan_ids, address_id, start_date, delivery_weekdays, meal_slots]
+      properties:
+        plan_ids:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: string, format: uuid }
+          description: One rotation-enabled plan from each of four different kitchens.
+        address_id: { type: string, format: uuid }
+        start_date: { type: string, format: date }
+        delivery_weekdays:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 6 }
+          description: 0 = Sunday. Every chosen kitchen's plan must deliver on these days.
+        meal_slots:
+          type: array
+          items: { type: string, enum: [breakfast, lunch, dinner, snack, suhoor, iftar] }
+    RotationWeek:
+      type: object
+      required: [week, starts_on, ends_on, branch_id, kitchen_name, plan_id, plan_name, price_minor]
+      properties:
+        week: { type: integer, minimum: 1, maximum: 4 }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date }
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        plan_id: { type: string, format: uuid }
+        plan_name: { type: string }
+        price_minor:
+          type: integer
+          format: int64
+          description: The kitchen's weekly rotation price, tax included.
+        subscription_id: { type: [string, "null"], format: uuid }
+        subscription_no: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+    RotationQuote:
+      type: object
+      required: [start_date, end_date, weeks, amount_minor, currency]
+      properties:
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        weeks: { type: array, items: { $ref: "#/components/schemas/RotationWeek" } }
+        amount_minor:
+          type: integer
+          format: int64
+          description: Sum of the four weekly prices.
+        currency: { type: string }
+    Rotation:
+      allOf:
+        - $ref: "#/components/schemas/RotationQuote"
+        - type: object
+          required: [id, rotation_no, status, meal_slots, delivery_weekdays, created_at]
+          properties:
+            id: { type: string, format: uuid }
+            rotation_no: { type: string }
+            status: { type: string, enum: [pending_payment, active, cancelled, completed] }
+            meal_slots: { type: array, items: { type: string } }
+            delivery_weekdays: { type: array, items: { type: integer } }
+            created_at: { type: string, format: date-time }
     MealOption:
       type: object
       required: [id, name, allergens, is_default]

@@ -46,7 +46,7 @@ configureApiClient({
       return;
     }
     const customer =
-      /^\/(en|ar)\/(subscriptions|kitchens\/[^/]+\/subscribe)(\/|$)/.exec(path);
+      /^\/(en|ar)\/(subscriptions|rotations?|kitchens\/[^/]+\/subscribe)(\/|$)/.exec(path);
     if (customer) {
       window.location.href = `/${customer[1]}/signin?next=${encodeURIComponent(path)}`;
       return;

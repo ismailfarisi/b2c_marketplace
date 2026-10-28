@@ -41,6 +41,9 @@ type PlanTemplate struct {
 	Country          string
 	Weekdays         []int16
 	MealSlots        []string
+	RotationEnabled  bool
+	// The kitchen's price for one week of this plan inside a rotation.
+	RotationWeekPriceMinor *int64
 }
 
 // LoadPlan reads a plan and the branch context it belongs to.
@@ -60,7 +63,8 @@ func (r *Repository) LoadPlan(ctx context.Context, tx pgx.Tx, planID uuid.UUID, 
 		       p.price_minor, p.currency, p.tax_rate_bp,
 		       b.timezone, b.country,
 		       t.price_minor, t.days_per_week, t.meals_per_day,
-		       p.delivery_weekdays, p.meal_slots
+		       p.delivery_weekdays, p.meal_slots,
+		       p.rotation_enabled, p.rotation_week_price_minor
 		  FROM subscription_plans p
 		  JOIN vendor_branches b ON b.id = p.branch_id
 		  LEFT JOIN plan_tiers t ON t.id = $2 AND t.plan_id = p.id AND t.is_active
@@ -73,7 +77,8 @@ func (r *Repository) LoadPlan(ctx context.Context, tx pgx.Tx, planID uuid.UUID, 
 		&p.PriceMinor, &p.Currency, &p.TaxRateBP,
 		&p.Timezone, &p.Country,
 		&tierPrice, &tierDays, &tierMeals,
-		&p.Weekdays, &p.MealSlots)
+		&p.Weekdays, &p.MealSlots,
+		&p.RotationEnabled, &p.RotationWeekPriceMinor)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PlanTemplate{}, httpx.ErrNotFound
@@ -103,6 +108,9 @@ type insertParams struct {
 	Start       time.Time
 	End         time.Time
 	RenewalMode string
+	// Set for one week of a four-kitchen rotation.
+	RotationID   uuid.NullUUID
+	RotationWeek int
 }
 
 func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insertParams) error {
@@ -114,6 +122,10 @@ func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insert
 	if p.TierID.Valid {
 		tierID = p.TierID.UUID
 	}
+	var rotationID, rotationWeek any
+	if p.RotationID.Valid {
+		rotationID, rotationWeek = p.RotationID.UUID, p.RotationWeek
+	}
 
 	// Retried like order numbers, and for the same reason: the generator is
 	// random, collisions are rare and inevitable, and a customer failing to
@@ -124,15 +136,17 @@ func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insert
 			INSERT INTO subscriptions (
 				id, subscription_no, user_id, branch_id, vendor_id,
 				plan_id, tier_id, service_type, status,
-				start_date, end_date, renewal_mode, timezone, address_id
+				start_date, end_date, renewal_mode, timezone, address_id,
+				rotation_id, rotation_week
 			) VALUES (
 				$1, generate_subscription_no(), $2, $3, $4,
 				$5, $6, $7, 'pending_payment',
-				$8, $9, $10, $11, $12
+				$8, $9, $10, $11, $12, $13, $14
 			)`,
 			p.ID, p.UserID, p.Plan.BranchID, p.Plan.VendorID,
 			p.Plan.ID, tierID, p.Plan.ServiceType,
-			p.Start, end, p.RenewalMode, p.Plan.Timezone, p.AddressID)
+			p.Start, end, p.RenewalMode, p.Plan.Timezone, p.AddressID,
+			rotationID, rotationWeek)
 		if err == nil {
 			return nil
 		}
@@ -199,6 +213,7 @@ type Live struct {
 	CutoffHours    int
 	Currency       string
 	Materialised   *time.Time
+	RotationID     uuid.NullUUID
 	Rules          []Rule
 	Pauses         []Pause
 	Skips          []Skip
@@ -218,13 +233,13 @@ func (r *Repository) LoadLive(ctx context.Context, tx pgx.Tx, subID uuid.UUID) (
 		SELECT s.id, s.subscription_no, s.user_id, s.branch_id, s.vendor_id,
 		       s.plan_id, s.status, s.start_date, s.end_date, s.timezone,
 		       s.address_id, s.materialised_through,
-		       p.cutoff_hours, p.currency
+		       p.cutoff_hours, p.currency, s.rotation_id
 		  FROM subscriptions s
 		  JOIN subscription_plans p ON p.id = s.plan_id
 		 WHERE s.id = $1`, subID,
 	).Scan(&l.ID, &l.SubscriptionNo, &l.UserID, &l.BranchID, &l.VendorID,
 		&l.PlanID, &l.Status, &start, &end, &tz,
-		&l.AddressID, &l.Materialised, &l.CutoffHours, &l.Currency)
+		&l.AddressID, &l.Materialised, &l.CutoffHours, &l.Currency, &l.RotationID)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, httpx.ErrNotFound

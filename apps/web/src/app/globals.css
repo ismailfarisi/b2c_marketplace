@@ -821,3 +821,25 @@ a.ms-cta {
 .ms-danger .ms-field {
   max-inline-size: 32rem;
 }
+
+/* Four-kitchen rotation: the week-by-week order. */
+.ms-weeks {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ms-weeks li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ms-line, #eadfd2);
+}
+
+.ms-weeks li a {
+  color: inherit;
+}

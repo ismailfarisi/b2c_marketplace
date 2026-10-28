@@ -115,6 +115,8 @@ export interface MySubscription {
   amount_minor: number;
   currency: string;
   pending_order_id: string | null;
+  rotation_id: string | null;
+  rotation_week: number | null;
 }
 
 export interface MealOption {
@@ -195,6 +197,75 @@ export const pauseSubscription = (id: string, from: string, to: string) =>
 export const cancelSubscription = (id: string, reason: string) =>
   apiFetch<unknown>({
     url: `/subscriptions/${id}/cancel`,
+    method: "POST",
+    data: { reason },
+  });
+
+export interface RotationInput {
+  plan_ids: string[];
+  address_id: string;
+  start_date: string;
+  delivery_weekdays: number[];
+  meal_slots: string[];
+}
+
+export interface RotationWeek {
+  week: number;
+  starts_on: string;
+  ends_on: string;
+  branch_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  plan_id: string;
+  plan_name: string;
+  price_minor: number;
+  subscription_id: string | null;
+  subscription_no: string | null;
+  status: string | null;
+}
+
+export interface RotationQuote {
+  start_date: string;
+  end_date: string;
+  weeks: RotationWeek[];
+  amount_minor: number;
+  currency: string;
+}
+
+export interface Rotation extends RotationQuote {
+  id: string;
+  rotation_no: string;
+  status: string;
+  meal_slots: string[];
+  delivery_weekdays: number[];
+  created_at: string;
+}
+
+/** Which kitchen the platform would give each week, and the total. */
+export const previewRotation = (data: RotationInput) =>
+  apiFetch<RotationQuote>({ url: "/rotations/preview", method: "POST", data });
+
+export const createRotation = (data: RotationInput) =>
+  apiFetch<Rotation>({ url: "/rotations", method: "POST", data });
+
+/** One payment for all four weeks, keyed on the rotation like payOrder. */
+export const payRotation = (id: string) =>
+  apiFetch<PaymentIntent>({
+    url: `/rotations/${id}/payment-intent`,
+    method: "POST",
+    data: {},
+    headers: { "Idempotency-Key": id },
+  });
+
+export const listMyRotations = () =>
+  apiFetch<{ items: Rotation[] }>({ url: "/me/rotations", method: "GET" });
+
+export const getMyRotation = (id: string) =>
+  apiFetch<Rotation>({ url: `/me/rotations/${id}`, method: "GET" });
+
+export const cancelRotation = (id: string, reason: string) =>
+  apiFetch<void>({
+    url: `/rotations/${id}/cancel`,
     method: "POST",
     data: { reason },
   });

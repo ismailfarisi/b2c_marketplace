@@ -36,6 +36,9 @@ type MySubscription struct {
 	// The billing order still waiting to be paid, if any. The client pays it
 	// with the ordinary payment-intent call.
 	PendingOrderID *uuid.UUID `json:"pending_order_id"`
+	// Set when this subscription is one week of a four-kitchen rotation.
+	RotationID   *uuid.UUID `json:"rotation_id"`
+	RotationWeek *int       `json:"rotation_week"`
 }
 
 // Dish is one option a customer can be served on a given day.
@@ -93,7 +96,8 @@ const mySelect = `
 	       p.name, p.name_ar, s.start_date, s.end_date,
 	       COALESCE(c.cycle_no, 0), c.ends_on, COALESCE(c.amount_minor, 0),
 	       COALESCE(c.currency, p.currency),
-	       CASE WHEN c.status IN ('pending', 'past_due') THEN c.order_id END
+	       CASE WHEN c.status IN ('pending', 'past_due') THEN c.order_id END,
+	       s.rotation_id, s.rotation_week
 	  FROM subscriptions s
 	  JOIN vendor_branches b ON b.id = s.branch_id
 	  JOIN subscription_plans p ON p.id = s.plan_id
@@ -108,7 +112,8 @@ func scanMine(row pgx.Row) (MySubscription, error) {
 	var end, cycleEnd *time.Time
 	if err := row.Scan(&m.ID, &m.SubscriptionNo, &m.Status, &m.BranchID, &m.KitchenName,
 		&m.KitchenNameAr, &m.PlanName, &m.PlanNameAr, &start, &end,
-		&m.CycleNo, &cycleEnd, &m.AmountMinor, &m.Currency, &m.PendingOrderID); err != nil {
+		&m.CycleNo, &cycleEnd, &m.AmountMinor, &m.Currency, &m.PendingOrderID,
+		&m.RotationID, &m.RotationWeek); err != nil {
 		return m, err
 	}
 	m.StartDate = start.Format("2006-01-02")

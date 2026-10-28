@@ -27,6 +27,7 @@ const COPY = {
     search: "Search kitchens",
     any: "Any meal",
     rotation: "In the 4-kitchen rotation",
+    build: "Build a 4-kitchen rotation →",
     from: "from",
     perCycle: "per cycle",
     perWeek: "a week in rotation",
@@ -52,6 +53,7 @@ const COPY = {
     search: "ابحث عن مطبخ",
     any: "أي وجبة",
     rotation: "ضمن تناوب المطابخ الأربعة",
+    build: "اختر تناوب ٤ مطابخ ←",
     from: "من",
     perCycle: "لكل دورة",
     perWeek: "أسبوعيًا ضمن التناوب",
@@ -228,6 +230,9 @@ export default function MealsHome({
             />
             {t.rotation}
           </label>
+          <Link className="ms-link" href={`/${locale}/rotation`}>
+            {t.build}
+          </Link>
         </form>
 
         {!point || list.isPending ? (

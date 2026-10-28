@@ -117,6 +117,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/me/subscriptions/{subscriptionId}", h.Subscriptions.MyDetail)
 			r.Put("/subscriptions/{subscriptionId}/meals/{date}/{slot}", h.Subscriptions.ChooseMeal)
 		}
+		if h.Rotations != nil {
+			r.Post("/rotations/preview", h.Rotations.Preview)
+			r.Post("/rotations", h.Rotations.Create)
+			r.Post("/rotations/{rotationId}/payment-intent", h.Rotations.Pay)
+			r.Post("/rotations/{rotationId}/cancel", h.Rotations.Cancel)
+			r.Get("/me/rotations", h.Rotations.Mine)
+			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
+		}
 		if h.Addresses != nil {
 			r.Get("/me/addresses", h.Addresses.List)
 			r.Post("/me/addresses", h.Addresses.Create)

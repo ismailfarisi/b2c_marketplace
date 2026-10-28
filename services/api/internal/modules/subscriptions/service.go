@@ -3,6 +3,7 @@ package subscriptions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -331,6 +332,11 @@ func (s *Service) Pause(ctx context.Context, in PauseInput) error {
 		if err != nil {
 			return err
 		}
+		// Extending one rotation week would run into the next kitchen's week.
+		if live.RotationID.Valid {
+			return httpx.Coded(httpx.ErrConflict, "rotation_no_pause",
+				"A week in a kitchen rotation cannot be paused; skip meals instead.")
+		}
 
 		from := dayIn(in.From, live.Location)
 		to := dayIn(in.To, live.Location)
@@ -509,6 +515,20 @@ func (s *Service) Skip(ctx context.Context, userID, subID uuid.UUID, date time.T
 
 // Cancel stops a subscription and returns the unearned remainder of its cycle.
 func (s *Service) Cancel(ctx context.Context, userID, subID uuid.UUID, reason string) error {
+	var rotation uuid.NullUUID
+	err := s.pool.QueryRow(ctx,
+		`SELECT rotation_id FROM subscriptions WHERE id = $1 AND user_id = $2`,
+		subID, userID).Scan(&rotation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return httpx.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("subscriptions: load for cancel: %w", err)
+	}
+	if rotation.Valid {
+		return httpx.Coded(httpx.ErrConflict, "cancel_rotation",
+			"This week is part of a kitchen rotation; cancel the rotation instead.")
+	}
 	return s.cancel(ctx, subID, uuid.NullUUID{UUID: userID, Valid: true}, "customer", userID, reason)
 }
 

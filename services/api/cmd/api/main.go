@@ -195,6 +195,7 @@ func run() error {
 	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc}
 	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen}
 	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}
+	handlers.Rotations = &api.RotationHandlers{Service: handlers.Subscriptions.Service, Payments: paymentsSvc}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
 	handlers.Console = &api.ConsoleHandlers{
 		Console: consoleSvc,

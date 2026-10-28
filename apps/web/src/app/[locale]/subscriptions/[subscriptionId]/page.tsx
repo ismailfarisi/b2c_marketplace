@@ -50,6 +50,9 @@ const COPY = {
     reason: "Reason (optional)",
     cancelBtn: "Cancel subscription",
     cancelConfirm: "Cancel this subscription? All future deliveries stop.",
+    rotation: (n: number) =>
+      `Week ${n} of a 4-kitchen rotation. Payment, pausing and cancelling are managed on the rotation.`,
+    manageRotation: "Manage rotation",
     loading: "Loading…",
     notFound: "Subscription not found.",
     failed: "Something went wrong. Try again.",
@@ -91,6 +94,9 @@ const COPY = {
     reason: "السبب (اختياري)",
     cancelBtn: "إلغاء الاشتراك",
     cancelConfirm: "إلغاء هذا الاشتراك؟ ستتوقف كل التوصيلات القادمة.",
+    rotation: (n: number) =>
+      `الأسبوع ${n} من تناوب ٤ مطابخ. يتم الدفع والإلغاء من صفحة التناوب.`,
+    manageRotation: "إدارة التناوب",
     loading: "جارٍ التحميل…",
     notFound: "الاشتراك غير موجود.",
     failed: "حدث خطأ. حاول مرة أخرى.",
@@ -211,7 +217,16 @@ function Detail({
         </p>
       </header>
 
-      {s.pending_order_id && (
+      {s.rotation_id && s.rotation_week != null && (
+        <section className="ms-callout">
+          <p>{t.rotation(s.rotation_week)}</p>
+          <Link href={`/${locale}/rotations/${s.rotation_id}`}>
+            → {t.manageRotation}
+          </Link>
+        </section>
+      )}
+
+      {s.pending_order_id && !s.rotation_id && (
         <section className="ms-callout">
           <p>{t.payNote}</p>
           {pay.isError && <p className="ms-bad">{t.payFailed}</p>}
@@ -260,8 +275,10 @@ function Detail({
         </section>
       )}
 
-      {s.status === "active" && <Pause s={s} t={t} onDone={refresh} />}
-      {live && <Cancel s={s} t={t} onDone={refresh} />}
+      {s.status === "active" && !s.rotation_id && (
+        <Pause s={s} t={t} onDone={refresh} />
+      )}
+      {live && !s.rotation_id && <Cancel s={s} t={t} onDone={refresh} />}
     </div>
   );
 }
