@@ -33,7 +33,7 @@ export default function CompaniesPage() {
   });
   const rows = list.data?.items ?? [];
   return (
-    <div className="merch-form">
+    <div className="company-admin">
       <div className="merch-actions">
         <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
           <option value="">All statuses</option>
@@ -117,7 +117,7 @@ function Detail({ id }: { id: string }) {
       status ? `Company ${status}.` : "Terms saved.",
     );
   return (
-    <div className="merch-form">
+    <div className="company-admin">
       <Panel title={c.name} note={<span className="mono">{c.status}</span>}>
         <dl className="detail">
           <dt>Legal name</dt><dd>{c.legal_name}</dd>
