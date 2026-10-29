@@ -365,4 +365,11 @@
     <string name="meals_cancel_confirm">هل تريد إلغاء هذا الاشتراك؟ تتوقف الوجبات المتبقية وتُعاد قيمة الأيام المدفوعة غير المستخدمة كرصيد.</string>
     <string name="meals_cancel_yes">نعم، ألغِ</string>
     <string name="meals_keep">إبقاء</string>
+    <string name="meals_promo_unknown">رمز العرض غير موجود.</string>
+    <string name="meals_promo_not_live">انتهى هذا العرض أو لم يبدأ بعد.</string>
+    <string name="meals_promo_wrong_kitchen">هذا العرض لا يشمل هذا المطبخ أو الخطة.</string>
+    <string name="meals_promo_new_only">هذا العرض للمشتركين الجدد فقط.</string>
+    <string name="meals_promo_used">لقد استخدمت هذا العرض من قبل.</string>
+    <string name="meals_promo_exhausted">نفد هذا العرض.</string>
+    <string name="meals_promo_invalid">لا يمكن استخدام رمز العرض هنا.</string>
 </resources>

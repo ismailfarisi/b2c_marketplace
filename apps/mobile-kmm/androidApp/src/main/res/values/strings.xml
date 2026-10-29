@@ -435,4 +435,11 @@
     <string name="meals_cancel_confirm">Cancel this subscription? Remaining meals stop and unused paid days are credited back.</string>
     <string name="meals_cancel_yes">Yes, cancel</string>
     <string name="meals_keep">Keep it</string>
+    <string name="meals_promo_unknown">This promo code does not exist.</string>
+    <string name="meals_promo_not_live">This promo has ended or has not started yet.</string>
+    <string name="meals_promo_wrong_kitchen">This promo does not cover this kitchen or plan.</string>
+    <string name="meals_promo_new_only">This promo is for first-time subscribers.</string>
+    <string name="meals_promo_used">You have already used this promo.</string>
+    <string name="meals_promo_exhausted">This promo has been fully used.</string>
+    <string name="meals_promo_invalid">This promo code cannot be used here.</string>
 </resources>

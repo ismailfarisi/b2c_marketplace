@@ -31,6 +31,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -363,6 +364,9 @@ class MainActivity : ComponentActivity() {
                                         requireAccount = { run -> if (authorised) run() else pendingMeals = run },
                                     )
                                     if (pendingMeals != null && !authorised && gate != null) {
+                                        // Composed after MealsTab, so Back closes the gate
+                                        // instead of popping the page underneath it.
+                                        BackHandler { pendingMeals = null }
                                         SignInGate(
                                             viewModel = gate,
                                             onCancel = { pendingMeals = null },

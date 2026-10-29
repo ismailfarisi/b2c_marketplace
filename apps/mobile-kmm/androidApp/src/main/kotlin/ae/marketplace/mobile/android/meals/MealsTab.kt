@@ -15,6 +15,7 @@ import ae.marketplace.mobile.android.ui.Space
 import ae.marketplace.mobile.android.ui.Type
 import ae.marketplace.mobile.android.ui.rememberArabic
 import ae.marketplace.mobile.android.ui.words
+import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.meals.MealsViewModel
 import ae.marketplace.mobile.model.HomeSection
 import ae.marketplace.mobile.model.Kitchen
@@ -479,6 +480,15 @@ private fun CheckoutPage(
                 Spacer(Modifier.width(Space.Small))
                 SecondaryButton(stringResource(R.string.meals_apply), vm::applyPromo)
             }
+            val promoCode = (s.error as? Failure.Rejected)?.fieldCodes?.get("promo_code")
+            promoCode?.let {
+                Text(
+                    stringResource(promoReason(it)),
+                    color = Palette.Bad,
+                    fontSize = Type.Secondary,
+                    modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp),
+                )
+            }
             s.preview?.let { p ->
                 Spacer(Modifier.height(Space.Medium))
                 Card {
@@ -489,7 +499,7 @@ private fun CheckoutPage(
                     Line(stringResource(R.string.meals_total), money(p.totalMinor, p.currency), strong = true)
                 }
             }
-            s.error?.let { FailureStrip(it, onRetry = null) }
+            if (promoCode == null) s.error?.let { FailureStrip(it, onRetry = null) }
             Spacer(Modifier.height(Space.XL))
         }
         Box(Modifier.padding(Space.Edge)) {
@@ -875,4 +885,14 @@ private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsV
             }
         }
     }
+}
+
+private fun promoReason(code: String): Int = when (code) {
+    "unknown" -> R.string.meals_promo_unknown
+    "not_live" -> R.string.meals_promo_not_live
+    "wrong_kitchen", "wrong_product" -> R.string.meals_promo_wrong_kitchen
+    "new_customers_only" -> R.string.meals_promo_new_only
+    "already_used" -> R.string.meals_promo_used
+    "exhausted" -> R.string.meals_promo_exhausted
+    else -> R.string.meals_promo_invalid
 }
