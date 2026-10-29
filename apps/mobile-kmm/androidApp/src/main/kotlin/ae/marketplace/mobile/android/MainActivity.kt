@@ -7,6 +7,9 @@ import ae.marketplace.mobile.android.me.SearchScreen
 import ae.marketplace.mobile.android.me.ThreadScreen
 import ae.marketplace.mobile.android.sell.SellFlow
 import ae.marketplace.mobile.android.sell.SignInGate
+import ae.marketplace.mobile.android.meals.MealsTab
+import ae.marketplace.mobile.meals.MealsViewModel
+import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.feed.FeedViewModel
 import ae.marketplace.mobile.identity.Session
 import ae.marketplace.mobile.identity.SessionEnded
@@ -156,7 +159,7 @@ class MainActivity : ComponentActivity() {
 
                 // rememberSaveable, not remember: a rotation must not drop the
                 // viewer back to the feed from wherever they were.
-                var destination by rememberSaveable { mutableStateOf(Destination.Feed) }
+                var destination by rememberSaveable { mutableStateOf(Destination.Meals) }
                 var filtersOpen by remember { mutableStateOf(false) }
 
                 // Saved, Me, Search and messaging share one state holder — see
@@ -164,6 +167,9 @@ class MainActivity : ComponentActivity() {
                 // its whole design is that flicking between those tabs does not
                 // re-fetch.
                 var meVm by remember { mutableStateOf<MeViewModel?>(null) }
+                var mealsVm by remember { mutableStateOf<MealsViewModel?>(null) }
+                // A meals action waiting on sign-in: checkout, rotation, My meals.
+                var pendingMeals by remember { mutableStateOf<(() -> Unit)?>(null) }
                 var signInVm by remember { mutableStateOf<SignInViewModel?>(null) }
                 var session by remember { mutableStateOf<Session?>(null) }
 
@@ -179,6 +185,7 @@ class MainActivity : ComponentActivity() {
                     meVm = sdk.createMeViewModel().also {
                         it.setLocation(fallback.lat, fallback.lng)
                     }
+                    mealsVm = sdk.createMealsViewModel()
                     signInVm = sdk.createSignInViewModel()
                     session = sdk.session
                 }
@@ -206,6 +213,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(ended) {
                     val why = ended ?: return@LaunchedEffect
                     meVm?.forget()
+                    mealsVm?.forget()
                     if (why == SessionEnded.Expired) {
                         // Only for the involuntary case. Telling someone who
                         // just tapped Sign out that they have been signed out is
@@ -217,8 +225,8 @@ class MainActivity : ComponentActivity() {
                             R.string.session_expired,
                             Toast.LENGTH_LONG,
                         ).show()
-                        if (destination != Destination.Feed && destination != Destination.Search) {
-                            destination = Destination.Feed
+                        if (destination != Destination.Feed && destination != Destination.Search && destination != Destination.Meals) {
+                            destination = Destination.Meals
                         }
                     }
                     session?.clearEnded()
@@ -331,10 +339,28 @@ class MainActivity : ComponentActivity() {
                                 // Nothing to set. The gate reports to Session,
                                 // and this composition is already observing it —
                                 // a local flag here is what let the two disagree.
-                                onCancel = { destination = Destination.Feed },
+                                onCancel = { destination = Destination.Meals },
                             )
+                        } else if (destination == Destination.Meals && pendingMeals != null && !authorised && gate != null) {
+                            SignInGate(viewModel = gate, onCancel = { pendingMeals = null })
                         } else when (destination) {
                             Destination.Feed -> Unit // drawn above, always composed
+
+                            Destination.Meals -> mealsVm?.let {
+                                LaunchedEffect(authorised) {
+                                    if (authorised) pendingMeals?.let { run -> pendingMeals = null; run() }
+                                }
+                                val here = if (feedState.lat != 0.0 || feedState.lng != 0.0) {
+                                    LatLng(feedState.lat, feedState.lng)
+                                } else {
+                                    LatLng(fallback.lat, fallback.lng)
+                                }
+                                MealsTab(
+                                    viewModel = it,
+                                    location = here,
+                                    requireAccount = { run -> if (authorised) run() else pendingMeals = run },
+                                )
+                            }
 
                             Destination.Search -> me?.let {
                                 SearchScreen(

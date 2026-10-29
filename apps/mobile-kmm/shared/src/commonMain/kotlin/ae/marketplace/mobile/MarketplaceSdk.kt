@@ -8,6 +8,8 @@ import ae.marketplace.mobile.feed.FeedViewModel
 import ae.marketplace.mobile.identity.Session
 import ae.marketplace.mobile.identity.SignInApi
 import ae.marketplace.mobile.me.MeApi
+import ae.marketplace.mobile.meals.MealsApi
+import ae.marketplace.mobile.meals.MealsViewModel
 import ae.marketplace.mobile.me.MeViewModel
 import ae.marketplace.mobile.identity.SignInViewModel
 import ae.marketplace.mobile.identity.ViewerIdentity
@@ -61,6 +63,7 @@ class MarketplaceSdk private constructor(
     private val sell: SellApi,
     private val signIn: SignInApi,
     private val me: MeApi,
+    private val meals: MealsApi,
     private val scope: CoroutineScope,
     private val network: NetworkStatus,
 ) {
@@ -100,6 +103,7 @@ class MarketplaceSdk private constructor(
                 sell = SellApi(client, ApiClientFactory.createUploader()),
                 signIn = SignInApi(client, store),
                 me = MeApi(client),
+                meals = MealsApi(client),
                 scope = scope,
                 network = networkStatus(context),
             ).also { it.sessionId = sessionId }
@@ -166,4 +170,7 @@ class MarketplaceSdk private constructor(
      * its whole design is that flicking between those tabs does not re-fetch.
      */
     fun createMeViewModel(): MeViewModel = MeViewModel(me)
+
+    /** The meals tab: storefront, checkout and the customer's subscriptions. */
+    fun createMealsViewModel(): MealsViewModel = MealsViewModel(meals)
 }
