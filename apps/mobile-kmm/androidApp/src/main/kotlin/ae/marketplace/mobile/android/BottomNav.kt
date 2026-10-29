@@ -48,7 +48,7 @@ enum class Destination {
 // Was a private copy of the same hex in four files, two of which had drifted.
 // See ae.marketplace.mobile.android.ui.Palette.
 private val Accent = Palette.Accent
-private val MealsChilli = Color(0xFFD9441C)
+private val MealsChilli = Color(0xFFC43B16)
 
 /**
  * NAV_BAR_HEIGHT excludes the system navigation inset, which the bar adds on top

@@ -26,6 +26,7 @@ import {
 import { offerLabel } from "@/components/meals/offers";
 import { getMealKitchen, getMealKitchens } from "@/lib/meals-api";
 import type { Plan } from "@/lib/vendor-api";
+import { tagLabel } from "@/components/meals/kitchen-card";
 
 const COPY = {
   en: {
@@ -396,7 +397,9 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                         </strong>
                         <br />
                         <span className="ms-sub" dir="auto">
-                          {k.cuisines.join(", ")}
+                          {k.cuisines
+                            .map((c) => tagLabel(c, locale))
+                            .join(", ")}
                           {k.rotation_week_price_minor != null &&
                             ` · ${formatMoney({ amount: k.rotation_week_price_minor, currency: k.currency }, locale)} ${t.perWeek}`}
                         </span>
@@ -526,7 +529,8 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
               <dl className="ms-lines">
                 <dt dir="auto">
                   {t.discount}
-                  {preview.data.promo && ` · ${offerLabel(preview.data.promo, locale)}`}
+                  {preview.data.promo &&
+                    ` · ${offerLabel(preview.data.promo, locale)}`}
                 </dt>
                 <dd className="ms-ok">−{money(preview.data.discount_minor)}</dd>
               </dl>

@@ -17,6 +17,7 @@ const COPY = {
     mine: "My subscriptions",
     mineShort: "My meals",
     business: "Office lunches",
+    businessLong: "Office lunches for your company",
     signIn: "Sign in",
     signOut: "Sign out",
   },
@@ -28,6 +29,7 @@ const COPY = {
     mine: "اشتراكاتي",
     mineShort: "اشتراكاتي",
     business: "غداء المكاتب",
+    businessLong: "غداء المكاتب لشركتك",
     signIn: "تسجيل الدخول",
     signOut: "تسجيل الخروج",
   },
@@ -199,6 +201,10 @@ export function CustomerShell({
         )}
         {children}
       </main>
+      <footer className="ms-foot">
+        <Link href={`/${locale}/business`}>{t.businessLong}</Link>
+        <Link href={`/${locale}/feed`}>{t.feed}</Link>
+      </footer>
     </div>
   );
 }

@@ -229,13 +229,13 @@ button.ghost {
   --ms-ink: #1e1410;
   --ms-muted: #76675b;
   --ms-line: #f0e2d2;
-  --ms-accent: #d9441c;
+  --ms-accent: #c43b16;
   --ms-accent-deep: #a8300f;
   --ms-accent-ink: #ffffff;
   --ms-saffron: #f6b21b;
   --ms-saffron-soft: #fff1cc;
   --ms-saffron-ink: #7a5200;
-  --ms-ok: #2e7d4f;
+  --ms-ok: #276c44;
   --ms-ok-soft: #e3f2e8;
   --ms-bad: #b23b2e;
   --ms-tag: #fbeee2;
@@ -255,8 +255,10 @@ button.ghost {
   --ms-radius: 1rem;
   --ms-radius-lg: 1.5rem;
   --ms-shadow: 0 1px 2px rgb(30 20 16 / 0.06), 0 12px 32px rgb(30 20 16 / 0.08);
-  --ms-shadow-lift: 0 2px 4px rgb(30 20 16 / 0.08), 0 20px 44px rgb(30 20 16 / 0.14);
-  --ms-font-display: var(--font-display), var(--font-arabic), system-ui, sans-serif;
+  --ms-shadow-lift:
+    0 2px 4px rgb(30 20 16 / 0.08), 0 20px 44px rgb(30 20 16 / 0.14);
+  --ms-font-display:
+    var(--font-display), var(--font-arabic), system-ui, sans-serif;
   --ms-font-body: var(--font-body), var(--font-arabic), system-ui, sans-serif;
   background: var(--ms-paper);
   color: var(--ms-ink);
@@ -1992,8 +1994,17 @@ a.ms-offer:focus-visible {
   border: 1px solid var(--ms-line);
   min-inline-size: 0;
 }
-.ms-invite h2, .ms-invite h3, .ms-invite p { margin: 0; }
-.ms-invite-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.ms-invite h2,
+.ms-invite h3,
+.ms-invite p {
+  margin: 0;
+}
+.ms-invite-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
 .ms-invite-code {
   display: grid;
   padding: 0.5rem 0.875rem;
@@ -2001,24 +2012,75 @@ a.ms-offer:focus-visible {
   border-radius: var(--ms-radius);
   background: #fff;
 }
-.ms-invite-code strong { font-size: 1.25rem; letter-spacing: 0.12em; }
-.ms-vouchers { display: grid; gap: 0.5rem; }
-.ms-vouchers ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
-.ms-vouchers li {
-  display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline;
-  padding: 0.5rem 0.75rem; background: #fff; border: 1px solid var(--ms-line);
-  border-radius: var(--ms-radius); overflow-wrap: anywhere;
+.ms-invite-code strong {
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
 }
-.ms-voucher-off { opacity: 0.6; }
+.ms-vouchers {
+  display: grid;
+  gap: 0.5rem;
+}
+.ms-vouchers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.ms-vouchers li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  overflow-wrap: anywhere;
+}
+.ms-voucher-off {
+  opacity: 0.6;
+}
 
 /* Office lunches */
-.ms-biz { display: grid; gap: 1.25rem; padding-block: 1.5rem; }
-.ms-biz-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
-.ms-panel { border: 1px solid var(--ms-line); border-radius: var(--ms-radius); padding: 1.25rem; background: #fff; display: grid; gap: .75rem; align-content: start; min-inline-size: 0; }
-.ms-panel h2 { margin: 0; }
-.ms-biz-form { max-inline-size: 44rem; }
-.ms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
-.ms-list li { padding-block: .5rem; border-block-end: 1px solid var(--ms-line); overflow-wrap: anywhere; }
+.ms-biz {
+  display: grid;
+  gap: 1.25rem;
+  padding-block: 1.5rem;
+}
+.ms-biz-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+}
+.ms-panel {
+  border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  padding: 1.25rem;
+  background: #fff;
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  min-inline-size: 0;
+}
+.ms-panel h2 {
+  margin: 0;
+}
+.ms-biz-form {
+  max-inline-size: 44rem;
+}
+.ms-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.ms-list li {
+  padding-block: 0.5rem;
+  border-block-end: 1px solid var(--ms-line);
+  overflow-wrap: anywhere;
+}
 
 /*
  * Meals: food-led layer. Big photos, bold upright display type, chilli /
@@ -2112,7 +2174,9 @@ body {
   text-decoration: none;
   border: 0;
   box-shadow: 0 6px 16px color-mix(in srgb, var(--ms-accent) 30%, transparent);
-  transition: transform 0.15s, background 0.15s;
+  transition:
+    transform 0.15s,
+    background 0.15s;
 }
 .ms-btn:hover,
 .ms .ms-cta:hover {
@@ -2303,7 +2367,9 @@ body {
   overflow: hidden;
   box-shadow: var(--ms-shadow);
   text-decoration: none;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 .ms-dish-card:hover {
   transform: translateY(-3px);
@@ -2400,7 +2466,9 @@ body {
   border-radius: var(--ms-radius-lg);
   box-shadow: var(--ms-shadow);
   overflow: hidden;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 .ms .ms-card.ms-kc:hover,
 .ms .ms-card.ms-kc:focus-visible {
@@ -2685,7 +2753,12 @@ body {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(to top, rgb(25 12 6 / 0.88), rgb(25 12 6 / 0) 65%);
+  background: linear-gradient(
+    to top,
+    rgb(25 12 6 / 0.92),
+    rgb(25 12 6 / 0.55) 55%,
+    rgb(25 12 6 / 0) 85%
+  );
 }
 .ms-khero-copy {
   position: absolute;
@@ -2703,7 +2776,8 @@ body {
 }
 .ms-khero-sub {
   margin: 0;
-  color: var(--ms-char-muted);
+  color: var(--ms-char-ink);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
   text-transform: capitalize;
 }
 .ms-khero-badges {
@@ -2975,4 +3049,96 @@ body {
   .ms-nav > button:last-child {
     padding: 0.4rem 0.65rem;
   }
+}
+
+/* critique pass: lighter kitchen cards */
+.ms .ms-kc-rot {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--ms-muted);
+}
+.ms-dish-drawn.ms-cover-p1 {
+  background: var(--ms-cover-1);
+  color: var(--ms-cover-1-ink);
+}
+.ms-dish-drawn.ms-cover-p2 {
+  background: var(--ms-cover-2);
+  color: var(--ms-cover-2-ink);
+}
+.ms-dish-drawn.ms-cover-p3 {
+  background: var(--ms-cover-3);
+  color: var(--ms-cover-3-ink);
+}
+.ms-dish-drawn.ms-cover-p4 {
+  background: var(--ms-cover-4);
+  color: var(--ms-cover-4-ink);
+}
+
+/* critique pass: plan cards lead with the per-meal price */
+.ms .ms-plan-meal {
+  margin: 0.35rem 0 0;
+  color: var(--ms-muted);
+}
+.ms .ms-plan-meal strong {
+  font: 800 1.75rem var(--ms-font-display);
+  letter-spacing: -0.02em;
+  color: var(--ms-ink);
+}
+.ms .ms-kgrid .ms-plan-price,
+.ms .ms-plan-price {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--ms-muted);
+}
+.ms .ms-plan-facts {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--ms-muted);
+}
+.ms .ms-plan-rot {
+  margin-block-end: 0.75rem;
+  font-size: 0.85rem;
+}
+.ms .ms-plan-rot summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ms-ink);
+}
+.ms .ms-plan-rot p {
+  margin: 0.35rem 0 0;
+  color: var(--ms-muted);
+}
+
+.ms .ms-grid > .ms-grid-wide {
+  grid-column: 1 / -1;
+  list-style: none;
+}
+
+.ms .ms-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  max-inline-size: 72rem;
+  margin: 3rem auto 0;
+  padding: 1.5rem 1rem 6rem;
+  border-block-start: 1px solid var(--ms-line);
+  font-weight: 600;
+}
+.ms .ms-foot a {
+  color: var(--ms-ink);
+}
+
+.ms .ms-promo .ms-cta {
+  box-shadow: none;
+}
+.ms p,
+.ms li {
+  text-wrap: pretty;
+}
+.ms .ms-day.on small {
+  color: var(--ms-char-ink);
 }

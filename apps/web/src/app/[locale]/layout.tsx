@@ -10,8 +10,9 @@ import { Providers } from "@/app/providers";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Marketplace",
-  description: "Discover local food, services and vehicles",
+  title: "Meals: home-style kitchens on subscription",
+  description:
+    "Subscribe to a home-style kitchen near you: a weekday menu, delivered to your home or office.",
 };
 
 const display = Bricolage_Grotesque({

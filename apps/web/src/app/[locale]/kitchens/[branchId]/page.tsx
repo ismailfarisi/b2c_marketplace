@@ -18,6 +18,7 @@ import {
   type PublicKitchenDetail,
 } from "@/lib/meals-api";
 import type { MenuChoice } from "@/lib/vendor-api";
+import { tagLabel } from "@/components/meals/kitchen-card";
 
 const COPY = {
   en: {
@@ -29,9 +30,13 @@ const COPY = {
     menuNote:
       "The same dish every week on the same day. Where two dishes are listed you choose one before the cutoff.",
     or: "or",
+    choiceShort: "2 dishes",
+    choiceHelp:
+      "Days marked 2 dishes let you pick one of two mains before the cutoff.",
     noMenu: "This kitchen has not published its menu yet.",
     plans: "Plans",
     reviews: "Reviews from subscribers",
+    subscriber: "Subscriber",
     noReviews:
       "No reviews yet. Only customers who have had a delivery can rate a kitchen.",
     kitchenReply: "Kitchen's reply",
@@ -42,6 +47,11 @@ const COPY = {
     cycle: (d: number) => `per ${d}-day cycle`,
     perMeal: (m: string, n: number) => `${m} a meal · ${n} meals`,
     rotationMeal: (m: string) => `${m} a meal`,
+    mealUnit: "a meal",
+    mealCount: (n: number) => `${n} meals`,
+    inRotation: "In a 4-kitchen rotation?",
+    rotationHelp:
+      "Pick four kitchens for the month; each cooks one week and you pay its weekly price.",
     rotation: "In the 4-kitchen rotation",
     choice: "Choose 1 of 2",
     popular: "Most popular",
@@ -74,9 +84,13 @@ const COPY = {
     menuNote:
       "الطبق نفسه كل أسبوع في اليوم نفسه. عند وجود طبقين تختار أحدهما قبل الموعد النهائي.",
     or: "أو",
+    choiceShort: "طبقان",
+    choiceHelp:
+      "في الأيام المعلَّمة بطبقين يمكنك اختيار أحدهما قبل الموعد النهائي.",
     noMenu: "لم ينشر هذا المطبخ قائمته بعد.",
     plans: "الباقات",
     reviews: "تقييمات المشتركين",
+    subscriber: "مشترك",
     noReviews:
       "لا توجد تقييمات بعد. يمكن فقط للعملاء الذين استلموا توصيلة تقييم المطبخ.",
     kitchenReply: "رد المطبخ",
@@ -87,6 +101,11 @@ const COPY = {
     cycle: (d: number) => `لكل دورة ${d} يومًا`,
     perMeal: (m: string, n: number) => `${m} للوجبة · ${n} وجبة`,
     rotationMeal: (m: string) => `${m} للوجبة`,
+    mealUnit: "للوجبة",
+    mealCount: (n: number) => `${n} وجبة`,
+    inRotation: "ضمن تناوب ٤ مطابخ؟",
+    rotationHelp:
+      "اختر أربعة مطابخ للشهر؛ كل مطبخ يطبخ أسبوعًا وتدفع سعره الأسبوعي.",
     rotation: "ضمن تناوب المطابخ الأربعة",
     choice: "اختر طبقًا من اثنين",
     popular: "الأكثر طلبًا",
@@ -188,6 +207,9 @@ function Menu({
   const dishName = (d: MenuChoice) => (locale === "ar" && d.name_ar) || d.name;
   return (
     <div className="ms-menu2">
+      {days.some((d) => slots.some((slot) => cell(d, slot)?.alternative)) && (
+        <p className="ms-sub">{t.choiceHelp}</p>
+      )}
       <div className="ms-days" role="tablist" aria-label={t.menu}>
         {days.map((d) => (
           <button
@@ -200,7 +222,7 @@ function Menu({
           >
             {t.weekdays[d]}
             {slots.some((slot) => cell(d, slot)?.alternative) && (
-              <small>{t.or}</small>
+              <small>{t.choiceShort}</small>
             )}
           </button>
         ))}
@@ -314,7 +336,7 @@ export default function KitchenPage({
             fallback={
               k.menu.slots.find((s) => s.default?.image_url)?.default?.image_url
             }
-            caption={k.cuisines.join(" · ")}
+            caption={k.cuisines.map((c) => tagLabel(c, locale)).join(" · ")}
             className="ms-khero-img"
           />
           <div className="ms-khero-copy">
@@ -332,7 +354,10 @@ export default function KitchenPage({
             <p className="ms-khero-sub" dir="auto">
               {(locale === "ar" && k.vendor_name_ar) || k.vendor_name}
               {k.city && ` · ${k.city}`}
-              {k.cuisines.length > 0 && ` · ${k.cuisines.join(" · ")}`}
+              {k.cuisines.length > 0 &&
+                ` · ${k.cuisines.map((c) => tagLabel(c, locale)).join(" · ")}`}
+              {k.dietary_tags.length > 0 &&
+                ` · ${k.dietary_tags.map((c) => tagLabel(c, locale)).join(" · ")}`}
             </p>
           </div>
         </section>
@@ -344,13 +369,6 @@ export default function KitchenPage({
                 {blurb}
               </p>
             )}
-            <div className="ms-tags">
-              {k.dietary_tags.map((c) => (
-                <span key={c} className="ms-tag">
-                  {c}
-                </span>
-              ))}
-            </div>
             <ul className="ms-facts">
               {k.delivers_here != null && (
                 <li className={k.delivers_here ? "ms-ok" : "ms-bad"}>
@@ -385,6 +403,7 @@ export default function KitchenPage({
                         <span aria-hidden="true">{"★".repeat(r.rating)}</span>
                         <span className="ms-rating-count">
                           {" "}
+                          {t.subscriber} ·{" "}
                           {new Date(r.created_at).toLocaleDateString(
                             locale === "ar" ? "ar" : "en-GB",
                             {
@@ -432,32 +451,36 @@ export default function KitchenPage({
                         plan.description}
                     </p>
                   )}
-                  <p className="ms-sub">
-                    {plan.delivery_weekdays
-                      .map((d) => t.weekdays[d])
-                      .join(" · ")}
-                    <br />
-                    {plan.meal_slots
-                      .map((s) => t.slot[s] ?? s)
-                      .join(", ")} · {t.meals(plan.meals_per_day)}
-                    <br />
-                    {t.cutoff(plan.cutoff_hours)}
-                    {plan.allowed_pause_days > 0 &&
-                      ` · ${t.pause(plan.allowed_pause_days)}`}
-                  </p>
-                  <p className="ms-plan-price">
-                    <strong>{money(plan.price_minor, plan.currency)}</strong>{" "}
-                    {t.cycle(plan.cycle_days)}
-                  </p>
-                  <p className="ms-meal-price">
-                    {t.perMeal(
-                      money(
+                  <p className="ms-plan-meal">
+                    <strong>
+                      {money(
                         Math.round(plan.price_minor / mealsPerCycle(plan)),
                         plan.currency,
-                      ),
-                      mealsPerCycle(plan),
-                    )}
+                      )}
+                    </strong>{" "}
+                    {t.mealUnit}
                   </p>
+                  <p className="ms-plan-price">
+                    {money(plan.price_minor, plan.currency)}{" "}
+                    {t.cycle(plan.cycle_days)} ·{" "}
+                    {t.mealCount(mealsPerCycle(plan))}
+                  </p>
+                  <ul className="ms-plan-facts">
+                    <li>
+                      {plan.delivery_weekdays
+                        .map((d) => t.weekdays[d])
+                        .join(" · ")}
+                    </li>
+                    <li>
+                      {plan.meal_slots.map((s) => t.slot[s] ?? s).join(", ")} ·{" "}
+                      {t.meals(plan.meals_per_day)}
+                    </li>
+                    <li>
+                      {t.cutoff(plan.cutoff_hours)}
+                      {plan.allowed_pause_days > 0 &&
+                        ` · ${t.pause(plan.allowed_pause_days)}`}
+                    </li>
+                  </ul>
                   {plan.tiers.length > 1 && (
                     <ul className="ms-tiers">
                       {plan.tiers.map((tier) => (
@@ -472,23 +495,26 @@ export default function KitchenPage({
                   )}
                   {plan.rotation_enabled &&
                     plan.rotation_week_price_minor != null && (
-                      <p className="ms-rot">
-                        {t.rotation}:{" "}
-                        {money(plan.rotation_week_price_minor, plan.currency)}{" "}
-                        {t.rotationWeek} ·{" "}
-                        {t.rotationMeal(
-                          money(
-                            Math.round(
-                              plan.rotation_week_price_minor /
-                                Math.max(
-                                  1,
-                                  plan.days_per_week * plan.meals_per_day,
-                                ),
+                      <details className="ms-plan-rot">
+                        <summary>{t.inRotation}</summary>
+                        <p>
+                          {money(plan.rotation_week_price_minor, plan.currency)}{" "}
+                          {t.rotationWeek} ·{" "}
+                          {t.rotationMeal(
+                            money(
+                              Math.round(
+                                plan.rotation_week_price_minor /
+                                  Math.max(
+                                    1,
+                                    plan.days_per_week * plan.meals_per_day,
+                                  ),
+                              ),
+                              plan.currency,
                             ),
-                            plan.currency,
-                          ),
-                        )}
-                      </p>
+                          )}
+                          . {t.rotationHelp}
+                        </p>
+                      </details>
                     )}
                   {k.delivers_here === false ? (
                     <small className="ms-bad">{t.deliversNo}</small>

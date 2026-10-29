@@ -55,7 +55,7 @@ struct BottomNav: View {
     let onSelect: (Destination) -> Void
 
     private static let accent = Color(red: 0.706, green: 0.396, blue: 0.165)
-    private static let chilli = Color(red: 0.851, green: 0.267, blue: 0.110)
+    private static let chilli = Color(red: 0.769, green: 0.231, blue: 0.086)
     private static let muted = Color(red: 0.463, green: 0.404, blue: 0.357)
 
     /// Meals is a light food-photo page; the scrim is for video only.

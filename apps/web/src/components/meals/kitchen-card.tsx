@@ -75,6 +75,39 @@ export const COPY = {
 };
 
 export type Copy = (typeof COPY)["en"];
+
+const TAGS: Record<string, { en: string; ar: string }> = {
+  indian: { en: "Indian", ar: "هندي" },
+  kerala: { en: "Kerala", ar: "كيرلا" },
+  south_indian: { en: "South Indian", ar: "جنوب هندي" },
+  pakistani: { en: "Pakistani", ar: "باكستاني" },
+  arabic: { en: "Arabic", ar: "عربي" },
+  emirati: { en: "Emirati", ar: "إماراتي" },
+  lebanese: { en: "Lebanese", ar: "لبناني" },
+  egyptian: { en: "Egyptian", ar: "مصري" },
+  filipino: { en: "Filipino", ar: "فلبيني" },
+  mediterranean: { en: "Mediterranean", ar: "متوسطي" },
+  asian: { en: "Asian", ar: "آسيوي" },
+  chinese: { en: "Chinese", ar: "صيني" },
+  continental: { en: "Continental", ar: "أوروبي" },
+  healthy: { en: "Healthy", ar: "صحي" },
+  halal: { en: "Halal", ar: "حلال" },
+  vegetarian: { en: "Vegetarian", ar: "نباتي" },
+  vegan: { en: "Vegan", ar: "نباتي صرف" },
+  gluten_free: { en: "Gluten-free", ar: "خالٍ من الغلوتين" },
+  dairy_free: { en: "Dairy-free", ar: "خالٍ من الألبان" },
+};
+
+/** Display label for a cuisine or dietary tag slug. */
+export function tagLabel(tag: string, locale: "en" | "ar") {
+  const key = tag
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const known = TAGS[key];
+  if (known) return known[locale];
+  return tag.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 export const FILTER_SLOTS = ["breakfast", "lunch", "dinner", "suhoor", "iftar"];
 
 export function KitchenCard({
@@ -88,7 +121,6 @@ export function KitchenCard({
 }) {
   const name = (locale === "ar" && k.name_ar) || k.name;
   const vendor = (locale === "ar" && k.vendor_name_ar) || k.vendor_name;
-  const blurb = (locale === "ar" && k.description_ar) || k.description;
   const money = (amount: number) =>
     formatMoney({ amount, currency: k.currency }, locale);
   const dishes = k.week_dishes ?? [];
@@ -104,7 +136,10 @@ export function KitchenCard({
             name={name}
             src={k.cover_image_url}
             fallback={dishes.find((d) => d.image_url)?.image_url}
-            caption={k.cuisines.slice(0, 3).join(" · ")}
+            caption={k.cuisines
+              .slice(0, 3)
+              .map((c) => tagLabel(c, locale))
+              .join(" · ")}
           />
           <span className="ms-kc-price">
             <span className="ms-sub">{t.from}</span>{" "}
@@ -133,16 +168,13 @@ export function KitchenCard({
           </div>
           {(k.cuisines.length > 0 || k.dietary_tags.length > 0) && (
             <p className="ms-kc-cu" dir="auto">
-              {[...k.cuisines, ...k.dietary_tags].join(" · ")}
-            </p>
-          )}
-          {blurb && (
-            <p className="ms-blurb" dir="auto">
-              {blurb}
+              {[...k.cuisines, ...k.dietary_tags]
+                .map((c) => tagLabel(c, locale))
+                .join(" · ")}
             </p>
           )}
           {dishes.length > 0 && (
-            <div className="ms-week">
+            <div className="ms-week" aria-label={t.thisWeek}>
               {dishes.map((d) => (
                 <DishPhoto
                   key={d.name}
@@ -150,27 +182,12 @@ export function KitchenCard({
                   src={d.image_url}
                 />
               ))}
-              <span dir="auto">
-                {dishName(dishes[0]!, locale)} · {t.thisWeek}
-              </span>
             </div>
           )}
-          <div className="ms-kc-foot">
-            <span className="ms-tags">
-              {k.meal_slots.map((s) => (
-                <span key={s} className="ms-tag ms-tag-slot">
-                  {t.slot[s] ?? s}
-                </span>
-              ))}
-            </span>
-            <span className="ms-sub">
-              {money(k.from_price_minor)} {t.perCycle}
-            </span>
-          </div>
           {k.rotation_week_price_minor != null && (
-            <span className="ms-rot-pill">
+            <p className="ms-kc-rot">
               {money(k.rotation_week_price_minor)} {t.perWeek}
-            </span>
+            </p>
           )}
         </div>
       </Link>

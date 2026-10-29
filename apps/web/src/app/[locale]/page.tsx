@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { use, useState } from "react";
+import { Fragment, use, useState } from "react";
 
 import {
   CuisineCircles,
@@ -19,6 +19,7 @@ import {
   KitchenRail,
   MERCH_COPY,
   sectionTitle,
+  tagLabel,
 } from "@/components/meals/kitchen-card";
 import { CustomerShell, formatDay } from "@/components/meals/shell";
 import {
@@ -127,7 +128,6 @@ export default function MealsHome({
 
   const promo = (
     <aside className="ms-promo">
-      <p className="ms-eyebrow">{t.promoEyebrow}</p>
       <h2>{t.promoTitle}</h2>
       {photos.length >= 4 && (
         <div className="ms-plates" aria-hidden>
@@ -149,7 +149,14 @@ export default function MealsHome({
     </aside>
   );
 
-  const allKitchens = (
+  const filtering = q !== "" || slot !== "" || rotation || cuisine !== "";
+  const showPromo =
+    sections == null || sections.some((s) => s.type === "rotation_promo");
+  // Promo follows the first two rows of kitchens (or the whole list when
+  // shorter) so the choice comes first and no kitchen is left stranded.
+  const promoAfter = Math.min(list.data?.items.length ?? 0, 6);
+
+  const filters = (
     <div id="all-kitchens" className="ms-all">
       <form
         className="ms-filters"
@@ -194,30 +201,36 @@ export default function MealsHome({
               aria-label={MERCH_COPY[locale].clear}
               onClick={() => setCuisine("")}
             >
-              {cuisine} ×
+              {tagLabel(cuisine, locale)} ×
             </button>
           )}
         </div>
       </form>
-
-      {!point || list.isPending ? (
-        <p className="ms-note">{t.locating}</p>
-      ) : list.isError ? (
-        <p className="ms-note ms-bad">{t.failed}</p>
-      ) : list.data.items.length === 0 ? (
-        <p className="ms-empty">{t.empty}</p>
-      ) : (
-        <>
-          <p className="ms-count">{t.count(list.data.items.length)}</p>
-          <ul className="ms-grid">
-            {list.data.items.map((k) => (
-              <KitchenCard key={k.branch_id} k={k} locale={locale} t={t} />
-            ))}
-          </ul>
-        </>
-      )}
     </div>
   );
+
+  const kitchenList =
+    !point || list.isPending ? (
+      <p className="ms-note">{t.locating}</p>
+    ) : list.isError ? (
+      <p className="ms-note ms-bad">{t.failed}</p>
+    ) : list.data.items.length === 0 ? (
+      <p className="ms-empty">{t.empty}</p>
+    ) : (
+      <section className="ms-all-list">
+        <p className="ms-count">{t.count(list.data.items.length)}</p>
+        <ul className="ms-grid">
+          {list.data.items.map((k, i) => (
+            <Fragment key={k.branch_id}>
+              <KitchenCard k={k} locale={locale} t={t} />
+              {showPromo && !filtering && i === promoAfter - 1 && (
+                <li className="ms-grid-wide">{promo}</li>
+              )}
+            </Fragment>
+          ))}
+        </ul>
+      </section>
+    );
 
   const pickCuisine = (c: string) => {
     setCuisine(c);
@@ -239,52 +252,48 @@ export default function MealsHome({
     return (
       <CustomerShell locale={locale}>
         {intro}
-        {dishRail}
-        <div className="ms-promo-wide">{promo}</div>
-        {allKitchens}
+        {filters}
+        {kitchenList}
+        {!filtering && dishRail}
       </CustomerShell>
     );
   }
 
+  const cuisineStrip = sections.find((s) => s.type === "cuisine_strip");
+
   return (
     <CustomerShell locale={locale}>
       {intro}
-      {dishRail}
-      {sections.map((s) => {
-        switch (s.type) {
-          case "banner_carousel":
-            return (
-              <BannerCarousel
-                key={s.id}
-                banners={s.banners ?? []}
-                locale={locale}
-              />
-            );
-          case "kitchen_rail":
-            return <KitchenRail key={s.id} s={s} locale={locale} />;
-          case "rotation_promo":
-            return (
-              <div key={s.id} className="ms-promo-wide">
-                {promo}
-              </div>
-            );
-          case "cuisine_strip":
-            return (
-              <CuisineCircles
-                key={s.id}
-                title={sectionTitle(s, locale) || f.cuisines}
-                items={s.cuisines ?? []}
-                active={cuisine}
-                count={t.count}
-                onPick={pickCuisine}
-              />
-            );
-          case "all_kitchens":
-            return <div key={s.id}>{allKitchens}</div>;
-          default:
-            return null;
-        }
-      })}
+      {showList && filters}
+      {cuisineStrip && (
+        <CuisineCircles
+          title={sectionTitle(cuisineStrip, locale) || f.cuisines}
+          items={cuisineStrip.cuisines ?? []}
+          active={cuisine}
+          count={t.count}
+          label={(c) => tagLabel(c, locale)}
+          onPick={pickCuisine}
+        />
+      )}
+      {!filtering &&
+        sections
+          .filter((s) => s.type === "banner_carousel")
+          .map((s) => (
+            <BannerCarousel
+              key={s.id}
+              banners={s.banners ?? []}
+              locale={locale}
+            />
+          ))}
+      {showList
+        ? kitchenList
+        : !filtering &&
+          showPromo && <div className="ms-promo-wide">{promo}</div>}
+      {!filtering && dishRail}
+      {!filtering &&
+        sections
+          .filter((s) => s.type === "kitchen_rail")
+          .map((s) => <KitchenRail key={s.id} s={s} locale={locale} />)}
     </CustomerShell>
   );
 }

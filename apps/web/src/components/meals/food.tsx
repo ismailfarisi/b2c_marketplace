@@ -95,7 +95,6 @@ export function HomeHero({
   return (
     <section className="ms-hh">
       <div className="ms-hh-copy">
-        <p className="ms-pill-eyebrow">{t.eyebrow}</p>
         <h1>
           {t.title[0]} <em>{t.title[1]}</em>
         </h1>
@@ -203,21 +202,30 @@ export function CuisineCircles({
   items,
   active,
   count,
+  label = (c) => c,
   onPick,
 }: {
   title: string;
   items: { cuisine: string; kitchens: number; image_url: string | null }[];
   active: string;
   count: (n: number) => string;
+  label?: (c: string) => string;
   onPick: (c: string) => void;
 }) {
+  // A photo reused across cuisines reads as a bug; later repeats get a drawn tile.
+  const used = new Set<string>();
+  const shown = items.map((c) => {
+    if (!c.image_url || used.has(c.image_url)) return { ...c, image_url: null };
+    used.add(c.image_url);
+    return c;
+  });
   return (
     <section className="ms-shelf">
       <div className="ms-shelf-head">
         <h2>{title}</h2>
       </div>
       <div className="ms-rail ms-circles">
-        {items.map((c) => (
+        {shown.map((c) => (
           <button
             key={c.cuisine}
             type="button"
@@ -226,11 +234,11 @@ export function CuisineCircles({
             onClick={() => onPick(active === c.cuisine ? "" : c.cuisine)}
           >
             <DishPhoto
-              name={c.cuisine}
+              name={label(c.cuisine)}
               src={c.image_url}
               className="ms-circle"
             />
-            <span dir="auto">{c.cuisine}</span>
+            <span dir="auto">{label(c.cuisine)}</span>
             <small>{count(c.kitchens)}</small>
           </button>
         ))}

@@ -7,7 +7,7 @@
       "chilli-red": {
         "role": "primary",
         "displayName": "Chilli Red",
-        "canonical": "#d9441c",
+        "canonical": "#c43b16",
         "tonalRamp": [
           "#3a1b12",
           "#6c2c1a",
@@ -82,7 +82,7 @@
       "leaf-green": {
         "role": "tertiary",
         "displayName": "Leaf Green",
-        "canonical": "#2e7d4f",
+        "canonical": "#276c44",
         "tonalRamp": [
           "#1a3224",
           "#2b5c3f",
@@ -340,7 +340,7 @@
       "refersTo": "button-primary",
       "description": "Every primary action: Subscribe, See plans, Apply.",
       "html": "<button class=\"ds-btn-primary\">See plans</button>",
-      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 1.4rem;border:0;border-radius:999px;background:#d9441c;color:#fff;font:700 1rem 'DM Sans',system-ui,sans-serif;box-shadow:0 6px 16px rgb(217 68 28 / .3);cursor:pointer;transition:transform .15s,background .15s}.ds-btn-primary:hover{background:#a8300f;transform:translateY(-1px)}.ds-btn-primary:focus-visible{outline:2px solid #1e1410;outline-offset:3px}"
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 1.4rem;border:0;border-radius:999px;background:#c43b16;color:#fff;font:700 1rem 'DM Sans',system-ui,sans-serif;box-shadow:0 6px 16px rgb(217 68 28 / .3);cursor:pointer;transition:transform .15s,background .15s}.ds-btn-primary:hover{background:#a8300f;transform:translateY(-1px)}.ds-btn-primary:focus-visible{outline:2px solid #1e1410;outline-offset:3px}"
     },
     {
       "name": "Ghost Button",
@@ -348,7 +348,7 @@
       "refersTo": "button-ghost",
       "description": "Secondary actions beside a primary button.",
       "html": "<button class=\"ds-btn-ghost\">View menu</button>",
-      "css": ".ds-btn-ghost{padding:.8rem 1.4rem;border:1.5px solid #1e1410;border-radius:999px;background:transparent;color:#1e1410;font:700 1rem 'DM Sans',system-ui,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-btn-ghost:hover{background:#1e1410;color:#fff8f0}.ds-btn-ghost:focus-visible{outline:2px solid #d9441c;outline-offset:3px}"
+      "css": ".ds-btn-ghost{padding:.8rem 1.4rem;border:1.5px solid #1e1410;border-radius:999px;background:transparent;color:#1e1410;font:700 1rem 'DM Sans',system-ui,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-btn-ghost:hover{background:#1e1410;color:#fff8f0}.ds-btn-ghost:focus-visible{outline:2px solid #c43b16;outline-offset:3px}"
     },
     {
       "name": "Filter Chips",
@@ -356,7 +356,7 @@
       "refersTo": "chip",
       "description": "Meal-slot filters and weekday tabs; selected fills with ink.",
       "html": "<div class=\"ds-chips\"><button class=\"ds-chip ds-on\">Lunch</button><button class=\"ds-chip\">Dinner</button><button class=\"ds-chip\">Breakfast</button></div>",
-      "css": ".ds-chips{display:flex;gap:.5rem}.ds-chip{padding:.5rem 1rem;border:1.5px solid #f0e2d2;border-radius:999px;background:#fff;color:#1e1410;font:600 .9rem 'DM Sans',system-ui,sans-serif;cursor:pointer}.ds-chip:hover{border-color:#1e1410}.ds-chip.ds-on{background:#1e1410;border-color:#1e1410;color:#fff8f0}.ds-chip:focus-visible{outline:2px solid #d9441c;outline-offset:2px}"
+      "css": ".ds-chips{display:flex;gap:.5rem}.ds-chip{padding:.5rem 1rem;border:1.5px solid #f0e2d2;border-radius:999px;background:#fff;color:#1e1410;font:600 .9rem 'DM Sans',system-ui,sans-serif;cursor:pointer}.ds-chip:hover{border-color:#1e1410}.ds-chip.ds-on{background:#1e1410;border-color:#1e1410;color:#fff8f0}.ds-chip:focus-visible{outline:2px solid #c43b16;outline-offset:2px}"
     },
     {
       "name": "Search Field",
@@ -364,7 +364,7 @@
       "refersTo": "input-search",
       "description": "Kitchen and dish search in the header and filters.",
       "html": "<input class=\"ds-input-search\" type=\"search\" placeholder=\"Search kitchens or dishes\">",
-      "css": ".ds-input-search{width:18rem;padding:.75rem 1.1rem;border:1.5px solid #f0e2d2;border-radius:999px;background:#fff;color:#1e1410;font:400 1rem 'DM Sans',system-ui,sans-serif;transition:border-color 120ms ease}.ds-input-search:focus-visible{outline:none;border-color:#d9441c}"
+      "css": ".ds-input-search{width:18rem;padding:.75rem 1.1rem;border:1.5px solid #f0e2d2;border-radius:999px;background:#fff;color:#1e1410;font:400 1rem 'DM Sans',system-ui,sans-serif;transition:border-color 120ms ease}.ds-input-search:focus-visible{outline:none;border-color:#c43b16}"
     },
     {
       "name": "Eyebrow",
@@ -380,7 +380,7 @@
       "refersTo": "card-kitchen",
       "description": "Photo-led kitchen card with per-meal price on the photo, rating, safety badge.",
       "html": "<a class=\"ds-kc\" href=\"#\"><div class=\"ds-kc-ph\"><span class=\"ds-kc-tile\">A</span><span class=\"ds-kc-price\">from AED 60 a meal</span></div><div class=\"ds-kc-body\"><b>Amma's Kitchen</b><span class=\"ds-kc-meta\">Kerala · Al Quoz</span><span class=\"ds-kc-row\"><span class=\"ds-kc-star\">★ 4.7</span><span class=\"ds-kc-safe\">Food safety verified</span></span></div></a>",
-      "css": ".ds-kc{display:block;width:17rem;border-radius:1.5rem;overflow:hidden;background:#fff;color:#1e1410;text-decoration:none;box-shadow:0 1px 2px rgb(30 20 16 / .06),0 12px 32px rgb(30 20 16 / .08);transition:transform .2s,box-shadow .2s}.ds-kc:hover,.ds-kc:focus-visible{transform:translateY(-3px);box-shadow:0 2px 4px rgb(30 20 16 / .08),0 20px 44px rgb(30 20 16 / .14);outline:none}.ds-kc-ph{position:relative;aspect-ratio:4/3;background:#fde0cf;display:grid;place-items:center}.ds-kc-tile{font:800 3rem 'Bricolage Grotesque',system-ui,sans-serif;color:#a8300f}.ds-kc-price{position:absolute;inset-inline-start:.75rem;inset-block-end:.75rem;padding:.3rem .7rem;border-radius:999px;background:#fff;font:700 .8rem 'DM Sans',system-ui,sans-serif}.ds-kc-body{display:grid;gap:.3rem;padding:1rem 1.25rem 1.25rem;font-family:'DM Sans',system-ui,sans-serif}.ds-kc-body b{font:800 1.05rem 'Bricolage Grotesque',system-ui,sans-serif}.ds-kc-meta{color:#76675b;font-size:.9rem}.ds-kc-row{display:flex;gap:.5rem;align-items:center;font-size:.8rem}.ds-kc-star{color:#d9441c;font-weight:700}.ds-kc-safe{padding:.15rem .55rem;border-radius:999px;background:rgb(46 125 79 / .12);color:#2e7d4f;font-weight:700}"
+      "css": ".ds-kc{display:block;width:17rem;border-radius:1.5rem;overflow:hidden;background:#fff;color:#1e1410;text-decoration:none;box-shadow:0 1px 2px rgb(30 20 16 / .06),0 12px 32px rgb(30 20 16 / .08);transition:transform .2s,box-shadow .2s}.ds-kc:hover,.ds-kc:focus-visible{transform:translateY(-3px);box-shadow:0 2px 4px rgb(30 20 16 / .08),0 20px 44px rgb(30 20 16 / .14);outline:none}.ds-kc-ph{position:relative;aspect-ratio:4/3;background:#fde0cf;display:grid;place-items:center}.ds-kc-tile{font:800 3rem 'Bricolage Grotesque',system-ui,sans-serif;color:#a8300f}.ds-kc-price{position:absolute;inset-inline-start:.75rem;inset-block-end:.75rem;padding:.3rem .7rem;border-radius:999px;background:#fff;font:700 .8rem 'DM Sans',system-ui,sans-serif}.ds-kc-body{display:grid;gap:.3rem;padding:1rem 1.25rem 1.25rem;font-family:'DM Sans',system-ui,sans-serif}.ds-kc-body b{font:800 1.05rem 'Bricolage Grotesque',system-ui,sans-serif}.ds-kc-meta{color:#76675b;font-size:.9rem}.ds-kc-row{display:flex;gap:.5rem;align-items:center;font-size:.8rem}.ds-kc-star{color:#c43b16;font-weight:700}.ds-kc-safe{padding:.15rem .55rem;border-radius:999px;background:rgb(46 125 79 / .12);color:#276c44;font-weight:700}"
     },
     {
       "name": "Offer Banner",
@@ -388,7 +388,7 @@
       "refersTo": "banner-offer",
       "description": "Staff-built merchandising banner without an image.",
       "html": "<div class=\"ds-banner\"><span>Try 4 kitchens this month</span><button>Build a rotation</button></div>",
-      "css": ".ds-banner{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem 1.5rem;border-radius:1.5rem;background:#d9441c;color:#fff;font:800 1.4rem 'Bricolage Grotesque',system-ui,sans-serif}.ds-banner button{padding:.6rem 1.1rem;border:0;border-radius:999px;background:#fff;color:#a8300f;font:700 .9rem 'DM Sans',system-ui,sans-serif;cursor:pointer}.ds-banner button:hover{background:#fff1cc}"
+      "css": ".ds-banner{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem 1.5rem;border-radius:1.5rem;background:#c43b16;color:#fff;font:800 1.4rem 'Bricolage Grotesque',system-ui,sans-serif}.ds-banner button{padding:.6rem 1.1rem;border:0;border-radius:999px;background:#fff;color:#a8300f;font:700 .9rem 'DM Sans',system-ui,sans-serif;cursor:pointer}.ds-banner button:hover{background:#fff1cc}"
     }
   ],
   "narrative": {

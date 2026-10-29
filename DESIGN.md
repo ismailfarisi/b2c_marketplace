@@ -2,12 +2,12 @@
 name: Meals
 description: Everyday home-style meal subscriptions, food first.
 colors:
-  chilli-red: "#d9441c"
+  chilli-red: "#c43b16"
   chilli-deep: "#a8300f"
   saffron: "#f6b21b"
   saffron-soft: "#fff1cc"
   saffron-ink: "#7a5200"
-  leaf-green: "#2e7d4f"
+  leaf-green: "#276c44"
   leaf-soft: "#e3f2e8"
   blush: "#fde6d8"
   ghee-paper: "#fff8f0"
@@ -121,7 +121,7 @@ The feel is warm and generous: soft, round corners, roomy cards and a gentle lif
 A spice-cupboard palette on cream: one hot red, one golden yellow, one fresh green, and warm browns instead of greys.
 
 ### Primary
-- **Chilli Red** (`chilli-red`): every primary action (Subscribe, See plans, Apply), the offer banner background, selected bottom-nav items on mobile. Hover and pressed deepen to **Chilli Deep** (`chilli-deep`), which also anchors the rotation promo gradient with Char.
+- **Chilli Red** (`chilli-red`): every primary action (Subscribe, See plans, Apply), the offer banner background, selected bottom-nav items on mobile. Hover and pressed deepen to **Chilli Deep** (`chilli-deep`), which also anchors the rotation promo gradient with Char. Chilli Red is tuned to clear 4.5:1 for white text on it and for red text on Cream Paper; do not lighten it.
 
 ### Secondary
 - **Saffron** (`saffron`): small highlight accents and offer moments. Its soft tint **Saffron Soft** (`saffron-soft`) with **Saffron Ink** (`saffron-ink`) text forms the eyebrow pill above headings and the offer tags.
