@@ -147,6 +147,7 @@ export interface MySubscription {
   renewal_mode: "auto" | "manual" | "none";
   renewed_by_id: string | null;
   can_renew: boolean;
+  company_name: string | null;
 }
 
 export interface MealOption {
