@@ -23,6 +23,20 @@ import {
 } from "@/lib/customer-api";
 import { getMealKitchen } from "@/lib/meals-api";
 
+const LUNCH_ERRORS_AR: Record<string, string> = {
+  over_meal_cap: "تكلفة الوجبة في هذه الخطة أعلى مما تغطيه شركتك.",
+  over_credit_limit: "بلغت شركتك حد رصيد الغداء. تواصل مع مسؤول الغداء.",
+  company_not_active: "حساب غداء شركتك غير مفعّل حاليًا.",
+  not_member: "لم تعد ضمن موظفي هذه الشركة.",
+};
+
+function problemReason(err: unknown, locale: string): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const code = (err.problem as { code?: string } | null)?.code;
+  if (locale === "ar" && code && LUNCH_ERRORS_AR[code]) return LUNCH_ERRORS_AR[code];
+  return err.problem?.errors?.[0]?.message ?? err.problem?.detail ?? null;
+}
+
 const COPY = {
   en: {
     back: "Back to kitchen",
@@ -302,11 +316,7 @@ function Checkout({
     retry: false,
   });
   const previewProblem =
-    preview.error instanceof ApiError
-      ? (preview.error.problem?.errors?.[0]?.message ??
-          preview.error.problem?.detail ??
-          null)
-      : null;
+    problemReason(preview.error, locale);
   const promoRejected =
     preview.error instanceof ApiError &&
     preview.error.fieldErrors["promo_code"] != null;
@@ -355,11 +365,7 @@ function Checkout({
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors["address_id"])
         setError(t.outside);
-      else if (err instanceof ApiError && err.problem?.errors?.[0]?.message)
-        setError(err.problem.errors[0].message);
-      else if (err instanceof ApiError && err.problem?.detail)
-        setError(err.problem.detail);
-      else setError(t.failed);
+      else setError(problemReason(err, locale) ?? t.failed);
       setBusy(false);
     }
   }
