@@ -272,9 +272,9 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 	materialiseSubscriptions(startupCtx, svc)
 	openRenewals(startupCtx, svc)
 	sendMealMessages(startupCtx, svc)
-	cancel()
-
 	referrals := promo.NewService(pool)
+	settleReferrals(startupCtx, referrals)
+	cancel()
 
 	ticker := time.NewTicker(subscriptionTick)
 	defer ticker.Stop()

@@ -1616,6 +1616,45 @@ paths:
                     items: { $ref: "#/components/schemas/Rotation" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /me/referrals:
+    get:
+      tags: [subscriptions]
+      operationId: getMyReferrals
+      summary: The signed-in customer's invite code and referral vouchers
+      description: >
+        The code is created on first read while the programme is running. A
+        friend enters it as a promo code at checkout; the referrer's voucher is
+        issued after the friend's first meal is delivered.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [active, friend_amount_minor, reward_amount_minor, currency, pending, rewarded, vouchers]
+                properties:
+                  active: { type: boolean }
+                  code: { type: string }
+                  friend_amount_minor: { type: integer, format: int64 }
+                  reward_amount_minor: { type: integer, format: int64 }
+                  currency: { type: string }
+                  pending: { type: integer }
+                  rewarded: { type: integer }
+                  vouchers:
+                    type: array
+                    items:
+                      type: object
+                      required: [code, amount_minor, currency, used, active]
+                      properties:
+                        code: { type: string }
+                        amount_minor: { type: integer, format: int64 }
+                        currency: { type: string }
+                        ends_at: { type: string, format: date-time, nullable: true }
+                        used: { type: boolean }
+                        active: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /me/rotations/{rotationId}:
     get:
       tags: [subscriptions]
