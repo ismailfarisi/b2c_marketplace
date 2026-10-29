@@ -174,12 +174,12 @@ struct SignInGate: View {
     /// this screen used to show for all of them, and it is the one message that
     /// cannot be acted on.
     private static func words(_ problem: SignInProblem) -> String {
-        switch problem {
-        case .badPhone: return String(localized: "signin_err_phone")
-        case .wrongCode: return String(localized: "signin_err_code")
-        case .needsNewCode: return String(localized: "signin_err_stale")
-        case .tooMany: return String(localized: "signin_err_too_many")
-        case .offline: return String(localized: "signin_err_offline")
+        switch problem.code {
+        case "BadPhone": return String(localized: "signin_err_phone")
+        case "WrongCode": return String(localized: "signin_err_code")
+        case "NeedsNewCode": return String(localized: "signin_err_stale")
+        case "TooMany": return String(localized: "signin_err_too_many")
+        case "Offline": return String(localized: "signin_err_offline")
         default: return String(localized: "signin_err_unknown")
         }
     }

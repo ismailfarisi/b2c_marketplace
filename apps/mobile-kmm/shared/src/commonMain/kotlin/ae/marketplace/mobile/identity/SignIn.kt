@@ -122,7 +122,10 @@ enum class SignInProblem {
     Offline,
 
     /** Anything else, including a 500. */
-    Unknown,
+    Unknown;
+
+    /** The entry's Kotlin name, for Swift, which spells multi-word case names unpredictably. */
+    val code: String get() = name
 }
 
 class SignInViewModel(
