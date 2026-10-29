@@ -424,4 +424,15 @@
     <string name="meals_status_ended">Ended</string>
     <string name="meals_rotations">Rotations</string>
     <string name="meals_subscriptions">Subscriptions</string>
+    <string name="meals_signin_title">Sign in to subscribe</string>
+    <string name="meals_signin_why">We use your number for delivery updates and to keep your subscriptions in one place.</string>
+    <string name="meals_paying">Finish paying in your browser. Your meals are scheduled once the payment is confirmed.</string>
+    <string name="meals_pause_title">Pause deliveries</string>
+    <string name="meals_pause_left">%1$d of %2$d pause days left</string>
+    <string name="meals_pause_from">From (YYYY-MM-DD)</string>
+    <string name="meals_pause_to">To (YYYY-MM-DD)</string>
+    <string name="meals_pause">Pause</string>
+    <string name="meals_cancel_confirm">Cancel this subscription? Remaining meals stop and unused paid days are credited back.</string>
+    <string name="meals_cancel_yes">Yes, cancel</string>
+    <string name="meals_keep">Keep it</string>
 </resources>

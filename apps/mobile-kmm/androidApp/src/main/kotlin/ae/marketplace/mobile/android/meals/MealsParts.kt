@@ -2,10 +2,16 @@ package ae.marketplace.mobile.android.meals
 
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.android.ui.Palette
-import ae.marketplace.mobile.android.ui.Poster
 import ae.marketplace.mobile.android.ui.Space
 import ae.marketplace.mobile.android.ui.Type
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -128,7 +134,18 @@ internal fun KitchenCover(
             }
         }
         if (!imageUrl.isNullOrBlank()) {
-            Poster(url = imageUrl, lqip = null, modifier = Modifier.fillMaxSize(), corner = 14.dp)
+            // Drawn over the monogram, and only once it loads: a broken link
+            // leaves the designed cover rather than an empty box.
+            val painter = rememberAsyncImagePainter(imageUrl)
+            val state by painter.state.collectAsState()
+            if (state is AsyncImagePainter.State.Success) {
+                Image(
+                    painter = painter,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
+                )
+            }
         }
     }
 }

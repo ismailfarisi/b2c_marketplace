@@ -1,5 +1,8 @@
 package ae.marketplace.mobile.android.meals
 
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.text.style.TextAlign
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.android.me.BottomPad
 import ae.marketplace.mobile.android.ui.EmptyBlock
@@ -32,6 +35,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -98,7 +103,11 @@ fun MealsTab(
     BackHandler(enabled = stack.size > 1) { back() }
 
     val context = LocalContext.current
+    // A redirect means the provider has not confirmed yet, so the next page
+    // must not say the payment went through.
+    var redirected by remember { mutableStateOf(false) }
     val openPayment: (String) -> Unit = { url ->
+        redirected = true
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         viewModel.paymentOpened()
     }
@@ -118,7 +127,7 @@ fun MealsTab(
             )
             Page.Checkout -> CheckoutPage(viewModel, location, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Rotation -> RotationPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
-            Page.Paid -> PaidPage(onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
+            Page.Paid -> PaidPage(redirected, onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
             Page.Mine -> MinePage(viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) })
             Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
         }
@@ -394,10 +403,11 @@ private fun PlanCard(p: MealPlan, arabic: Boolean, enabled: Boolean, onSubscribe
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = 6.dp)
+            .height(IntrinsicSize.Min)
             .background(Warm.Card, RoundedCornerShape(16.dp))
             .border(1.dp, Palette.Line, RoundedCornerShape(16.dp)),
     ) {
-        Box(Modifier.width(5.dp).height(150.dp).background(Warm.Saffron, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)))
+        Box(Modifier.width(5.dp).fillMaxHeight().background(Warm.Saffron, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)))
         Column(Modifier.padding(Space.Large), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(pick(p.name, p.nameAr, arabic), color = Palette.Text, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
             Text(stringResource(R.string.meals_meal_price, money(p.mealPriceMinor, p.currency)), color = Warm.Cream, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.SemiBold)
@@ -621,14 +631,14 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
 }
 
 @Composable
-private fun PaidPage(onMine: () -> Unit) {
+private fun PaidPage(redirected: Boolean, onMine: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(Space.XL),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("✓", color = Warm.Leaf, fontSize = Type.Title * 2.5f)
-        Text(stringResource(R.string.meals_paid), color = Palette.Text, fontSize = Type.Heading, modifier = Modifier.padding(vertical = Space.Large))
+        Text(stringResource(if (redirected) R.string.meals_paying else R.string.meals_paid), textAlign = TextAlign.Center, color = Palette.Text, fontSize = Type.Heading, modifier = Modifier.padding(vertical = Space.Large))
         PrimaryButton(stringResource(R.string.meals_view_subs), onMine)
     }
 }
@@ -666,6 +676,7 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
 
 @Composable
 private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(r.rotationNo, color = Palette.Text, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -696,8 +707,9 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
                 stringResource(R.string.meals_cancel_rotation),
                 color = Palette.Bad,
                 fontSize = Type.Secondary,
-                modifier = Modifier.clickable { vm.cancelRotation(r.id) }.padding(vertical = Space.Small),
+                modifier = Modifier.clickable { confirming = true }.padding(vertical = Space.Small),
             )
+            if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancelRotation(r.id) }, onDismiss = { confirming = false })
         }
     }
 }
@@ -786,20 +798,57 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                     item { SectionTitle(stringResource(R.string.meals_upcoming)) }
                     items(sub.upcoming, key = { it.date + it.mealSlot }) { m -> MealCard(m, arabic, s.busy, vm) }
                 }
+                if (sub.rotationId == null && sub.status == "active" && sub.pauseAllowanceDays > 0) {
+                    item { PauseCard(sub, s.busy, vm) }
+                }
                 if (sub.rotationId == null && sub.status in setOf("active", "paused", "pending")) {
                     item {
+                        var confirming by remember { mutableStateOf(false) }
                         Text(
                             stringResource(R.string.meals_cancel),
                             color = Palette.Bad,
                             fontSize = Type.Secondary,
-                            modifier = Modifier.clickable(enabled = !s.busy) { vm.cancel() }.padding(Space.Edge),
+                            modifier = Modifier.clickable(enabled = !s.busy) { confirming = true }.padding(Space.Edge),
                         )
+                        if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancel() }, onDismiss = { confirming = false })
                     }
                 }
                 item { BottomPad() }
             }
         }
     }
+}
+
+@Composable
+private fun PauseCard(sub: MySubscription, busy: Boolean, vm: MealsViewModel) {
+    val left = (sub.pauseAllowanceDays - sub.pauseDaysUsed).coerceAtLeast(0)
+    val first = sub.upcoming.firstOrNull { !it.locked }?.date ?: return
+    var from by remember(first) { mutableStateOf(first) }
+    var to by remember(first) { mutableStateOf(first) }
+    Card {
+        Text(stringResource(R.string.meals_pause_title), color = Palette.Text, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_pause_left, left, sub.pauseAllowanceDays), color = Palette.TextMuted, fontSize = Type.Secondary)
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+            Field(from, { from = it }, Modifier.weight(1f), placeholder = stringResource(R.string.meals_pause_from))
+            Field(to, { to = it }, Modifier.weight(1f), placeholder = stringResource(R.string.meals_pause_to))
+        }
+        PrimaryButton(stringResource(R.string.meals_pause), { vm.pause(from.trim(), to.trim()) }, enabled = !busy && left > 0)
+    }
+}
+
+@Composable
+private fun ConfirmCancel(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Warm.Card,
+        text = { Text(stringResource(R.string.meals_cancel_confirm), color = Palette.Text, fontSize = Type.Body) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.meals_cancel_yes), color = Palette.Bad) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.meals_keep), color = Palette.Text) }
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -8,6 +8,7 @@ import ae.marketplace.mobile.android.me.ThreadScreen
 import ae.marketplace.mobile.android.sell.SellFlow
 import ae.marketplace.mobile.android.sell.SignInGate
 import ae.marketplace.mobile.android.meals.MealsTab
+import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.meals.MealsViewModel
 import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.feed.FeedViewModel
@@ -341,8 +342,6 @@ class MainActivity : ComponentActivity() {
                                 // a local flag here is what let the two disagree.
                                 onCancel = { destination = Destination.Meals },
                             )
-                        } else if (destination == Destination.Meals && pendingMeals != null && !authorised && gate != null) {
-                            SignInGate(viewModel = gate, onCancel = { pendingMeals = null })
                         } else when (destination) {
                             Destination.Feed -> Unit // drawn above, always composed
 
@@ -355,11 +354,24 @@ class MainActivity : ComponentActivity() {
                                 } else {
                                     LatLng(fallback.lat, fallback.lng)
                                 }
-                                MealsTab(
-                                    viewModel = it,
-                                    location = here,
-                                    requireAccount = { run -> if (authorised) run() else pendingMeals = run },
-                                )
+                                // The gate sits over the tab rather than replacing it, so
+                                // the kitchen and plan the viewer picked survive sign-in.
+                                Box(Modifier.fillMaxSize()) {
+                                    MealsTab(
+                                        viewModel = it,
+                                        location = here,
+                                        requireAccount = { run -> if (authorised) run() else pendingMeals = run },
+                                    )
+                                    if (pendingMeals != null && !authorised && gate != null) {
+                                        SignInGate(
+                                            viewModel = gate,
+                                            onCancel = { pendingMeals = null },
+                                            modifier = Modifier.fillMaxSize().background(Palette.Ink),
+                                            title = R.string.meals_signin_title,
+                                            why = R.string.meals_signin_why,
+                                        )
+                                    }
+                                }
                             }
 
                             Destination.Search -> me?.let {
