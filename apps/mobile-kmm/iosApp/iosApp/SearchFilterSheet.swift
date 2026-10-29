@@ -141,10 +141,10 @@ struct SearchFilterSheet: View {
     private static func sorts(hasLocation: Bool) -> [Opt] {
         var out = [
             Opt(value: SearchSort.newest.wire, label: "Newest"),
-            Opt(value: SearchSort.priceasc.wire, label: "Price ↑"),
-            Opt(value: SearchSort.pricedesc.wire, label: "Price ↓"),
-            Opt(value: SearchSort.mileageasc.wire, label: "Lowest km"),
-            Opt(value: SearchSort.yeardesc.wire, label: "Newest year"),
+            Opt(value: SearchSort.priceAsc.wire, label: "Price ↑"),
+            Opt(value: SearchSort.priceDesc.wire, label: "Price ↓"),
+            Opt(value: SearchSort.mileageAsc.wire, label: "Lowest km"),
+            Opt(value: SearchSort.yearDesc.wire, label: "Newest year"),
         ]
         // Only with a location. The server falls back to newest without one, and
         // a sort that looks selected while producing a different order is worse

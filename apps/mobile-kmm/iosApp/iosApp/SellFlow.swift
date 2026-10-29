@@ -588,8 +588,8 @@ private struct FieldInput: View {
     private func problemText(_ issue: FieldIssue) -> String {
         switch issue.problem {
         case .required: return String(localized: "sell_field_required")
-        case .notanumber: return String(localized: "sell_field_number")
-        case .notanoption: return String(localized: "sell_field_option")
+        case .notANumber: return String(localized: "sell_field_number")
+        case .notAnOption: return String(localized: "sell_field_option")
         case .belowmin:
             return String(format: String(localized: "sell_field_min"),
                           issue.bound.map { "\($0)" } ?? "", localised(field.unit, field.unitAr))

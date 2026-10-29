@@ -175,10 +175,10 @@ struct SignInGate: View {
     /// cannot be acted on.
     private static func words(_ problem: SignInProblem) -> String {
         switch problem {
-        case .badphone: return String(localized: "signin_err_phone")
-        case .wrongcode: return String(localized: "signin_err_code")
-        case .needsnewcode: return String(localized: "signin_err_stale")
-        case .toomany: return String(localized: "signin_err_too_many")
+        case .badPhone: return String(localized: "signin_err_phone")
+        case .wrongCode: return String(localized: "signin_err_code")
+        case .needsNewCode: return String(localized: "signin_err_stale")
+        case .tooMany: return String(localized: "signin_err_too_many")
         case .offline: return String(localized: "signin_err_offline")
         default: return String(localized: "signin_err_unknown")
         }
