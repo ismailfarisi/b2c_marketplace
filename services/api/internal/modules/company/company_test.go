@@ -42,6 +42,9 @@ func TestCreditAvailable(t *testing.T) {
 	if c = (Credit{UnbilledMinor: 200000}).withLimit(100000); c.AvailableMinor != 0 {
 		t.Fatalf("available over limit = %d, want 0", c.AvailableMinor)
 	}
+	if c = (Credit{UnbilledMinor: -50000}).withLimit(100000); c.AvailableMinor != 100000 {
+		t.Fatalf("available with credit = %d, want capped at 100000", c.AvailableMinor)
+	}
 }
 
 func TestRegisterValidation(t *testing.T) {

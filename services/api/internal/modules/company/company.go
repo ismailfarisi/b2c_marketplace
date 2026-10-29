@@ -249,6 +249,6 @@ func (p Policy) covers(weekday int, slot string) bool {
 
 func (c Credit) withLimit(limit int64) Credit {
 	c.LimitMinor = limit
-	c.AvailableMinor = max(limit-c.UnbilledMinor-c.OutstandingMinor, 0)
+	c.AvailableMinor = min(max(limit-c.UnbilledMinor-c.OutstandingMinor, 0), limit)
 	return c
 }
