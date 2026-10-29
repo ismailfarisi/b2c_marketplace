@@ -119,7 +119,7 @@ actual fun createReelPlayer(context: PlatformContext): ReelPlayer = AvReelPlayer
 /**
  * The bridge SwiftUI needs, mirroring `asExoPlayer()` on Android.
  *
- * Swift sees this as `ReelPlayerKt.asAvPlayer(player)` and wraps the result in
+ * Swift sees this as `ReelPlayer_iosKt.asAvPlayer(player)` and wraps the result in
  * an `AVPlayerLayer`.
  */
 @OptIn(ExperimentalForeignApi::class)

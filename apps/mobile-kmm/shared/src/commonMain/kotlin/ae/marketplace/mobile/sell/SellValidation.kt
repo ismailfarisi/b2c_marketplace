@@ -19,7 +19,10 @@ enum class FieldProblem {
     TooSmall,
     TooLarge,
     /** A select or lookup answer that is not one of the offered values. */
-    NotAnOption,
+    NotAnOption;
+
+    /** The entry's Kotlin name, for Swift, which spells multi-word case names unpredictably. */
+    val code: String get() = name
 }
 
 /**

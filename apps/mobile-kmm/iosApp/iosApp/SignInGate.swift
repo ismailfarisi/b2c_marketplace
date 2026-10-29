@@ -16,6 +16,8 @@ import Shared
 struct SignInGate: View {
     let viewModel: SignInViewModel
     let onCancel: () -> Void
+    var titleKey = "signin_title"
+    var whyKey = "signin_why"
 
     @State private var current: SignInUiState?
     private var state: SignInUiState { current ?? viewModel.state.value }
@@ -39,14 +41,14 @@ struct SignInGate: View {
             .accessibilityLabel(Text("action_close"))
             .padding(.bottom, Space.xl)
 
-            Text("signin_title")
+            Text(LocalizedStringKey(titleKey))
                 .font(.system(size: 21).weight(.semibold))
                 .foregroundStyle(Palette.text)
 
             Text(onCodeStep
                  ? String(format: String(localized: "signin_sent_to"),
                           phone.trimmingCharacters(in: .whitespaces))
-                 : String(localized: "signin_why"))
+                 : NSLocalizedString(whyKey, comment: ""))
                 .font(.system(size: TypeScale.secondary))
                 .foregroundStyle(Palette.text.opacity(0.55))
                 .padding(.top, Space.small)
@@ -172,12 +174,12 @@ struct SignInGate: View {
     /// this screen used to show for all of them, and it is the one message that
     /// cannot be acted on.
     private static func words(_ problem: SignInProblem) -> String {
-        switch problem {
-        case .badphone: return String(localized: "signin_err_phone")
-        case .wrongcode: return String(localized: "signin_err_code")
-        case .needsnewcode: return String(localized: "signin_err_stale")
-        case .toomany: return String(localized: "signin_err_too_many")
-        case .offline: return String(localized: "signin_err_offline")
+        switch problem.code {
+        case "BadPhone": return String(localized: "signin_err_phone")
+        case "WrongCode": return String(localized: "signin_err_code")
+        case "NeedsNewCode": return String(localized: "signin_err_stale")
+        case "TooMany": return String(localized: "signin_err_too_many")
+        case "Offline": return String(localized: "signin_err_offline")
         default: return String(localized: "signin_err_unknown")
         }
     }

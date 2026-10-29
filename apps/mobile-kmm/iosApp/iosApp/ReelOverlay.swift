@@ -67,7 +67,7 @@ struct ReelOverlay: View {
 /// modes whose text actually moves and the others resolve once.
 @MainActor
 private final class ClockTicker: ObservableObject {
-    @Published private(set) var face: ReelClockFace?
+    @Published private(set) var face: ReelClock.Face?
 
     private var timer: Timer?
 
