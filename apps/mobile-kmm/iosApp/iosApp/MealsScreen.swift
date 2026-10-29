@@ -250,7 +250,7 @@ private struct Chip: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: TypeScale.secondary, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? MP.ink : MP.text)
+                .foregroundStyle(selected ? Color.white : MP.text)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(selected ? Warm.chilli : MP.surface, in: Capsule())
