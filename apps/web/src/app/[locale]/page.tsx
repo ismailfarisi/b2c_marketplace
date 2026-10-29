@@ -11,6 +11,7 @@ import {
   HomeHero,
 } from "@/components/meals/food";
 import { useCustomerPoint } from "@/components/meals/location";
+import { LocationPicker, placeLabel } from "@/components/meals/location-picker";
 import {
   BannerCarousel,
   COPY,
@@ -50,7 +51,7 @@ export default function MealsHome({
 }) {
   const locale = use(params).locale === "ar" ? "ar" : "en";
   const t = COPY[locale];
-  const { point, precise, retry } = useCustomerPoint();
+  const { point, precise, place, choose, locate } = useCustomerPoint();
   const [q, setQ] = useState("");
   const [slot, setSlot] = useState("");
   const [rotation, setRotation] = useState(false);
@@ -230,22 +231,28 @@ export default function MealsHome({
       <p className="ms-note">{t.locating}</p>
     ) : list.isError ? (
       <p className="ms-note ms-bad">{t.failed}</p>
-    ) : list.data.items.length === 0 ? (
-      <p className="ms-empty">{t.empty}</p>
     ) : (
       <section className="ms-all-list">
         <div className="ms-count">
           <h2>
-            {precise
-              ? t.near(list.data.items.length)
-              : t.nearFallback(list.data.items.length)}
+            {list.data.items.length === 0 && place && !filtering
+              ? t.noneNear(placeLabel(place, locale))
+              : place
+                ? t.nearPlace(list.data.items.length, placeLabel(place, locale))
+                : precise
+                  ? t.near(list.data.items.length)
+                  : t.nearFallback(list.data.items.length)}
           </h2>
-          {!precise && (
-            <button type="button" onClick={retry}>
-              {t.useLocation}
-            </button>
-          )}
+          <LocationPicker
+            locale={locale}
+            current={place}
+            onChoose={choose}
+            onLocate={locate}
+          />
         </div>
+        {list.data.items.length === 0 && (
+          <p className="ms-empty">{filtering ? t.empty : t.noneHelp}</p>
+        )}
         <ul className="ms-grid">
           {list.data.items.map((k, i) => (
             <Fragment key={k.branch_id}>

@@ -3158,7 +3158,10 @@ body {
   font-size: 1.35rem;
   color: var(--ms-ink);
 }
-.ms .ms-count button {
+.ms .ms-loc {
+  display: contents;
+}
+.ms .ms-loc-toggle {
   padding: 0;
   border: 0;
   background: none;
@@ -3168,6 +3171,78 @@ body {
   text-decoration: underline;
   text-underline-offset: 0.2em;
   cursor: pointer;
+}
+.ms .ms-loc-panel {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 0.6rem;
+  margin-block-start: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  background: var(--ms-surface);
+  box-shadow: var(--ms-shadow);
+}
+.ms .ms-loc-panel h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.ms .ms-loc-panel h4 {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ms-muted);
+}
+.ms .ms-loc-mine {
+  justify-self: start;
+  padding: 0.55rem 1rem;
+  border: 1.5px solid var(--ms-ink);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ms-ink);
+  cursor: pointer;
+}
+.ms .ms-loc-panel input {
+  inline-size: 100%;
+  padding: 0.6rem 0.85rem;
+  border: 1.5px solid var(--ms-line);
+  border-radius: 0.75rem;
+  font: inherit;
+  background: var(--ms-paper);
+}
+.ms .ms-loc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.ms .ms-loc-areas {
+  max-block-size: 16rem;
+  overflow-y: auto;
+  grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
+}
+.ms .ms-loc-list button {
+  inline-size: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  background: none;
+  font: inherit;
+  text-align: start;
+  color: var(--ms-ink);
+  cursor: pointer;
+}
+.ms .ms-loc-list button:hover {
+  background: var(--ms-tag);
+}
+.ms .ms-loc-list button[aria-pressed="true"] {
+  border-color: var(--ms-accent);
 }
 
 @media (max-width: 52rem) {

@@ -154,7 +154,7 @@ export default function RotationPage({
 
 function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   const router = useRouter();
-  const { point, precise } = useCustomerPoint();
+  const { point, exact } = useCustomerPoint();
   const addresses = useQuery({
     queryKey: ["me", "addresses"],
     queryFn: listAddresses,
@@ -360,7 +360,7 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
           </div>
           <NewAddress
             t={ADDRESS_COPY[locale]}
-            initial={point && precise ? point : null}
+            initial={point && exact ? point : null}
             onSaved={(a) => setAddressId(a.id)}
           />
         </fieldset>

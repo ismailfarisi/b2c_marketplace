@@ -35,7 +35,8 @@ const LUNCH_ERRORS_AR: Record<string, string> = {
 function problemReason(err: unknown, locale: string): string | null {
   if (!(err instanceof ApiError)) return null;
   const code = (err.problem as { code?: string } | null)?.code;
-  if (locale === "ar" && code && LUNCH_ERRORS_AR[code]) return LUNCH_ERRORS_AR[code];
+  if (locale === "ar" && code && LUNCH_ERRORS_AR[code])
+    return LUNCH_ERRORS_AR[code];
   return err.problem?.errors?.[0]?.message ?? err.problem?.detail ?? null;
 }
 
@@ -212,7 +213,7 @@ function Checkout({
   planId: string;
 }) {
   const router = useRouter();
-  const { point, precise } = useCustomerPoint();
+  const { point, exact, place } = useCustomerPoint();
   const kitchen = useQuery({
     queryKey: ["meal-kitchen", branchId, "checkout"],
     queryFn: () => getMealKitchen(branchId),
@@ -273,9 +274,14 @@ function Checkout({
   useEffect(() => {
     const list = addresses.data?.items ?? [];
     if (!addressId && list.length > 0) {
-      setAddressId((list.find((a) => a.is_default) ?? list[0])!.id);
+      // The address picked on home leads, then the default.
+      const chosen =
+        place?.kind === "address"
+          ? list.find((a) => a.id === place.id)
+          : undefined;
+      setAddressId((chosen ?? list.find((a) => a.is_default) ?? list[0])!.id);
     }
-  }, [addresses.data, addressId]);
+  }, [addresses.data, addressId, place]);
 
   const price = useMemo(() => {
     if (!plan) return 0;
@@ -301,7 +307,11 @@ function Checkout({
               window_id: windowId,
             })),
           ),
-          ...(code ? { promo_code: code } : promoId ? { promo_id: promoId } : {}),
+          ...(code
+            ? { promo_code: code }
+            : promoId
+              ? { promo_id: promoId }
+              : {}),
         }
       : null;
   const lunch: LunchInput | null =
@@ -323,8 +333,7 @@ function Checkout({
     enabled: company ? lunch != null : input != null,
     retry: false,
   });
-  const previewProblem =
-    problemReason(preview.error, locale);
+  const previewProblem = problemReason(preview.error, locale);
   const promoRejected =
     preview.error instanceof ApiError &&
     preview.error.fieldErrors["promo_code"] != null;
@@ -509,7 +518,10 @@ function Checkout({
                 {company.status === "active"
                   ? t.companyNote(
                       formatMoney(
-                        { amount: company.policy.meal_cap_minor, currency: company.currency },
+                        {
+                          amount: company.policy.meal_cap_minor,
+                          currency: company.currency,
+                        },
                         locale,
                       ),
                     )
@@ -547,40 +559,40 @@ function Checkout({
             </div>
           </fieldset>
         ) : (
-        <fieldset className="ms-field">
-          <legend>{t.address}</legend>
-          {(addresses.data?.items ?? []).length === 0 && (
-            <p className="ms-sub">{t.noAddress}</p>
-          )}
-          <div className="ms-addresses">
-            {(addresses.data?.items ?? []).map((a) => (
-              <label
-                key={a.id}
-                className={`ms-address${a.id === addressId ? " on" : ""}`}
-              >
-                <input
-                  type="radio"
-                  name="address"
-                  value={a.id}
-                  checked={a.id === addressId}
-                  onChange={() => setAddressId(a.id)}
-                />
-                <span>
-                  <strong dir="auto">{a.label}</strong>
-                  <br />
-                  <span className="ms-sub" dir="auto">
-                    {describeAddress(a)}
+          <fieldset className="ms-field">
+            <legend>{t.address}</legend>
+            {(addresses.data?.items ?? []).length === 0 && (
+              <p className="ms-sub">{t.noAddress}</p>
+            )}
+            <div className="ms-addresses">
+              {(addresses.data?.items ?? []).map((a) => (
+                <label
+                  key={a.id}
+                  className={`ms-address${a.id === addressId ? " on" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="address"
+                    value={a.id}
+                    checked={a.id === addressId}
+                    onChange={() => setAddressId(a.id)}
+                  />
+                  <span>
+                    <strong dir="auto">{a.label}</strong>
+                    <br />
+                    <span className="ms-sub" dir="auto">
+                      {describeAddress(a)}
+                    </span>
                   </span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <NewAddress
-            t={t}
-            initial={point && precise ? point : null}
-            onSaved={(a) => setAddressId(a.id)}
-          />
-        </fieldset>
+                </label>
+              ))}
+            </div>
+            <NewAddress
+              t={t}
+              initial={point && exact ? point : null}
+              onSaved={(a) => setAddressId(a.id)}
+            />
+          </fieldset>
         )}
       </div>
 
@@ -617,51 +629,53 @@ function Checkout({
               : t.cycle(plan.cycle_days)}
         </p>
         {!company && (
-        <div className="ms-promo">
-          {code || promoId ? (
-            <p>
-              <span dir="auto">{code ||
-                  (preview.data?.promo
-                    ? offerName(preview.data.promo, locale)
-                    : "")}</span>
-              <button
-                type="button"
-                className="ms-link"
-                onClick={() => {
-                  setCode("");
-                  forgetInvite();
-                  setCodeDraft("");
-                  setPromoId(null);
-                }}
-              >
-                {t.remove}
-              </button>
-            </p>
-          ) : (
-            <label className="ms-field">
-              <span>{t.promo}</span>
-              <span className="ms-promo-row">
-                <input
-                  value={codeDraft}
-                  autoCapitalize="characters"
-                  onChange={(e) => setCodeDraft(e.target.value)}
-                />
+          <div className="ms-promo">
+            {code || promoId ? (
+              <p>
+                <span dir="auto">
+                  {code ||
+                    (preview.data?.promo
+                      ? offerName(preview.data.promo, locale)
+                      : "")}
+                </span>
                 <button
                   type="button"
-                  disabled={!codeDraft.trim()}
-                  onClick={() => setCode(codeDraft.trim().toUpperCase())}
+                  className="ms-link"
+                  onClick={() => {
+                    setCode("");
+                    forgetInvite();
+                    setCodeDraft("");
+                    setPromoId(null);
+                  }}
                 >
-                  {t.apply}
+                  {t.remove}
                 </button>
-              </span>
-            </label>
-          )}
-          {promoRejected && previewProblem && (
-            <p className="ms-bad" role="alert">
-              {previewProblem}
-            </p>
-          )}
-        </div>
+              </p>
+            ) : (
+              <label className="ms-field">
+                <span>{t.promo}</span>
+                <span className="ms-promo-row">
+                  <input
+                    value={codeDraft}
+                    autoCapitalize="characters"
+                    onChange={(e) => setCodeDraft(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    disabled={!codeDraft.trim()}
+                    onClick={() => setCode(codeDraft.trim().toUpperCase())}
+                  >
+                    {t.apply}
+                  </button>
+                </span>
+              </label>
+            )}
+            {promoRejected && previewProblem && (
+              <p className="ms-bad" role="alert">
+                {previewProblem}
+              </p>
+            )}
+          </div>
         )}
         {preview.isError && !promoRejected && previewProblem && (
           <p className="ms-bad" role="alert">

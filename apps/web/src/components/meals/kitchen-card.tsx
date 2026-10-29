@@ -37,7 +37,12 @@ export const COPY = {
       n === 1
         ? "1 kitchen delivers to Dubai Marina"
         : `${n} kitchens deliver to Dubai Marina`,
-    useLocation: "Use my location",
+    noneNear: (place: string) => `No kitchens deliver to ${place} yet`,
+    noneHelp: "Try a nearby area or use your current location.",
+    nearPlace: (n: number, place: string) =>
+      n === 1
+        ? `1 kitchen delivers to ${place}`
+        : `${n} kitchens deliver to ${place}`,
     slot: {
       breakfast: "Breakfast",
       lunch: "Lunch",
@@ -71,7 +76,9 @@ export const COPY = {
     count: (n: number) => `${n} مطبخ`,
     near: (n: number) => `${n} مطبخ يوصل إليك`,
     nearFallback: (n: number) => `${n} مطبخ يوصل إلى دبي مارينا`,
-    useLocation: "استخدم موقعي",
+    nearPlace: (n: number, place: string) => `${n} مطبخ يوصل إلى ${place}`,
+    noneNear: (place: string) => `لا توجد مطابخ توصل إلى ${place} بعد`,
+    noneHelp: "جرّب منطقة قريبة أو استخدم موقعك الحالي.",
     slot: {
       breakfast: "فطور",
       lunch: "غداء",
