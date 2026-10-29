@@ -89,3 +89,24 @@ func TestNormaliseRejects(t *testing.T) {
 		t.Error("duplicate item accepted")
 	}
 }
+
+func TestNormaliseCuisineImages(t *testing.T) {
+	got, err := NormaliseSections([]Section{
+		{Type: SectionCuisines, Settings: SectionSettings{CuisineImages: map[string]string{
+			" Indian ": " https://img/x.jpg ", "arabic": "",
+		}}},
+		{Type: SectionRotation, Settings: SectionSettings{CuisineImages: map[string]string{"indian": "https://img/y.jpg"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img := got[0].Settings.CuisineImages; len(img) != 1 || img["indian"] != "https://img/x.jpg" {
+		t.Errorf("cuisine images = %v", img)
+	}
+	if got[1].Settings.CuisineImages != nil {
+		t.Error("cuisine images kept on a non-cuisine section")
+	}
+	if _, err := NormaliseSections([]Section{{Type: SectionCuisines, Settings: SectionSettings{CuisineImages: map[string]string{"indian": "http://img/x.jpg"}}}}); err == nil {
+		t.Error("http cuisine image accepted")
+	}
+}
