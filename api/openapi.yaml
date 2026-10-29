@@ -4516,123 +4516,6 @@ paths:
         "409": { description: "over_credit_limit, over_meal_cap or company_not_active" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /admin/meals/companies:
-    get:
-      tags: [companies]
-      operationId: adminListCompanies
-      summary: Office lunch accounts (staff)
-      parameters:
-        - { name: status, in: query, schema: { type: string, enum: [pending, active, suspended, rejected] } }
-        - { name: q, in: query, schema: { type: string } }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items: { type: array, items: { $ref: "#/components/schemas/CompanyAdminSummary" } }
-        "403": { description: Not staff }
-
-  /admin/meals/companies/{companyId}:
-    get:
-      tags: [companies]
-      operationId: adminGetCompany
-      summary: Full company dashboard (staff)
-      parameters:
-        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/CompanyDashboard" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /admin/meals/companies/{companyId}/review:
-    put:
-      tags: [companies]
-      operationId: adminReviewCompany
-      summary: Approve, reject or suspend; set credit limit and payment terms
-      description: Approving requires a credit limit above zero. Audited.
-      parameters:
-        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                status: { type: string, enum: [active, rejected, suspended] }
-                credit_limit_minor: { type: integer, format: int64 }
-                payment_terms_days: { type: integer }
-                note: { type: string }
-      responses:
-        "204": { description: Saved }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-
-  /admin/meals/companies/{companyId}/statements:
-    post:
-      tags: [companies]
-      operationId: adminIssueCompanyStatement
-      summary: Bill every unbilled charge and credit up to a date
-      parameters:
-        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [period_end]
-              properties:
-                period_end: { type: string, format: date }
-      responses:
-        "201":
-          description: Issued
-          content:
-            application/json:
-              schema: { type: object, properties: { id: { type: string, format: uuid } } }
-        "409": { description: Nothing to bill }
-
-  /admin/meals/companies/{companyId}/statements/{statementId}:
-    get:
-      tags: [companies]
-      operationId: adminGetCompanyStatement
-      summary: One statement with its lines (staff)
-      parameters:
-        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: statementId, in: path, required: true, schema: { type: string, format: uuid } }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/CompanyStatement" }
-
-  /admin/meals/companies/{companyId}/statements/{statementId}/paid:
-    post:
-      tags: [companies]
-      operationId: adminMarkCompanyStatementPaid
-      summary: Record the bank transfer that settled a statement
-      parameters:
-        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: statementId, in: path, required: true, schema: { type: string, format: uuid } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reference]
-              properties:
-                reference: { type: string }
-      responses:
-        "204": { description: Marked paid }
-        "409": { description: Not payable }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
 components:
   securitySchemes:
@@ -4855,14 +4738,6 @@ components:
               start_date: { type: string, format: date }
         statements: { type: array, nullable: true, items: { $ref: "#/components/schemas/CompanyStatement" } }
         unbilled: { type: array, nullable: true, items: { $ref: "#/components/schemas/CompanyCharge" } }
-    CompanyAdminSummary:
-      allOf:
-        - $ref: "#/components/schemas/Company"
-        - type: object
-          properties:
-            members: { type: integer }
-            lunches: { type: integer }
-            credit: { $ref: "#/components/schemas/CompanyCredit" }
     LunchInput:
       type: object
       required: [office_id, plan_id, start_date, schedule]
