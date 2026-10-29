@@ -109,6 +109,9 @@ type SectionSettings struct {
 	TitleAr      string      `json:"title_ar,omitempty"`
 	CollectionID *uuid.UUID  `json:"collection_id,omitempty"`
 	BannerIDs    []uuid.UUID `json:"banner_ids,omitempty"`
+	// Cuisine strip only: a photo per cuisine (lower-case key, https URL).
+	// Cuisines without one use a dish photo from a kitchen that cooks it.
+	CuisineImages map[string]string `json:"cuisine_images,omitempty"`
 }
 
 type Section struct {
@@ -261,6 +264,22 @@ func NormaliseSections(in []Section) ([]Section, error) {
 			s.Settings.CollectionID = nil
 		default:
 			s.Settings.CollectionID, s.Settings.BannerIDs = nil, nil
+		}
+		if s.Type != SectionCuisines {
+			s.Settings.CuisineImages = nil
+		} else if len(s.Settings.CuisineImages) > 0 {
+			imgs := map[string]string{}
+			for c, u := range s.Settings.CuisineImages {
+				c, u = strings.ToLower(strings.TrimSpace(c)), strings.TrimSpace(u)
+				if c == "" || u == "" {
+					continue
+				}
+				if !strings.HasPrefix(u, "https://") {
+					return nil, fieldErr("sections", "invalid_image_url", "cuisine images must be https URLs")
+				}
+				imgs[c] = u
+			}
+			s.Settings.CuisineImages = imgs
 		}
 		out = append(out, s)
 	}

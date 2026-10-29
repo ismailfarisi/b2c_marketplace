@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -484,8 +485,9 @@ type HomeSection struct {
 }
 
 type CuisineCount struct {
-	Cuisine  string `json:"cuisine"`
-	Kitchens int    `json:"kitchens"`
+	Cuisine  string  `json:"cuisine"`
+	Kitchens int     `json:"kitchens"`
+	ImageURL *string `json:"image_url"`
 }
 
 type Home struct {
@@ -590,7 +592,7 @@ func (s *Service) resolve(ctx context.Context, override *[]Section, lat, lng *fl
 			if err != nil {
 				return h, err
 			}
-			hs.Cuisines = countCuisines(ks)
+			hs.Cuisines = countCuisines(ks, sec.Settings.CuisineImages)
 			if len(hs.Cuisines) == 0 {
 				continue
 			}
@@ -600,7 +602,9 @@ func (s *Service) resolve(ctx context.Context, override *[]Section, lat, lng *fl
 	return h, nil
 }
 
-func countCuisines(ks []kitchen.PublicKitchen) []CuisineCount {
+// countCuisines tallies kitchens per cuisine. Each cuisine's photo is the one
+// staff set, else the first dish photo, else cover, of a kitchen cooking it.
+func countCuisines(ks []kitchen.PublicKitchen, images map[string]string) []CuisineCount {
 	idx := map[string]int{}
 	out := []CuisineCount{}
 	for _, k := range ks {
@@ -610,6 +614,29 @@ func countCuisines(ks []kitchen.PublicKitchen) []CuisineCount {
 			} else {
 				idx[c] = len(out)
 				out = append(out, CuisineCount{Cuisine: c, Kitchens: 1})
+			}
+		}
+	}
+	for i := range out {
+		if u, ok := images[out[i].Cuisine]; ok {
+			out[i].ImageURL = &u
+			continue
+		}
+		for _, k := range ks {
+			if !slices.Contains(k.Cuisines, out[i].Cuisine) {
+				continue
+			}
+			for _, d := range k.WeekDishes {
+				if d.ImageURL != nil {
+					out[i].ImageURL = d.ImageURL
+					break
+				}
+			}
+			if out[i].ImageURL == nil {
+				out[i].ImageURL = k.CoverImageURL
+			}
+			if out[i].ImageURL != nil {
+				break
 			}
 		}
 	}

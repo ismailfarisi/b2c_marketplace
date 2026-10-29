@@ -35,6 +35,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// cooks on which day for how much.
 		if h.Meals != nil {
 			r.Get("/meals/kitchens", h.Meals.KitchenList)
+			r.Get("/meals/dishes/tomorrow", h.Meals.TomorrowDishes)
 			r.Get("/meals/kitchens/{branchId}", h.Meals.KitchenPage)
 			if h.Meals.Merch != nil {
 				r.Get("/meals/home", h.Meals.Home)

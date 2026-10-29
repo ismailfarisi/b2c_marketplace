@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/kitchen"
@@ -64,6 +65,44 @@ func (h *MealsHandlers) KitchenList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": items})
+}
+
+var dubai = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Dubai")
+	if err != nil {
+		return time.FixedZone("Asia/Dubai", 4*3600)
+	}
+	return loc
+}()
+
+// TomorrowDishes answers GET /meals/dishes/tomorrow: the default dishes of
+// the next delivery day (Asia/Dubai), from kitchens that deliver to the
+// customer. Usually tomorrow; over a weekend with no deliveries, the first day
+// after it that has dishes.
+func (h *MealsHandlers) TomorrowDishes(w http.ResponseWriter, r *http.Request) {
+	lat, lng, ok := point(w, r)
+	if !ok {
+		return
+	}
+	f := kitchen.DiscoverFilter{Lat: lat, Lng: lng, Slot: r.URL.Query().Get("slot")}
+	today := time.Now().In(dubai)
+	day := today.AddDate(0, 0, 1)
+	items := []kitchen.DayDish{}
+	for i := 1; i <= 7; i++ {
+		d := today.AddDate(0, 0, i)
+		got, err := h.Kitchen.DishesOn(r.Context(), f, int(d.Weekday()))
+		if err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+		if len(got) > 0 {
+			day, items = d, got
+			break
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
+		"date": day.Format(time.DateOnly), "weekday": int(day.Weekday()), "items": items,
+	})
 }
 
 func (h *MealsHandlers) KitchenPage(w http.ResponseWriter, r *http.Request) {

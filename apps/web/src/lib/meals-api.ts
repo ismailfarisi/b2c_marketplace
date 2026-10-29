@@ -30,13 +30,46 @@ export interface PublicKitchen {
   rotation_week_price_minor: number | null;
   /** Staff checked a current food-safety licence. */
   food_safety_verified: boolean;
+  /** Up to four dishes from this week's menu, photographed ones first. */
+  week_dishes: DishThumb[];
 }
+
+export interface DishThumb {
+  name: string;
+  name_ar: string | null;
+  image_url: string | null;
+}
+
+export interface DayDish {
+  branch_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  name: string;
+  name_ar: string | null;
+  image_url: string | null;
+  slot: string;
+  has_alternative: boolean;
+  from_meal_price_minor: number;
+  currency: string;
+  rating: number | null;
+  rating_count: number;
+}
+
+/** Tomorrow's default dishes (Asia/Dubai) from kitchens delivering to `point`. */
+export const getTomorrowDishes = (point?: Point | null) =>
+  apiFetch<{ date: string; weekday: number; items: DayDish[] }>({
+    url: "/meals/dishes/tomorrow",
+    method: "GET",
+    params: { lat: point?.lat, lng: point?.lng },
+  });
 
 export interface PublicKitchenDetail extends PublicKitchen {
   delivers_here: boolean | null;
   delivery_windows: DeliveryWindow[];
   menu: WeeklyMenu;
   plan_list: Plan[];
+  /** The plan most customers pick, when the kitchen sells more than one. */
+  popular_plan_id: string | null;
 }
 
 export interface Point {
@@ -87,6 +120,8 @@ export interface SectionSettings {
   title_ar?: string;
   collection_id?: string;
   banner_ids?: string[];
+  /** Cuisine strip: photo per lower-case cuisine, https URLs. */
+  cuisine_images?: Record<string, string>;
 }
 
 export interface Section {
@@ -142,7 +177,7 @@ export interface HomeSection extends Section {
   collection?: Collection;
   kitchens?: PublicKitchen[];
   banners?: Banner[];
-  cuisines?: { cuisine: string; kitchens: number }[];
+  cuisines?: { cuisine: string; kitchens: number; image_url: string | null }[];
 }
 
 /** `sections` is null when nothing is published: render the default home. */
