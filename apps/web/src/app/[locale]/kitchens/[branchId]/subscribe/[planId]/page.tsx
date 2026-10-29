@@ -213,7 +213,7 @@ function Checkout({
   planId: string;
 }) {
   const router = useRouter();
-  const { point, exact, place } = useCustomerPoint();
+  const { point, exact, place, placeReady } = useCustomerPoint();
   const kitchen = useQuery({
     queryKey: ["meal-kitchen", branchId, "checkout"],
     queryFn: () => getMealKitchen(branchId),
@@ -273,6 +273,8 @@ function Checkout({
 
   useEffect(() => {
     const list = addresses.data?.items ?? [];
+    // Wait for the stored place: cached addresses can arrive before it.
+    if (!placeReady) return;
     if (!addressId && list.length > 0) {
       // The address picked on home leads, then the default.
       const chosen =
@@ -281,7 +283,7 @@ function Checkout({
           : undefined;
       setAddressId((chosen ?? list.find((a) => a.is_default) ?? list[0])!.id);
     }
-  }, [addresses.data, addressId, place]);
+  }, [addresses.data, addressId, place, placeReady]);
 
   const price = useMemo(() => {
     if (!plan) return 0;

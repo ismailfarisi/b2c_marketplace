@@ -96,6 +96,8 @@ export function useCustomerPoint() {
   return {
     point,
     place,
+    /** The stored choice has been read; `place` is final for this render. */
+    placeReady: read,
     precise: place != null || gps != null,
     exact: place?.kind === "address" || (place == null && gps != null),
     choose: choosePlace,
