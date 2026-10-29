@@ -299,6 +299,11 @@ func scanSwift(dir string, kotlin map[string]*kotlinType) []finding {
 					"hash", "isEqual", "self", "map", "flatMap", "count":
 					continue
 				}
+				// Kotlin/Native exports a property that clashes with an NSObject
+				// member (description, hash) with a trailing underscore.
+				if strings.HasSuffix(member, "_") && t.members[strings.TrimSuffix(member, "_")] {
+					continue
+				}
 				if !t.members[member] {
 					findings = append(findings, finding{
 						file:   filepath.Base(path),

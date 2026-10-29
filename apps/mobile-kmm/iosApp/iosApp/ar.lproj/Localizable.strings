@@ -198,6 +198,11 @@
 "meals_none" = "لا توجد مطابخ توصّل إلى هنا بعد.";
 "meals_from_meal" = "من %@ للوجبة";
 "meals_cycle_from" = "%@ للدورة";
+"meals_tomorrow" = "على القائمة غداً";
+"meals_two_choices" = "خياران";
+"meals_popular" = "الأكثر طلباً";
+"meals_see_plans" = "عرض الخطط";
+"meals_week_glance" = "الأسبوع بنظرة سريعة";
 "meals_verified" = "سلامة الغذاء موثّقة";
 "meals_new" = "جديد";
 "meals_rating" = "★ %@ (%lld)";

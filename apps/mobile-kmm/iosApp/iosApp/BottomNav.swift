@@ -55,6 +55,11 @@ struct BottomNav: View {
     let onSelect: (Destination) -> Void
 
     private static let accent = Color(red: 0.706, green: 0.396, blue: 0.165)
+    private static let chilli = Color(red: 0.851, green: 0.267, blue: 0.110)
+    private static let muted = Color(red: 0.463, green: 0.404, blue: 0.357)
+
+    /// Meals is a light food-photo page; the scrim is for video only.
+    private var light: Bool { selected == .meals }
 
     var body: some View {
         HStack {
@@ -63,10 +68,10 @@ struct BottomNav: View {
                 VStack(spacing: 3) {
                     Text(NSLocalizedString(destination.labelKey, comment: ""))
                         .font(.system(size: 12, weight: active ? .semibold : .regular))
-                        .foregroundStyle(active ? Self.accent : .white.opacity(0.7))
+                        .foregroundStyle(active ? (light ? Self.chilli : Self.accent) : (light ? Self.muted : .white.opacity(0.7)))
 
                     Rectangle()
-                        .fill(active ? Self.accent : .clear)
+                        .fill(active ? (light ? Self.chilli : Self.accent) : .clear)
                         .frame(width: active ? 14 : 0, height: 2)
                 }
                 .frame(maxWidth: .infinity)
@@ -78,13 +83,17 @@ struct BottomNav: View {
             }
         }
         .frame(height: navBarHeight)
-        .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.75)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background {
+            if light {
+                Color.white.ignoresSafeArea(edges: .bottom)
+            } else {
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.75)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        }
     }
 }
 

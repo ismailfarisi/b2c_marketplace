@@ -1,13 +1,22 @@
 import SwiftUI
 import Shared
 
-// Warm storefront palette, same values as the Android meals tab.
+// Light food-led storefront palette, same values as the Android meals tab (M).
 enum Warm {
-    static let peach = Color(red: 0.965, green: 0.851, blue: 0.761)
-    static let cream = Color(red: 1.0, green: 0.957, blue: 0.918)
-    static let saffron = Color(red: 0.898, green: 0.604, blue: 0.231)
-    static let leaf = Color(red: 0.420, green: 0.686, blue: 0.431)
-    static let card = Color(red: 0.133, green: 0.114, blue: 0.102)
+    static let paper = Color(red: 1.0, green: 0.973, blue: 0.941)
+    static let ink = Color(red: 0.118, green: 0.078, blue: 0.063)
+    static let muted = Color(red: 0.463, green: 0.404, blue: 0.357)
+    static let faint = Color(red: 0.659, green: 0.596, blue: 0.537)
+    static let line = Color(red: 0.941, green: 0.886, blue: 0.824)
+    static let chilli = Color(red: 0.851, green: 0.267, blue: 0.110)
+    static let chilliDeep = Color(red: 0.659, green: 0.188, blue: 0.059)
+    static let saffron = Color(red: 0.965, green: 0.698, blue: 0.106)
+    static let saffronSoft = Color(red: 1.0, green: 0.945, blue: 0.8)
+    static let leaf = Color(red: 0.180, green: 0.490, blue: 0.310)
+    static let leafSoft = Color(red: 0.890, green: 0.949, blue: 0.910)
+    static let blush = Color(red: 0.992, green: 0.902, blue: 0.847)
+    static let char = Color(red: 0.133, green: 0.086, blue: 0.059)
+    static let card = Color.white
     static let covers: [Color] = [
         Color(red: 0.549, green: 0.290, blue: 0.184), Color(red: 0.247, green: 0.420, blue: 0.310),
         Color(red: 0.478, green: 0.361, blue: 0.180), Color(red: 0.243, green: 0.353, blue: 0.478),
@@ -19,7 +28,17 @@ enum Warm {
     ]
 }
 
-private func serif(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold, design: .serif) }
+/// The meals pages are light; the app-wide Palette is the dark video one.
+private enum MP {
+    static let surface = Color.white
+    static let line = Warm.line
+    static let bad = Color(red: 0.749, green: 0.161, blue: 0.129)
+    static let text = Warm.ink
+    static let textMuted = Warm.muted
+    static let textFaint = Warm.faint
+}
+
+private func display(_ size: CGFloat) -> Font { .system(size: size, weight: .bold) }
 
 private func tr(_ key: String, _ args: CVarArg...) -> String {
     String(format: NSLocalizedString(key, comment: ""), arguments: args)
@@ -120,7 +139,7 @@ struct MealsScreen: View {
 
     var body: some View {
         ZStack {
-            Palette.ink.ignoresSafeArea()
+            Warm.paper.ignoresSafeArea()
             switch stack.last ?? .home {
             case .home:
                 MealsHomePage(
@@ -152,6 +171,7 @@ struct MealsScreen: View {
                 SubscriptionPage(vm: viewModel, onBack: back, openPayment: openPayment)
             }
         }
+        .environment(\.colorScheme, .light)
         .task(id: "\(lat),\(lng)") { viewModel.setLocation(lat: lat, lng: lng) }
     }
 }
@@ -167,13 +187,13 @@ private struct TopBar: View {
             Button(action: onBack) {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Palette.text)
+                    .foregroundStyle(MP.text)
                     .frame(minWidth: Space.touch, minHeight: Space.touch)
             }
             .accessibilityLabel(Text("meals_back"))
             Text(title)
                 .font(.system(size: TypeScale.heading, weight: .semibold))
-                .foregroundStyle(Palette.text)
+                .foregroundStyle(MP.text)
                 .lineLimit(1)
             Spacer()
         }
@@ -185,8 +205,8 @@ private struct SectionTitle: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(serif(TypeScale.heading + 2))
-            .foregroundStyle(Warm.cream)
+            .font(display(TypeScale.heading + 2))
+            .foregroundStyle(Warm.ink)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Space.edge)
             .padding(.top, Space.xl)
@@ -199,7 +219,7 @@ private struct FieldLabel: View {
     var body: some View {
         Text(text)
             .font(.system(size: TypeScale.secondary, weight: .semibold))
-            .foregroundStyle(Palette.textMuted)
+            .foregroundStyle(MP.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Space.edge)
             .padding(.top, Space.large)
@@ -214,6 +234,7 @@ private struct CardBox<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Space.large)
             .background(Warm.card, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Warm.line, lineWidth: 1))
             .padding(.horizontal, Space.edge)
             .padding(.vertical, 6)
     }
@@ -229,11 +250,11 @@ private struct Chip: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: TypeScale.secondary, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? Palette.ink : Palette.text)
+                .foregroundStyle(selected ? MP.ink : MP.text)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(selected ? Warm.peach : Palette.surface, in: Capsule())
-                .overlay(Capsule().stroke(selected ? Color.clear : Palette.line, lineWidth: 1))
+                .background(selected ? Warm.chilli : MP.surface, in: Capsule())
+                .overlay(Capsule().stroke(selected ? Color.clear : MP.line, lineWidth: 1))
         }
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.5)
@@ -249,9 +270,9 @@ private struct PrimaryButton: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: TypeScale.body, weight: .semibold))
-                .foregroundStyle(Palette.ink)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(enabled ? Warm.saffron : Warm.saffron.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
+                .background(enabled ? Warm.chilli : Warm.chilli.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
         }
         .disabled(!enabled)
     }
@@ -265,10 +286,10 @@ private struct SecondaryButton: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: TypeScale.secondary, weight: .semibold))
-                .foregroundStyle(Palette.text)
+                .foregroundStyle(MP.text)
                 .padding(.horizontal, Space.large)
                 .frame(minHeight: 46)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.line, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(MP.line, lineWidth: 1))
         }
     }
 }
@@ -282,12 +303,12 @@ private struct InputField: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .font(.system(size: TypeScale.body))
-            .foregroundStyle(Palette.text)
-            .tint(Warm.saffron)
+            .foregroundStyle(MP.text)
+            .tint(Warm.chilli)
             .padding(.horizontal, Space.medium)
             .padding(.vertical, 14)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.line, lineWidth: 1))
+            .background(MP.surface, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(MP.line, lineWidth: 1))
     }
 }
 
@@ -298,11 +319,11 @@ private struct PriceLine: View {
 
     var body: some View {
         HStack {
-            Text(label).foregroundStyle(strong ? Palette.text : Palette.textMuted)
+            Text(label).foregroundStyle(strong ? MP.text : MP.textMuted)
             Spacer()
-            Text(value).foregroundStyle(strong ? Warm.cream : Palette.text)
+            Text(value).foregroundStyle(strong ? Warm.ink : MP.text)
         }
-        .font(strong ? serif(TypeScale.heading) : .system(size: TypeScale.body))
+        .font(strong ? display(TypeScale.heading) : .system(size: TypeScale.body))
     }
 }
 
@@ -316,20 +337,20 @@ private struct Choice: View {
         Button(action: action) {
             HStack(spacing: Space.medium) {
                 Circle()
-                    .strokeBorder(selected ? Warm.saffron : Palette.textFaint, lineWidth: 2)
-                    .background(Circle().fill(selected ? Warm.saffron : .clear).padding(4))
+                    .strokeBorder(selected ? Warm.chilli : MP.textFaint, lineWidth: 2)
+                    .background(Circle().fill(selected ? Warm.chilli : .clear).padding(4))
                     .frame(width: 18, height: 18)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: TypeScale.body)).foregroundStyle(Palette.text)
+                    Text(title).font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
                     if !detail.isEmpty {
-                        Text(detail).font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                        Text(detail).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                     }
                 }
                 Spacer()
             }
             .padding(Space.medium)
             .background(Warm.card, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Warm.saffron : Palette.line, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Warm.chilli : MP.line, lineWidth: 1))
         }
         .padding(.horizontal, Space.edge)
         .padding(.vertical, 4)
@@ -359,12 +380,12 @@ private struct KitchenCover: View {
             LinearGradient(colors: [tint, tint.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
             VStack(spacing: 4) {
                 Text(String(name.prefix(1)).uppercased())
-                    .font(serif(40))
-                    .foregroundStyle(Warm.cream)
+                    .font(display(40))
+                    .foregroundStyle(Color.white)
                 if !cuisines.isEmpty {
                     Text(cuisines.prefix(3).joined(separator: " · "))
                         .font(.system(size: TypeScale.caption))
-                        .foregroundStyle(Warm.cream.opacity(0.8))
+                        .foregroundStyle(Color.white.opacity(0.8))
                 }
             }
             if let imageUrl, let url = URL(string: imageUrl) {
@@ -387,7 +408,7 @@ private struct RatingText: View {
         if let rating, count > 0 {
             Text(tr("meals_rating", String(format: "%.1f", rating.doubleValue), Int(count)))
                 .font(.system(size: TypeScale.secondary))
-                .foregroundStyle(Warm.saffron)
+                .foregroundStyle(Warm.chilli)
         } else {
             Text("meals_new")
                 .font(.system(size: TypeScale.caption, weight: .semibold))
@@ -413,9 +434,9 @@ private struct StatusPill: View {
     var body: some View {
         let tint: Color = switch status {
         case "active": Warm.leaf
-        case "pending", "pending_payment": Warm.saffron
-        case "cancelled": Palette.bad
-        default: Palette.textMuted
+        case "pending", "pending_payment": Warm.chilli
+        case "cancelled": MP.bad
+        default: MP.textMuted
         }
         Text(statusLabel(status))
             .font(.system(size: TypeScale.caption, weight: .semibold))
@@ -434,9 +455,9 @@ private struct RenewToggle: View {
         Toggle(isOn: Binding(get: { on }, set: onChange)) {
             Text("meals_auto_renew")
                 .font(.system(size: TypeScale.body))
-                .foregroundStyle(Palette.text)
+                .foregroundStyle(MP.text)
         }
-        .tint(Warm.saffron)
+        .tint(Warm.chilli)
     }
 }
 
@@ -460,6 +481,7 @@ private struct MealsHomePage: View {
                 } else if s.loading && s.kitchens.isEmpty {
                     LoadingBlock()
                 } else {
+                    if s.slot == nil && !s.dishes.isEmpty { dishRail }
                     if s.slot == nil { rotationPromo }
                     ForEach(s.sections, id: \.id) { section in sectionView(section) }
                     SectionTitle(text: NSLocalizedString("meals_near_you", comment: ""))
@@ -483,17 +505,17 @@ private struct MealsHomePage: View {
         VStack(alignment: .leading, spacing: Space.large) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("meals_title").font(serif(TypeScale.title * 1.3)).foregroundStyle(Warm.cream)
-                    Text("meals_subtitle").font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                    Text("meals_title").font(display(TypeScale.title * 1.3)).foregroundStyle(Warm.ink)
+                    Text("meals_subtitle").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                 }
                 Spacer()
                 Button(action: onMine) {
                     Text("meals_my")
                         .font(.system(size: TypeScale.secondary, weight: .semibold))
-                        .foregroundStyle(Palette.ink)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(Warm.peach, in: Capsule())
+                        .background(Warm.chilli, in: Capsule())
                 }
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -510,32 +532,46 @@ private struct MealsHomePage: View {
         .padding(.horizontal, Space.edge)
         .padding(.top, Space.large)
         .padding(.bottom, Space.medium)
-        .background(LinearGradient(colors: [Warm.peach.opacity(0.22), Palette.ink], startPoint: .top, endPoint: .bottom))
+        .background(LinearGradient(colors: [Warm.blush, Warm.paper], startPoint: .top, endPoint: .bottom))
     }
 
     private var rotationPromo: some View {
         Button(action: onRotation) {
             VStack(alignment: .leading, spacing: Space.small) {
                 WeekBars()
-                Text("meals_rotation_title").font(serif(TypeScale.heading * 1.15)).foregroundStyle(Warm.cream)
-                Text("meals_rotation_body").font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                Text("meals_rotation_title").font(display(TypeScale.heading * 1.2)).foregroundStyle(Color.white)
+                Text("meals_rotation_body").font(.system(size: TypeScale.secondary)).foregroundStyle(Color.white.opacity(0.8))
                 Text(NSLocalizedString("meals_rotation_cta", comment: "") + " →")
-                    .font(.system(size: TypeScale.body, weight: .semibold))
+                    .font(.system(size: TypeScale.body, weight: .bold))
                     .foregroundStyle(Warm.saffron)
             }
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Space.large)
             .background(
-                LinearGradient(colors: [Color(red: 0.169, green: 0.129, blue: 0.106), Color(red: 0.082, green: 0.067, blue: 0.059)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                LinearGradient(colors: [Warm.char, Warm.chilliDeep], startPoint: .topLeading, endPoint: .bottomTrailing),
                 in: RoundedRectangle(cornerRadius: 18)
             )
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Warm.saffron.opacity(0.35), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, Space.edge)
         .padding(.vertical, Space.small)
+    }
+
+    private var dishRail: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionTitle(text: NSLocalizedString("meals_tomorrow", comment: ""))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: Space.medium) {
+                    ForEach(Array(s.dishes.enumerated()), id: \.offset) { _, d in
+                        Button { onKitchen(d.branchId) } label: { DishTile(d: d) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, Space.edge)
+                .padding(.bottom, Space.small)
+            }
+        }
     }
 
     @ViewBuilder
@@ -556,11 +592,11 @@ private struct MealsHomePage: View {
                                         .frame(width: 220, height: 124)
                                     Text(pick(k.name, k.nameAr))
                                         .font(.system(size: TypeScale.body, weight: .semibold))
-                                        .foregroundStyle(Palette.text)
+                                        .foregroundStyle(MP.text)
                                         .lineLimit(1)
                                     Text(tr("meals_from_meal", money(k.fromMealPriceMinor, k.currency)))
                                         .font(.system(size: TypeScale.secondary))
-                                        .foregroundStyle(Warm.saffron)
+                                        .foregroundStyle(Warm.chilli)
                                 }
                                 .frame(width: 220, alignment: .leading)
                             }
@@ -577,16 +613,16 @@ private struct MealsHomePage: View {
                     HStack(spacing: Space.medium) {
                         ForEach(banners, id: \.id) { b in
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(pick(b.title, b.titleAr)).font(serif(TypeScale.heading)).foregroundStyle(Palette.ink)
+                                Text(pick(b.title, b.titleAr)).font(display(TypeScale.heading)).foregroundStyle(Color.white)
                                 if let body = b.body {
                                     Text(pick(body, b.bodyAr))
                                         .font(.system(size: TypeScale.secondary))
-                                        .foregroundStyle(Palette.ink.opacity(0.75))
+                                        .foregroundStyle(Color.white.opacity(0.75))
                                 }
                             }
                             .frame(width: 300, alignment: .leading)
                             .padding(Space.large)
-                            .background(Warm.peach, in: RoundedRectangle(cornerRadius: 16))
+                            .background(Warm.chilli, in: RoundedRectangle(cornerRadius: 16))
                         }
                     }
                     .padding(.horizontal, Space.edge)
@@ -599,38 +635,143 @@ private struct MealsHomePage: View {
     }
 }
 
+/// A food photo filling whatever frame it is given, over a drawn tile that
+/// stays visible until (and unless) the photo loads.
+private struct FoodPhoto: View {
+    let seed: String
+    let imageUrl: String?
+
+    var body: some View {
+        let tint = Warm.covers[abs(seed.hashValue) % Warm.covers.count]
+        Rectangle()
+            .fill(LinearGradient(colors: [tint, tint.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay {
+                Text(String(seed.prefix(1)).uppercased())
+                    .font(display(34))
+                    .foregroundStyle(Color.white.opacity(0.9))
+            }
+            .overlay {
+                if let imageUrl, let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().scaledToFill()
+                        }
+                    }
+                }
+            }
+            .clipped()
+    }
+}
+
+private struct DishTile: View {
+    let d: DayDish
+
+    var body: some View {
+        let name = pick(d.name, d.nameAr)
+        VStack(alignment: .leading, spacing: 0) {
+            FoodPhoto(seed: name, imageUrl: d.imageUrl)
+                .frame(width: 200, height: 170)
+                .overlay(alignment: .topLeading) {
+                    if d.hasAlternative {
+                        Text("meals_two_choices")
+                            .font(.system(size: TypeScale.caption, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Warm.chilli, in: Capsule())
+                            .padding(Space.small)
+                    }
+                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(name)
+                    .font(.system(size: TypeScale.body, weight: .bold))
+                    .foregroundStyle(Warm.ink)
+                    .lineLimit(1)
+                Text(pick(d.kitchenName, d.kitchenNameAr) + " · " + slotLabel(d.slot))
+                    .font(.system(size: TypeScale.caption))
+                    .foregroundStyle(Warm.muted)
+                    .lineLimit(1)
+                Text(tr("meals_from_meal", money(d.fromMealPriceMinor, d.currency)))
+                    .font(.system(size: TypeScale.secondary, weight: .bold))
+                    .foregroundStyle(Warm.chilli)
+            }
+            .padding(Space.medium)
+        }
+        .frame(width: 200, alignment: .leading)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Warm.line, lineWidth: 1))
+    }
+}
+
 private struct KitchenCard: View {
     let k: Kitchen
 
     var body: some View {
         let name = pick(k.name, k.nameAr)
+        let photo = k.coverImageUrl ?? k.weekDishes.first(where: { $0.imageUrl != nil })?.imageUrl
         VStack(alignment: .leading, spacing: 0) {
-            KitchenCover(name: name, imageUrl: k.coverImageUrl, cuisines: k.cuisines)
-                .aspectRatio(2.2, contentMode: .fit)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(name)
-                        .font(.system(size: TypeScale.heading, weight: .semibold))
-                        .foregroundStyle(Palette.text)
-                        .lineLimit(1)
-                    Spacer()
-                    RatingText(rating: k.rating, count: k.ratingCount)
+            FoodPhoto(seed: name, imageUrl: photo)
+                .frame(height: 190)
+                .overlay(alignment: .topLeading) {
+                    HStack(spacing: 6) {
+                        if let rating = k.rating, k.ratingCount > 0 {
+                            Text("★ " + String(format: "%.1f", rating.doubleValue))
+                                .font(.system(size: TypeScale.caption, weight: .bold))
+                                .foregroundStyle(Warm.ink)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Warm.saffron, in: Capsule())
+                        }
+                        if k.foodSafetyVerified {
+                            Text("✓ " + NSLocalizedString("meals_verified", comment: ""))
+                                .font(.system(size: TypeScale.caption, weight: .semibold))
+                                .foregroundStyle(Warm.leaf)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Warm.leafSoft, in: Capsule())
+                        }
+                    }
+                    .padding(Space.medium)
                 }
+                .overlay(alignment: .bottomLeading) {
+                    Text(tr("meals_from_meal", money(k.fromMealPriceMinor, k.currency)))
+                        .font(.system(size: TypeScale.secondary, weight: .bold))
+                        .foregroundStyle(Warm.ink)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.white, in: Capsule())
+                        .padding(Space.medium)
+                }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(name)
+                    .font(.system(size: TypeScale.heading, weight: .bold))
+                    .foregroundStyle(Warm.ink)
+                    .lineLimit(1)
                 Text((k.cuisines + [k.city].compactMap { $0 }).joined(separator: " · "))
                     .font(.system(size: TypeScale.secondary))
-                    .foregroundStyle(Palette.textMuted)
+                    .foregroundStyle(Warm.muted)
                     .lineLimit(1)
-                HStack {
-                    Text(tr("meals_from_meal", money(k.fromMealPriceMinor, k.currency)))
-                        .font(.system(size: TypeScale.body, weight: .semibold))
-                        .foregroundStyle(Warm.saffron)
-                    Spacer()
-                    if k.foodSafetyVerified { VerifiedBadge() }
+                if !k.weekDishes.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(Array(k.weekDishes.prefix(4).enumerated()), id: \.offset) { _, d in
+                            FoodPhoto(seed: pick(d.name, d.nameAr), imageUrl: d.imageUrl)
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                        }
+                        Text(k.weekDishes.prefix(2).map { pick($0.name, $0.nameAr) }.joined(separator: ", "))
+                            .font(.system(size: TypeScale.caption))
+                            .foregroundStyle(Warm.muted)
+                            .lineLimit(1)
+                    }
+                    .padding(.top, 2)
                 }
             }
             .padding(Space.medium)
         }
-        .background(Warm.card, in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Warm.line, lineWidth: 1))
         .padding(.horizontal, Space.edge)
         .padding(.vertical, Space.small)
     }
@@ -647,125 +788,266 @@ private struct KitchenPage: View {
     private var s: KitchenUiState { current ?? vm.kitchen.value }
 
     var body: some View {
-        VStack(spacing: 0) {
-            TopBar(title: s.kitchen.map { pick($0.name, $0.nameAr) } ?? "", onBack: onBack)
+        Group {
             if let failure = s.error {
-                FailureBlock(failure: failure) { vm.openKitchen(branchId: s.branchId) }
-                Spacer()
+                VStack(spacing: 0) {
+                    TopBar(title: "", onBack: onBack)
+                    FailureBlock(failure: failure) { vm.openKitchen(branchId: s.branchId) }
+                    Spacer()
+                }
             } else if let k = s.kitchen {
-                content(k)
+                KitchenBody(k: k, reviews: s.reviews, onBack: onBack, onSubscribe: onSubscribe)
             } else {
-                LoadingBlock()
-                Spacer()
+                VStack(spacing: 0) {
+                    TopBar(title: "", onBack: onBack)
+                    LoadingBlock()
+                    Spacer()
+                }
             }
         }
         .task {
             for await state in vm.kitchen { current = state }
         }
     }
+}
 
-    private func content(_ k: KitchenDetail) -> some View {
+private struct KitchenBody: View {
+    let k: KitchenDetail
+    let reviews: [KitchenReview]
+    let onBack: () -> Void
+    let onSubscribe: (MealPlan) -> Void
+
+    @State private var day: Int32?
+    /// Plan-area rows currently on screen; the sticky bar hides while any is.
+    @State private var planRows: Set<String> = []
+
+    var body: some View {
         let byDay = Dictionary(grouping: k.menu.slots, by: { $0.weekday })
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                KitchenCover(name: pick(k.name, k.nameAr), imageUrl: k.coverImageUrl, cuisines: k.cuisines)
-                    .aspectRatio(2, contentMode: .fit)
-                    .padding(.horizontal, Space.edge)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(pick(k.name, k.nameAr)).font(serif(TypeScale.title * 1.2)).foregroundStyle(Warm.cream)
-                    HStack(spacing: Space.small) {
-                        RatingText(rating: k.rating, count: k.ratingCount)
-                        if k.foodSafetyVerified { VerifiedBadge() }
-                    }
-                    if let d = k.description_ {
-                        Text(pick(d, k.descriptionAr)).font(.system(size: TypeScale.body)).foregroundStyle(Palette.textMuted)
-                    }
-                    if k.deliversHere?.boolValue == false {
-                        Text("meals_not_here").font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.bad)
-                    }
-                }
-                .padding(Space.edge)
+        let days = byDay.keys.sorted()
+        let selected = day.flatMap { byDay[$0] != nil ? $0 : nil } ?? days.first
+        let name = pick(k.name, k.nameAr)
+        let hero = k.coverImageUrl ?? k.menu.slots.compactMap { $0.`default`?.imageUrl }.first
+        let enabled = k.deliversHere?.boolValue != false
+        let from = k.plans.map { $0.mealPriceMinor }.min()
+        let currency = k.plans.first?.currency ?? "AED"
+        ScrollViewReader { proxy in
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        FoodPhoto(seed: name, imageUrl: hero)
+                            .frame(height: 260)
+                            .overlay(alignment: .topLeading) {
+                                Button(action: onBack) {
+                                    Image(systemName: "chevron.backward")
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundStyle(Warm.ink)
+                                        .frame(width: Space.touch, height: Space.touch)
+                                        .background(Color.white, in: Circle())
+                                }
+                                .accessibilityLabel(Text("meals_back"))
+                                .padding(Space.medium)
+                            }
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(name).font(display(TypeScale.title * 1.25)).foregroundStyle(Warm.ink)
+                            if !k.cuisines.isEmpty {
+                                Text(k.cuisines.joined(separator: " · "))
+                                    .font(.system(size: TypeScale.secondary))
+                                    .foregroundStyle(Warm.muted)
+                            }
+                            if let from {
+                                Text(tr("meals_from_meal", money(from, currency)))
+                                    .font(.system(size: TypeScale.secondary, weight: .bold))
+                                    .foregroundStyle(Color.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(Warm.chilli, in: Capsule())
+                            }
+                            HStack(spacing: Space.small) {
+                                RatingText(rating: k.rating, count: k.ratingCount)
+                                if k.foodSafetyVerified { VerifiedBadge() }
+                            }
+                            if let d = k.description_ {
+                                Text(pick(d, k.descriptionAr)).font(.system(size: TypeScale.body)).foregroundStyle(Warm.muted)
+                            }
+                            if !enabled {
+                                Text("meals_not_here").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
+                            }
+                        }
+                        .padding(Space.edge)
 
-                if !k.plans.isEmpty {
-                    SectionTitle(text: NSLocalizedString("meals_plans", comment: ""))
-                    ForEach(k.plans, id: \.id) { p in
-                        PlanCard(p: p, enabled: k.deliversHere?.boolValue != false) { onSubscribe(p) }
-                    }
-                }
-                if !byDay.isEmpty {
-                    SectionTitle(text: NSLocalizedString("meals_weekly_menu", comment: ""))
-                    ForEach(byDay.keys.sorted(), id: \.self) { day in
-                        CardBox {
-                            Text(weekday(day, full: true))
-                                .font(.system(size: TypeScale.secondary, weight: .semibold))
-                                .foregroundStyle(Warm.peach)
-                            ForEach(byDay[day] ?? [], id: \.slot) { slot in
-                                HStack(alignment: .top) {
-                                    Text(slotLabel(slot.slot))
-                                        .font(.system(size: TypeScale.secondary))
-                                        .foregroundStyle(Palette.textFaint)
-                                        .frame(width: 84, alignment: .leading)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        if let d = slot.`default` {
-                                            Text(pick(d.name, d.nameAr)).font(.system(size: TypeScale.body)).foregroundStyle(Palette.text)
-                                        }
-                                        if let a = slot.alternative {
-                                            Text(tr("meals_or", pick(a.name, a.nameAr)))
-                                                .font(.system(size: TypeScale.secondary))
-                                                .foregroundStyle(Palette.textMuted)
-                                        }
+                        if !days.isEmpty {
+                            SectionTitle(text: NSLocalizedString("meals_weekly_menu", comment: ""))
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: Space.small) {
+                                    ForEach(days, id: \.self) { d in
+                                        Chip(label: weekday(d), selected: d == selected) { day = d }
+                                    }
+                                }
+                                .padding(.horizontal, Space.edge)
+                                .padding(.bottom, Space.small)
+                            }
+                            ForEach(selected.flatMap { byDay[$0] } ?? [], id: \.slot) { slot in
+                                DishCard(slot: slot)
+                            }
+                            SectionTitle(text: NSLocalizedString("meals_week_glance", comment: ""))
+                            CardBox {
+                                ForEach(days, id: \.self) { d in
+                                    HStack(alignment: .top, spacing: Space.medium) {
+                                        Text(weekday(d))
+                                            .font(.system(size: TypeScale.secondary, weight: .bold))
+                                            .foregroundStyle(Warm.chilli)
+                                            .frame(width: 64, alignment: .leading)
+                                        Text((byDay[d] ?? []).compactMap { $0.`default`.map { pick($0.name, $0.nameAr) } }
+                                            .joined(separator: ", "))
+                                            .font(.system(size: TypeScale.secondary))
+                                            .foregroundStyle(Warm.ink)
                                     }
                                 }
                             }
                         }
-                    }
-                }
-                if !s.reviews.isEmpty {
-                    SectionTitle(text: NSLocalizedString("meals_reviews", comment: ""))
-                    ForEach(s.reviews.prefix(5), id: \.id) { r in
-                        CardBox {
-                            let stars = max(0, min(5, Int(r.rating)))
-                            Text(String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars))
-                                .font(.system(size: TypeScale.secondary))
-                                .foregroundStyle(Warm.saffron)
-                            if !r.comment.isEmpty {
-                                Text(r.comment).font(.system(size: TypeScale.body)).foregroundStyle(Palette.text)
+
+                        if !k.plans.isEmpty {
+                            SectionTitle(text: NSLocalizedString("meals_plans", comment: ""))
+                                .id("plans")
+                                .onAppear { planRows.insert("title") }
+                                .onDisappear { planRows.remove("title") }
+                            ForEach(k.plans, id: \.id) { p in
+                                PlanCard(p: p, popular: p.id == k.popularPlanId, enabled: enabled) { onSubscribe(p) }
+                                    .onAppear { planRows.insert(p.id) }
+                                    .onDisappear { planRows.remove(p.id) }
                             }
                         }
+                        Group {
+                            if !reviews.isEmpty {
+                                SectionTitle(text: NSLocalizedString("meals_reviews", comment: ""))
+                                ForEach(reviews.prefix(5), id: \.id) { r in
+                                    CardBox {
+                                        let stars = max(0, min(5, Int(r.rating)))
+                                        Text(String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars))
+                                            .font(.system(size: TypeScale.secondary))
+                                            .foregroundStyle(Warm.saffron)
+                                        if !r.comment.isEmpty {
+                                            Text(r.comment).font(.system(size: TypeScale.body)).foregroundStyle(Warm.ink)
+                                        }
+                                    }
+                                }
+                            }
+                            Color.clear.frame(height: navBarHeight + Space.xl + 72)
+                        }
+                        .onAppear { planRows.insert("after") }
+                        .onDisappear { planRows.remove("after") }
                     }
                 }
-                Color.clear.frame(height: navBarHeight + Space.xl)
+                if !k.plans.isEmpty && planRows.isEmpty {
+                    HStack(spacing: Space.medium) {
+                        if let from {
+                            Text(tr("meals_from_meal", money(from, currency)))
+                                .font(.system(size: TypeScale.body, weight: .bold))
+                                .foregroundStyle(Warm.ink)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        Spacer(minLength: 0)
+                        Button {
+                            withAnimation { proxy.scrollTo("plans", anchor: .top) }
+                        } label: {
+                            Text("meals_see_plans")
+                                .font(.system(size: TypeScale.body, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 22)
+                                .frame(minHeight: 46)
+                                .background(Warm.chilli, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                    .padding(.horizontal, Space.edge)
+                    .padding(.vertical, Space.medium)
+                    .background(Color.white)
+                    .overlay(alignment: .top) { Rectangle().fill(Warm.line).frame(height: 1) }
+                    .padding(.bottom, navBarHeight)
+                }
             }
         }
     }
 }
 
+private struct DishCard: View {
+    let slot: MenuSlot
+
+    var body: some View {
+        let main = slot.`default` ?? slot.alternative
+        VStack(alignment: .leading, spacing: 0) {
+            FoodPhoto(seed: main.map { pick($0.name, $0.nameAr) } ?? slotLabel(slot.slot), imageUrl: main?.imageUrl)
+                .frame(height: 190)
+                .overlay(alignment: .topLeading) {
+                    Text(slotLabel(slot.slot))
+                        .font(.system(size: TypeScale.caption, weight: .bold))
+                        .foregroundStyle(Warm.ink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Warm.saffronSoft, in: Capsule())
+                        .padding(Space.medium)
+                }
+            VStack(alignment: .leading, spacing: 8) {
+                if let main {
+                    Text(pick(main.name, main.nameAr))
+                        .font(.system(size: TypeScale.heading, weight: .bold))
+                        .foregroundStyle(Warm.ink)
+                }
+                if let a = slot.alternative, slot.`default` != nil {
+                    HStack(spacing: Space.small) {
+                        FoodPhoto(seed: pick(a.name, a.nameAr), imageUrl: a.imageUrl)
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                        Text(tr("meals_or", pick(a.name, a.nameAr)))
+                            .font(.system(size: TypeScale.secondary))
+                            .foregroundStyle(Warm.muted)
+                    }
+                }
+            }
+            .padding(Space.medium)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Warm.line, lineWidth: 1))
+        .padding(.horizontal, Space.edge)
+        .padding(.vertical, 6)
+    }
+}
+
 private struct PlanCard: View {
     let p: MealPlan
+    var popular: Bool = false
     let enabled: Bool
     let onSubscribe: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            Rectangle().fill(Warm.saffron).frame(width: 5)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(pick(p.name, p.nameAr))
-                    .font(.system(size: TypeScale.heading, weight: .semibold))
-                    .foregroundStyle(Palette.text)
-                Text(tr("meals_meal_price", money(p.mealPriceMinor, p.currency)))
-                    .font(serif(TypeScale.title))
-                    .foregroundStyle(Warm.cream)
-                Text(tr("meals_plan_summary", Int(p.mealsPerCycle), Int(p.daysPerWeek)) + " · "
-                     + tr("meals_cycle_from", money(p.priceMinor, p.currency)))
-                    .font(.system(size: TypeScale.secondary))
-                    .foregroundStyle(Palette.textMuted)
-                PrimaryButton(label: NSLocalizedString("meals_subscribe", comment: ""), enabled: enabled, action: onSubscribe)
+        VStack(alignment: .leading, spacing: 6) {
+            if popular {
+                Text("meals_popular")
+                    .font(.system(size: TypeScale.caption, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Warm.chilli, in: Capsule())
             }
-            .padding(Space.large)
+            Text(pick(p.name, p.nameAr))
+                .font(.system(size: TypeScale.heading, weight: .bold))
+                .foregroundStyle(Warm.ink)
+            Text(tr("meals_meal_price", money(p.mealPriceMinor, p.currency)))
+                .font(display(TypeScale.title))
+                .foregroundStyle(Warm.chilli)
+            Text(tr("meals_plan_summary", Int(p.mealsPerCycle), Int(p.daysPerWeek)) + " · "
+                 + tr("meals_cycle_from", money(p.priceMinor, p.currency)))
+                .font(.system(size: TypeScale.secondary))
+                .foregroundStyle(Warm.muted)
+            PrimaryButton(label: NSLocalizedString("meals_subscribe", comment: ""), enabled: enabled, action: onSubscribe)
         }
-        .background(Warm.card)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Palette.line, lineWidth: 1))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Space.large)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(popular ? Warm.chilli : Warm.line, lineWidth: popular ? 2 : 1))
         .padding(.horizontal, Space.edge)
         .padding(.vertical, 6)
     }
@@ -822,11 +1104,11 @@ private struct CheckoutPage: View {
             VStack(alignment: .leading, spacing: 0) {
                 CardBox {
                     Text(s.kitchen.map { pick($0.name, $0.nameAr) } ?? "")
-                        .font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                        .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                     Text(pick(plan.name, plan.nameAr))
-                        .font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(Palette.text)
+                        .font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(MP.text)
                     Text(tr("meals_meal_price", money(plan.mealPriceMinor, plan.currency)))
-                        .font(.system(size: TypeScale.body)).foregroundStyle(Warm.saffron)
+                        .font(.system(size: TypeScale.body)).foregroundStyle(Warm.chilli)
                 }
                 FieldLabel(text: NSLocalizedString("meals_address", comment: ""))
                 ForEach(s.addresses, id: \.id) { a in
@@ -860,14 +1142,14 @@ private struct CheckoutPage: View {
                 if let code = promoCode {
                     Text(promoReason(code))
                         .font(.system(size: TypeScale.secondary))
-                        .foregroundStyle(Palette.bad)
+                        .foregroundStyle(MP.bad)
                         .padding(.horizontal, Space.edge)
                         .padding(.vertical, 6)
                 }
                 if let p = s.preview {
                     CardBox {
                         Text(shortDate(p.startsOn) + " – " + shortDate(p.endsOn))
-                            .font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                            .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                         PriceLine(label: NSLocalizedString("meals_subtotal", comment: ""), value: money(p.subtotalMinor, p.currency))
                         if p.discountMinor > 0 {
                             PriceLine(label: NSLocalizedString("meals_discount", comment: ""), value: "−" + money(p.discountMinor, p.currency))
@@ -912,7 +1194,7 @@ private struct AddressForm: View {
             Button { open = true } label: {
                 Text("+ " + NSLocalizedString("meals_add_address", comment: ""))
                     .font(.system(size: TypeScale.body))
-                    .foregroundStyle(Warm.saffron)
+                    .foregroundStyle(Warm.chilli)
                     .padding(.horizontal, Space.edge)
                     .padding(.vertical, Space.medium)
             }
@@ -920,7 +1202,7 @@ private struct AddressForm: View {
             CardBox {
                 Text("meals_add_address")
                     .font(.system(size: TypeScale.body, weight: .semibold))
-                    .foregroundStyle(Palette.text)
+                    .foregroundStyle(MP.text)
                 InputField(placeholder: NSLocalizedString("meals_label", comment: ""), text: $label)
                 InputField(placeholder: NSLocalizedString("meals_building", comment: ""), text: $building)
                 InputField(placeholder: NSLocalizedString("meals_area", comment: ""), text: $area)
@@ -1015,7 +1297,7 @@ private struct PaidPage: View {
             Text("✓").font(.system(size: TypeScale.title * 2.5)).foregroundStyle(Warm.leaf)
             Text(LocalizedStringKey(redirected ? "meals_paying" : "meals_paid"))
                 .font(.system(size: TypeScale.heading))
-                .foregroundStyle(Palette.text)
+                .foregroundStyle(MP.text)
                 .multilineTextAlignment(.center)
             PrimaryButton(label: NSLocalizedString("meals_view_subs", comment: ""), action: onMine)
         }
@@ -1077,20 +1359,20 @@ private struct RotationCard: View {
     var body: some View {
         CardBox {
             HStack {
-                Text(r.rotationNo).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(Palette.text)
+                Text(r.rotationNo).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
                 Spacer()
                 StatusPill(status: r.status)
             }
             Text(shortDate(r.startDate) + " – " + shortDate(r.endDate))
-                .font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
             ForEach(r.weeks.sorted { $0.week < $1.week }, id: \.week) { w in
                 Button { if let id = w.subscriptionId { onOpen(id) } } label: {
                     HStack(spacing: Space.small) {
                         Circle().fill(Warm.weeks[(Int(w.week) - 1 + 4) % 4]).frame(width: 10, height: 10)
                         Text(tr("meals_week", Int(w.week)) + " · " + pick(w.kitchenName, w.kitchenNameAr))
-                            .font(.system(size: TypeScale.body)).foregroundStyle(Palette.text)
+                            .font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
                         Spacer()
-                        Image(systemName: "chevron.forward").foregroundStyle(Palette.textFaint)
+                        Image(systemName: "chevron.forward").foregroundStyle(MP.textFaint)
                     }
                     .padding(.vertical, 6)
                 }
@@ -1099,7 +1381,7 @@ private struct RotationCard: View {
             if r.status == "active" || r.status == "pending" {
                 RenewToggle(on: r.autoRenew) { vm.setRotationRenewal(id: r.id, auto: $0) }
                 Button { confirming = true } label: {
-                    Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.bad)
+                    Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
                 }
                 .padding(.vertical, Space.small)
             }
@@ -1115,12 +1397,12 @@ private struct SubscriptionRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(pick(s.kitchenName, s.kitchenNameAr))
-                    .font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(Palette.text)
+                    .font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(MP.text)
                 Text(pick(s.planName, s.planNameAr))
-                    .font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                 if let next = s.upcoming.first {
                     Text(shortDate(next.date) + " · " + slotLabel(next.mealSlot))
-                        .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.peach)
+                        .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.chilli)
                 }
             }
             Spacer()
@@ -1182,13 +1464,13 @@ private struct SubscriptionPage: View {
                 CardBox {
                     HStack {
                         Text(pick(sub.planName, sub.planNameAr))
-                            .font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(Palette.text)
+                            .font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(MP.text)
                         Spacer()
                         StatusPill(status: sub.status)
                     }
                     let end = sub.cycleEndsOn ?? sub.endDate
                     Text(shortDate(sub.startDate) + (end.map { " – " + shortDate($0) } ?? ""))
-                        .font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                        .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                     if sub.rotationId == nil && (sub.status == "active" || sub.status == "paused") {
                         RenewToggle(on: sub.renewalMode == "auto") { vm.setAutoRenew(auto: $0) }
                     }
@@ -1209,7 +1491,7 @@ private struct SubscriptionPage: View {
                 }
                 if sub.rotationId == nil && ["active", "paused", "pending"].contains(sub.status) {
                     Button { confirming = true } label: {
-                        Text("meals_cancel").font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.bad)
+                        Text("meals_cancel").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
                     }
                     .disabled(s.busy)
                     .padding(Space.edge)
@@ -1234,9 +1516,9 @@ private struct PauseCard: View {
         if let first {
             CardBox {
                 Text("meals_pause_title")
-                    .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(Palette.text)
+                    .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
                 Text(tr("meals_pause_left", left, Int(sub.pauseAllowanceDays)))
-                    .font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                 HStack(spacing: Space.small) {
                     InputField(placeholder: NSLocalizedString("meals_pause_from", comment: ""), text: $from)
                     InputField(placeholder: NSLocalizedString("meals_pause_to", comment: ""), text: $to)
@@ -1263,13 +1545,13 @@ private struct MealCard: View {
         CardBox {
             HStack {
                 Text(shortDate(m.date) + " · " + slotLabel(m.mealSlot))
-                    .font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.peach)
+                    .font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.chilli)
                 Spacer()
                 if m.locked {
-                    Text("meals_locked").font(.system(size: TypeScale.caption)).foregroundStyle(Palette.textFaint)
+                    Text("meals_locked").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textFaint)
                 } else {
                     Button { vm.skip(date: m.date, slot: m.mealSlot) } label: {
-                        Text("meals_skip").font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+                        Text("meals_skip").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                             .padding(Space.small)
                     }
                     .disabled(busy)

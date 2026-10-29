@@ -198,6 +198,11 @@
 "meals_none" = "No kitchens deliver here yet.";
 "meals_from_meal" = "from %@ a meal";
 "meals_cycle_from" = "%@ a cycle";
+"meals_tomorrow" = "On the menu tomorrow";
+"meals_two_choices" = "2 choices";
+"meals_popular" = "Most popular";
+"meals_see_plans" = "See plans";
+"meals_week_glance" = "This week at a glance";
 "meals_verified" = "Food safety verified";
 "meals_new" = "New";
 "meals_rating" = "★ %@ (%lld)";
