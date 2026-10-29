@@ -213,7 +213,7 @@ struct FeedEmptyStateView: View {
     }
 }
 
-private struct ReelPage: View {
+struct ReelPage: View {
     let item: FeedItem
     let skewMillis: Int64
     let viewModel: FeedViewModel

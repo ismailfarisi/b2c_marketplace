@@ -763,7 +763,7 @@ private struct PrimaryButton: View {
 /// the duration of the block, so the whole thing is a single copy. The copy
 /// itself is unavoidable across the boundary, and is the reason
 /// `onClipRecorded` takes bytes rather than a path — see the note on Recorder.
-private func toKotlinByteArray(_ data: Data) -> KotlinByteArray {
+func toKotlinByteArray(_ data: Data) -> KotlinByteArray {
     let array = KotlinByteArray(size: Int32(data.count))
     data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
         guard let source = raw.baseAddress else { return }
