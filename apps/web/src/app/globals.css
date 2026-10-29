@@ -2160,7 +2160,7 @@ body {
 }
 
 /* buttons */
-.ms-btn,
+.ms .ms-btn,
 .ms .ms-cta {
   display: inline-flex;
   align-items: center;
@@ -2178,18 +2178,18 @@ body {
     transform 0.15s,
     background 0.15s;
 }
-.ms-btn:hover,
+.ms .ms-btn:hover,
 .ms .ms-cta:hover {
   background: var(--ms-accent-deep);
   transform: translateY(-1px);
 }
-.ms-btn-ghost {
+.ms .ms-btn-ghost {
   background: transparent;
   color: var(--ms-ink);
   border: 1.5px solid var(--ms-ink);
   box-shadow: none;
 }
-.ms-btn-ghost:hover {
+.ms .ms-btn-ghost:hover {
   background: var(--ms-ink);
   color: var(--ms-paper);
 }
