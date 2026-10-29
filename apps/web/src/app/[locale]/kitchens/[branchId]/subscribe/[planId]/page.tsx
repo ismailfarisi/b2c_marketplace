@@ -303,7 +303,9 @@ function Checkout({
   });
   const previewProblem =
     preview.error instanceof ApiError
-      ? (preview.error.problem?.errors?.[0]?.message ?? null)
+      ? (preview.error.problem?.errors?.[0]?.message ??
+          preview.error.problem?.detail ??
+          null)
       : null;
   const promoRejected =
     preview.error instanceof ApiError &&
