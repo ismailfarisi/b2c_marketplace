@@ -48,6 +48,7 @@ enum class Destination {
 // Was a private copy of the same hex in four files, two of which had drifted.
 // See ae.marketplace.mobile.android.ui.Palette.
 private val Accent = Palette.Accent
+private val MealsChilli = Color(0xFFD9441C)
 
 /**
  * NAV_BAR_HEIGHT excludes the system navigation inset, which the bar adds on top
@@ -75,11 +76,14 @@ fun BottomNav(
     onSelect: (Destination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Meals is a light, food-photo page; the scrim is for video only.
+    val light = selected == Destination.Meals
     Column(
         modifier
             .fillMaxWidth()
+            .then(if (light) Modifier.background(Color.White) else Modifier)
             .navigationBarsPadding()
-            .background(
+            .then(if (light) Modifier else Modifier.background(
                 // Scrim rather than a flat fill. A solid bar over a dark reel
                 // reads as a black band across the bottom of the video; a
                 // gradient keeps the frame continuous and still gives the labels
@@ -87,7 +91,7 @@ fun BottomNav(
                 Brush.verticalGradient(
                     listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
                 )
-            ),
+            )),
     ) {
         Row(
             // The system inset is applied to the Column above rather than here.
@@ -104,6 +108,7 @@ fun BottomNav(
                 NavItem(
                     label = stringResource(destination.labelRes()),
                     active = destination == selected,
+                    light = light,
                     onClick = { onSelect(destination) },
                 )
             }
@@ -112,7 +117,7 @@ fun BottomNav(
 }
 
 @Composable
-private fun NavItem(label: String, active: Boolean, onClick: () -> Unit) {
+private fun NavItem(label: String, active: Boolean, light: Boolean, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -124,7 +129,12 @@ private fun NavItem(label: String, active: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = label,
-            color = if (active) Accent else Color.White.copy(alpha = 0.7f),
+            color = when {
+                active && light -> MealsChilli
+                active -> Accent
+                light -> Color(0xFF76675B)
+                else -> Color.White.copy(alpha = 0.7f)
+            },
             fontSize = 12.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
         )

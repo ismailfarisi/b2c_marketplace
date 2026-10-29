@@ -158,13 +158,12 @@ private fun HomePage(
 ) {
     val s by vm.store.collectAsState()
     val arabic = rememberArabic()
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().background(M.Blush).statusBarsPadding().background(M.Paper)) {
         item {
             Column(
                 Modifier
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(M.Blush, M.Paper)))
-                    .statusBarsPadding()
                     .padding(start = Space.Edge, end = Space.Edge, top = Space.Large, bottom = Space.Medium),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -223,16 +222,15 @@ private fun RotationPromo(onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = Space.Small)
-            .background(Brush.linearGradient(listOf(androidx.compose.ui.graphics.Color(0xFF2B211B), androidx.compose.ui.graphics.Color(0xFF15110F))), RoundedCornerShape(18.dp))
-            .border(1.dp, M.Chilli.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
+            .background(Brush.linearGradient(listOf(M.Char, M.ChilliDeep)), RoundedCornerShape(18.dp))
+                        .clickable(onClick = onClick)
             .padding(Space.Large),
         verticalArrangement = Arrangement.spacedBy(Space.Small),
     ) {
         WeekBars(Modifier.fillMaxWidth())
-        Text(stringResource(R.string.meals_rotation_title), color = M.Ink, fontFamily = Serif, fontSize = Type.Heading * 1.15f, fontWeight = FontWeight.SemiBold)
-        Text(stringResource(R.string.meals_rotation_body), color = M.Muted, fontSize = Type.Secondary)
-        Text(stringResource(R.string.meals_rotation_cta) + " →", color = M.Chilli, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_rotation_title), color = M.OnAccent, fontFamily = Serif, fontSize = Type.Heading * 1.15f, fontWeight = FontWeight.ExtraBold)
+        Text(stringResource(R.string.meals_rotation_body), color = M.OnAccent.copy(alpha = 0.8f), fontSize = Type.Secondary)
+        Text(stringResource(R.string.meals_rotation_cta) + " →", color = M.Saffron, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -573,6 +571,9 @@ private fun KitchenBody(
             }
             item { Spacer(Modifier.height(96.dp)); BottomPad() }
         }
+        if (list.firstVisibleItemIndex > 0) {
+            Box(Modifier.fillMaxWidth().background(M.Paper).statusBarsPadding())
+        }
         if (k.plans.isNotEmpty() && !plansShown) {
             Row(
                 Modifier
@@ -581,6 +582,7 @@ private fun KitchenBody(
                     .background(M.Surface)
                     .border(1.dp, M.Line)
                     .navigationBarsPadding()
+                    .padding(bottom = ae.marketplace.mobile.android.NAV_BAR_HEIGHT)
                     .padding(horizontal = Space.Edge, vertical = Space.Medium),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Space.Medium),
