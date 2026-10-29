@@ -259,6 +259,35 @@ export default function MerchLayoutPage() {
                           }
                         />
                       </label>
+                      {s.type === "cuisine_strip" && (
+                        <label className="field">
+                          <span>
+                            Cuisine photos (optional, one per line:
+                            cuisine = https://…). Without one, a dish photo
+                            from a kitchen cooking it is used.
+                          </span>
+                          <textarea
+                            rows={4}
+                            dir="ltr"
+                            defaultValue={Object.entries(
+                              s.settings.cuisine_images ?? {},
+                            )
+                              .map(([c, u]) => `${c} = ${u}`)
+                              .join("\n")}
+                            onBlur={(e) => {
+                              const cuisine_images: Record<string, string> = {};
+                              for (const line of e.target.value.split("\n")) {
+                                const at = line.indexOf("=");
+                                if (at < 1) continue;
+                                const c = line.slice(0, at).trim().toLowerCase();
+                                const u = line.slice(at + 1).trim();
+                                if (c && u) cuisine_images[c] = u;
+                              }
+                              patch(i, { settings: { cuisine_images } });
+                            }}
+                          />
+                        </label>
+                      )}
                     </>
                   )}
                   {s.type === "kitchen_rail" && (

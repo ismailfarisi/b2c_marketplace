@@ -69,8 +69,22 @@ export default function DishesPage() {
       (q === "" || `${d.name} ${d.name_ar ?? ""} ${d.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase())),
   );
 
+  const unphotographed = all.filter((d) => d.is_active && !d.image_url).length;
+
   return (
     <>
+      {unphotographed > 0 && branch.editable ? (
+        <div className="state photo-nudge">
+          <strong>
+            {unphotographed === 1
+              ? "1 dish has no photo."
+              : `${unphotographed} dishes have no photo.`}
+          </strong>{" "}
+          Customers see your dish photos on your kitchen card, in the
+          &ldquo;On the menu tomorrow&rdquo; row and on your weekly menu. Dishes
+          without one show a plain tile. Add a photo link with Edit.
+        </div>
+      ) : null}
       {editing ? (
         <DishForm
           key={editing.id ?? "new"}

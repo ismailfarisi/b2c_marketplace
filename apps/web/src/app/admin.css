@@ -1895,3 +1895,12 @@ table.menu-grid td {
 .company-admin .money-table {
   inline-size: 100%;
 }
+
+.state.photo-nudge {
+  padding: 12px 16px;
+  margin-block-end: 16px;
+  text-align: start;
+  border-radius: 10px;
+  background: var(--a-warn-soft);
+  color: var(--a-text);
+}

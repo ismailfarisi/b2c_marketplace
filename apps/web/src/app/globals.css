@@ -2936,3 +2936,8 @@ body {
     white-space: nowrap;
   }
 }
+.ms-kgrid .ms-k-plans,
+.ms-kmain .ms-k-menu,
+.ms-kmain .ms-k-reviews {
+  grid-area: auto;
+}
