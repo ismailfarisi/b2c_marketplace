@@ -357,6 +357,8 @@ function Checkout({
         setError(t.outside);
       else if (err instanceof ApiError && err.problem?.errors?.[0]?.message)
         setError(err.problem.errors[0].message);
+      else if (err instanceof ApiError && err.problem?.detail)
+        setError(err.problem.detail);
       else setError(t.failed);
       setBusy(false);
     }
