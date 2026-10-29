@@ -64,7 +64,32 @@ internal object Warm {
     val Weeks = listOf(Color(0xFFE59A3B), Color(0xFF6BAF6E), Color(0xFF5B9BD5), Color(0xFFC46B8C))
 }
 
-internal val Serif = FontFamily.Serif
+/**
+ * The storefront's light palette: chilli, saffron and leaf on cream, the same
+ * tokens as the web (`--ms-*` in globals.css). Food photos read best on a warm
+ * light page, so meals leave the app's dark video palette behind.
+ */
+internal object M {
+    val Paper = Color(0xFFFFF8F0)
+    val Surface = Color(0xFFFFFFFF)
+    val Ink = Color(0xFF1E1410)
+    val Muted = Color(0xFF76675B)
+    val Faint = Color(0xFFA89889)
+    val Ghost = Color(0xFFC9BBAE)
+    val Line = Color(0xFFF0E2D2)
+    val Chilli = Color(0xFFD9441C)
+    val ChilliDeep = Color(0xFFA8300F)
+    val OnAccent = Color.White
+    val Saffron = Color(0xFFF6B21B)
+    val SaffronSoft = Color(0xFFFFF1CC)
+    val Leaf = Color(0xFF2E7D4F)
+    val LeafSoft = Color(0xFFE3F2E8)
+    val Blush = Color(0xFFFDE6D8)
+    val Char = Color(0xFF22160F)
+}
+
+/** Upright, heavy headings (the web uses Bricolage Grotesque; no serif). */
+internal val Serif = FontFamily.SansSerif
 
 internal fun money(minor: Long, currency: String): String =
     "$currency " + String.format(Locale.US, "%,.2f", minor / 100.0)
@@ -120,7 +145,7 @@ internal fun KitchenCover(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 name.take(1).uppercase(),
-                color = Warm.Cream,
+                color = Color.White,
                 fontFamily = Serif,
                 fontSize = Type.Title * 1.6f,
                 fontWeight = FontWeight.SemiBold,
@@ -128,7 +153,7 @@ internal fun KitchenCover(
             if (cuisines.isNotEmpty()) {
                 Text(
                     cuisines.take(2).joinToString(" · "),
-                    color = Warm.Cream.copy(alpha = 0.8f),
+                    color = Color.White.copy(alpha = 0.85f),
                     fontSize = Type.Caption,
                 )
             }
@@ -155,17 +180,17 @@ internal fun Chip(label: String, selected: Boolean, onClick: () -> Unit, enabled
     Text(
         label,
         color = when {
-            selected -> Palette.Ink
-            enabled -> Palette.Text
-            else -> Palette.TextFaint
+            selected -> M.OnAccent
+            enabled -> M.Ink
+            else -> M.Faint
         },
         fontSize = Type.Secondary,
         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
         modifier = Modifier
             .semantics { this.selected = selected; role = Role.Checkbox }
             .clickable(enabled = enabled, onClick = onClick)
-            .background(if (selected) Warm.Peach else Palette.Surface, RoundedCornerShape(50))
-            .border(1.dp, if (selected) Warm.Peach else Palette.Line, RoundedCornerShape(50))
+            .background(if (selected) M.Chilli else M.Surface, RoundedCornerShape(50))
+            .border(1.dp, if (selected) M.Chilli else M.Line, RoundedCornerShape(50))
             .defaultMinSize(minHeight = 36.dp)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     )
@@ -177,14 +202,14 @@ internal fun PrimaryButton(label: String, onClick: () -> Unit, enabled: Boolean 
         modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = Space.Touch)
-            .background(if (enabled) Warm.Saffron else Palette.Line, RoundedCornerShape(12.dp))
+            .background(if (enabled) M.Chilli else M.Line, RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .semantics { role = Role.Button },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            color = if (enabled) Palette.Ink else Palette.TextFaint,
+            color = if (enabled) M.OnAccent else M.Faint,
             fontWeight = FontWeight.SemiBold,
             fontSize = Type.Body,
         )
@@ -203,7 +228,7 @@ internal fun TopBar(title: String, onBack: (() -> Unit)?, action: (@Composable (
         if (onBack != null) {
             Text(
                 "‹ " + stringResource(R.string.meals_back),
-                color = Palette.TextMuted,
+                color = M.Muted,
                 fontSize = Type.Body,
                 modifier = Modifier
                     .clickable(onClick = onBack)
@@ -213,7 +238,7 @@ internal fun TopBar(title: String, onBack: (() -> Unit)?, action: (@Composable (
         }
         Text(
             title,
-            color = Palette.Text,
+            color = M.Ink,
             fontSize = Type.Heading,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
@@ -228,7 +253,7 @@ internal fun TopBar(title: String, onBack: (() -> Unit)?, action: (@Composable (
 internal fun SectionTitle(text: String) {
     Text(
         text,
-        color = Palette.Text,
+        color = M.Ink,
         fontFamily = Serif,
         fontSize = Type.Title,
         fontWeight = FontWeight.SemiBold,
@@ -242,8 +267,8 @@ internal fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit
         modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = 6.dp)
-            .background(Warm.Card, RoundedCornerShape(16.dp))
-            .border(1.dp, Palette.Line, RoundedCornerShape(16.dp))
+            .background(M.Surface, RoundedCornerShape(16.dp))
+            .border(1.dp, M.Line, RoundedCornerShape(16.dp))
             .padding(Space.Large),
         verticalArrangement = Arrangement.spacedBy(Space.Small),
     ) { content() }
@@ -252,8 +277,8 @@ internal fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit
 @Composable
 internal fun Line(label: String, value: String, strong: Boolean = false) {
     Row(Modifier.fillMaxWidth()) {
-        Text(label, color = if (strong) Palette.Text else Palette.TextMuted, fontSize = Type.Body, modifier = Modifier.weight(1f))
-        Text(value, color = Palette.Text, fontSize = Type.Body, fontWeight = if (strong) FontWeight.Bold else FontWeight.Normal)
+        Text(label, color = if (strong) M.Ink else M.Muted, fontSize = Type.Body, modifier = Modifier.weight(1f))
+        Text(value, color = M.Ink, fontSize = Type.Body, fontWeight = if (strong) FontWeight.Bold else FontWeight.Normal)
     }
 }
 

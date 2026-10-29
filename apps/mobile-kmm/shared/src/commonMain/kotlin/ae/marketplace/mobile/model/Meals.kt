@@ -34,6 +34,39 @@ data class Kitchen(
     @SerialName("from_meal_price_minor") val fromMealPriceMinor: Long = 0,
     @SerialName("rotation_week_price_minor") val rotationWeekPriceMinor: Long? = null,
     @SerialName("food_safety_verified") val foodSafetyVerified: Boolean = false,
+    @SerialName("week_dishes") val weekDishes: List<DishThumb> = emptyList(),
+)
+
+/** One of this week's default dishes, photographed ones first. */
+@Serializable
+data class DishThumb(
+    val name: String,
+    @SerialName("name_ar") val nameAr: String? = null,
+    @SerialName("image_url") val imageUrl: String? = null,
+)
+
+/** A dish on the next delivery day, from a kitchen that delivers to the customer. */
+@Serializable
+data class DayDish(
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    val name: String,
+    @SerialName("name_ar") val nameAr: String? = null,
+    @SerialName("image_url") val imageUrl: String? = null,
+    val slot: String,
+    @SerialName("has_alternative") val hasAlternative: Boolean = false,
+    @SerialName("from_meal_price_minor") val fromMealPriceMinor: Long = 0,
+    val currency: String = "AED",
+    val rating: Double? = null,
+    @SerialName("rating_count") val ratingCount: Int = 0,
+)
+
+@Serializable
+data class NextDayDishes(
+    val date: String,
+    val weekday: Int,
+    val items: List<DayDish> = emptyList(),
 )
 
 @Serializable
@@ -55,6 +88,7 @@ data class KitchenDetail(
     @SerialName("delivery_windows") val deliveryWindows: List<DeliveryWindow> = emptyList(),
     val menu: WeeklyMenu = WeeklyMenu(),
     @SerialName("plan_list") val plans: List<MealPlan> = emptyList(),
+    @SerialName("popular_plan_id") val popularPlanId: String? = null,
 )
 
 @Serializable

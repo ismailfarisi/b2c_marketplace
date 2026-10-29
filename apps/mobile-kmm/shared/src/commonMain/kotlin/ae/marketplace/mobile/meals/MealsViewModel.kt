@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.meals
 
+import ae.marketplace.mobile.model.DayDish
 import ae.marketplace.mobile.model.Address
 import ae.marketplace.mobile.model.AddressInput
 import ae.marketplace.mobile.model.HomeSection
@@ -37,6 +38,8 @@ data class StorefrontUiState(
     val slot: String? = null,
     val sections: List<HomeSection> = emptyList(),
     val kitchens: List<Kitchen> = emptyList(),
+    /** The next delivery day's dishes; empty when that call fails, which never blocks the page. */
+    val dishes: List<DayDish> = emptyList(),
     val loading: Boolean = false,
     val error: Failure? = null,
 )
@@ -158,7 +161,12 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                     emptyList()
                 }
                 val kitchens = api.kitchens(at, slot).items
-                _store.update { it.copy(sections = sections, kitchens = kitchens, loading = false) }
+                val dishes = if (slot == null) {
+                    runCatching { api.tomorrowDishes(at).items }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
+                _store.update { it.copy(sections = sections, kitchens = kitchens, dishes = dishes, loading = false) }
             } catch (e: Throwable) {
                 _store.update { it.copy(loading = false, error = e.toFailure()) }
             }

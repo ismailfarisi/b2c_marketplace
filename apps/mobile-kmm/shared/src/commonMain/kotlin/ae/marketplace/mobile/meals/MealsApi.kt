@@ -1,6 +1,7 @@
 package ae.marketplace.mobile.meals
 
 import ae.marketplace.mobile.model.Address
+import ae.marketplace.mobile.model.NextDayDishes
 import ae.marketplace.mobile.model.AddressInput
 import ae.marketplace.mobile.model.AddressPage
 import ae.marketplace.mobile.model.KitchenDetail
@@ -35,6 +36,9 @@ import kotlinx.serialization.Serializable
 class MealsApi(private val client: HttpClient) {
 
     suspend fun home(at: LatLng): MealsHome = client.get("meals/home") { point(at) }.body()
+
+    suspend fun tomorrowDishes(at: LatLng): NextDayDishes =
+        client.get("meals/dishes/tomorrow") { point(at) }.body()
 
     suspend fun kitchens(at: LatLng, slot: String? = null, rotation: Boolean = false): KitchenPage =
         client.get("meals/kitchens") {

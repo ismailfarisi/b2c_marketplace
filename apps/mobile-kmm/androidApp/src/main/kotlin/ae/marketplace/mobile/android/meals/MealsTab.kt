@@ -113,7 +113,7 @@ fun MealsTab(
         viewModel.paymentOpened()
     }
 
-    Box(modifier.fillMaxSize().background(Palette.Ink)) {
+    Box(modifier.fillMaxSize().background(M.Paper)) {
         when (page) {
             Page.Home -> HomePage(
                 viewModel,
@@ -153,7 +153,7 @@ private fun HomePage(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Warm.Peach.copy(alpha = 0.22f), Palette.Ink)))
+                    .background(Brush.verticalGradient(listOf(M.Blush, M.Paper)))
                     .statusBarsPadding()
                     .padding(start = Space.Edge, end = Space.Edge, top = Space.Large, bottom = Space.Medium),
             ) {
@@ -161,21 +161,21 @@ private fun HomePage(
                     Column(Modifier.weight(1f)) {
                         Text(
                             stringResource(R.string.meals_title),
-                            color = Warm.Cream,
+                            color = M.Ink,
                             fontFamily = Serif,
                             fontSize = Type.Title * 1.3f,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Text(stringResource(R.string.meals_subtitle), color = Palette.TextMuted, fontSize = Type.Secondary)
+                        Text(stringResource(R.string.meals_subtitle), color = M.Muted, fontSize = Type.Secondary)
                     }
                     Text(
                         stringResource(R.string.meals_my),
-                        color = Palette.Ink,
+                        color = M.OnAccent,
                         fontSize = Type.Secondary,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .clickable(onClick = onMine)
-                            .background(Warm.Peach, RoundedCornerShape(50))
+                            .background(M.Chilli, RoundedCornerShape(50))
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                     )
                 }
@@ -213,15 +213,15 @@ private fun RotationPromo(onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = Space.Small)
             .background(Brush.linearGradient(listOf(androidx.compose.ui.graphics.Color(0xFF2B211B), androidx.compose.ui.graphics.Color(0xFF15110F))), RoundedCornerShape(18.dp))
-            .border(1.dp, Warm.Saffron.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+            .border(1.dp, M.Chilli.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .padding(Space.Large),
         verticalArrangement = Arrangement.spacedBy(Space.Small),
     ) {
         WeekBars(Modifier.fillMaxWidth())
-        Text(stringResource(R.string.meals_rotation_title), color = Warm.Cream, fontFamily = Serif, fontSize = Type.Heading * 1.15f, fontWeight = FontWeight.SemiBold)
-        Text(stringResource(R.string.meals_rotation_body), color = Palette.TextMuted, fontSize = Type.Secondary)
-        Text(stringResource(R.string.meals_rotation_cta) + " →", color = Warm.Saffron, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_rotation_title), color = M.Ink, fontFamily = Serif, fontSize = Type.Heading * 1.15f, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_rotation_body), color = M.Muted, fontSize = Type.Secondary)
+        Text(stringResource(R.string.meals_rotation_cta) + " →", color = M.Chilli, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -241,8 +241,8 @@ private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -
                 items(kitchens, key = { it.branchId }) { k ->
                     Column(Modifier.width(220.dp).clickable { onKitchen(k.branchId) }) {
                         KitchenCover(pick(k.name, k.nameAr, arabic), k.coverImageUrl, k.cuisines, Modifier.fillMaxWidth().height(124.dp))
-                        Text(pick(k.name, k.nameAr, arabic), color = Palette.Text, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                        Text(stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)), color = Warm.Saffron, fontSize = Type.Secondary)
+                        Text(pick(k.name, k.nameAr, arabic), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                        Text(stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)), color = M.Chilli, fontSize = Type.Secondary)
                     }
                 }
             }
@@ -258,11 +258,11 @@ private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -
                     Column(
                         Modifier
                             .width(300.dp)
-                            .background(Warm.Peach, RoundedCornerShape(16.dp))
+                            .background(M.Chilli, RoundedCornerShape(16.dp))
                             .padding(Space.Large),
                     ) {
-                        Text(pick(b.title, b.titleAr, arabic), color = Palette.Ink, fontFamily = Serif, fontSize = Type.Heading, fontWeight = FontWeight.Bold)
-                        b.body?.let { Text(pick(it, b.bodyAr, arabic), color = Palette.Ink.copy(alpha = 0.75f), fontSize = Type.Secondary) }
+                        Text(pick(b.title, b.titleAr, arabic), color = M.OnAccent, fontFamily = Serif, fontSize = Type.Heading, fontWeight = FontWeight.Bold)
+                        b.body?.let { Text(pick(it, b.bodyAr, arabic), color = M.OnAccent.copy(alpha = 0.75f), fontSize = Type.Secondary) }
                     }
                 }
             }
@@ -280,24 +280,24 @@ private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = Space.Small)
-            .background(Warm.Card, RoundedCornerShape(16.dp))
+            .background(M.Surface, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
     ) {
         KitchenCover(name, k.coverImageUrl, k.cuisines, Modifier.fillMaxWidth().aspectRatio(2.2f))
         Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, color = Palette.Text, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(name, color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 RatingText(k.rating, k.ratingCount)
             }
             Text(
                 (k.cuisines + listOfNotNull(k.city)).joinToString(" · "),
-                color = Palette.TextMuted,
+                color = M.Muted,
                 fontSize = Type.Secondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)), color = Warm.Saffron, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)), color = M.Chilli, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 if (k.foodSafetyVerified) VerifiedBadge()
             }
         }
@@ -307,9 +307,9 @@ private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
 @Composable
 private fun RatingText(rating: Double?, count: Int) {
     if (rating == null || count == 0) {
-        Text(stringResource(R.string.meals_new), color = Warm.Leaf, fontSize = Type.Caption, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_new), color = M.Leaf, fontSize = Type.Caption, fontWeight = FontWeight.SemiBold)
     } else {
-        Text(stringResource(R.string.meals_rating, String.format(java.util.Locale.US, "%.1f", rating), count), color = Warm.Saffron, fontSize = Type.Secondary)
+        Text(stringResource(R.string.meals_rating, String.format(java.util.Locale.US, "%.1f", rating), count), color = M.Chilli, fontSize = Type.Secondary)
     }
 }
 
@@ -317,10 +317,10 @@ private fun RatingText(rating: Double?, count: Int) {
 private fun VerifiedBadge() {
     Text(
         "✓ " + stringResource(R.string.meals_verified),
-        color = Warm.Leaf,
+        color = M.Leaf,
         fontSize = Type.Caption,
         modifier = Modifier
-            .border(1.dp, Warm.Leaf.copy(alpha = 0.5f), RoundedCornerShape(50))
+            .border(1.dp, M.Leaf.copy(alpha = 0.5f), RoundedCornerShape(50))
             .padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
@@ -344,12 +344,12 @@ private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onSubscribe: (Me
                 item {
                     KitchenCover(pick(k.name, k.nameAr, arabic), k.coverImageUrl, k.cuisines, Modifier.fillMaxWidth().padding(horizontal = Space.Edge).aspectRatio(2f))
                     Column(Modifier.padding(Space.Edge), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(pick(k.name, k.nameAr, arabic), color = Warm.Cream, fontFamily = Serif, fontSize = Type.Title * 1.2f, fontWeight = FontWeight.SemiBold)
+                        Text(pick(k.name, k.nameAr, arabic), color = M.Ink, fontFamily = Serif, fontSize = Type.Title * 1.2f, fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalAlignment = Alignment.CenterVertically) {
                             RatingText(k.rating, k.ratingCount)
                             if (k.foodSafetyVerified) VerifiedBadge()
                         }
-                        k.description?.let { Text(pick(it, k.descriptionAr, arabic), color = Palette.TextMuted, fontSize = Type.Body) }
+                        k.description?.let { Text(pick(it, k.descriptionAr, arabic), color = M.Muted, fontSize = Type.Body) }
                         if (k.deliversHere == false) {
                             Text(stringResource(R.string.meals_not_here), color = Palette.Bad, fontSize = Type.Secondary)
                         }
@@ -367,14 +367,14 @@ private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onSubscribe: (Me
                     byDay.forEach { (day, slots) ->
                         item(key = "day$day") {
                             Card {
-                                Text(weekday(day, arabic, java.time.format.TextStyle.FULL), color = Warm.Peach, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold)
+                                Text(weekday(day, arabic, java.time.format.TextStyle.FULL), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold)
                                 slots.forEach { slot ->
                                     Row {
-                                        Text(slotLabel(slot.slot), color = Palette.TextFaint, fontSize = Type.Secondary, modifier = Modifier.width(84.dp))
+                                        Text(slotLabel(slot.slot), color = M.Faint, fontSize = Type.Secondary, modifier = Modifier.width(84.dp))
                                         Column(Modifier.weight(1f)) {
-                                            slot.default?.let { Text(pick(it.name, it.nameAr, arabic), color = Palette.Text, fontSize = Type.Body) }
+                                            slot.default?.let { Text(pick(it.name, it.nameAr, arabic), color = M.Ink, fontSize = Type.Body) }
                                             slot.alternative?.let {
-                                                Text(stringResource(R.string.meals_or, pick(it.name, it.nameAr, arabic)), color = Palette.TextMuted, fontSize = Type.Secondary)
+                                                Text(stringResource(R.string.meals_or, pick(it.name, it.nameAr, arabic)), color = M.Muted, fontSize = Type.Secondary)
                                             }
                                         }
                                     }
@@ -387,8 +387,8 @@ private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onSubscribe: (Me
                     item { SectionTitle(stringResource(R.string.meals_reviews)) }
                     items(s.reviews.take(5), key = { it.id }) { r ->
                         Card {
-                            Text("★".repeat(r.rating) + "☆".repeat(5 - r.rating), color = Warm.Saffron, fontSize = Type.Secondary)
-                            if (r.comment.isNotBlank()) Text(r.comment, color = Palette.Text, fontSize = Type.Body)
+                            Text("★".repeat(r.rating) + "☆".repeat(5 - r.rating), color = M.Chilli, fontSize = Type.Secondary)
+                            if (r.comment.isNotBlank()) Text(r.comment, color = M.Ink, fontSize = Type.Body)
                         }
                     }
                 }
@@ -405,16 +405,16 @@ private fun PlanCard(p: MealPlan, arabic: Boolean, enabled: Boolean, onSubscribe
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = 6.dp)
             .height(IntrinsicSize.Min)
-            .background(Warm.Card, RoundedCornerShape(16.dp))
-            .border(1.dp, Palette.Line, RoundedCornerShape(16.dp)),
+            .background(M.Surface, RoundedCornerShape(16.dp))
+            .border(1.dp, M.Line, RoundedCornerShape(16.dp)),
     ) {
-        Box(Modifier.width(5.dp).fillMaxHeight().background(Warm.Saffron, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)))
+        Box(Modifier.width(5.dp).fillMaxHeight().background(M.Chilli, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)))
         Column(Modifier.padding(Space.Large), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(pick(p.name, p.nameAr, arabic), color = Palette.Text, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.meals_meal_price, money(p.mealPriceMinor, p.currency)), color = Warm.Cream, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.SemiBold)
+            Text(pick(p.name, p.nameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.meals_meal_price, money(p.mealPriceMinor, p.currency)), color = M.Ink, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.SemiBold)
             Text(
                 stringResource(R.string.meals_plan_summary, p.mealsPerCycle, p.daysPerWeek) + " · " + stringResource(R.string.meals_cycle_from, money(p.priceMinor, p.currency)),
-                color = Palette.TextMuted,
+                color = M.Muted,
                 fontSize = Type.Secondary,
             )
             PrimaryButton(stringResource(R.string.meals_subscribe), onSubscribe, enabled = enabled)
@@ -446,9 +446,9 @@ private fun CheckoutPage(
         TopBar(stringResource(R.string.meals_checkout), onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Card {
-                Text(s.kitchen?.let { pick(it.name, it.nameAr, arabic) } ?: "", color = Palette.TextMuted, fontSize = Type.Secondary)
-                Text(pick(plan.name, plan.nameAr, arabic), color = Palette.Text, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.meals_meal_price, money(plan.mealPriceMinor, plan.currency)), color = Warm.Saffron, fontSize = Type.Body)
+                Text(s.kitchen?.let { pick(it.name, it.nameAr, arabic) } ?: "", color = M.Muted, fontSize = Type.Secondary)
+                Text(pick(plan.name, plan.nameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.meals_meal_price, money(plan.mealPriceMinor, plan.currency)), color = M.Chilli, fontSize = Type.Body)
             }
             Label(stringResource(R.string.meals_address))
             s.addresses.forEach { a ->
@@ -492,7 +492,7 @@ private fun CheckoutPage(
             s.preview?.let { p ->
                 Spacer(Modifier.height(Space.Medium))
                 Card {
-                    Text(shortDate(p.startsOn, arabic) + " – " + shortDate(p.endsOn, arabic), color = Palette.TextMuted, fontSize = Type.Secondary)
+                    Text(shortDate(p.startsOn, arabic) + " – " + shortDate(p.endsOn, arabic), color = M.Muted, fontSize = Type.Secondary)
                     Line(stringResource(R.string.meals_subtotal), money(p.subtotalMinor, p.currency))
                     if (p.discountMinor > 0) Line(stringResource(R.string.meals_discount), "−" + money(p.discountMinor, p.currency))
                     Line(stringResource(R.string.meals_delivery), money(p.deliveryMinor, p.currency))
@@ -523,14 +523,14 @@ private fun AddressForm(startOpen: Boolean, busy: Boolean, onSave: (String, Stri
     if (!open && !startOpen) {
         Text(
             "+ " + stringResource(R.string.meals_add_address),
-            color = Warm.Saffron,
+            color = M.Chilli,
             fontSize = Type.Body,
             modifier = Modifier.clickable { open = true }.padding(horizontal = Space.Edge, vertical = Space.Medium),
         )
         return
     }
     Card {
-        Text(stringResource(R.string.meals_add_address), color = Palette.Text, fontWeight = FontWeight.SemiBold, fontSize = Type.Body)
+        Text(stringResource(R.string.meals_add_address), color = M.Ink, fontWeight = FontWeight.SemiBold, fontSize = Type.Body)
         Field(label, { label = it }, placeholder = stringResource(R.string.meals_label))
         Field(building, { building = it }, placeholder = stringResource(R.string.meals_building))
         Field(area, { area = it }, placeholder = stringResource(R.string.meals_area))
@@ -541,7 +541,7 @@ private fun AddressForm(startOpen: Boolean, busy: Boolean, onSave: (String, Stri
 
 @Composable
 private fun Label(text: String) {
-    Text(text, color = Palette.TextMuted, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = Space.Edge, end = Space.Edge, top = Space.Large, bottom = Space.Small))
+    Text(text, color = M.Muted, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = Space.Edge, end = Space.Edge, top = Space.Large, bottom = Space.Small))
 }
 
 @Composable
@@ -550,18 +550,18 @@ private fun Choice(title: String, detail: String, selected: Boolean, onClick: ()
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = 4.dp)
-            .background(Warm.Card, RoundedCornerShape(12.dp))
-            .border(1.dp, if (selected) Warm.Saffron else Palette.Line, RoundedCornerShape(12.dp))
+            .background(M.Surface, RoundedCornerShape(12.dp))
+            .border(1.dp, if (selected) M.Chilli else M.Line, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(Space.Medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(18.dp).border(2.dp, if (selected) Warm.Saffron else Palette.TextFaint, RoundedCornerShape(50)).padding(4.dp)) {
-            if (selected) Box(Modifier.fillMaxSize().background(Warm.Saffron, RoundedCornerShape(50)))
+        Box(Modifier.size(18.dp).border(2.dp, if (selected) M.Chilli else M.Faint, RoundedCornerShape(50)).padding(4.dp)) {
+            if (selected) Box(Modifier.fillMaxSize().background(M.Chilli, RoundedCornerShape(50)))
         }
         Column(Modifier.padding(start = Space.Medium)) {
-            Text(title, color = Palette.Text, fontSize = Type.Body)
-            if (detail.isNotBlank()) Text(detail, color = Palette.TextMuted, fontSize = Type.Secondary)
+            Text(title, color = M.Ink, fontSize = Type.Body)
+            if (detail.isNotBlank()) Text(detail, color = M.Muted, fontSize = Type.Secondary)
         }
     }
 }
@@ -572,15 +572,15 @@ private fun Field(value: String, onChange: (String) -> Unit, modifier: Modifier 
         value = value,
         onValueChange = onChange,
         singleLine = true,
-        textStyle = TextStyle(color = Palette.Text, fontSize = Type.Body),
-        cursorBrush = SolidColor(Warm.Saffron),
+        textStyle = TextStyle(color = M.Ink, fontSize = Type.Body),
+        cursorBrush = SolidColor(M.Chilli),
         modifier = modifier
             .fillMaxWidth()
-            .background(Palette.Surface, RoundedCornerShape(10.dp))
-            .border(1.dp, Palette.Line, RoundedCornerShape(10.dp))
+            .background(M.Surface, RoundedCornerShape(10.dp))
+            .border(1.dp, M.Line, RoundedCornerShape(10.dp))
             .padding(horizontal = Space.Medium, vertical = 14.dp),
         decorationBox = { inner ->
-            if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = Palette.TextFaint, fontSize = Type.Body)
+            if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = M.Faint, fontSize = Type.Body)
             inner()
         },
     )
@@ -647,8 +647,8 @@ private fun PaidPage(redirected: Boolean, onMine: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("✓", color = Warm.Leaf, fontSize = Type.Title * 2.5f)
-        Text(stringResource(if (redirected) R.string.meals_paying else R.string.meals_paid), textAlign = TextAlign.Center, color = Palette.Text, fontSize = Type.Heading, modifier = Modifier.padding(vertical = Space.Large))
+        Text("✓", color = M.Leaf, fontSize = Type.Title * 2.5f)
+        Text(stringResource(if (redirected) R.string.meals_paying else R.string.meals_paid), textAlign = TextAlign.Center, color = M.Ink, fontSize = Type.Heading, modifier = Modifier.padding(vertical = Space.Large))
         PrimaryButton(stringResource(R.string.meals_view_subs), onMine)
     }
 }
@@ -689,10 +689,10 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
     var confirming by remember { mutableStateOf(false) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(r.rotationNo, color = Palette.Text, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(r.rotationNo, color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             StatusPill(r.status)
         }
-        Text(shortDate(r.startDate, arabic) + " – " + shortDate(r.endDate, arabic), color = Palette.TextMuted, fontSize = Type.Secondary)
+        Text(shortDate(r.startDate, arabic) + " – " + shortDate(r.endDate, arabic), color = M.Muted, fontSize = Type.Secondary)
         r.weeks.sortedBy { it.week }.forEach { w ->
             Row(
                 Modifier.fillMaxWidth().clickable(enabled = w.subscriptionId != null) { w.subscriptionId?.let(onOpen) }.padding(vertical = 6.dp),
@@ -701,16 +701,16 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
                 Box(Modifier.size(10.dp).background(Warm.Weeks[(w.week - 1).mod(Warm.Weeks.size)], RoundedCornerShape(50)))
                 Text(
                     stringResource(R.string.meals_week, w.week) + " · " + pick(w.kitchenName, w.kitchenNameAr, arabic),
-                    color = Palette.Text,
+                    color = M.Ink,
                     fontSize = Type.Body,
                     modifier = Modifier.weight(1f).padding(start = Space.Small),
                 )
-                Text("›", color = Palette.TextFaint, fontSize = Type.Heading)
+                Text("›", color = M.Faint, fontSize = Type.Heading)
             }
         }
         if (r.status == "active" || r.status == "pending") {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.meals_auto_renew), color = Palette.Text, fontSize = Type.Body, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.meals_auto_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
                 RenewSwitch(r.autoRenew) { vm.setRotationRenewal(r.id, it) }
             }
             Text(
@@ -730,16 +730,16 @@ private fun SubscriptionRow(s: MySubscription, arabic: Boolean, onClick: () -> U
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = 6.dp)
-            .background(Warm.Card, RoundedCornerShape(16.dp))
+            .background(M.Surface, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(Space.Large),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(pick(s.kitchenName, s.kitchenNameAr, arabic), color = Palette.Text, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
-            Text(pick(s.planName, s.planNameAr, arabic), color = Palette.TextMuted, fontSize = Type.Secondary)
+            Text(pick(s.kitchenName, s.kitchenNameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
+            Text(pick(s.planName, s.planNameAr, arabic), color = M.Muted, fontSize = Type.Secondary)
             s.upcoming.firstOrNull()?.let {
-                Text(shortDate(it.date, arabic) + " · " + slotLabel(it.mealSlot), color = Warm.Peach, fontSize = Type.Secondary)
+                Text(shortDate(it.date, arabic) + " · " + slotLabel(it.mealSlot), color = M.Chilli, fontSize = Type.Secondary)
             }
         }
         StatusPill(s.status)
@@ -749,10 +749,10 @@ private fun SubscriptionRow(s: MySubscription, arabic: Boolean, onClick: () -> U
 @Composable
 private fun StatusPill(status: String) {
     val tint = when (status) {
-        "active" -> Warm.Leaf
-        "pending", "pending_payment" -> Warm.Saffron
+        "active" -> M.Leaf
+        "pending", "pending_payment" -> M.Chilli
         "cancelled" -> Palette.Bad
-        else -> Palette.TextMuted
+        else -> M.Muted
     }
     Text(
         statusLabel(status),
@@ -768,7 +768,7 @@ private fun RenewSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     Switch(
         checked = checked,
         onCheckedChange = onChange,
-        colors = SwitchDefaults.colors(checkedTrackColor = Warm.Saffron, checkedThumbColor = Palette.Ink),
+        colors = SwitchDefaults.colors(checkedTrackColor = M.Chilli, checkedThumbColor = M.OnAccent),
     )
 }
 
@@ -788,14 +788,14 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                 item {
                     Card {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(pick(sub.planName, sub.planNameAr, arabic), color = Palette.Text, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Text(pick(sub.planName, sub.planNameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             StatusPill(sub.status)
                         }
                         val end = sub.cycleEndsOn ?: sub.endDate
-                        Text(shortDate(sub.startDate, arabic) + (end?.let { " – " + shortDate(it, arabic) } ?: ""), color = Palette.TextMuted, fontSize = Type.Secondary)
+                        Text(shortDate(sub.startDate, arabic) + (end?.let { " – " + shortDate(it, arabic) } ?: ""), color = M.Muted, fontSize = Type.Secondary)
                         if (sub.rotationId == null && sub.status in setOf("active", "paused")) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(stringResource(R.string.meals_auto_renew), color = Palette.Text, fontSize = Type.Body, modifier = Modifier.weight(1f))
+                                Text(stringResource(R.string.meals_auto_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
                                 RenewSwitch(sub.renewalMode == "auto") { vm.setAutoRenew(it) }
                             }
                         }
@@ -836,8 +836,8 @@ private fun PauseCard(sub: MySubscription, busy: Boolean, vm: MealsViewModel) {
     var from by remember(first) { mutableStateOf(first) }
     var to by remember(first) { mutableStateOf(first) }
     Card {
-        Text(stringResource(R.string.meals_pause_title), color = Palette.Text, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
-        Text(stringResource(R.string.meals_pause_left, left, sub.pauseAllowanceDays), color = Palette.TextMuted, fontSize = Type.Secondary)
+        Text(stringResource(R.string.meals_pause_title), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_pause_left, left, sub.pauseAllowanceDays), color = M.Muted, fontSize = Type.Secondary)
         Row(horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
             Field(from, { from = it }, Modifier.weight(1f), placeholder = stringResource(R.string.meals_pause_from))
             Field(to, { to = it }, Modifier.weight(1f), placeholder = stringResource(R.string.meals_pause_to))
@@ -850,13 +850,13 @@ private fun PauseCard(sub: MySubscription, busy: Boolean, vm: MealsViewModel) {
 private fun ConfirmCancel(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Warm.Card,
-        text = { Text(stringResource(R.string.meals_cancel_confirm), color = Palette.Text, fontSize = Type.Body) },
+        containerColor = M.Surface,
+        text = { Text(stringResource(R.string.meals_cancel_confirm), color = M.Ink, fontSize = Type.Body) },
         confirmButton = {
             TextButton(onClick = onConfirm) { Text(stringResource(R.string.meals_cancel_yes), color = Palette.Bad) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.meals_keep), color = Palette.Text) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.meals_keep), color = M.Ink) }
         },
     )
 }
@@ -866,13 +866,13 @@ private fun ConfirmCancel(onConfirm: () -> Unit, onDismiss: () -> Unit) {
 private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsViewModel) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(shortDate(m.date, arabic) + " · " + slotLabel(m.mealSlot), color = Warm.Peach, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(shortDate(m.date, arabic) + " · " + slotLabel(m.mealSlot), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             if (m.locked) {
-                Text(stringResource(R.string.meals_locked), color = Palette.TextFaint, fontSize = Type.Caption)
+                Text(stringResource(R.string.meals_locked), color = M.Faint, fontSize = Type.Caption)
             } else {
                 Text(
                     stringResource(R.string.meals_skip),
-                    color = Palette.TextMuted,
+                    color = M.Muted,
                     fontSize = Type.Secondary,
                     modifier = Modifier.clickable(enabled = !busy) { vm.skip(m.date, m.mealSlot) }.padding(Space.Small),
                 )
