@@ -70,7 +70,7 @@ struct RootView: View {
 
     /// @SceneStorage, not @State: a backgrounded app relaunched by the system
     /// must not drop the viewer back to the feed from wherever they were.
-    @SceneStorage("destination") private var destinationRaw: String = Destination.feed.rawValue
+    @SceneStorage("destination") private var destinationRaw: String = Destination.meals.rawValue
 
     /// One view model for the process. Created once and held, because the feed
     /// stays alive across tab changes — see the ZStack below.
@@ -81,6 +81,9 @@ struct RootView: View {
     /// those tabs does not re-fetch.
     @State private var meViewModel: MeViewModel?
     @State private var signInViewModel: SignInViewModel?
+    @State private var mealsViewModel: MealsViewModel?
+    /// A meals action waiting on sign-in: checkout, rotation, My meals.
+    @State private var pendingMeals: (() -> Void)?
     @State private var session: Session?
     @State private var sellViewModel: SellViewModel?
 
@@ -103,7 +106,7 @@ struct RootView: View {
     @State private var lng: Double = 0
 
     private var destination: Destination {
-        Destination(rawValue: destinationRaw) ?? .feed
+        Destination(rawValue: destinationRaw) ?? .meals
     }
 
     private var authorised: Bool { sessionState is SessionStateAuthenticated }
@@ -170,6 +173,8 @@ struct RootView: View {
             if feedViewModel == nil { feedViewModel = sdk.createFeedViewModel() }
             if meViewModel == nil { meViewModel = sdk.createMeViewModel() }
             if signInViewModel == nil { signInViewModel = sdk.createSignInViewModel() }
+            if mealsViewModel == nil { mealsViewModel = sdk.createMealsViewModel() }
+            if destination != .feed { feedViewModel?.onAppBackgrounded() }
             session = sdk.session
         }
         .task(id: session != nil) {
@@ -186,6 +191,7 @@ struct RootView: View {
             for await ended in session.ended {
                 guard let ended else { continue }
                 me.forget()
+                mealsViewModel?.forget()
                 if ended == .expired && destination != .feed && destination != .search {
                     destinationRaw = Destination.feed.rawValue
                 }
@@ -207,6 +213,11 @@ struct RootView: View {
             for await focused in vm.focused {
                 focusTitle = focused.item?.summary.map { localised($0.title, $0.titleAr) } ?? ""
             }
+        }
+        .onChange(of: authorised) { _, ok in
+            guard ok, let run = pendingMeals else { return }
+            pendingMeals = nil
+            run()
         }
         .onChange(of: destination) { _, new in
             // The sell flow's state holder goes when the tab does, taking the
@@ -235,6 +246,24 @@ struct RootView: View {
             SignInGate(viewModel: gate) { destinationRaw = Destination.feed.rawValue }
         } else {
             switch destination {
+            case .meals:
+                if let meals = mealsViewModel {
+                    ZStack {
+                        MealsScreen(
+                            viewModel: meals,
+                            lat: lat != 0 || lng != 0 ? lat : 25.0805,
+                            lng: lat != 0 || lng != 0 ? lng : 55.1403,
+                            requireAccount: { run in
+                                if authorised { run() } else { pendingMeals = run }
+                            }
+                        )
+                        if pendingMeals != nil && !authorised, let gate = signInViewModel {
+                            SignInGate(viewModel: gate, onCancel: { pendingMeals = nil },
+                                       titleKey: "meals_signin_title", whyKey: "meals_signin_why")
+                                .background(Palette.ink.ignoresSafeArea())
+                        }
+                    }
+                }
             case .search:
                 SearchScreen(
                     viewModel: me,
