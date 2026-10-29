@@ -706,7 +706,7 @@ private struct KitchenPage: View {
                                         .foregroundStyle(Palette.textFaint)
                                         .frame(width: 84, alignment: .leading)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        if let d = slot.default_ {
+                                        if let d = slot.`default` {
                                             Text(pick(d.name, d.nameAr)).font(.system(size: TypeScale.body)).foregroundStyle(Palette.text)
                                         }
                                         if let a = slot.alternative {
