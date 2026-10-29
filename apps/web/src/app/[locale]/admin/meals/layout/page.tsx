@@ -267,6 +267,7 @@ export default function MerchLayoutPage() {
                             from a kitchen cooking it is used.
                           </span>
                           <textarea
+                            key={JSON.stringify(s.settings.cuisine_images ?? {})}
                             rows={4}
                             dir="ltr"
                             defaultValue={Object.entries(

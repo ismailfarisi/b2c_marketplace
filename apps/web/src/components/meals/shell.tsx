@@ -15,6 +15,7 @@ const COPY = {
     other: "العربية",
     home: "Kitchens",
     mine: "My subscriptions",
+    mineShort: "My meals",
     business: "Office lunches",
     signIn: "Sign in",
     signOut: "Sign out",
@@ -25,6 +26,7 @@ const COPY = {
     other: "English",
     home: "المطابخ",
     mine: "اشتراكاتي",
+    mineShort: "اشتراكاتي",
     business: "غداء المكاتب",
     signIn: "تسجيل الدخول",
     signOut: "تسجيل الخروج",
@@ -166,7 +168,8 @@ export function CustomerShell({
             href={`/${locale}/subscriptions`}
             aria-current={here(`/${locale}/subscriptions`)}
           >
-            {t.mine}
+            <span className="ms-nav-long">{t.mine}</span>
+            <span className="ms-nav-short">{t.mineShort}</span>
           </Link>
           <Link href={switchHref} lang={otherLocale} hrefLang={otherLocale}>
             {t.other}

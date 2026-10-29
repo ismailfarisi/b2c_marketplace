@@ -2941,3 +2941,38 @@ body {
 .ms-kmain .ms-k-reviews {
   grid-area: auto;
 }
+.ms-nav-short {
+  display: none;
+}
+@media (max-width: 40rem) {
+  .ms-nav-long {
+    display: none;
+  }
+  .ms-nav-short {
+    display: inline;
+  }
+  .ms-bar {
+    padding-inline: 1rem;
+  }
+  .ms-nav {
+    gap: 0.65rem;
+    overflow-x: visible;
+  }
+  .ms-nav > a:last-child,
+  .ms-nav > button:last-child {
+    padding: 0.45rem 0.8rem;
+  }
+}
+@media (max-width: 22rem) {
+  .ms-bar {
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+  .ms-nav {
+    gap: 0.5rem;
+  }
+  .ms-nav > a:last-child,
+  .ms-nav > button:last-child {
+    padding: 0.4rem 0.65rem;
+  }
+}
