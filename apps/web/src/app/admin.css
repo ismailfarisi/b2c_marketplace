@@ -1858,3 +1858,23 @@ table.menu-grid td {
 .merch-sec-head .merch-row-actions {
   margin-inline-start: auto;
 }
+
+/* ---- Referrals ----------------------------------------------------------- */
+
+.referrals-admin {
+  display: grid;
+  gap: 1rem;
+  margin-block: 0.75rem;
+  min-inline-size: 0;
+}
+
+.referrals-admin > * {
+  min-inline-size: 0;
+}
+
+.referral-void {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}

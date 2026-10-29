@@ -20,6 +20,8 @@ import {
   payRotation,
   previewRotation,
   type RotationInput,
+  forgetInvite,
+  rememberedInvite,
 } from "@/lib/customer-api";
 import { offerLabel } from "@/components/meals/offers";
 import { getMealKitchen, getMealKitchens } from "@/lib/meals-api";
@@ -165,6 +167,13 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   const [error, setError] = useState<string | null>(null);
   const [codeDraft, setCodeDraft] = useState("");
   const [code, setCode] = useState("");
+  useEffect(() => {
+    const invite = rememberedInvite();
+    if (invite) {
+      setCode(invite);
+      setCodeDraft(invite);
+    }
+  }, []);
 
   useEffect(() => {
     const list = addresses.data?.items ?? [];
@@ -538,6 +547,7 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                   className="ms-link"
                   onClick={() => {
                     setCode("");
+                    forgetInvite();
                     setCodeDraft("");
                   }}
                 >

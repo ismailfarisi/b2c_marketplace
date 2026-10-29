@@ -27,7 +27,7 @@ func NewService(pool *pgxpool.Pool) *Service {
 const cols = `p.id, p.code, p.name, p.name_ar, p.description, p.description_ar, p.discount_type,
 	p.percent_bp, p.amount_minor, p.max_discount_minor, p.currency, p.trial_days, p.applies_to,
 	p.audience, p.kitchen_share_bp, p.usage_limit, p.per_customer_limit, p.usage_count,
-	p.is_public, p.is_active, p.starts_at, p.ends_at, p.updated_at,
+	p.is_public, p.is_active, p.starts_at, p.ends_at, p.updated_at, p.kind, p.owner_user_id,
 	COALESCE((SELECT array_agg(b.branch_id) FROM promo_branches b WHERE b.promo_id = p.id), '{}')`
 
 func scan(row pgx.Row) (Promo, error) {
@@ -36,7 +36,7 @@ func scan(row pgx.Row) (Promo, error) {
 		&p.DiscountType, &p.PercentBP, &p.AmountMinor, &p.MaxDiscountMinor, &p.Currency,
 		&p.TrialDays, &p.AppliesTo, &p.Audience, &p.KitchenShareBP, &p.UsageLimit,
 		&p.PerCustomerLimit, &p.UsageCount, &p.IsPublic, &p.IsActive, &p.StartsAt, &p.EndsAt,
-		&p.UpdatedAt, &p.BranchIDs)
+		&p.UpdatedAt, &p.Kind, &p.OwnerUserID, &p.BranchIDs)
 	return p, err
 }
 
@@ -55,12 +55,12 @@ func collect(rows pgx.Rows, err error) ([]Promo, error) {
 
 func (s *Service) List(ctx context.Context) ([]Promo, error) {
 	return collect(s.pool.Query(ctx, `SELECT `+cols+` FROM promos p
-		 WHERE p.deleted_at IS NULL ORDER BY p.updated_at DESC`))
+		 WHERE p.deleted_at IS NULL AND p.kind = 'standard' ORDER BY p.updated_at DESC`))
 }
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (Promo, error) {
 	p, err := scan(s.pool.QueryRow(ctx, `SELECT `+cols+` FROM promos p
-		 WHERE p.id = $1 AND p.deleted_at IS NULL`, id))
+		 WHERE p.id = $1 AND p.deleted_at IS NULL AND p.kind = 'standard'`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, httpx.ErrNotFound
 	}
@@ -74,6 +74,16 @@ func (s *Service) Save(ctx context.Context, id *uuid.UUID, actor uuid.UUID, in I
 	}
 	var saved uuid.UUID
 	err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		if in.Code != nil {
+			var clash bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM referral_codes WHERE code = $1)`,
+				*in.Code).Scan(&clash); err != nil {
+				return fmt.Errorf("promo: code clash: %w", err)
+			}
+			if clash {
+				return invalid("code", "taken", "a customer's invite code already uses this code")
+			}
+		}
 		args := []any{in.Code, in.Name, in.NameAr, in.Description, in.DescriptionAr, in.DiscountType,
 			in.PercentBP, in.AmountMinor, in.MaxDiscountMinor, in.Currency, in.TrialDays, in.AppliesTo,
 			in.Audience, in.KitchenShareBP, in.UsageLimit, in.PerCustomerLimit, in.IsPublic,
@@ -94,7 +104,7 @@ func (s *Service) Save(ctx context.Context, id *uuid.UUID, actor uuid.UUID, in I
 					currency=$10, trial_days=$11, applies_to=$12, audience=$13, kitchen_share_bp=$14,
 					usage_limit=$15, per_customer_limit=$16, is_public=$17, is_active=$18,
 					starts_at=$19, ends_at=$20, updated_at=now()
-				 WHERE id = $21 AND deleted_at IS NULL RETURNING id`, append(args, *id)...).Scan(&saved)
+				 WHERE id = $21 AND deleted_at IS NULL AND kind = 'standard' RETURNING id`, append(args, *id)...).Scan(&saved)
 		}
 		if errors.Is(qerr, pgx.ErrNoRows) {
 			return httpx.ErrNotFound
@@ -216,14 +226,21 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, ref Ref, userID uuid.U
 			 WHERE p.id = $1 AND p.deleted_at IS NULL AND (p.is_public OR p.code IS NOT NULL)`, *ref.ID)
 	} else {
 		row = tx.QueryRow(ctx, `SELECT `+cols+` FROM promos p
-			 WHERE p.code = upper(btrim($1)) AND p.deleted_at IS NULL`, ref.Code)
+			 WHERE p.code = upper(btrim($1)) AND p.deleted_at IS NULL
+			   AND p.kind <> 'referral_friend'`, ref.Code)
 	}
 	p, err := scan(row)
+	if errors.Is(err, pgx.ErrNoRows) && ref.ID == nil {
+		p, err = s.invitePromo(ctx, tx, ref.Code, userID)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, invalid("promo_code", "unknown", "this promo code does not exist")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("promo: resolve: %w", err)
+	}
+	if p.OwnerUserID != nil && *p.OwnerUserID != userID {
+		return nil, invalid("promo_code", "unknown", "this promo code does not exist")
 	}
 	if ref.ID != nil && !p.IsPublic {
 		return nil, invalid("promo_code", "unknown", "this promo code does not exist")
@@ -341,6 +358,9 @@ func (s *Service) Reserve(ctx context.Context, tx pgx.Tx, p *Promo, userID uuid.
 		p.ID, userID, t.SubscriptionID, t.RotationID, discountMinor, platformMinor, currency); err != nil {
 		return fmt.Errorf("promo: record redemption: %w", err)
 	}
+	if p.ReferrerID != nil {
+		return recordReferral(ctx, tx, *p.ReferrerID, userID, t)
+	}
 	return nil
 }
 
@@ -359,7 +379,7 @@ func ReleaseUnpaid(ctx context.Context, tx pgx.Tx, t Target) error {
 		return fmt.Errorf("promo: release: %w", err)
 	}
 	for _, id := range ids {
-		if err := releaseOne(ctx, tx, id, nil, nil, false); err != nil {
+		if err := releaseOne(ctx, tx, id, t.SubscriptionID, t.RotationID, false); err != nil {
 			return err
 		}
 	}
@@ -379,6 +399,11 @@ func releaseOne(ctx context.Context, tx pgx.Tx, id uuid.UUID, sub, rot *uuid.UUI
 	if _, err := tx.Exec(ctx, `UPDATE promos SET usage_count = GREATEST(usage_count - 1, 0) WHERE id = $1`,
 		promoID); err != nil {
 		return fmt.Errorf("promo: return use: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM referrals WHERE status = 'pending' AND (subscription_id = $1 OR rotation_id = $2)`,
+		sub, rot); err != nil {
+		return fmt.Errorf("promo: release referral: %w", err)
 	}
 	if !cancelCheckout {
 		return nil

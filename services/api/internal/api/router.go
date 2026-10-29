@@ -144,6 +144,9 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/me/rotations", h.Rotations.Mine)
 			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
 		}
+		if h.Meals != nil && h.Meals.Promos != nil {
+			r.Get("/me/referrals", h.Meals.MyReferrals)
+		}
 		if h.Addresses != nil {
 			r.Get("/me/addresses", h.Addresses.List)
 			r.Post("/me/addresses", h.Addresses.Create)
@@ -498,6 +501,10 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 					r.Put("/admin/meals/promos/{promoId}", h.AdminConsole.SavePromo)
 					r.Delete("/admin/meals/promos/{promoId}", h.AdminConsole.DeletePromo)
 					r.Get("/admin/meals/promos/{promoId}/redemptions", h.AdminConsole.PromoRedemptions)
+					r.Get("/admin/meals/referrals/program", h.AdminConsole.ReferralProgram)
+					r.Put("/admin/meals/referrals/program", h.AdminConsole.SaveReferralProgram)
+					r.Get("/admin/meals/referrals", h.AdminConsole.ListReferrals)
+					r.Post("/admin/meals/referrals/{referralId}/void", h.AdminConsole.VoidReferral)
 				}
 			})
 		}

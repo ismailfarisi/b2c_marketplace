@@ -16,6 +16,8 @@ import {
   previewSubscription,
   subscribe,
   type SubscribeInput,
+  forgetInvite,
+  rememberedInvite,
 } from "@/lib/customer-api";
 import { getMealKitchen } from "@/lib/meals-api";
 
@@ -202,7 +204,13 @@ function Checkout({
   const [codeDraft, setCodeDraft] = useState("");
   const [code, setCode] = useState("");
   useEffect(() => {
-    setPromoId(new URLSearchParams(window.location.search).get("promo"));
+    const params = new URLSearchParams(window.location.search);
+    setPromoId(params.get("promo"));
+    const invite = rememberedInvite();
+    if (!params.get("promo") && invite) {
+      setCode(invite);
+      setCodeDraft(invite);
+    }
   }, []);
 
   // Defaults once the plan arrives: the plan's own days and meals in order,
@@ -488,6 +496,7 @@ function Checkout({
                 className="ms-link"
                 onClick={() => {
                   setCode("");
+                  forgetInvite();
                   setCodeDraft("");
                   setPromoId(null);
                 }}

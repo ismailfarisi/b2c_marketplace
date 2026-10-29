@@ -359,3 +359,51 @@ export const renewRotation = (id: string) =>
     method: "POST",
     data: {},
   });
+
+// ---- referrals ------------------------------------------------------------
+
+export interface ReferralVoucher {
+  code: string;
+  amount_minor: number;
+  currency: string;
+  ends_at: string | null;
+  used: boolean;
+  active: boolean;
+}
+
+export interface MyReferrals {
+  active: boolean;
+  code?: string;
+  friend_amount_minor: number;
+  reward_amount_minor: number;
+  currency: string;
+  pending: number;
+  rewarded: number;
+  vouchers: ReferralVoucher[];
+}
+
+export const getMyReferrals = () =>
+  apiFetch<MyReferrals>({ url: "/me/referrals", method: "GET" });
+
+const INVITE_KEY = "meals.invite";
+
+/** Remembers an invite code from a shared link until checkout. */
+export function rememberInvite(code: string) {
+  try {
+    window.localStorage.setItem(INVITE_KEY, code.trim().toUpperCase());
+  } catch {}
+}
+
+export function rememberedInvite(): string {
+  try {
+    return window.localStorage.getItem(INVITE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function forgetInvite() {
+  try {
+    window.localStorage.removeItem(INVITE_KEY);
+  } catch {}
+}

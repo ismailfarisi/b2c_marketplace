@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { logout } from "@/lib/auth-api";
+import { rememberInvite } from "@/lib/customer-api";
 import { tokenStore } from "@/lib/token-store";
 
 const COPY = {
@@ -125,6 +126,11 @@ export function CustomerShell({
 }) {
   const t = COPY[locale];
   const signedIn = useHasSession();
+  // A shared invite link carries ?ref=<code>; keep it for checkout.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) rememberInvite(ref);
+  }, []);
   const path = usePathname() ?? `/${locale}`;
   const otherLocale = locale === "ar" ? "en" : "ar";
   const switchHref = path.replace(/^\/(en|ar)(?=\/|$)/, `/${otherLocale}`);

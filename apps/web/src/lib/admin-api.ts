@@ -1913,3 +1913,50 @@ export const setFoodSafety = (
     method: "PUT",
     data,
   });
+
+// ---- referrals ------------------------------------------------------------
+
+export interface ReferralProgramInput {
+  is_active: boolean;
+  friend_amount_minor: number;
+  reward_amount_minor: number;
+  currency: string;
+  monthly_cap: number;
+  reward_valid_days: number;
+}
+
+export interface ReferralProgram extends ReferralProgramInput {
+  friend_promo_id: string | null;
+  updated_at: string;
+}
+
+export interface AdminReferral {
+  id: string;
+  status: "pending" | "rewarded" | "rejected" | "void";
+  reason: string;
+  referrer_id: string;
+  referrer_phone: string;
+  referrer_name: string | null;
+  friend_id: string;
+  friend_phone: string;
+  friend_name: string | null;
+  subscription_id: string | null;
+  rotation_id: string | null;
+  voucher_code: string | null;
+  voucher_used: boolean;
+  created_at: string;
+  settled_at: string | null;
+}
+
+export const getReferralProgram = () =>
+  apiFetch<ReferralProgram>({ url: "/admin/meals/referrals/program", method: "GET" });
+export const saveReferralProgram = (data: ReferralProgramInput) =>
+  apiFetch<ReferralProgram>({ url: "/admin/meals/referrals/program", method: "PUT", data });
+export const getReferrals = (status: string, q: string) =>
+  apiFetch<{ items: AdminReferral[] }>({
+    url: "/admin/meals/referrals",
+    method: "GET",
+    params: { status: status || undefined, q: q || undefined },
+  });
+export const voidReferral = (id: string, reason: string) =>
+  apiFetch<void>({ url: `/admin/meals/referrals/${id}/void`, method: "POST", data: { reason } });

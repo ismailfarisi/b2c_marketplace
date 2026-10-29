@@ -51,6 +51,7 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
       { href: "/meals/collections", label: "Collections", queues: [] },
       { href: "/meals/banners", label: "Banners", queues: [] },
       { href: "/meals/promos", label: "Promos & trials", queues: [] },
+      { href: "/meals/referrals", label: "Referrals", queues: [] },
       { href: "/meals/reviews", label: "Reviews", queues: [] },
     ],
   },
@@ -121,6 +122,7 @@ export const TITLES: Record<string, string> = {
   "/meals/collections": "Kitchen collections",
   "/meals/banners": "Storefront banners",
   "/meals/promos": "Promos & trials",
+  "/meals/referrals": "Referrals",
   "/meals/reviews": "Kitchen reviews",
 };
 

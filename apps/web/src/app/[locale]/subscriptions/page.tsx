@@ -3,7 +3,7 @@
 import { formatMoney } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { use } from "react";
+import { use, useState } from "react";
 
 import {
   CustomerShell,
@@ -12,7 +12,11 @@ import {
   formatDay,
   formatRange,
 } from "@/components/meals/shell";
-import { listMyRotations, listMySubscriptions } from "@/lib/customer-api";
+import {
+  getMyReferrals,
+  listMyRotations,
+  listMySubscriptions,
+} from "@/lib/customer-api";
 
 const COPY = {
   en: {
@@ -76,6 +80,7 @@ export default function MySubscriptionsPage({
   return (
     <CustomerShell locale={locale}>
       <h1>{t.title}</h1>
+      <InviteCard locale={locale} />
       {rotations.length > 0 && (
         <section>
           <h2>{t.rotations}</h2>
@@ -182,5 +187,114 @@ export default function MySubscriptionsPage({
         </section>
       ) : null}
     </CustomerShell>
+  );
+}
+
+const INVITE = {
+  en: {
+    title: (reward: string) => `Invite friends, get ${reward}`,
+    body: (friend: string, reward: string) =>
+      `Friends get ${friend} off their first meal plan. You get a ${reward} voucher when their first meal is delivered.`,
+    code: "Your invite code",
+    copy: "Copy link",
+    copied: "Link copied",
+    whatsapp: "Share on WhatsApp",
+    share: (friend: string, link: string) =>
+      `Home-style meals delivered every day. Get ${friend} off your first plan with my link: ${link}`,
+    stats: (p: number, r: number) => `${p} waiting for a first delivery · ${r} earned`,
+    vouchers: "Your vouchers",
+    voucherUse: "Enter it as a promo code at checkout.",
+    until: (d: string) => `until ${d}`,
+    used: "Used",
+    expired: "Expired",
+  },
+  ar: {
+    title: (reward: string) => `ادعُ أصدقاءك واحصل على ${reward}`,
+    body: (friend: string, reward: string) =>
+      `يحصل أصدقاؤك على خصم ${friend} على أول خطة وجبات، وتحصل أنت على قسيمة بقيمة ${reward} عند توصيل أول وجبة لهم.`,
+    code: "رمز دعوتك",
+    copy: "انسخ الرابط",
+    copied: "تم نسخ الرابط",
+    whatsapp: "شارك عبر واتساب",
+    share: (friend: string, link: string) =>
+      `وجبات بيتية تصلك كل يوم. احصل على خصم ${friend} على أول خطة عبر رابطي: ${link}`,
+    stats: (p: number, r: number) => `${p} بانتظار أول توصيل · ${r} مكتسبة`,
+    vouchers: "قسائمك",
+    voucherUse: "أدخلها كرمز خصم عند الدفع.",
+    until: (d: string) => `حتى ${d}`,
+    used: "مستخدمة",
+    expired: "منتهية",
+  },
+};
+
+function InviteCard({ locale }: { locale: "en" | "ar" }) {
+  const t = INVITE[locale];
+  const [copied, setCopied] = useState(false);
+  const q = useQuery({ queryKey: ["me", "referrals"], queryFn: getMyReferrals });
+  const d = q.data;
+  if (!d || (!d.active && d.vouchers.length === 0)) return null;
+  const money = (amount: number) => formatMoney({ amount, currency: d.currency }, locale);
+  const link =
+    d.code && typeof window !== "undefined"
+      ? `${window.location.origin}/${locale}?ref=${d.code}`
+      : "";
+  return (
+    <section className="ms-invite" aria-labelledby="ms-invite-title">
+      {d.active && d.code && (
+        <>
+          <h2 id="ms-invite-title">{t.title(money(d.reward_amount_minor))}</h2>
+          <p>{t.body(money(d.friend_amount_minor), money(d.reward_amount_minor))}</p>
+          <div className="ms-invite-row">
+            <span className="ms-invite-code">
+              <span className="ms-sub">{t.code}</span>
+              <strong dir="ltr">{d.code}</strong>
+            </span>
+            <button
+              type="button"
+              className="ms-cta ms-cta-quiet"
+              onClick={() => {
+                navigator.clipboard?.writeText(link).then(() => setCopied(true));
+              }}
+            >
+              {copied ? t.copied : t.copy}
+            </button>
+            <a
+              className="ms-cta"
+              target="_blank"
+              rel="noopener noreferrer"
+              href={`https://wa.me/?text=${encodeURIComponent(t.share(money(d.friend_amount_minor), link))}`}
+            >
+              {t.whatsapp}
+            </a>
+          </div>
+          {(d.pending > 0 || d.rewarded > 0) && (
+            <p className="ms-sub">{t.stats(d.pending, d.rewarded)}</p>
+          )}
+        </>
+      )}
+      {d.vouchers.length > 0 && (
+        <div className="ms-vouchers">
+          <h3 id={d.active ? undefined : "ms-invite-title"}>{t.vouchers}</h3>
+          <p className="ms-sub">{t.voucherUse}</p>
+          <ul>
+            {d.vouchers.map((v) => (
+              <li key={v.code} className={v.active ? "" : "ms-voucher-off"}>
+                <strong dir="ltr">{v.code}</strong>
+                <span>{money(v.amount_minor)}</span>
+                <span className="ms-sub">
+                  {v.used
+                    ? t.used
+                    : !v.active
+                      ? t.expired
+                      : v.ends_at
+                        ? t.until(formatDay(locale, v.ends_at.slice(0, 10)))
+                        : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }

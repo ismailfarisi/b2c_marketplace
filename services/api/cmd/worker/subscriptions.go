@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 )
 
@@ -273,6 +274,8 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 	sendMealMessages(startupCtx, svc)
 	cancel()
 
+	referrals := promo.NewService(pool)
+
 	ticker := time.NewTicker(subscriptionTick)
 	defer ticker.Stop()
 
@@ -295,8 +298,22 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 			sendMealMessages(tickCtx, svc)
 			runDunning(tickCtx, pool)
 			recogniseSubscriptionRevenue(tickCtx, svc)
+			settleReferrals(tickCtx, referrals)
 
 			cancel()
 		}
+	}
+}
+
+// settleReferrals turns friends' first deliveries into referrer vouchers, and
+// closes referrals whose friend cancelled before any meal arrived.
+func settleReferrals(ctx context.Context, svc *promo.Service) {
+	n, err := svc.SettleReferrals(ctx, 200)
+	if err != nil {
+		slog.Error("referrals: settle", "err", err)
+		return
+	}
+	if n > 0 {
+		slog.Info("referrals: settled", "count", n)
 	}
 }

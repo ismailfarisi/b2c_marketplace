@@ -1,6 +1,7 @@
 package promo
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -126,6 +127,40 @@ func TestNormalize(t *testing.T) {
 	for _, b := range bad {
 		if _, err := Normalize(b); err == nil {
 			t.Errorf("%s: expected a validation error", b.Name)
+		}
+	}
+}
+
+func TestRandomCode(t *testing.T) {
+	seen := map[string]bool{}
+	for range 200 {
+		c, err := randomCode(8)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(c) != 8 || strings.Trim(c, codeAlphabet) != "" {
+			t.Fatalf("code %q not 8 chars from the alphabet", c)
+		}
+		seen[c] = true
+	}
+	if len(seen) < 190 {
+		t.Fatalf("only %d distinct codes in 200", len(seen))
+	}
+}
+
+func TestProgramInputValidate(t *testing.T) {
+	ok := ProgramInput{FriendAmountMinor: 5000, RewardAmountMinor: 5000, MonthlyCap: 5, RewardValidDays: 90}
+	if err := ok.validate(); err != nil || ok.Currency != "AED" {
+		t.Fatalf("valid input rejected: %v (currency %q)", err, ok.Currency)
+	}
+	for _, bad := range []ProgramInput{
+		{FriendAmountMinor: 0, RewardAmountMinor: 5000, MonthlyCap: 5, RewardValidDays: 90},
+		{FriendAmountMinor: 5000, RewardAmountMinor: 0, MonthlyCap: 5, RewardValidDays: 90},
+		{FriendAmountMinor: 5000, RewardAmountMinor: 5000, MonthlyCap: 0, RewardValidDays: 90},
+		{FriendAmountMinor: 5000, RewardAmountMinor: 5000, MonthlyCap: 5, RewardValidDays: 3},
+	} {
+		if err := bad.validate(); err == nil {
+			t.Fatalf("invalid input accepted: %+v", bad)
 		}
 	}
 }

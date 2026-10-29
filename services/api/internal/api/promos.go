@@ -129,3 +129,92 @@ func (h *AdminHandlers) PromoRedemptions(w http.ResponseWriter, r *http.Request)
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
 }
+
+// ---- referrals ----------------------------------------------------------
+
+// MyReferrals answers GET /me/referrals: the customer's invite code, what it
+// gives, and the vouchers they have earned.
+func (h *MealsHandlers) MyReferrals(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	out, err := h.Promos.MyReferrals(r.Context(), userID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", out)
+}
+
+func (h *AdminHandlers) ReferralProgram(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.caller(w, r, admin.PermCommerceRead); !ok {
+		return
+	}
+	p, err := h.Promos.Program(r.Context())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", p)
+}
+
+func (h *AdminHandlers) SaveReferralProgram(w http.ResponseWriter, r *http.Request) {
+	grant, ok := h.caller(w, r, admin.PermCommerceWrite)
+	if !ok {
+		return
+	}
+	var in promo.ProgramInput
+	if err := httpx.DecodeJSON(r, &in); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	p, err := h.Promos.SaveProgram(r.Context(), grant.UserID, in)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	h.record(r, grant, "referral_program.update", "referral_program", uuid.Nil, "referral programme updated", map[string]any{
+		"is_active": p.IsActive, "friend_amount_minor": p.FriendAmountMinor,
+		"reward_amount_minor": p.RewardAmountMinor, "monthly_cap": p.MonthlyCap,
+		"reward_valid_days": p.RewardValidDays,
+	})
+	httpx.WriteJSON(w, http.StatusOK, "", p)
+}
+
+func (h *AdminHandlers) ListReferrals(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.caller(w, r, admin.PermCommerceRead); !ok {
+		return
+	}
+	out, err := h.Promos.AdminReferrals(r.Context(), r.URL.Query().Get("status"), r.URL.Query().Get("q"))
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
+}
+
+func (h *AdminHandlers) VoidReferral(w http.ResponseWriter, r *http.Request) {
+	grant, ok := h.caller(w, r, admin.PermCommerceWrite)
+	if !ok {
+		return
+	}
+	id, ok := h.merchID(w, r, "referralId")
+	if !ok {
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if err := h.Promos.VoidReferral(r.Context(), id, body.Reason); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	h.record(r, grant, "referral.void", "referral", id, body.Reason, nil)
+	w.WriteHeader(http.StatusNoContent)
+}

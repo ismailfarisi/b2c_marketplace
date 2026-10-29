@@ -59,6 +59,13 @@ type Promo struct {
 	EndsAt           *time.Time  `json:"ends_at"`
 	BranchIDs        []uuid.UUID `json:"branch_ids"`
 	UpdatedAt        time.Time   `json:"updated_at"`
+
+	// Kind is standard for staff-made promos; referral promos are managed by
+	// the referral programme and never listed with them.
+	Kind        string     `json:"-"`
+	OwnerUserID *uuid.UUID `json:"-"`
+	// ReferrerID is set when the promo was reached through an invite code.
+	ReferrerID *uuid.UUID `json:"-"`
 }
 
 // Offer is the customer-facing view of a promo: what it gives, not how it is

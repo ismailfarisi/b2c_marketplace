@@ -1948,3 +1948,34 @@ a.ms-offer:focus-visible {
 .ms-price .ms-sub {
   font-size: 0.8rem;
 }
+
+/* ---- Invite friends ------------------------------------------------------ */
+
+.ms-invite {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  margin-block: 1rem 1.5rem;
+  border-radius: var(--ms-radius);
+  background: linear-gradient(135deg, #fff4ea, #fff);
+  border: 1px solid var(--ms-line);
+  min-inline-size: 0;
+}
+.ms-invite h2, .ms-invite h3, .ms-invite p { margin: 0; }
+.ms-invite-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.ms-invite-code {
+  display: grid;
+  padding: 0.5rem 0.875rem;
+  border: 1px dashed var(--ms-line);
+  border-radius: var(--ms-radius);
+  background: #fff;
+}
+.ms-invite-code strong { font-size: 1.25rem; letter-spacing: 0.12em; }
+.ms-vouchers { display: grid; gap: 0.5rem; }
+.ms-vouchers ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.ms-vouchers li {
+  display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline;
+  padding: 0.5rem 0.75rem; background: #fff; border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius); overflow-wrap: anywhere;
+}
+.ms-voucher-off { opacity: 0.6; }
