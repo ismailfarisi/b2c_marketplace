@@ -112,6 +112,7 @@ type insertParams struct {
 	RotationID   uuid.NullUUID
 	RotationWeek int
 	RenewedFrom  uuid.NullUUID
+	CompanyID    uuid.NullUUID
 }
 
 func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insertParams) error {
@@ -123,7 +124,10 @@ func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insert
 	if p.TierID.Valid {
 		tierID = p.TierID.UUID
 	}
-	var rotationID, rotationWeek, renewedFrom any
+	var rotationID, rotationWeek, renewedFrom, companyID any
+	if p.CompanyID.Valid {
+		companyID = p.CompanyID.UUID
+	}
 	if p.RotationID.Valid {
 		rotationID, rotationWeek = p.RotationID.UUID, p.RotationWeek
 	}
@@ -141,16 +145,16 @@ func (r *Repository) InsertSubscription(ctx context.Context, tx pgx.Tx, p insert
 				id, subscription_no, user_id, branch_id, vendor_id,
 				plan_id, tier_id, service_type, status,
 				start_date, end_date, renewal_mode, timezone, address_id,
-				rotation_id, rotation_week, renewed_from_id
+				rotation_id, rotation_week, renewed_from_id, company_id
 			) VALUES (
 				$1, generate_subscription_no(), $2, $3, $4,
 				$5, $6, $7, 'pending_payment',
-				$8, $9, $10, $11, $12, $13, $14, $15
+				$8, $9, $10, $11, $12, $13, $14, $15, $16
 			)`,
 			p.ID, p.UserID, p.Plan.BranchID, p.Plan.VendorID,
 			p.Plan.ID, tierID, p.Plan.ServiceType,
 			p.Start, end, p.RenewalMode, p.Plan.Timezone, p.AddressID,
-			rotationID, rotationWeek, renewedFrom)
+			rotationID, rotationWeek, renewedFrom, companyID)
 		if err == nil {
 			return nil
 		}

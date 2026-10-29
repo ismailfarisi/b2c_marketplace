@@ -12,9 +12,13 @@ import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
 import {
   describeAddress,
   listAddresses,
+  listMyCompanies,
   payOrder,
+  previewLunch,
   previewSubscription,
+  startLunch,
   subscribe,
+  type LunchInput,
   type SubscribeInput,
 } from "@/lib/customer-api";
 import { getMealKitchen } from "@/lib/meals-api";
@@ -30,6 +34,14 @@ const COPY = {
     window: "Delivery time",
     start: "First delivery on or after",
     address: "Deliver to",
+    payer: "Who pays",
+    payMe: "I pay",
+    payCompany: (name: string) => `Paid by ${name}`,
+    office: "Deliver to your office",
+    companyNote: (cap: string) =>
+      `Your company covers its lunch days, up to ${cap} a meal. You pay nothing.`,
+    companyPending: "Your company's lunch account is waiting for approval.",
+    startLunch: "Start office lunch",
     noAddress: "Add an address to continue.",
     addAddress: "Add a new address",
     label: "Label (Home, Office…)",
@@ -80,6 +92,14 @@ const COPY = {
     window: "وقت التوصيل",
     start: "أول توصيل في هذا اليوم أو بعده",
     address: "التوصيل إلى",
+    payer: "من يدفع",
+    payMe: "أنا أدفع",
+    payCompany: (name: string) => `على حساب ${name}`,
+    office: "التوصيل إلى مكتبك",
+    companyNote: (cap: string) =>
+      `تغطي شركتك أيام الغداء حتى ${cap} للوجبة. لا تدفع شيئًا.`,
+    companyPending: "حساب الغداء لشركتك بانتظار الموافقة.",
+    startLunch: "ابدأ غداء المكتب",
     noAddress: "أضف عنوانًا للمتابعة.",
     addAddress: "إضافة عنوان جديد",
     label: "الاسم (المنزل، المكتب…)",
@@ -186,6 +206,17 @@ function Checkout({
     queryFn: listAddresses,
   });
 
+  // Office lunch: an employee whose company covers this can bill it there.
+  const companies = useQuery({
+    queryKey: ["me", "companies"],
+    queryFn: listMyCompanies,
+  });
+  const [companyId, setCompanyId] = useState<string>("");
+  const [officeId, setOfficeId] = useState<string>("");
+  const company = (companies.data?.items ?? []).find(
+    (c) => c.company_id === companyId,
+  );
+
   const plan = kitchen.data?.plan_list.find((pl) => pl.id === planId);
   const tiers = plan?.tiers.filter((x) => x.is_active) ?? [];
 
@@ -234,7 +265,7 @@ function Checkout({
     days.length === plan.days_per_week &&
     slots.length === plan.meals_per_day &&
     windowId !== "" &&
-    addressId !== "" &&
+    (addressId !== "" || companyId !== "") &&
     start !== ""
       ? {
           plan_id: plan.id,
@@ -251,10 +282,23 @@ function Checkout({
           ...(code ? { promo_code: code } : promoId ? { promo_id: promoId } : {}),
         }
       : null;
+  const lunch: LunchInput | null =
+    company && input && officeId
+      ? {
+          office_id: officeId,
+          plan_id: input.plan_id,
+          ...(input.tier_id ? { tier_id: input.tier_id } : {}),
+          start_date: input.start_date,
+          schedule: input.schedule,
+        }
+      : null;
   const preview = useQuery({
-    queryKey: ["subscription-preview", input],
-    queryFn: () => previewSubscription(input!),
-    enabled: input != null,
+    queryKey: ["subscription-preview", company ? lunch : input, companyId],
+    queryFn: () =>
+      company
+        ? previewLunch(company.company_id, lunch!).then((r) => r.preview)
+        : previewSubscription(input!),
+    enabled: company ? lunch != null : input != null,
     retry: false,
   });
   const previewProblem =
@@ -280,7 +324,7 @@ function Checkout({
   const k = kitchen.data;
   const money = (n: number) =>
     formatMoney({ amount: n, currency: plan.currency }, locale);
-  const ready = input != null && !preview.isError;
+  const ready = (company ? lunch != null : input != null) && !preview.isError;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -288,6 +332,11 @@ function Checkout({
     setBusy(true);
     setError(null);
     try {
+      if (company && lunch) {
+        const started = await startLunch(company.company_id, lunch);
+        router.replace(`/${locale}/subscriptions/${started.id}`);
+        return;
+      }
       const sub = await subscribe(input!);
       // A failed payment still leaves a subscription awaiting payment, which
       // its page offers to pay again; it is not lost.
@@ -408,6 +457,78 @@ function Checkout({
           </label>
         </div>
 
+        {(companies.data?.items ?? []).length > 0 && (
+          <fieldset className="ms-field">
+            <legend>{t.payer}</legend>
+            <div className="ms-chips">
+              <button
+                type="button"
+                className={companyId === "" ? "on" : ""}
+                aria-pressed={companyId === ""}
+                onClick={() => setCompanyId("")}
+              >
+                {t.payMe}
+              </button>
+              {(companies.data?.items ?? []).map((c) => (
+                <button
+                  key={c.company_id}
+                  type="button"
+                  className={companyId === c.company_id ? "on" : ""}
+                  aria-pressed={companyId === c.company_id}
+                  onClick={() => {
+                    setCompanyId(c.company_id);
+                    setOfficeId(c.offices[0]?.id ?? "");
+                    setCode("");
+                    setPromoId(null);
+                  }}
+                >
+                  <span dir="auto">{t.payCompany(c.name)}</span>
+                </button>
+              ))}
+            </div>
+            {company && (
+              <p className="ms-sub">
+                {company.status === "active"
+                  ? t.companyNote(
+                      formatMoney(
+                        { amount: company.policy.meal_cap_minor, currency: company.currency },
+                        locale,
+                      ),
+                    )
+                  : t.companyPending}
+              </p>
+            )}
+          </fieldset>
+        )}
+
+        {company ? (
+          <fieldset className="ms-field">
+            <legend>{t.office}</legend>
+            <div className="ms-addresses">
+              {company.offices.map((o) => (
+                <label
+                  key={o.id}
+                  className={`ms-address${o.id === officeId ? " on" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="office"
+                    value={o.id}
+                    checked={o.id === officeId}
+                    onChange={() => setOfficeId(o.id)}
+                  />
+                  <span>
+                    <strong dir="auto">{o.label}</strong>
+                    <br />
+                    <span className="ms-sub" dir="auto">
+                      {[o.building, o.area, o.city].filter(Boolean).join(", ")}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : (
         <fieldset className="ms-field">
           <legend>{t.address}</legend>
           {(addresses.data?.items ?? []).length === 0 && (
@@ -442,6 +563,7 @@ function Checkout({
             onSaved={(a) => setAddressId(a.id)}
           />
         </fieldset>
+        )}
       </div>
 
       <aside className="ms-summary">
@@ -476,6 +598,7 @@ function Checkout({
               ? t.once(preview.data.starts_on, preview.data.ends_on)
               : t.cycle(plan.cycle_days)}
         </p>
+        {!company && (
         <div className="ms-promo">
           {code || promoId ? (
             <p>
@@ -520,6 +643,7 @@ function Checkout({
             </p>
           )}
         </div>
+        )}
         {preview.isError && !promoRejected && previewProblem && (
           <p className="ms-bad" role="alert">
             {previewProblem}
@@ -531,7 +655,7 @@ function Checkout({
           </p>
         )}
         <button className="ms-cta" type="submit" disabled={!ready || busy}>
-          {busy ? t.paying : t.pay}
+          {busy ? t.paying : company ? t.startLunch : t.pay}
         </button>
       </aside>
     </form>

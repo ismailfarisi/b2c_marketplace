@@ -280,13 +280,15 @@ func (s *Service) Renew(ctx context.Context, userID, subID uuid.UUID, now time.T
 			status, mode, tz   string
 			paidEnd            *time.Time
 			successor          *uuid.UUID
+			companyID          *uuid.UUID
 		)
 		err := tx.QueryRow(ctx, `
 			SELECT s.plan_id, s.tier_id, s.address_id, s.status, s.renewal_mode, s.rotation_id, s.timezone,
 			       (SELECT max(ends_on) FROM subscription_cycles WHERE subscription_id = s.id AND status = 'paid'),
-			       (SELECT n.id FROM subscriptions n WHERE n.renewed_from_id = s.id AND n.status <> 'cancelled' LIMIT 1)
+			       (SELECT n.id FROM subscriptions n WHERE n.renewed_from_id = s.id AND n.status <> 'cancelled' LIMIT 1),
+			       s.company_id
 			  FROM subscriptions s WHERE s.id = $1 AND s.user_id = $2`, subID, userID).
-			Scan(&planID, &tierID, &addressID, &status, &mode, &rotationID, &tz, &paidEnd, &successor)
+			Scan(&planID, &tierID, &addressID, &status, &mode, &rotationID, &tz, &paidEnd, &successor, &companyID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.ErrNotFound
 		}
@@ -295,6 +297,10 @@ func (s *Service) Renew(ctx context.Context, userID, subID uuid.UUID, now time.T
 		}
 		if successor != nil {
 			return httpx.Coded(httpx.ErrConflict, "already_renewed", "This subscription has already been renewed.")
+		}
+		if companyID != nil {
+			return httpx.Coded(httpx.ErrConflict, "company_lunch",
+				"Office lunches are started again from your company's lunch page.")
 		}
 		var rot *uuid.UUID
 		if rotationID.Valid {

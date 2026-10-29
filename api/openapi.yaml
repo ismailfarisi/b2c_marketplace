@@ -27,6 +27,8 @@ servers:
 
 tags:
   - name: health
+  - name: companies
+    description: Office lunch accounts billed to an employer.
   - name: auth
   - name: me
   - name: catalog
@@ -4306,6 +4308,332 @@ paths:
                     items: { $ref: "#/components/schemas/PendingCampaign" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /companies:
+    post:
+      tags: [companies]
+      operationId: registerCompany
+      summary: Apply for an office lunch account
+      description: >-
+        The caller becomes the company's first lunch admin. The company starts
+        pending until staff approve it and set a credit limit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterCompanyInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /me/companies:
+    get:
+      tags: [companies]
+      operationId: listMyCompanies
+      summary: Companies that cover the caller's lunches
+      description: Invitations by phone number are linked to the caller here.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/CompanyBenefit" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /companies/{companyId}:
+    get:
+      tags: [companies]
+      operationId: getCompany
+      summary: Company dashboard
+      description: Admins see employees, lunches and statements; employees see the policy and offices only.
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyDashboard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /companies/{companyId}/statements/{statementId}:
+    get:
+      tags: [companies]
+      operationId: getCompanyStatement
+      summary: One monthly statement with its lines (company admins)
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: statementId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyStatement" }
+        "403": { description: Not a company admin }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /companies/{companyId}/members:
+    post:
+      tags: [companies]
+      operationId: addCompanyMember
+      summary: Invite an employee or admin by phone number
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string }
+                name: { type: string }
+                role: { type: string, enum: [admin, employee] }
+      responses:
+        "204": { description: Invited }
+        "403": { description: Not a company admin }
+        "409": { description: Already a member }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /companies/{companyId}/members/{memberId}:
+    delete:
+      tags: [companies]
+      operationId: removeCompanyMember
+      summary: Remove an employee; their running lunches end at their paid period
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "403": { description: Not a company admin }
+        "409": { description: The last admin cannot be removed }
+
+  /companies/{companyId}/policy:
+    put:
+      tags: [companies]
+      operationId: setCompanyPolicy
+      summary: Covered weekdays (Sunday is 0), meal slots and per-meal cap
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanyPolicy" }
+      responses:
+        "204": { description: Saved }
+        "403": { description: Not a company admin }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /companies/{companyId}/offices:
+    post:
+      tags: [companies]
+      operationId: addCompanyOffice
+      summary: Add an office delivery address
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanyOfficeInput" }
+      responses:
+        "204": { description: Added }
+        "403": { description: Not a company admin }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /companies/{companyId}/offices/{officeId}:
+    delete:
+      tags: [companies]
+      operationId: removeCompanyOffice
+      summary: Stop offering an office for new lunches
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: officeId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "403": { description: Not a company admin }
+        "409": { description: The last office cannot be removed }
+
+  /companies/{companyId}/lunches/preview:
+    post:
+      tags: [companies]
+      operationId: previewLunch
+      summary: Price a company-paid lunch and check it against the policy
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LunchInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preview: { $ref: "#/components/schemas/SubscriptionPreview" }
+                  per_meal_minor: { type: integer, format: int64 }
+        "409": { description: "Over the per-meal cap (over_meal_cap) or company not active" }
+        "422": { description: "Day or meal not covered (not_covered)" }
+
+  /companies/{companyId}/lunches:
+    post:
+      tags: [companies]
+      operationId: startLunch
+      summary: Start a lunch subscription billed to the company
+      description: >-
+        Creates an ordinary subscription for the employee and authorises its
+        order on the company account inside the credit limit. The employee pays
+        nothing. Kitchen fulfilment, ledger and payouts are unchanged.
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LunchInput" }
+      responses:
+        "201":
+          description: Created and active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionCreated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "over_credit_limit, over_meal_cap or company_not_active" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /admin/meals/companies:
+    get:
+      tags: [companies]
+      operationId: adminListCompanies
+      summary: Office lunch accounts (staff)
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, active, suspended, rejected] } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/CompanyAdminSummary" } }
+        "403": { description: Not staff }
+
+  /admin/meals/companies/{companyId}:
+    get:
+      tags: [companies]
+      operationId: adminGetCompany
+      summary: Full company dashboard (staff)
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyDashboard" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/meals/companies/{companyId}/review:
+    put:
+      tags: [companies]
+      operationId: adminReviewCompany
+      summary: Approve, reject or suspend; set credit limit and payment terms
+      description: Approving requires a credit limit above zero. Audited.
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [active, rejected, suspended] }
+                credit_limit_minor: { type: integer, format: int64 }
+                payment_terms_days: { type: integer }
+                note: { type: string }
+      responses:
+        "204": { description: Saved }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /admin/meals/companies/{companyId}/statements:
+    post:
+      tags: [companies]
+      operationId: adminIssueCompanyStatement
+      summary: Bill every unbilled charge and credit up to a date
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period_end]
+              properties:
+                period_end: { type: string, format: date }
+      responses:
+        "201":
+          description: Issued
+          content:
+            application/json:
+              schema: { type: object, properties: { id: { type: string, format: uuid } } }
+        "409": { description: Nothing to bill }
+
+  /admin/meals/companies/{companyId}/statements/{statementId}:
+    get:
+      tags: [companies]
+      operationId: adminGetCompanyStatement
+      summary: One statement with its lines (staff)
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: statementId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyStatement" }
+
+  /admin/meals/companies/{companyId}/statements/{statementId}/paid:
+    post:
+      tags: [companies]
+      operationId: adminMarkCompanyStatementPaid
+      summary: Record the bank transfer that settled a statement
+      parameters:
+        - { name: companyId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: statementId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference]
+              properties:
+                reference: { type: string }
+      responses:
+        "204": { description: Marked paid }
+        "409": { description: Not payable }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4396,6 +4724,162 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+    CompanyPolicy:
+      type: object
+      required: [weekdays, slots, meal_cap_minor]
+      properties:
+        weekdays: { type: array, items: { type: integer, minimum: 0, maximum: 6 }, description: Sunday is 0 }
+        slots: { type: array, items: { type: string, enum: [breakfast, lunch, dinner, snack] } }
+        meal_cap_minor: { type: integer, format: int64, minimum: 1 }
+    CompanyOfficeInput:
+      type: object
+      required: [label, city, lat, lng]
+      properties:
+        label: { type: string }
+        building: { type: string }
+        area: { type: string }
+        city: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+    CompanyOffice:
+      allOf:
+        - $ref: "#/components/schemas/CompanyOfficeInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+    RegisterCompanyInput:
+      type: object
+      required: [name, legal_name, billing_email, office]
+      properties:
+        name: { type: string }
+        legal_name: { type: string }
+        trn: { type: string, pattern: "^[0-9]{15}$" }
+        billing_email: { type: string, format: email }
+        billing_phone: { type: string }
+        office: { $ref: "#/components/schemas/CompanyOfficeInput" }
+    Company:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        legal_name: { type: string }
+        trn: { type: string }
+        billing_email: { type: string }
+        billing_phone: { type: string }
+        status: { type: string, enum: [pending, active, suspended, rejected] }
+        currency: { type: string }
+        credit_limit_minor: { type: integer, format: int64 }
+        payment_terms_days: { type: integer }
+        policy: { $ref: "#/components/schemas/CompanyPolicy" }
+        review_note: { type: string }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    CompanyCredit:
+      type: object
+      properties:
+        limit_minor: { type: integer, format: int64 }
+        unbilled_minor: { type: integer, format: int64 }
+        outstanding_minor: { type: integer, format: int64 }
+        available_minor: { type: integer, format: int64 }
+        month_spend_minor: { type: integer, format: int64 }
+        overdue_statements: { type: integer }
+    CompanyBenefit:
+      type: object
+      properties:
+        company_id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, enum: [admin, employee] }
+        status: { type: string, enum: [pending, active, suspended, rejected] }
+        policy: { $ref: "#/components/schemas/CompanyPolicy" }
+        offices: { type: array, items: { $ref: "#/components/schemas/CompanyOffice" } }
+        currency: { type: string }
+    CompanyCharge:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [charge, credit] }
+        subscription_id: { type: string, format: uuid }
+        subscription_no: { type: string }
+        employee: { type: string }
+        kitchen: { type: string }
+        amount_minor: { type: integer, format: int64, description: Negative for credits }
+        currency: { type: string }
+        created_at: { type: string, format: date-time }
+    CompanyStatement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        statement_no: { type: string }
+        period_end: { type: string, format: date }
+        total_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        status: { type: string, enum: [issued, paid, void] }
+        issued_at: { type: string, format: date-time }
+        due_on: { type: string, format: date }
+        paid_at: { type: string, format: date-time, nullable: true }
+        paid_reference: { type: string }
+        lines: { type: array, items: { $ref: "#/components/schemas/CompanyCharge" } }
+    CompanyDashboard:
+      type: object
+      properties:
+        company: { $ref: "#/components/schemas/Company" }
+        role: { type: string, enum: [admin, employee, staff] }
+        credit: { $ref: "#/components/schemas/CompanyCredit" }
+        members:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              phone: { type: string }
+              name: { type: string }
+              role: { type: string, enum: [admin, employee] }
+              joined: { type: boolean }
+              joined_at: { type: string, format: date-time, nullable: true }
+              lunches: { type: integer }
+        offices: { type: array, items: { $ref: "#/components/schemas/CompanyOffice" } }
+        lunches:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              subscription_id: { type: string, format: uuid }
+              subscription_no: { type: string }
+              employee: { type: string }
+              phone: { type: string }
+              kitchen: { type: string }
+              plan: { type: string }
+              status: { type: string }
+              start_date: { type: string, format: date }
+        statements: { type: array, nullable: true, items: { $ref: "#/components/schemas/CompanyStatement" } }
+        unbilled: { type: array, nullable: true, items: { $ref: "#/components/schemas/CompanyCharge" } }
+    CompanyAdminSummary:
+      allOf:
+        - $ref: "#/components/schemas/Company"
+        - type: object
+          properties:
+            members: { type: integer }
+            lunches: { type: integer }
+            credit: { $ref: "#/components/schemas/CompanyCredit" }
+    LunchInput:
+      type: object
+      required: [office_id, plan_id, start_date, schedule]
+      properties:
+        office_id: { type: string, format: uuid }
+        plan_id: { type: string, format: uuid }
+        tier_id: { type: string, format: uuid }
+        start_date: { type: string, format: date }
+        schedule:
+          type: array
+          items:
+            type: object
+            required: [weekday, meal_slot, window_id]
+            properties:
+              weekday: { type: integer, minimum: 0, maximum: 6, description: 0 is Sunday }
+              meal_slot: { type: string }
+              window_id: { type: string, format: uuid }
 
     QueueDepth:
       type: object

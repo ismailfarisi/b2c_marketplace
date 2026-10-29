@@ -359,3 +359,177 @@ export const renewRotation = (id: string) =>
     method: "POST",
     data: {},
   });
+
+// --- Office lunch accounts -------------------------------------------------
+
+export interface CompanyPolicy {
+  weekdays: number[];
+  slots: string[];
+  meal_cap_minor: number;
+}
+
+export interface CompanyOffice {
+  id: string;
+  label: string;
+  building: string;
+  area: string;
+  city: string;
+  lat: number;
+  lng: number;
+}
+
+export interface CompanyBenefit {
+  company_id: string;
+  name: string;
+  role: "admin" | "employee";
+  status: "pending" | "active" | "suspended" | "rejected";
+  policy: CompanyPolicy;
+  offices: CompanyOffice[];
+  currency: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  legal_name: string;
+  trn: string;
+  billing_email: string;
+  billing_phone: string;
+  status: CompanyBenefit["status"];
+  currency: string;
+  credit_limit_minor: number;
+  payment_terms_days: number;
+  policy: CompanyPolicy;
+  review_note: string;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface CompanyMember {
+  id: string;
+  phone: string;
+  name: string;
+  role: "admin" | "employee";
+  joined: boolean;
+  joined_at: string | null;
+  lunches: number;
+}
+
+export interface CompanyCredit {
+  limit_minor: number;
+  unbilled_minor: number;
+  outstanding_minor: number;
+  available_minor: number;
+  month_spend_minor: number;
+  overdue_statements: number;
+}
+
+export interface CompanyCharge {
+  id: string;
+  kind: "charge" | "credit";
+  subscription_id: string;
+  subscription_no: string;
+  employee: string;
+  kitchen: string;
+  amount_minor: number;
+  currency: string;
+  created_at: string;
+}
+
+export interface CompanyStatement {
+  id: string;
+  statement_no: string;
+  period_end: string;
+  total_minor: number;
+  currency: string;
+  status: "issued" | "paid" | "void";
+  issued_at: string;
+  due_on: string;
+  paid_at: string | null;
+  paid_reference: string;
+  lines?: CompanyCharge[];
+}
+
+export interface CompanyLunch {
+  subscription_id: string;
+  subscription_no: string;
+  employee: string;
+  phone: string;
+  kitchen: string;
+  plan: string;
+  status: string;
+  start_date: string;
+}
+
+export interface CompanyDashboard {
+  company: Company;
+  role: "admin" | "employee" | "staff";
+  credit: CompanyCredit;
+  members: CompanyMember[] | null;
+  offices: CompanyOffice[];
+  lunches: CompanyLunch[] | null;
+  statements: CompanyStatement[] | null;
+  unbilled: CompanyCharge[] | null;
+}
+
+export interface OfficeInput {
+  label: string;
+  building: string;
+  area: string;
+  city: string;
+  lat: number;
+  lng: number;
+}
+
+export interface RegisterCompanyInput {
+  name: string;
+  legal_name: string;
+  trn: string;
+  billing_email: string;
+  billing_phone: string;
+  office: OfficeInput;
+}
+
+export interface LunchInput {
+  office_id: string;
+  plan_id: string;
+  tier_id?: string;
+  start_date: string;
+  schedule: ScheduleRule[];
+}
+
+export const listMyCompanies = () =>
+  apiFetch<{ items: CompanyBenefit[] }>({ url: "/me/companies", method: "GET" });
+export const registerCompany = (data: RegisterCompanyInput) =>
+  apiFetch<Company>({ url: "/companies", method: "POST", data });
+export const getCompany = (id: string) =>
+  apiFetch<CompanyDashboard>({ url: `/companies/${id}`, method: "GET" });
+export const getCompanyStatement = (id: string, statementId: string) =>
+  apiFetch<CompanyStatement>({
+    url: `/companies/${id}/statements/${statementId}`,
+    method: "GET",
+  });
+export const addCompanyMember = (
+  id: string,
+  data: { phone: string; name: string; role: "admin" | "employee" },
+) => apiFetch<void>({ url: `/companies/${id}/members`, method: "POST", data });
+export const removeCompanyMember = (id: string, memberId: string) =>
+  apiFetch<void>({ url: `/companies/${id}/members/${memberId}`, method: "DELETE" });
+export const setCompanyPolicy = (id: string, data: CompanyPolicy) =>
+  apiFetch<void>({ url: `/companies/${id}/policy`, method: "PUT", data });
+export const addCompanyOffice = (id: string, data: OfficeInput) =>
+  apiFetch<void>({ url: `/companies/${id}/offices`, method: "POST", data });
+export const removeCompanyOffice = (id: string, officeId: string) =>
+  apiFetch<void>({ url: `/companies/${id}/offices/${officeId}`, method: "DELETE" });
+export const previewLunch = (companyId: string, data: LunchInput) =>
+  apiFetch<{ preview: SubscriptionPreview; per_meal_minor: number }>({
+    url: `/companies/${companyId}/lunches/preview`,
+    method: "POST",
+    data,
+  });
+export const startLunch = (companyId: string, data: LunchInput) =>
+  apiFetch<{ id: string; subscription_no: string; status: string }>({
+    url: `/companies/${companyId}/lunches`,
+    method: "POST",
+    data,
+  });

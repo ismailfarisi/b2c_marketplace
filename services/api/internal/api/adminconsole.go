@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"github.com/marketplace/api/internal/modules/company"
 	"log/slog"
 	"net/http"
 	"time"
@@ -58,6 +59,8 @@ type AdminHandlers struct {
 	Promos *promo.Service
 	// Reviews are kitchen ratings and food-safety verification. Nil hides them.
 	Reviews *reviews.Service
+	// Companies_ are office lunch accounts. Nil hides them.
+	Companies_ *company.Service
 }
 
 // caller resolves the staff member and their permission, and logs the read when

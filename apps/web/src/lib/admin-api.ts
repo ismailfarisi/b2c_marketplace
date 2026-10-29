@@ -1913,3 +1913,59 @@ export const setFoodSafety = (
     method: "PUT",
     data,
   });
+
+// --- Office lunch accounts -------------------------------------------------
+
+export type {
+  Company,
+  CompanyCharge,
+  CompanyCredit,
+  CompanyDashboard,
+  CompanyStatement,
+} from "./customer-api";
+import type {
+  Company as CompanyT,
+  CompanyCredit as CompanyCreditT,
+  CompanyDashboard as CompanyDashboardT,
+  CompanyStatement as CompanyStatementT,
+} from "./customer-api";
+
+export interface AdminCompany extends CompanyT {
+  members: number;
+  lunches: number;
+  credit: CompanyCreditT;
+}
+
+export const getCompanies = (status = "", q = "") =>
+  apiFetch<{ items: AdminCompany[] }>({
+    url: `/admin/meals/companies${query({ status: status || undefined, q: q || undefined })}`,
+    method: "GET",
+  });
+export const getAdminCompany = (id: string) =>
+  apiFetch<CompanyDashboardT>({ url: `/admin/meals/companies/${id}`, method: "GET" });
+export const getAdminCompanyStatement = (id: string, statementId: string) =>
+  apiFetch<CompanyStatementT>({
+    url: `/admin/meals/companies/${id}/statements/${statementId}`,
+    method: "GET",
+  });
+export const reviewCompany = (
+  id: string,
+  data: {
+    status?: "active" | "rejected" | "suspended";
+    credit_limit_minor?: number;
+    payment_terms_days?: number;
+    note?: string;
+  },
+) => apiFetch<void>({ url: `/admin/meals/companies/${id}/review`, method: "PUT", data });
+export const issueCompanyStatement = (id: string, periodEnd: string) =>
+  apiFetch<{ id: string }>({
+    url: `/admin/meals/companies/${id}/statements`,
+    method: "POST",
+    data: { period_end: periodEnd },
+  });
+export const markCompanyStatementPaid = (id: string, statementId: string, reference: string) =>
+  apiFetch<void>({
+    url: `/admin/meals/companies/${id}/statements/${statementId}/paid`,
+    method: "POST",
+    data: { reference },
+  });

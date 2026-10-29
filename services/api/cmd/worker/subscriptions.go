@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/marketplace/api/internal/modules/company"
+	"github.com/marketplace/api/internal/modules/payments"
 	"log/slog"
 	"time"
 
@@ -257,7 +259,7 @@ func ensureMealSelectionPartitions(ctx context.Context, pool *pgxpool.Pool) {
 // file on why this is not a nightly cron.
 const subscriptionTick = 15 * time.Minute
 
-func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscriptions.Service) {
+func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscriptions.Service, pay *payments.Service) {
 	if svc == nil {
 		slog.Info("subscriptions disabled: no service configured")
 		return
@@ -270,6 +272,7 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 	activatePaidSubscriptions(startupCtx, pool)
 	materialiseSubscriptions(startupCtx, svc)
 	openRenewals(startupCtx, svc)
+	settleCompanyLunches(startupCtx, pool, svc, pay)
 	sendMealMessages(startupCtx, svc)
 	cancel()
 
@@ -292,11 +295,28 @@ func runSubscriptionLoop(ctx context.Context, pool *pgxpool.Pool, svc *subscript
 			materialiseSubscriptions(tickCtx, svc)
 
 			openRenewals(tickCtx, svc)
+			settleCompanyLunches(tickCtx, pool, svc, pay)
 			sendMealMessages(tickCtx, svc)
 			runDunning(tickCtx, pool)
 			recogniseSubscriptionRevenue(tickCtx, svc)
 
 			cancel()
 		}
+	}
+}
+
+// settleCompanyLunches pays office lunch renewals from the company account,
+// right after renewals are opened so they never sit waiting on the employee.
+func settleCompanyLunches(ctx context.Context, pool *pgxpool.Pool, svc *subscriptions.Service, pay *payments.Service) {
+	if svc == nil || pay == nil {
+		return
+	}
+	n, err := company.NewService(pool, svc, pay).SettleDue(ctx, 200)
+	if err != nil {
+		slog.ErrorContext(ctx, "company lunch settlement failed", "error", err)
+		return
+	}
+	if n > 0 {
+		slog.InfoContext(ctx, "settled company lunches", "cycles", n)
 	}
 }

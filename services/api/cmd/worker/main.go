@@ -114,18 +114,6 @@ func run() error {
 	// queue behind a 30-second capacity sweep.
 	go runMediaLoop(ctx, pool, media, timesignal.New(pool, registries.Subjects))
 
-	// The recurring loop, likewise separate. Its slowest job walks the
-	// impressions-scale fulfillment table; putting it in line ahead of the
-	// media pipeline would blow the upload-to-feed budget on days when a lot of
-	// subscriptions renew.
-	go runSubscriptionLoop(ctx, pool, subscriptions.NewService(pool, registries.Verticals,
-		subscriptions.Config{
-			CommissionBP:    commissionBP,
-			PlatformVATBP:   platformVATBP,
-			ReserveCapacity: true,
-			Notifier:        app.MealNotifier{Svc: app.BuildNotify(cfg, pool)},
-		}))
-
 	// Auctions run on their own, much tighter, loop. See auctionTick: a lot
 	// that closes late is taking bids after the hammer.
 	//
@@ -175,6 +163,18 @@ func run() error {
 			"wire a real gateway before deploying")
 	}
 	paymentsSvc := payments.NewService(pool, provider, commissionBP, platformVATBP)
+
+	// The recurring loop, likewise separate. Its slowest job walks the
+	// impressions-scale fulfillment table; putting it in line ahead of the
+	// media pipeline would blow the upload-to-feed budget on days when a lot of
+	// subscriptions renew.
+	go runSubscriptionLoop(ctx, pool, subscriptions.NewService(pool, registries.Verticals,
+		subscriptions.Config{
+			CommissionBP:    commissionBP,
+			PlatformVATBP:   platformVATBP,
+			ReserveCapacity: true,
+			Notifier:        app.MealNotifier{Svc: app.BuildNotify(cfg, pool)},
+		}), paymentsSvc)
 
 	// The Phase 9 loop. Its fast tick releases budget held by impressions that
 	// were served and never confirmed — without it a campaign's daily cap fills
