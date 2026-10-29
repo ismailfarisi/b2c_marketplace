@@ -1,0 +1,451 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-29T22:13:42.279611+00:00",
+  "title": "Design System: Meals",
+  "extensions": {
+    "colorMeta": {
+      "chilli-red": {
+        "role": "primary",
+        "displayName": "Chilli Red",
+        "canonical": "#d9441c",
+        "tonalRamp": [
+          "#3a1b12",
+          "#6c2c1a",
+          "#a33a1e",
+          "#de461d",
+          "#e17355",
+          "#e49f8c",
+          "#ecc8bf",
+          "#f8efec"
+        ]
+      },
+      "chilli-deep": {
+        "role": "primary",
+        "displayName": "Chilli Deep",
+        "canonical": "#a8300f",
+        "tonalRamp": [
+          "#3c1a10",
+          "#702a17",
+          "#a83819",
+          "#e64215",
+          "#e7704f",
+          "#e89d88",
+          "#eec7bd",
+          "#f9efec"
+        ]
+      },
+      "saffron": {
+        "role": "secondary",
+        "displayName": "Saffron",
+        "canonical": "#f6b21b",
+        "tonalRamp": [
+          "#3e2f0e",
+          "#745612",
+          "#b07f11",
+          "#f1a90a",
+          "#eebb47",
+          "#edcc83",
+          "#f0dfba",
+          "#f9f5eb"
+        ]
+      },
+      "saffron-soft": {
+        "role": "secondary",
+        "displayName": "Saffron Soft",
+        "canonical": "#fff1cc",
+        "tonalRamp": [
+          "#40320c",
+          "#785b0e",
+          "#b7870b",
+          "#fbb601",
+          "#f5c440",
+          "#f1d27f",
+          "#f2e2b8",
+          "#faf6eb"
+        ]
+      },
+      "saffron-ink": {
+        "role": "secondary",
+        "displayName": "Saffron Ink",
+        "canonical": "#7a5200",
+        "tonalRamp": [
+          "#402f0c",
+          "#78560e",
+          "#b77e0b",
+          "#fba901",
+          "#f5ba40",
+          "#f1cc7f",
+          "#f2dfb8",
+          "#faf5eb"
+        ]
+      },
+      "leaf-green": {
+        "role": "tertiary",
+        "displayName": "Leaf Green",
+        "canonical": "#2e7d4f",
+        "tonalRamp": [
+          "#1a3224",
+          "#2b5c3f",
+          "#39885a",
+          "#44b774",
+          "#71c594",
+          "#9ed2b4",
+          "#c8e3d3",
+          "#eff6f2"
+        ]
+      },
+      "leaf-soft": {
+        "role": "tertiary",
+        "displayName": "Leaf Soft",
+        "canonical": "#e3f2e8",
+        "tonalRamp": [
+          "#1d3023",
+          "#30573d",
+          "#418056",
+          "#50ab6e",
+          "#7abc90",
+          "#a3cdb1",
+          "#cae0d2",
+          "#eff5f1"
+        ]
+      },
+      "blush": {
+        "role": "neutral",
+        "displayName": "Blush",
+        "canonical": "#fde6d8",
+        "tonalRamp": [
+          "#3e200f",
+          "#733813",
+          "#ae4e13",
+          "#ee620d",
+          "#ed8749",
+          "#ebab85",
+          "#efcfbb",
+          "#f9f1eb"
+        ]
+      },
+      "ghee-paper": {
+        "role": "neutral",
+        "displayName": "Ghee Paper",
+        "canonical": "#fff8f0",
+        "tonalRamp": [
+          "#40280c",
+          "#78470e",
+          "#b7660b",
+          "#fb8601",
+          "#f5a140",
+          "#f1bc7f",
+          "#f2d7b8",
+          "#faf3eb"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7e7e7e",
+          "#9b9b9b",
+          "#b8b8b8",
+          "#d5d5d5",
+          "#f2f2f2"
+        ]
+      },
+      "tag-cream": {
+        "role": "neutral",
+        "displayName": "Tag Cream",
+        "canonical": "#fbeee2",
+        "tonalRamp": [
+          "#3a2512",
+          "#6c421b",
+          "#a25e1f",
+          "#dc7a1f",
+          "#df9856",
+          "#e3b68d",
+          "#ebd4bf",
+          "#f8f2ed"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#f0e2d2",
+        "tonalRamp": [
+          "#332719",
+          "#5e4529",
+          "#8c6336",
+          "#bc823f",
+          "#c89e6e",
+          "#d4ba9c",
+          "#e4d6c6",
+          "#f6f3ee"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1e1410",
+        "tonalRamp": [
+          "#2e231e",
+          "#543c33",
+          "#7b5546",
+          "#a46d58",
+          "#b68f7f",
+          "#c9b1a7",
+          "#ded1cc",
+          "#f5f1f0"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#76675b",
+        "tonalRamp": [
+          "#2a2623",
+          "#4a433d",
+          "#6c5f55",
+          "#8e7c6e",
+          "#a79a8f",
+          "#bfb7b1",
+          "#d9d5d1",
+          "#f3f2f1"
+        ]
+      },
+      "char": {
+        "role": "neutral",
+        "displayName": "Char",
+        "canonical": "#22160f",
+        "tonalRamp": [
+          "#30241c",
+          "#583e2f",
+          "#82583f",
+          "#ae714d",
+          "#be9278",
+          "#ceb2a2",
+          "#e0d2ca",
+          "#f5f1ef"
+        ]
+      },
+      "error": {
+        "role": "error",
+        "displayName": "Error",
+        "canonical": "#b23b2e",
+        "tonalRamp": [
+          "#361a17",
+          "#632a24",
+          "#93382e",
+          "#c74334",
+          "#d07065",
+          "#d99d96",
+          "#e6c7c4",
+          "#f7efee"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page hero headlines on home and the kitchen hero."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, kitchen names, sticky-bar price."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions, menu text, forms."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Eyebrows, badges, tags, button text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "rest",
+        "value": "0 1px 2px rgb(30 20 16 / 0.06), 0 12px 32px rgb(30 20 16 / 0.08)",
+        "purpose": "Kitchen cards and panels at rest."
+      },
+      {
+        "name": "lift",
+        "value": "0 2px 4px rgb(30 20 16 / 0.08), 0 20px 44px rgb(30 20 16 / 0.14)",
+        "purpose": "Hovered or focused cards."
+      },
+      {
+        "name": "chilli-glow",
+        "value": "0 6px 16px rgb(217 68 28 / 0.3)",
+        "purpose": "Under primary buttons."
+      },
+      {
+        "name": "sticky-edge",
+        "value": "0 -8px 24px rgb(30 20 16 / 0.08)",
+        "purpose": "Bottom See plans bar on phones."
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-press",
+        "value": "transform 0.15s, background 0.15s",
+        "purpose": "Primary button hover rise and deepen."
+      },
+      {
+        "name": "card-lift",
+        "value": "transform 0.2s, box-shadow 0.2s",
+        "purpose": "Card hover/focus lift."
+      },
+      {
+        "name": "photo-zoom",
+        "value": "transform 0.4s",
+        "purpose": "Slow photo zoom inside hovered kitchen cards."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "xxs",
+        "value": "22rem"
+      },
+      {
+        "name": "xs",
+        "value": "30rem"
+      },
+      {
+        "name": "sm",
+        "value": "36rem"
+      },
+      {
+        "name": "md",
+        "value": "40rem"
+      },
+      {
+        "name": "stack",
+        "value": "52rem"
+      },
+      {
+        "name": "wide",
+        "value": "56rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Every primary action: Subscribe, See plans, Apply.",
+      "html": "<button class=\"ds-btn-primary\">See plans</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 1.4rem;border:0;border-radius:999px;background:#d9441c;color:#fff;font:700 1rem 'DM Sans',system-ui,sans-serif;box-shadow:0 6px 16px rgb(217 68 28 / .3);cursor:pointer;transition:transform .15s,background .15s}.ds-btn-primary:hover{background:#a8300f;transform:translateY(-1px)}.ds-btn-primary:focus-visible{outline:2px solid #1e1410;outline-offset:3px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary actions beside a primary button.",
+      "html": "<button class=\"ds-btn-ghost\">View menu</button>",
+      "css": ".ds-btn-ghost{padding:.8rem 1.4rem;border:1.5px solid #1e1410;border-radius:999px;background:transparent;color:#1e1410;font:700 1rem 'DM Sans',system-ui,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-btn-ghost:hover{background:#1e1410;color:#fff8f0}.ds-btn-ghost:focus-visible{outline:2px solid #d9441c;outline-offset:3px}"
+    },
+    {
+      "name": "Filter Chips",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Meal-slot filters and weekday tabs; selected fills with ink.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip ds-on\">Lunch</button><button class=\"ds-chip\">Dinner</button><button class=\"ds-chip\">Breakfast</button></div>",
+      "css": ".ds-chips{display:flex;gap:.5rem}.ds-chip{padding:.5rem 1rem;border:1.5px solid #f0e2d2;border-radius:999px;background:#fff;color:#1e1410;font:600 .9rem 'DM Sans',system-ui,sans-serif;cursor:pointer}.ds-chip:hover{border-color:#1e1410}.ds-chip.ds-on{background:#1e1410;border-color:#1e1410;color:#fff8f0}.ds-chip:focus-visible{outline:2px solid #d9441c;outline-offset:2px}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Kitchen and dish search in the header and filters.",
+      "html": "<input class=\"ds-input-search\" type=\"search\" placeholder=\"Search kitchens or dishes\">",
+      "css": ".ds-input-search{width:18rem;padding:.75rem 1.1rem;border:1.5px solid #f0e2d2;border-radius:999px;background:#fff;color:#1e1410;font:400 1rem 'DM Sans',system-ui,sans-serif;transition:border-color 120ms ease}.ds-input-search:focus-visible{outline:none;border-color:#d9441c}"
+    },
+    {
+      "name": "Eyebrow",
+      "kind": "custom",
+      "refersTo": "eyebrow",
+      "description": "Saffron pill above section headlines.",
+      "html": "<span class=\"ds-eyebrow\">On the menu tomorrow</span>",
+      "css": ".ds-eyebrow{display:inline-flex;padding:.35rem .8rem;border-radius:999px;background:#fff1cc;color:#7a5200;font:700 .8rem 'DM Sans',system-ui,sans-serif}"
+    },
+    {
+      "name": "Kitchen Card",
+      "kind": "card",
+      "refersTo": "card-kitchen",
+      "description": "Photo-led kitchen card with per-meal price on the photo, rating, safety badge.",
+      "html": "<a class=\"ds-kc\" href=\"#\"><div class=\"ds-kc-ph\"><span class=\"ds-kc-tile\">A</span><span class=\"ds-kc-price\">from AED 60 a meal</span></div><div class=\"ds-kc-body\"><b>Amma's Kitchen</b><span class=\"ds-kc-meta\">Kerala · Al Quoz</span><span class=\"ds-kc-row\"><span class=\"ds-kc-star\">★ 4.7</span><span class=\"ds-kc-safe\">Food safety verified</span></span></div></a>",
+      "css": ".ds-kc{display:block;width:17rem;border-radius:1.5rem;overflow:hidden;background:#fff;color:#1e1410;text-decoration:none;box-shadow:0 1px 2px rgb(30 20 16 / .06),0 12px 32px rgb(30 20 16 / .08);transition:transform .2s,box-shadow .2s}.ds-kc:hover,.ds-kc:focus-visible{transform:translateY(-3px);box-shadow:0 2px 4px rgb(30 20 16 / .08),0 20px 44px rgb(30 20 16 / .14);outline:none}.ds-kc-ph{position:relative;aspect-ratio:4/3;background:#fde0cf;display:grid;place-items:center}.ds-kc-tile{font:800 3rem 'Bricolage Grotesque',system-ui,sans-serif;color:#a8300f}.ds-kc-price{position:absolute;inset-inline-start:.75rem;inset-block-end:.75rem;padding:.3rem .7rem;border-radius:999px;background:#fff;font:700 .8rem 'DM Sans',system-ui,sans-serif}.ds-kc-body{display:grid;gap:.3rem;padding:1rem 1.25rem 1.25rem;font-family:'DM Sans',system-ui,sans-serif}.ds-kc-body b{font:800 1.05rem 'Bricolage Grotesque',system-ui,sans-serif}.ds-kc-meta{color:#76675b;font-size:.9rem}.ds-kc-row{display:flex;gap:.5rem;align-items:center;font-size:.8rem}.ds-kc-star{color:#d9441c;font-weight:700}.ds-kc-safe{padding:.15rem .55rem;border-radius:999px;background:rgb(46 125 79 / .12);color:#2e7d4f;font-weight:700}"
+    },
+    {
+      "name": "Offer Banner",
+      "kind": "card",
+      "refersTo": "banner-offer",
+      "description": "Staff-built merchandising banner without an image.",
+      "html": "<div class=\"ds-banner\"><span>Try 4 kitchens this month</span><button>Build a rotation</button></div>",
+      "css": ".ds-banner{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem 1.5rem;border-radius:1.5rem;background:#d9441c;color:#fff;font:800 1.4rem 'Bricolage Grotesque',system-ui,sans-serif}.ds-banner button{padding:.6rem 1.1rem;border:0;border-radius:999px;background:#fff;color:#a8300f;font:700 .9rem 'DM Sans',system-ui,sans-serif;cursor:pointer}.ds-banner button:hover{background:#fff1cc}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Hungry Weekday",
+    "overview": "This is food you eat five days a week, so the interface should make an ordinary Tuesday lunch look worth waiting for. Dish and kitchen photos carry the appetite. Chilli red marks every action, saffron and leaf green mark offers and trust, and everything sits on a warm ghee-paper cream rather than clinical white.\n\nThe feel is warm and generous: soft, round corners, roomy cards and a gentle lift when something can be tapped. Headings are bold, upright and slightly tight, never italic or serif. Arabic is a first-class citizen with its own face and layout, not a mirrored afterthought.",
+    "keyCharacteristics": [
+      "Food photography leads every card and hero. When a kitchen hasn't uploaded one, a drawn tinted tile stands in.",
+      "Three food colours do all the talking: chilli for action, saffron for offers, leaf for trust.",
+      "Warm cream canvas, white cards, soft brown shadows.",
+      "Pill-shaped controls and big rounded cards.",
+      "Bold, upright grotesque display type with a friendly geometric body face."
+    ],
+    "rules": [
+      {
+        "name": "The Chilli Means Go Rule",
+        "body": "Chilli red is reserved for things the customer can do, plus the rating star. Prices, names and metadata stay in Ink and Muted.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Grey Rule",
+        "body": "Neutrals are warm browns. Never introduce a cool or pure grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The Upright Rule",
+        "body": "Headings are bold and upright. No italics, no serif display faces.",
+        "section": "typography"
+      },
+      {
+        "name": "The Arabic Reset Rule",
+        "body": "On Arabic pages, letter-spacing goes to 0 and heading line-height opens to 1.3. Tight Latin tracking breaks Arabic joins.",
+        "section": "typography"
+      },
+      {
+        "name": "The Logical Properties Rule",
+        "body": "Never write `left`, `right`, `margin-left` or `padding-right` in meals CSS. Every physical property is a future RTL bug.",
+        "section": "layout"
+      },
+      {
+        "name": "The Gentle Lift Rule",
+        "body": "Tappable cards rise 3px and gain the Lift shadow on hover or focus; buttons rise 1px. Motion is 150–200ms and switches off under `prefers-reduced-motion`.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** lead cards and heroes with the kitchen's real dish photos, falling back to the drawn tile.",
+      "**Do** show the per-meal price on the photo of every kitchen card.",
+      "**Do** keep chilli red for actions, saffron for offers and eyebrows, leaf green for trust and success.",
+      "**Do** use logical CSS properties and test every screen in Arabic at 320px.",
+      "**Do** use the Rest shadow at rest and the Lift shadow on hover/focus, and honour reduced motion."
+    ],
+    "donts": [
+      "**Don't** use stock food photography in place of a kitchen's own dishes.",
+      "**Don't** use italic or serif headings.",
+      "**Don't** introduce cool greys or pure black; use Ink, Muted and Char.",
+      "**Don't** put fake browser bars or phone frames around screenshots or showcases.",
+      "**Don't** reuse the meals palette in the vendor console or admin; they keep the operational shell in `admin.css`."
+    ]
+  }
+}
