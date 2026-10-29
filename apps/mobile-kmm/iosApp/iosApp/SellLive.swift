@@ -160,13 +160,13 @@ struct LiveStep: View {
         return mapped.isEmpty ? [.jpeg, .png, .pdf] : mapped
     }
 
-    private func stat(_ key: LocalizedStringKey, _ value: Int32?) -> some View {
+    private func stat(_ key: LocalizedStringKey, _ value: Int64?) -> some View {
         HStack {
             Text(key)
                 .font(.system(size: TypeScale.secondary))
                 .foregroundStyle(Palette.textMuted)
             Spacer()
-            Text(value.map { grouped(Int64($0)) } ?? "—")
+            Text(value.map { grouped($0) } ?? "—")
                 .font(.system(size: TypeScale.body).weight(.medium))
                 .foregroundStyle(Palette.text)
         }
