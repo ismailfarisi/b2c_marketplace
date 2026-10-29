@@ -1,5 +1,14 @@
 package ae.marketplace.mobile.android.meals
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.text.style.TextAlign
@@ -17,6 +26,7 @@ import ae.marketplace.mobile.android.ui.rememberArabic
 import ae.marketplace.mobile.android.ui.words
 import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.meals.MealsViewModel
+import ae.marketplace.mobile.model.DayDish
 import ae.marketplace.mobile.model.HomeSection
 import ae.marketplace.mobile.model.Kitchen
 import ae.marketplace.mobile.model.LatLng
@@ -195,6 +205,7 @@ private fun HomePage(
             failure != null && s.kitchens.isEmpty() -> item { FailureBlock(failure, onRetry = vm::loadStore) }
             s.loading && s.kitchens.isEmpty() -> item { LoadingBlock() }
             else -> {
+                if (s.dishes.isNotEmpty()) item(key = "dishes") { DishRail(s.dishes, arabic, onKitchen) }
                 if (s.slot == null) item { RotationPromo(onRotation) }
                 s.sections.forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation) } }
                 item { SectionTitle(stringResource(R.string.meals_near_you)) }
@@ -276,19 +287,54 @@ private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -
 @Composable
 private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
     val name = pick(k.name, k.nameAr, arabic)
+    val photo = k.coverImageUrl ?: k.weekDishes.firstOrNull { it.imageUrl != null }?.imageUrl
     Column(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = Space.Small)
-            .background(M.Surface, RoundedCornerShape(16.dp))
+            .background(M.Surface, RoundedCornerShape(20.dp))
+            .border(1.dp, M.Line, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick),
     ) {
-        KitchenCover(name, k.coverImageUrl, k.cuisines, Modifier.fillMaxWidth().aspectRatio(2.2f))
-        Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                RatingText(k.rating, k.ratingCount)
+        Box {
+            KitchenCover(name, photo, k.cuisines, Modifier.fillMaxWidth().aspectRatio(1.8f))
+            Text(
+                stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)),
+                color = M.Ink,
+                fontSize = Type.Secondary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(Space.Medium)
+                    .background(M.Surface, RoundedCornerShape(50))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            Row(
+                Modifier.align(Alignment.TopStart).padding(Space.Medium),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (k.rating != null && k.ratingCount > 0) {
+                    Text(
+                        "★ " + String.format(java.util.Locale.US, "%.1f", k.rating),
+                        color = M.Ink,
+                        fontSize = Type.Caption,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(M.Saffron, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+                if (k.foodSafetyVerified) {
+                    Text(
+                        "✓ " + stringResource(R.string.meals_verified),
+                        color = M.Leaf,
+                        fontSize = Type.Caption,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.background(M.LeafSoft, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
             }
+        }
+        Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(name, color = M.Ink, fontFamily = Serif, fontSize = Type.Heading, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 (k.cuisines + listOfNotNull(k.city)).joinToString(" · "),
                 color = M.Muted,
@@ -296,9 +342,60 @@ private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)), color = M.Chilli, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                if (k.foodSafetyVerified) VerifiedBadge()
+            if (k.weekDishes.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    k.weekDishes.take(4).forEach { d ->
+                        KitchenCover(pick(d.name, d.nameAr, arabic), d.imageUrl, emptyList(), Modifier.size(40.dp))
+                    }
+                    Text(
+                        pick(k.weekDishes.first().name, k.weekDishes.first().nameAr, arabic),
+                        color = M.Muted,
+                        fontSize = Type.Caption,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            if (k.rating == null || k.ratingCount == 0) RatingText(k.rating, k.ratingCount)
+        }
+    }
+}
+
+/** "On the menu tomorrow": dishes first, so customers can browse food, not only kitchens. */
+@Composable
+private fun DishRail(dishes: List<DayDish>, arabic: Boolean, onKitchen: (String) -> Unit) {
+    if (dishes.isEmpty()) return
+    SectionTitle(stringResource(R.string.meals_tomorrow))
+    LazyRow(
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Space.Edge),
+        horizontalArrangement = Arrangement.spacedBy(Space.Medium),
+    ) {
+        items(dishes, key = { it.branchId + it.slot + it.name }) { d ->
+            Column(
+                Modifier
+                    .width(176.dp)
+                    .background(M.Surface, RoundedCornerShape(18.dp))
+                    .border(1.dp, M.Line, RoundedCornerShape(18.dp))
+                    .clickable { onKitchen(d.branchId) },
+            ) {
+                Box {
+                    KitchenCover(pick(d.name, d.nameAr, arabic), d.imageUrl, emptyList(), Modifier.fillMaxWidth().aspectRatio(1.15f))
+                    if (d.hasAlternative) {
+                        Text(
+                            stringResource(R.string.meals_two_choices),
+                            color = M.OnAccent,
+                            fontSize = Type.Caption,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(M.Chilli, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
+                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(pick(d.name, d.nameAr, arabic), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(pick(d.kitchenName, d.kitchenNameAr, arabic) + " · " + slotLabel(d.slot), color = M.Muted, fontSize = Type.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.meals_from_meal, money(d.fromMealPriceMinor, d.currency)), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -334,91 +431,237 @@ private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onSubscribe: (Me
     val s by vm.kitchen.collectAsState()
     val arabic = rememberArabic()
     val k = s.kitchen
-    Column(Modifier.fillMaxSize()) {
-        TopBar(k?.let { pick(it.name, it.nameAr, arabic) } ?: "", onBack)
-        val failure = s.error
-        when {
-            failure != null -> FailureBlock(failure, onRetry = { vm.openKitchen(s.branchId) })
-            k == null -> LoadingBlock()
-            else -> LazyColumn(Modifier.fillMaxSize()) {
-                item {
-                    KitchenCover(pick(k.name, k.nameAr, arabic), k.coverImageUrl, k.cuisines, Modifier.fillMaxWidth().padding(horizontal = Space.Edge).aspectRatio(2f))
-                    Column(Modifier.padding(Space.Edge), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(pick(k.name, k.nameAr, arabic), color = M.Ink, fontFamily = Serif, fontSize = Type.Title * 1.2f, fontWeight = FontWeight.SemiBold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalAlignment = Alignment.CenterVertically) {
-                            RatingText(k.rating, k.ratingCount)
-                            if (k.foodSafetyVerified) VerifiedBadge()
-                        }
-                        k.description?.let { Text(pick(it, k.descriptionAr, arabic), color = M.Muted, fontSize = Type.Body) }
-                        if (k.deliversHere == false) {
-                            Text(stringResource(R.string.meals_not_here), color = Palette.Bad, fontSize = Type.Secondary)
-                        }
+    val failure = s.error
+    when {
+        failure != null -> Column(Modifier.fillMaxSize()) {
+            TopBar("", onBack)
+            FailureBlock(failure, onRetry = { vm.openKitchen(s.branchId) })
+        }
+        k == null -> Column(Modifier.fillMaxSize()) { TopBar("", onBack); LoadingBlock() }
+        else -> KitchenBody(k, s.reviews, arabic, onBack, onSubscribe)
+    }
+}
+
+@Composable
+private fun KitchenBody(
+    k: ae.marketplace.mobile.model.KitchenDetail,
+    reviews: List<ae.marketplace.mobile.model.KitchenReview>,
+    arabic: Boolean,
+    onBack: () -> Unit,
+    onSubscribe: (MealPlan) -> Unit,
+) {
+    val name = pick(k.name, k.nameAr, arabic)
+    val byDay = remember(k) { k.menu.slots.groupBy { it.weekday }.toSortedMap() }
+    var day by remember(k) { mutableStateOf(byDay.keys.firstOrNull()) }
+    val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // hero, info, then (menu title, tabs, day, week) when there is a menu.
+    val plansIndex = 2 + if (byDay.isEmpty()) 0 else 4
+    val plansShown by remember {
+        derivedStateOf { list.layoutInfo.visibleItemsInfo.any { it.key == "plans" || it.index > plansIndex } }
+    }
+    val photo = k.coverImageUrl
+        ?: k.menu.slots.firstNotNullOfOrNull { it.default?.imageUrl ?: it.alternative?.imageUrl }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = list) {
+            item(key = "hero") {
+                Box {
+                    KitchenCover(name, photo, k.cuisines, Modifier.fillMaxWidth().aspectRatio(1.35f))
+                    Text(
+                        if (arabic) "→" else "←",
+                        color = M.Ink,
+                        fontSize = Type.Heading,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(Space.Medium)
+                            .size(Space.Touch)
+                            .background(M.Surface, RoundedCornerShape(50))
+                            .clickable(onClick = onBack)
+                            .semantics { role = Role.Button; contentDescription = "back" }
+                            .padding(top = 11.dp),
+                    )
+                }
+            }
+            item(key = "info") {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Space.Edge)
+                        .padding(top = Space.Large),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(name, color = M.Ink, fontFamily = Serif, fontSize = Type.Title * 1.25f, fontWeight = FontWeight.ExtraBold)
+                    if (k.cuisines.isNotEmpty()) Text(k.cuisines.joinToString(" · "), color = M.Muted, fontSize = Type.Secondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)),
+                            color = M.OnAccent,
+                            fontSize = Type.Secondary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.background(M.Chilli, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                        RatingText(k.rating, k.ratingCount)
+                        if (k.foodSafetyVerified) VerifiedBadge()
+                    }
+                    k.description?.let { Text(pick(it, k.descriptionAr, arabic), color = M.Muted, fontSize = Type.Body) }
+                    if (k.deliversHere == false) {
+                        Text(stringResource(R.string.meals_not_here), color = Palette.Bad, fontSize = Type.Secondary)
                     }
                 }
-                if (k.plans.isNotEmpty()) {
-                    item { SectionTitle(stringResource(R.string.meals_plans)) }
-                    items(k.plans, key = { it.id }) { p ->
-                        PlanCard(p, arabic, enabled = k.deliversHere != false) { onSubscribe(p) }
+            }
+            if (byDay.isNotEmpty()) {
+                item(key = "menuTitle") { SectionTitle(stringResource(R.string.meals_weekly_menu)) }
+                item(key = "tabs") {
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.Edge),
+                        horizontalArrangement = Arrangement.spacedBy(Space.Small),
+                    ) {
+                        byDay.keys.forEach { d -> Chip(weekday(d, arabic), day == d, { day = d }) }
                     }
                 }
-                val byDay = k.menu.slots.groupBy { it.weekday }.toSortedMap()
-                if (byDay.isNotEmpty()) {
-                    item { SectionTitle(stringResource(R.string.meals_weekly_menu)) }
-                    byDay.forEach { (day, slots) ->
-                        item(key = "day$day") {
-                            Card {
-                                Text(weekday(day, arabic, java.time.format.TextStyle.FULL), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold)
-                                slots.forEach { slot ->
-                                    Row {
-                                        Text(slotLabel(slot.slot), color = M.Faint, fontSize = Type.Secondary, modifier = Modifier.width(84.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            slot.default?.let { Text(pick(it.name, it.nameAr, arabic), color = M.Ink, fontSize = Type.Body) }
-                                            slot.alternative?.let {
-                                                Text(stringResource(R.string.meals_or, pick(it.name, it.nameAr, arabic)), color = M.Muted, fontSize = Type.Secondary)
-                                            }
-                                        }
-                                    }
-                                }
+                item(key = "day") {
+                    Column(
+                        Modifier.padding(horizontal = Space.Edge).padding(top = Space.Medium),
+                        verticalArrangement = Arrangement.spacedBy(Space.Medium),
+                    ) {
+                        byDay[day].orEmpty().forEach { slot -> DishCard(slot, arabic) }
+                    }
+                }
+                item(key = "week") {
+                    SectionTitle(stringResource(R.string.meals_week_glance))
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Space.Edge)
+                            .background(M.Surface, RoundedCornerShape(18.dp))
+                            .border(1.dp, M.Line, RoundedCornerShape(18.dp))
+                            .padding(Space.Medium),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        byDay.forEach { (d, slots) ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { day = d }) {
+                                Text(weekday(d, arabic), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.Bold, modifier = Modifier.width(56.dp))
+                                Text(
+                                    slots.mapNotNull { it.default?.let { c -> pick(c.name, c.nameAr, arabic) } }.joinToString(" · "),
+                                    color = M.Ink,
+                                    fontSize = Type.Secondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }
                 }
-                if (s.reviews.isNotEmpty()) {
-                    item { SectionTitle(stringResource(R.string.meals_reviews)) }
-                    items(s.reviews.take(5), key = { it.id }) { r ->
-                        Card {
-                            Text("★".repeat(r.rating) + "☆".repeat(5 - r.rating), color = M.Chilli, fontSize = Type.Secondary)
-                            if (r.comment.isNotBlank()) Text(r.comment, color = M.Ink, fontSize = Type.Body)
-                        }
+            }
+            if (k.plans.isNotEmpty()) {
+                item(key = "plans") { SectionTitle(stringResource(R.string.meals_plans)) }
+                items(k.plans, key = { it.id }) { p ->
+                    PlanCard(p, arabic, popular = p.id == k.popularPlanId, enabled = k.deliversHere != false) { onSubscribe(p) }
+                }
+            }
+            if (reviews.isNotEmpty()) {
+                item { SectionTitle(stringResource(R.string.meals_reviews)) }
+                items(reviews.take(5), key = { it.id }) { r ->
+                    Card {
+                        Text("★".repeat(r.rating) + "☆".repeat(5 - r.rating), color = M.Saffron, fontSize = Type.Secondary)
+                        if (r.comment.isNotBlank()) Text(r.comment, color = M.Ink, fontSize = Type.Body)
                     }
                 }
-                item { BottomPad() }
+            }
+            item { Spacer(Modifier.height(96.dp)); BottomPad() }
+        }
+        if (k.plans.isNotEmpty() && !plansShown) {
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(M.Surface)
+                    .border(1.dp, M.Line)
+                    .navigationBarsPadding()
+                    .padding(horizontal = Space.Edge, vertical = Space.Medium),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Space.Medium),
+            ) {
+                Text(
+                    stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)),
+                    color = M.Ink,
+                    fontSize = Type.Body,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                PrimaryButton(
+                    stringResource(R.string.meals_see_plans),
+                    { scope.launch { list.animateScrollToItem(plansIndex) } },
+                    modifier = Modifier.width(160.dp),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PlanCard(p: MealPlan, arabic: Boolean, enabled: Boolean, onSubscribe: () -> Unit) {
-    Row(
+private fun DishCard(slot: ae.marketplace.mobile.model.MenuSlot, arabic: Boolean) {
+    val main = slot.default ?: slot.alternative ?: return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(M.Surface, RoundedCornerShape(18.dp))
+            .border(1.dp, M.Line, RoundedCornerShape(18.dp)),
+    ) {
+        Box {
+            KitchenCover(pick(main.name, main.nameAr, arabic), main.imageUrl, emptyList(), Modifier.fillMaxWidth().aspectRatio(2f))
+            Text(
+                slotLabel(slot.slot),
+                color = M.Ink,
+                fontSize = Type.Caption,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.TopStart).padding(10.dp).background(M.SaffronSoft, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+        Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(pick(main.name, main.nameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.Bold)
+            val alt = slot.alternative
+            if (slot.default != null && alt != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+                    KitchenCover(pick(alt.name, alt.nameAr, arabic), alt.imageUrl, emptyList(), Modifier.size(36.dp))
+                    Text(stringResource(R.string.meals_or, pick(alt.name, alt.nameAr, arabic)), color = M.Muted, fontSize = Type.Secondary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanCard(p: MealPlan, arabic: Boolean, popular: Boolean, enabled: Boolean, onSubscribe: () -> Unit) {
+    Column(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.Edge, vertical = 6.dp)
-            .height(IntrinsicSize.Min)
-            .background(M.Surface, RoundedCornerShape(16.dp))
-            .border(1.dp, M.Line, RoundedCornerShape(16.dp)),
+            .background(M.Surface, RoundedCornerShape(18.dp))
+            .border(if (popular) 2.dp else 1.dp, if (popular) M.Chilli else M.Line, RoundedCornerShape(18.dp))
+            .padding(Space.Large),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.width(5.dp).fillMaxHeight().background(M.Chilli, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)))
-        Column(Modifier.padding(Space.Large), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(pick(p.name, p.nameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.meals_meal_price, money(p.mealPriceMinor, p.currency)), color = M.Ink, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.SemiBold)
+        if (popular) {
             Text(
-                stringResource(R.string.meals_plan_summary, p.mealsPerCycle, p.daysPerWeek) + " · " + stringResource(R.string.meals_cycle_from, money(p.priceMinor, p.currency)),
-                color = M.Muted,
-                fontSize = Type.Secondary,
+                stringResource(R.string.meals_popular),
+                color = M.OnAccent,
+                fontSize = Type.Caption,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.background(M.Chilli, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
             )
-            PrimaryButton(stringResource(R.string.meals_subscribe), onSubscribe, enabled = enabled)
         }
+        Text(pick(p.name, p.nameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.meals_meal_price, money(p.mealPriceMinor, p.currency)), color = M.Chilli, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.ExtraBold)
+        Text(
+            stringResource(R.string.meals_plan_summary, p.mealsPerCycle, p.daysPerWeek) + " · " + stringResource(R.string.meals_cycle_from, money(p.priceMinor, p.currency)),
+            color = M.Muted,
+            fontSize = Type.Secondary,
+        )
+        PrimaryButton(stringResource(R.string.meals_subscribe), onSubscribe, enabled = enabled)
     }
 }
 

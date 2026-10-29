@@ -372,6 +372,11 @@
     <string name="meals_none">No kitchens deliver here yet.</string>
     <string name="meals_from_meal">from %1$s a meal</string>
     <string name="meals_cycle_from">%1$s a cycle</string>
+    <string name="meals_tomorrow">On the menu tomorrow</string>
+    <string name="meals_two_choices">2 choices</string>
+    <string name="meals_popular">Most popular</string>
+    <string name="meals_see_plans">See plans</string>
+    <string name="meals_week_glance">This week at a glance</string>
     <string name="meals_verified">Food safety verified</string>
     <string name="meals_new">New</string>
     <string name="meals_rating">★ %1$s (%2$d)</string>
