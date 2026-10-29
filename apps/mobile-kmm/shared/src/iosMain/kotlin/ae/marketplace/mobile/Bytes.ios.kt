@@ -1,9 +1,9 @@
 package ae.marketplace.mobile
 
-import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
+import platform.Foundation.NSData
 import platform.posix.memcpy
 
 /**
@@ -29,13 +29,14 @@ import platform.posix.memcpy
  * thing neither platform uses.
  */
 @OptIn(ExperimentalForeignApi::class)
-fun copyInto(target: ByteArray, source: CPointer<*>, count: Int) {
-    if (count <= 0 || target.isEmpty()) return
-    // Never copy more than the destination holds. The caller passes a count
-    // taken from the source, and a mismatch here would be an out-of-bounds
-    // write into the heap rather than an exception.
-    val safe = minOf(count, target.size)
-    target.usePinned { pinned ->
-        memcpy(pinned.addressOf(0), source, safe.toULong())
+fun toByteArray(data: NSData): ByteArray {
+    // Takes NSData rather than a raw pointer: `CPointer` parameters are not
+    // exported to Objective-C, so Swift could not call a pointer version.
+    val out = ByteArray(data.length.toInt())
+    val source = data.bytes ?: return out
+    if (out.isEmpty()) return out
+    out.usePinned { pinned ->
+        memcpy(pinned.addressOf(0), source, out.size.toULong())
     }
+    return out
 }

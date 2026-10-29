@@ -1878,3 +1878,20 @@ table.menu-grid td {
   gap: 0.5rem;
   align-items: center;
 }
+
+/* ---- Office lunch companies --------------------------------------------- */
+
+.company-admin {
+  display: grid;
+  gap: 1rem;
+  margin-block: 0.75rem;
+  min-inline-size: 0;
+}
+
+.company-admin > * {
+  min-inline-size: 0;
+}
+
+.company-admin .money-table {
+  inline-size: 100%;
+}

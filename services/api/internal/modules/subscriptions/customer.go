@@ -45,6 +45,8 @@ type MySubscription struct {
 	// The subscription a one-tap renew created from this one, if any.
 	RenewedByID *uuid.UUID `json:"renewed_by_id"`
 	CanRenew    bool       `json:"can_renew"`
+	// Set when the employee's company pays for this office lunch.
+	CompanyName *string `json:"company_name"`
 }
 
 // Dish is one option a customer can be served on a given day.
@@ -105,7 +107,8 @@ const mySelect = `
 	       CASE WHEN c.status IN ('pending', 'past_due') THEN c.order_id END,
 	       s.rotation_id, s.rotation_week, s.renewal_mode,
 	       (SELECT n.id FROM subscriptions n
-	         WHERE n.renewed_from_id = s.id AND n.status <> 'cancelled' LIMIT 1)
+	         WHERE n.renewed_from_id = s.id AND n.status <> 'cancelled' LIMIT 1),
+	       co.name
 	  FROM subscriptions s
 	  JOIN vendor_branches b ON b.id = s.branch_id
 	  JOIN subscription_plans p ON p.id = s.plan_id
@@ -113,7 +116,8 @@ const mySelect = `
 	       SELECT cycle_no, ends_on, amount_minor, currency, status, order_id
 	         FROM subscription_cycles WHERE subscription_id = s.id
 	          AND NOT (cycle_no > 1 AND status = 'cancelled' AND paid_at IS NULL)
-	        ORDER BY cycle_no DESC LIMIT 1) c ON true`
+	        ORDER BY cycle_no DESC LIMIT 1) c ON true
+	  LEFT JOIN companies co ON co.id = s.company_id`
 
 func scanMine(row pgx.Row) (MySubscription, error) {
 	var m MySubscription
@@ -122,10 +126,10 @@ func scanMine(row pgx.Row) (MySubscription, error) {
 	if err := row.Scan(&m.ID, &m.SubscriptionNo, &m.Status, &m.BranchID, &m.KitchenName,
 		&m.KitchenNameAr, &m.PlanName, &m.PlanNameAr, &start, &end,
 		&m.CycleNo, &cycleEnd, &m.AmountMinor, &m.Currency, &m.PendingOrderID,
-		&m.RotationID, &m.RotationWeek, &m.RenewalMode, &m.RenewedByID); err != nil {
+		&m.RotationID, &m.RotationWeek, &m.RenewalMode, &m.RenewedByID, &m.CompanyName); err != nil {
 		return m, err
 	}
-	m.CanRenew = canRenew(m.Status, m.RenewalMode, m.RotationID, m.RenewedByID)
+	m.CanRenew = m.CompanyName == nil && canRenew(m.Status, m.RenewalMode, m.RotationID, m.RenewedByID)
 	m.StartDate = start.Format("2006-01-02")
 	m.EndDate = datePtr(end)
 	m.CycleEndsOn = datePtr(cycleEnd)

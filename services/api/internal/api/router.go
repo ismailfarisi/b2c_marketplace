@@ -147,6 +147,20 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		if h.Meals != nil && h.Meals.Promos != nil {
 			r.Get("/me/referrals", h.Meals.MyReferrals)
 		}
+		// Office lunch accounts: the company pays for lunches inside its policy.
+		if h.Company != nil {
+			r.Post("/companies", h.Company.Register)
+			r.Get("/me/companies", h.Company.Mine)
+			r.Get("/companies/{companyId}", h.Company.Dashboard)
+			r.Get("/companies/{companyId}/statements/{statementId}", h.Company.Statement)
+			r.Post("/companies/{companyId}/members", h.Company.AddMember)
+			r.Delete("/companies/{companyId}/members/{memberId}", h.Company.RemoveMember)
+			r.Put("/companies/{companyId}/policy", h.Company.SetPolicy)
+			r.Post("/companies/{companyId}/offices", h.Company.AddOffice)
+			r.Delete("/companies/{companyId}/offices/{officeId}", h.Company.RemoveOffice)
+			r.Post("/companies/{companyId}/lunches/preview", h.Company.PreviewLunch)
+			r.Post("/companies/{companyId}/lunches", h.Company.StartLunch)
+		}
 		if h.Addresses != nil {
 			r.Get("/me/addresses", h.Addresses.List)
 			r.Post("/me/addresses", h.Addresses.Create)
@@ -493,6 +507,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 					r.Put("/admin/meals/reviews/{reviewId}/visibility", h.AdminConsole.HideMealReview)
 					r.Get("/admin/meals/kitchens/{branchId}/food-safety", h.AdminConsole.FoodSafety)
 					r.Put("/admin/meals/kitchens/{branchId}/food-safety", h.AdminConsole.SetFoodSafety)
+				}
+				if h.AdminConsole.Companies_ != nil {
+					r.Get("/admin/meals/companies", h.AdminConsole.Companies)
+					r.Get("/admin/meals/companies/{companyId}", h.AdminConsole.CompanyDetail)
+					r.Put("/admin/meals/companies/{companyId}/review", h.AdminConsole.ReviewCompany)
+					r.Post("/admin/meals/companies/{companyId}/statements", h.AdminConsole.IssueCompanyStatement)
+					r.Get("/admin/meals/companies/{companyId}/statements/{statementId}", h.AdminConsole.CompanyStatement)
+					r.Post("/admin/meals/companies/{companyId}/statements/{statementId}/paid", h.AdminConsole.MarkCompanyStatementPaid)
 				}
 				if h.AdminConsole.Promos != nil {
 					r.Get("/admin/meals/promos", h.AdminConsole.ListPromos)

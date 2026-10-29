@@ -25,7 +25,7 @@ struct ReelSurface: UIViewRepresentable {
         // Nil when the reel is outside the prefetch window. Drawing black rather
         // than creating a player here is the point: a surface that eagerly made
         // its own would defeat the pool and the egress policy in one line.
-        view.attach(player: viewModel.playerFor(reelId: reelId).flatMap { ReelPlayerKt.asAvPlayer($0) })
+        view.attach(player: viewModel.playerFor(reelId: reelId).flatMap { ReelPlayer_iosKt.asAvPlayer($0) })
     }
 }
 

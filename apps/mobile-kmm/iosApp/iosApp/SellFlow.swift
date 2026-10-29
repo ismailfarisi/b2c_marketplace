@@ -586,14 +586,14 @@ private struct FieldInput: View {
     /// changing. The bound travels as a number so a translator can put the unit
     /// on the correct side of it.
     private func problemText(_ issue: FieldIssue) -> String {
-        switch issue.problem {
-        case .required: return String(localized: "sell_field_required")
-        case .notanumber: return String(localized: "sell_field_number")
-        case .notanoption: return String(localized: "sell_field_option")
-        case .belowmin:
+        switch issue.problem.code {
+        case "Required": return String(localized: "sell_field_required")
+        case "NotANumber": return String(localized: "sell_field_number")
+        case "NotAnOption": return String(localized: "sell_field_option")
+        case "TooSmall":
             return String(format: String(localized: "sell_field_min"),
                           issue.bound.map { "\($0)" } ?? "", localised(field.unit, field.unitAr))
-        case .abovemax:
+        case "TooLarge":
             return String(format: String(localized: "sell_field_max"),
                           issue.bound.map { "\($0)" } ?? "", localised(field.unit, field.unitAr))
         default: return String(localized: "sell_field_required")
@@ -763,11 +763,6 @@ private struct PrimaryButton: View {
 /// the duration of the block, so the whole thing is a single copy. The copy
 /// itself is unavoidable across the boundary, and is the reason
 /// `onClipRecorded` takes bytes rather than a path — see the note on Recorder.
-private func toKotlinByteArray(_ data: Data) -> KotlinByteArray {
-    let array = KotlinByteArray(size: Int32(data.count))
-    data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
-        guard let source = raw.baseAddress else { return }
-        BytesKt.copyInto(target: array, source: source, count: Int32(data.count))
-    }
-    return array
+func toKotlinByteArray(_ data: Data) -> KotlinByteArray {
+    Bytes_iosKt.toByteArray(data: data)
 }

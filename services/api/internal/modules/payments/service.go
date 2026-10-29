@@ -221,8 +221,13 @@ func (s *Service) Capture(ctx context.Context, orderID uuid.UUID, finalAmountMin
 			httpx.ErrConflict, amount, auth.AuthorizedMinor)
 	}
 
-	result, err := s.provider.Capture(ctx, auth.ProviderRef, amount)
-	if err != nil {
+	var result CaptureResult
+	providerName := s.provider.Name()
+	if auth.Provider == AccountProvider {
+		// Billed to a company account: nothing to collect from a gateway now,
+		// the company settles its statement later.
+		result, providerName = CaptureResult{Status: "succeeded", ProviderRef: auth.ProviderRef}, AccountProvider
+	} else if result, err = s.provider.Capture(ctx, auth.ProviderRef, amount); err != nil {
 		return fmt.Errorf("gateway capture: %w", err)
 	}
 	if result.Status != "succeeded" {
@@ -239,7 +244,7 @@ func (s *Service) Capture(ctx context.Context, orderID uuid.UUID, finalAmountMin
 				order_id, quote_id, user_id, kind, status, provider,
 				provider_ref, amount_minor, currency, parent_payment_id, settled_at
 			) VALUES ($1,$2,$3,'capture','succeeded',$4,$5,$6,$7,$8,now())`,
-			orderID, auth.QuoteID, auth.UserID, s.provider.Name(),
+			orderID, auth.QuoteID, auth.UserID, providerName,
 			result.ProviderRef, amount, auth.Currency, auth.PaymentID,
 		); err != nil {
 			return fmt.Errorf("insert capture: %w", err)
@@ -305,6 +310,7 @@ type authorization struct {
 	QuoteID         uuid.UUID
 	UserID          uuid.UUID
 	VendorID        uuid.UUID
+	Provider        string
 	ProviderRef     string
 	AuthorizedMinor int64
 	QuoteTotalMinor int64
@@ -314,7 +320,7 @@ type authorization struct {
 func (s *Service) loadAuthorization(ctx context.Context, orderID uuid.UUID) (authorization, error) {
 	var a authorization
 	err := s.pool.QueryRow(ctx, `
-		SELECT p.id, p.quote_id, p.user_id, o.vendor_id, p.provider_ref,
+		SELECT p.id, p.quote_id, p.user_id, o.vendor_id, p.provider, coalesce(p.provider_ref, ''),
 		       p.amount_minor, q.total_minor, p.currency
 		  FROM payments p
 		  JOIN orders o ON o.id = p.order_id
@@ -324,7 +330,7 @@ func (s *Service) loadAuthorization(ctx context.Context, orderID uuid.UUID) (aut
 		   AND p.status = 'succeeded'
 		 ORDER BY p.created_at DESC
 		 LIMIT 1`, orderID).
-		Scan(&a.PaymentID, &a.QuoteID, &a.UserID, &a.VendorID, &a.ProviderRef,
+		Scan(&a.PaymentID, &a.QuoteID, &a.UserID, &a.VendorID, &a.Provider, &a.ProviderRef,
 			&a.AuthorizedMinor, &a.QuoteTotalMinor, &a.Currency)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return a, fmt.Errorf("%w for order %s", ErrNothingToCapture, orderID)

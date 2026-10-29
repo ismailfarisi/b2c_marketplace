@@ -45,6 +45,8 @@ type Handlers struct {
 	Meals         *MealsHandlers
 	Addresses     *AddressHandlers
 	Rotations     *RotationHandlers
+	// Company is office lunch accounts. Nil-safe like the rest.
+	Company *CompanyHandlers
 
 	// Vehicles and Chat are the Phase 6 classifieds surface. Nil-safe on the
 	// same principle as everything above, and worth stating for this one in

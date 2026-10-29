@@ -17,6 +17,7 @@ import SwiftUI
 /// whose binding constraint is supply, and the middle slot is the one a thumb
 /// reaches without looking.
 enum Destination: String, CaseIterable {
+    case meals
     case feed
     case search
     case sell
@@ -25,6 +26,7 @@ enum Destination: String, CaseIterable {
 
     var labelKey: String {
         switch self {
+        case .meals: return "nav_meals"
         case .feed: return "nav_feed"
         case .search: return "nav_search"
         case .sell: return "nav_sell"

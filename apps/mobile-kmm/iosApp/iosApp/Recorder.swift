@@ -279,11 +279,11 @@ struct ViewfinderView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
-        view.layer.session = session
+        view.previewLayer.session = session
         // Fill and crop, matching the player. A preview that letterboxes shows
         // the seller a different frame from the one they are recording, which
         // they only discover after publishing.
-        view.layer.videoGravity = .resizeAspectFill
+        view.previewLayer.videoGravity = .resizeAspectFill
         return view
     }
 
@@ -292,6 +292,6 @@ struct ViewfinderView: UIViewRepresentable {
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         // swiftlint:disable:next force_cast
-        var layer: AVCaptureVideoPreviewLayer { super.layer as! AVCaptureVideoPreviewLayer }
+        var previewLayer: AVCaptureVideoPreviewLayer { super.layer as! AVCaptureVideoPreviewLayer }
     }
 }

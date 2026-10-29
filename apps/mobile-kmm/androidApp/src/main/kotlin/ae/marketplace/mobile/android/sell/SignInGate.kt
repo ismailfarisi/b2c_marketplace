@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.sell
 
+import androidx.annotation.StringRes
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.identity.SignInProblem
 import ae.marketplace.mobile.identity.SignInViewModel
@@ -70,6 +71,8 @@ fun SignInGate(
     viewModel: SignInViewModel,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    @StringRes title: Int = R.string.signin_title,
+    @StringRes why: Int = R.string.signin_why,
 ) {
     val state by viewModel.state.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -118,14 +121,14 @@ fun SignInGate(
                 .padding(bottom = 24.dp),
         )
         Text(
-            text = stringResource(R.string.signin_title),
+            text = stringResource(title),
             color = Color.White,
             fontSize = 21.sp,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
             text = if (onCode) stringResource(R.string.signin_sent_to, state.phone.trim())
-            else stringResource(R.string.signin_why),
+            else stringResource(why),
             color = Color.White.copy(alpha = 0.55f),
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 8.dp, bottom = 26.dp),

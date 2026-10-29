@@ -266,3 +266,32 @@ func PostSubscriptionCancelled(ctx context.Context, tx pgx.Tx, c SubscriptionCre
 		},
 	})
 }
+
+// PostCompanySubscriptionCancelled returns the unearned remainder of an office
+// lunch cycle to the company that paid for it. The company settles by
+// statement, so the credit reduces what the platform is owed rather than
+// landing in the employee's wallet.
+func PostCompanySubscriptionCancelled(ctx context.Context, tx pgx.Tx, c SubscriptionCredit) (uuid.UUID, error) {
+	if c.AmountMinor <= 0 {
+		return uuid.Nil, fmt.Errorf("ledger: cancellation refund must be positive, got %d", c.AmountMinor)
+	}
+	return Post(ctx, tx, Journal{
+		EventType:     "subscription_cancelled",
+		ReferenceType: "subscription_cycle",
+		ReferenceID:   c.CycleID,
+		Description:   fmt.Sprintf("Unearned remainder credited to the company on cancelling %s", c.SubscriptionID),
+		Currency:      c.Currency,
+		Postings: []Posting{
+			{
+				Account:     AccountRef{Type: DeferredRevenue, OwnerType: OwnerPlatform, Currency: c.Currency},
+				Direction:   Debit,
+				AmountMinor: c.AmountMinor,
+			},
+			{
+				Account:     AccountRef{Type: GatewayReceivable, OwnerType: OwnerPlatform, Currency: c.Currency},
+				Direction:   Credit,
+				AmountMinor: c.AmountMinor,
+			},
+		},
+	})
+}

@@ -81,6 +81,10 @@ type SubscribeInput struct {
 	// renewedFrom links a one-tap renewal to the subscription it renews.
 	renewedFrom uuid.NullUUID
 
+	// CompanyID marks an office lunch paid by the employee's company. The
+	// caller has already checked the company's policy; this only records it.
+	CompanyID uuid.NullUUID
+
 	// Promo is an optional code or public offer to apply to the first cycle.
 	Promo promo.Ref
 
@@ -175,6 +179,7 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 			ID: subID, UserID: in.UserID, Plan: plan, TierID: in.TierID,
 			AddressID: in.AddressID, Start: start, End: endDate,
 			RenewalMode: in.RenewalMode, RenewedFrom: in.renewedFrom,
+			CompanyID: in.CompanyID,
 		}); err != nil {
 			return err
 		}
@@ -758,12 +763,30 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 		if err != nil {
 			return err
 		}
+		var companyID *uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT company_id FROM subscriptions WHERE id = $1`, subID).
+			Scan(&companyID); err != nil {
+			return fmt.Errorf("subscriptions: cancel load company: %w", err)
+		}
 		for _, c := range paid {
 			if unearned := c.AmountMinor - c.RecognisedMinor; unearned > 0 {
-				if _, err := ledger.PostSubscriptionCancelled(ctx, tx, ledger.SubscriptionCredit{
+				credit := ledger.SubscriptionCredit{
 					SubscriptionID: subID, CycleID: c.ID, UserID: userID,
 					Currency: c.Currency, AmountMinor: unearned,
-				}); err != nil {
+				}
+				if companyID != nil {
+					if _, err := ledger.PostCompanySubscriptionCancelled(ctx, tx, credit); err != nil {
+						return err
+					}
+					if _, err := tx.Exec(ctx, `
+						INSERT INTO company_charges
+						    (company_id, kind, subscription_id, cycle_id, user_id, amount_minor, currency)
+						VALUES ($1, 'credit', $2, $3, $4, $5, $6)
+						ON CONFLICT DO NOTHING`,
+						*companyID, subID, c.ID, userID, -unearned, c.Currency); err != nil {
+						return fmt.Errorf("subscriptions: credit company: %w", err)
+					}
+				} else if _, err := ledger.PostSubscriptionCancelled(ctx, tx, credit); err != nil {
 					return err
 				}
 				if _, err := tx.Exec(ctx,

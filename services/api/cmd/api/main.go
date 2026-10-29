@@ -7,6 +7,7 @@
 package main
 
 import (
+	"github.com/marketplace/api/internal/modules/company"
 	// Embedded tzdata — see the note in cmd/worker.
 	_ "time/tzdata"
 
@@ -206,6 +207,8 @@ func run() error {
 	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc, Promos: promoSvc, Reviews: reviewsSvc}
 	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}
 	handlers.Rotations = &api.RotationHandlers{Service: handlers.Subscriptions.Service, Payments: paymentsSvc}
+	companySvc := company.NewService(pool, handlers.Subscriptions.Service, paymentsSvc)
+	handlers.Company = &api.CompanyHandlers{Company: companySvc}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
 	handlers.Console = &api.ConsoleHandlers{
 		Console: consoleSvc,
@@ -240,6 +243,7 @@ func run() error {
 		Merch:         merchSvc,
 		Promos:        promoSvc,
 		Reviews:       reviewsSvc,
+		Companies_:    companySvc,
 		Act: api.Actions{
 			Payments: paymentsSvc,
 			Ordering: orderingSvc,

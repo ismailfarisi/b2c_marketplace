@@ -1979,3 +1979,12 @@ a.ms-offer:focus-visible {
   border-radius: var(--ms-radius); overflow-wrap: anywhere;
 }
 .ms-voucher-off { opacity: 0.6; }
+
+/* Office lunches */
+.ms-biz { display: grid; gap: 1.25rem; padding-block: 1.5rem; }
+.ms-biz-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.ms-panel { border: 1px solid var(--ms-line); border-radius: var(--ms-radius); padding: 1.25rem; background: #fff; display: grid; gap: .75rem; align-content: start; min-inline-size: 0; }
+.ms-panel h2 { margin: 0; }
+.ms-biz-form { max-inline-size: 44rem; }
+.ms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.ms-list li { padding-block: .5rem; border-block-end: 1px solid var(--ms-line); overflow-wrap: anywhere; }

@@ -107,6 +107,18 @@ func (s *Service) buildFromOrder(ctx context.Context, tx pgx.Tx, orderID uuid.UU
 		return doc, uuid.Nil, nil, fmt.Errorf("invoicing: load order: %w", err)
 	}
 
+	// An office lunch is bought by the company, so the company is the buyer
+	// of record and its TRN makes this a full tax invoice.
+	var companyName, companyTRN string
+	if err := tx.QueryRow(ctx, `
+		SELECT c.legal_name, coalesce(c.trn, '')
+		  FROM company_charges ch JOIN companies c ON c.id = ch.company_id
+		 WHERE ch.order_id = $1 AND ch.kind = 'charge'`, orderID).Scan(&companyName, &companyTRN); err == nil {
+		doc.Buyer.Name, doc.Buyer.TRN = companyName, companyTRN
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return doc, uuid.Nil, nil, fmt.Errorf("invoicing: load company buyer: %w", err)
+	}
+
 	var supplierVendor *uuid.UUID
 	if s.supplierIsVendor {
 		supplierVendor = &vendorID

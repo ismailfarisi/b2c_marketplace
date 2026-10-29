@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
  * supply, and the middle slot is the one a thumb reaches without looking.
  */
 enum class Destination {
+    Meals,
     Feed,
     Search,
     Sell,
@@ -138,6 +139,7 @@ private fun NavItem(label: String, active: Boolean, onClick: () -> Unit) {
 }
 
 private fun Destination.labelRes(): Int = when (this) {
+    Destination.Meals -> R.string.nav_meals
     Destination.Feed -> R.string.nav_feed
     Destination.Search -> R.string.nav_search
     Destination.Sell -> R.string.nav_sell

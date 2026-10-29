@@ -84,7 +84,7 @@ struct FeedScreen: View {
             // The API requires lat/lng — "a feed without a location is a
             // different product" — so a fixed point is more honest than a silent
             // nationwide feed.
-            viewModel.start(lat: 25.0805, lng: 55.1403, categoryId: nil)
+            viewModel.start(lat: 25.0805, lng: 55.1403, categoryId: nil, locationLabel: "")
 
             // The same StateFlow Compose collects. Nothing about paging, error
             // handling, the exhausted state or clock skew is reimplemented here.
@@ -213,7 +213,7 @@ struct FeedEmptyStateView: View {
     }
 }
 
-private struct ReelPage: View {
+struct ReelPage: View {
     let item: FeedItem
     let skewMillis: Int64
     let viewModel: FeedViewModel

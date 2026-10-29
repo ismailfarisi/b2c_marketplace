@@ -67,6 +67,10 @@ const COPY = {
       `Your next cycle is billed 3 days before ${d} at the plan's current price. Pay it with one tap and your meals continue.`,
     autoOff: (d: string) =>
       `This subscription ends after ${d}. Turn on automatic renewal or renew below to keep your meals coming.`,
+    companyOn: (c: string, d: string) =>
+      `${c} pays for your next cycle, which starts after ${d}. Your meals continue automatically.`,
+    companyOff: (c: string, d: string) =>
+      `This office lunch paid by ${c} ends after ${d}. Turn on automatic renewal to keep it going.`,
     renew: "Renew with this kitchen",
     continueTrial: "Continue with this kitchen",
     renewNote:
@@ -126,6 +130,10 @@ const COPY = {
       `تُصدر فاتورة دورتك التالية قبل ${d} بثلاثة أيام بالسعر الحالي للخطة. ادفعها بلمسة واحدة وتستمر وجباتك.`,
     autoOff: (d: string) =>
       `ينتهي هذا الاشتراك بعد ${d}. فعّل التجديد التلقائي أو جدّد أدناه لتستمر وجباتك.`,
+    companyOn: (c: string, d: string) =>
+      `تدفع ${c} دورتك التالية التي تبدأ بعد ${d}. تستمر وجباتك تلقائيًا.`,
+    companyOff: (c: string, d: string) =>
+      `ينتهي غداء المكتب المدفوع من ${c} بعد ${d}. فعّل التجديد التلقائي ليستمر.`,
     renew: "جدّد مع هذا المطبخ",
     continueTrial: "استمر مع هذا المطبخ",
     renewNote: "نفس الخطة والعنوان وأيام التوصيل، بالسعر الحالي للخطة.",
@@ -400,9 +408,13 @@ function Renewal({
               </label>
               {paidEnd && (
                 <p className="ms-sub">
-                  {s.renewal_mode === "auto"
-                    ? t.autoOn(formatDay(locale, paidEnd))
-                    : t.autoOff(formatDay(locale, paidEnd))}
+                  {s.company_name
+                    ? s.renewal_mode === "auto"
+                      ? t.companyOn(s.company_name, formatDay(locale, paidEnd))
+                      : t.companyOff(s.company_name, formatDay(locale, paidEnd))
+                    : s.renewal_mode === "auto"
+                      ? t.autoOn(formatDay(locale, paidEnd))
+                      : t.autoOff(formatDay(locale, paidEnd))}
                 </p>
               )}
             </>

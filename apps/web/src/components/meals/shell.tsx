@@ -15,6 +15,7 @@ const COPY = {
     other: "العربية",
     home: "Kitchens",
     mine: "My subscriptions",
+    business: "Office lunches",
     signIn: "Sign in",
     signOut: "Sign out",
   },
@@ -24,6 +25,7 @@ const COPY = {
     other: "English",
     home: "المطابخ",
     mine: "اشتراكاتي",
+    business: "غداء المكاتب",
     signIn: "تسجيل الدخول",
     signOut: "تسجيل الخروج",
   },
@@ -152,6 +154,13 @@ export function CustomerShell({
           </Link>
           <Link href={`/${locale}/feed`} className="ms-nav-wide">
             {t.feed}
+          </Link>
+          <Link
+            href={`/${locale}/business`}
+            className="ms-nav-wide"
+            aria-current={here(`/${locale}/business`)}
+          >
+            {t.business}
           </Link>
           <Link
             href={`/${locale}/subscriptions`}
