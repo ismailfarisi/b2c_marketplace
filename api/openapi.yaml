@@ -569,6 +569,32 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ------------------------------------------------------------------ feed --
+  /meals/dishes/tomorrow:
+    get:
+      tags: [meals]
+      operationId: nextDayMealDishes
+      summary: Default dishes of the next delivery day near the customer
+      description: |
+        Tomorrow (Asia/Dubai), or the first later day within a week that has
+        dishes, from kitchens delivering to `lat`/`lng`. Only slots a live plan
+        delivers that weekday.
+      security: []
+      parameters:
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+        - { name: slot, in: query, schema: { $ref: "#/components/schemas/MealSlot" } }
+      responses:
+        "200":
+          description: Dishes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, weekday, items]
+                properties:
+                  date: { type: string, format: date }
+                  weekday: { type: integer, description: "0 = Sunday" }
+                  items: { type: array, items: { $ref: "#/components/schemas/DayDish" } }
   /meals/kitchens:
     get:
       tags: [meals]
@@ -6807,6 +6833,7 @@ components:
             title_ar: { type: string }
             collection_id: { type: string, format: uuid }
             banner_ids: { type: array, items: { type: string, format: uuid } }
+            cuisine_images: { type: object, additionalProperties: { type: string }, description: "Cuisine strip only: https photo per lower-case cuisine." }
     MerchVersion:
       type: object
       required: [id, version_number, status, sections]
@@ -6841,6 +6868,30 @@ components:
                       properties:
                         cuisine: { type: string }
                         kitchens: { type: integer }
+                        image_url: { type: [string, "null"], description: "Staff-set photo, else a dish photo or cover of a kitchen cooking it." }
+    DishThumb:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        image_url: { type: [string, "null"] }
+    DayDish:
+      type: object
+      required: [branch_id, kitchen_name, name, slot, has_alternative, from_meal_price_minor, currency, rating_count]
+      properties:
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        image_url: { type: [string, "null"] }
+        slot: { $ref: "#/components/schemas/MealSlot" }
+        has_alternative: { type: boolean }
+        from_meal_price_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        rating: { type: [number, "null"] }
+        rating_count: { type: integer }
     PublicKitchen:
       type: object
       required: [branch_id, vendor_id, name, vendor_name, cuisines, dietary_tags, rating_count, currency, meal_slots, plans, from_price_minor]
@@ -6868,6 +6919,10 @@ components:
           type: [integer, "null"]
           format: int64
           description: Cheapest weekly price inside a 4-kitchen rotation; null when not in the rotation.
+        week_dishes:
+          type: array
+          description: Up to four default dishes from this week's menu, photographed ones first.
+          items: { $ref: "#/components/schemas/DishThumb" }
     PublicKitchenDetail:
       allOf:
         - $ref: "#/components/schemas/PublicKitchen"
@@ -6888,6 +6943,10 @@ components:
             plan_list:
               type: array
               items: { $ref: "#/components/schemas/KitchenPlan" }
+            popular_plan_id:
+              type: [string, "null"]
+              format: uuid
+              description: Plan with the most active subscribers, when more than one plan is on sale.
     KitchenOverview:
       type: object
       properties:

@@ -18,20 +18,29 @@ export function KitchenCover({
   id,
   name,
   src,
+  fallback,
   caption,
   className = "",
 }: {
   id: string;
   name: string;
   src: string | null;
+  /** Tried when `src` is missing or fails to load, e.g. a dish photo. */
+  fallback?: string | null | undefined;
   caption?: string;
   className?: string;
 }) {
-  const [broken, setBroken] = useState(false);
-  if (src && !broken) {
+  const [failed, setFailed] = useState(0);
+  const shown = [src, fallback].filter((u): u is string => !!u)[failed];
+  if (shown) {
     return (
       <div className={`ms-cover ${className}`} aria-hidden>
-        <img src={src} alt="" onError={() => setBroken(true)} />
+        <img
+          key={shown}
+          src={shown}
+          alt=""
+          onError={() => setFailed((n) => n + 1)}
+        />
       </div>
     );
   }

@@ -224,30 +224,75 @@ button.ghost {
  * rebrand is this block and nothing else.
  */
 .ms {
-  --ms-paper: #faf7f2;
-  --ms-ink: #1f1b16;
-  --ms-muted: #6b6258;
-  --ms-line: #e6ded3;
-  --ms-accent: #b4532a;
+  --ms-paper: #fff8f0;
+  --ms-surface: #ffffff;
+  --ms-ink: #1e1410;
+  --ms-muted: #76675b;
+  --ms-line: #f0e2d2;
+  --ms-accent: #d9441c;
+  --ms-accent-deep: #a8300f;
   --ms-accent-ink: #ffffff;
-  --ms-ok: #2f7a4b;
+  --ms-saffron: #f6b21b;
+  --ms-saffron-soft: #fff1cc;
+  --ms-saffron-ink: #7a5200;
+  --ms-ok: #2e7d4f;
+  --ms-ok-soft: #e3f2e8;
   --ms-bad: #b23b2e;
-  --ms-tag: #f1ebe2;
-  --ms-radius: 0.75rem;
+  --ms-tag: #fbeee2;
+  --ms-blush: #fde6d8;
+  --ms-accent-soft: #fde6d8;
+  --ms-char: #22160f;
+  --ms-char-ink: #fff8f0;
+  --ms-cover-1: #fde0cf;
+  --ms-cover-1-ink: #a8300f;
+  --ms-cover-2: #dcefe2;
+  --ms-cover-2-ink: #2e5e3f;
+  --ms-cover-3: #ffe9b0;
+  --ms-cover-3-ink: #7a5200;
+  --ms-cover-4: #f9d3c4;
+  --ms-cover-4-ink: #7d2e22;
+  --ms-char-muted: #d9c8bb;
+  --ms-radius: 1rem;
+  --ms-radius-lg: 1.5rem;
+  --ms-shadow: 0 1px 2px rgb(30 20 16 / 0.06), 0 12px 32px rgb(30 20 16 / 0.08);
+  --ms-shadow-lift: 0 2px 4px rgb(30 20 16 / 0.08), 0 20px 44px rgb(30 20 16 / 0.14);
+  --ms-font-display: var(--font-display), var(--font-arabic), system-ui, sans-serif;
+  --ms-font-body: var(--font-body), var(--font-arabic), system-ui, sans-serif;
   background: var(--ms-paper);
   color: var(--ms-ink);
+  font-family: var(--ms-font-body);
   min-block-size: 100vh;
+}
+.ms:lang(ar) {
+  --ms-font-display: var(--font-arabic), system-ui, sans-serif;
+  --ms-font-body: var(--font-arabic), system-ui, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   .ms {
-    --ms-paper: #17140f;
-    --ms-ink: #f3ede4;
-    --ms-muted: #a99f92;
-    --ms-line: #332d25;
-    --ms-tag: #26211a;
-    --ms-accent: #e07a4b;
-    --ms-accent-ink: #17140f;
+    --ms-paper: #17110d;
+    --ms-surface: #221a14;
+    --ms-ink: #f6ece2;
+    --ms-muted: #b3a394;
+    --ms-line: #3a2e25;
+    --ms-tag: #2c221b;
+    --ms-blush: #3a2318;
+    --ms-accent-soft: #3a2318;
+    --ms-accent: #f0643a;
+    --ms-accent-deep: #ff8a63;
+    --ms-saffron-soft: #3b2e10;
+    --ms-saffron-ink: #f8cf6a;
+    --ms-ok: #6fcf97;
+    --ms-ok-soft: #173525;
+    --ms-char: #0e0a07;
+    --ms-cover-1: #3a2318;
+    --ms-cover-1-ink: #ffb79c;
+    --ms-cover-2: #173525;
+    --ms-cover-2-ink: #9fdcb5;
+    --ms-cover-3: #3b2e10;
+    --ms-cover-3-ink: #f8cf6a;
+    --ms-cover-4: #3d1f18;
+    --ms-cover-4-ink: #f4a593;
   }
 }
 
@@ -1361,21 +1406,7 @@ details.ms-danger[open] > summary {
 
 /* Visual layer: display type, drawn covers, warmer surfaces. */
 .ms {
-  --ms-font-display:
-    ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia,
-    "Noto Naskh Arabic", serif;
-  --ms-accent-deep: #8a3b1b;
-  --ms-accent-soft: #f6e3d6;
-  --ms-surface: #fffdf9;
-  --ms-shadow: 0 1px 2px rgb(31 27 22 / 0.06), 0 8px 24px rgb(31 27 22 / 0.06);
-  --ms-cover-1: #e9c9a8;
-  --ms-cover-1-ink: #7a3e17;
-  --ms-cover-2: #cfdcc0;
-  --ms-cover-2-ink: #3d5a2a;
-  --ms-cover-3: #f0d48f;
-  --ms-cover-3-ink: #6e4e0c;
-  --ms-cover-4: #e7bcb0;
-  --ms-cover-4-ink: #7d2e22;
+  color: inherit;
 }
 .ms h1,
 .ms-intro h1,
@@ -1988,3 +2019,920 @@ a.ms-offer:focus-visible {
 .ms-biz-form { max-inline-size: 44rem; }
 .ms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
 .ms-list li { padding-block: .5rem; border-block-end: 1px solid var(--ms-line); overflow-wrap: anywhere; }
+
+/*
+ * Meals: food-led layer. Big photos, bold upright display type, chilli /
+ * saffron / leaf on cream. Every colour is a token from the .ms block.
+ */
+html,
+body {
+  overflow-x: clip;
+}
+.ms h1,
+.ms h2,
+.ms h3 {
+  font-family: var(--ms-font-display);
+  font-style: normal;
+  letter-spacing: -0.02em;
+}
+.ms h1 {
+  font-weight: 800;
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  line-height: 1.03;
+  letter-spacing: -0.035em;
+}
+.ms h2 {
+  font-weight: 700;
+  font-size: clamp(1.4rem, 2.6vw, 1.75rem);
+}
+.ms :lang(ar) h1,
+.ms:lang(ar) h1,
+.ms:lang(ar) h2 {
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+/* header */
+.ms-bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--ms-paper) 90%, transparent);
+  backdrop-filter: blur(10px);
+  border-block-end: 1px solid var(--ms-line);
+  min-block-size: 4.25rem;
+  gap: 1rem;
+}
+.ms-brand {
+  font: 800 1.5rem/1 var(--ms-font-display);
+  color: var(--ms-accent);
+  letter-spacing: -0.02em;
+}
+.ms-brand::after {
+  content: ".";
+  color: var(--ms-saffron);
+}
+.ms-nav {
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.ms-nav a[aria-current="page"] {
+  color: var(--ms-ink);
+  box-shadow: inset 0 -2px 0 var(--ms-accent);
+}
+.ms-nav > a:last-child,
+.ms-nav > button:last-child {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: var(--ms-ink);
+  color: var(--ms-paper);
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ms-main {
+  max-inline-size: 78rem;
+  padding-block-start: 1.25rem;
+}
+
+/* buttons */
+.ms-btn,
+.ms .ms-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.4rem;
+  border-radius: 999px;
+  background: var(--ms-accent);
+  color: var(--ms-accent-ink);
+  font-weight: 700;
+  text-decoration: none;
+  border: 0;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--ms-accent) 30%, transparent);
+  transition: transform 0.15s, background 0.15s;
+}
+.ms-btn:hover,
+.ms .ms-cta:hover {
+  background: var(--ms-accent-deep);
+  transform: translateY(-1px);
+}
+.ms-btn-ghost {
+  background: transparent;
+  color: var(--ms-ink);
+  border: 1.5px solid var(--ms-ink);
+  box-shadow: none;
+}
+.ms-btn-ghost:hover {
+  background: var(--ms-ink);
+  color: var(--ms-paper);
+}
+.ms-pill-eyebrow,
+.ms .ms-eyebrow {
+  display: inline-flex;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--ms-saffron-soft);
+  color: var(--ms-saffron-ink);
+  font-weight: 700;
+  font-size: 0.8rem;
+  margin: 0;
+}
+.ms-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--ms-surface);
+  color: var(--ms-ink);
+}
+.ms-chip-hot {
+  background: var(--ms-accent);
+  color: var(--ms-accent-ink);
+}
+
+/* home hero */
+.ms-hh {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: center;
+  padding-block: 1.5rem 1rem;
+}
+.ms-hh:not(:has(.ms-collage)) {
+  grid-template-columns: 1fr;
+}
+.ms-hh h1 {
+  margin-block: 1rem;
+}
+.ms-hh h1 em {
+  font-style: normal;
+  color: var(--ms-accent);
+}
+.ms-hh-lede {
+  font-size: 1.1rem;
+  color: var(--ms-muted);
+  max-inline-size: 32em;
+}
+.ms-hh-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 1.5rem;
+}
+.ms-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  list-style: none;
+  padding: 0;
+  margin-block: 1.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.ms-proof li::before {
+  content: "";
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: var(--ms-ok);
+  margin-inline-end: 0.45rem;
+  vertical-align: middle;
+}
+.ms-collage {
+  position: relative;
+  aspect-ratio: 1 / 0.9;
+}
+.ms-collage img {
+  position: absolute;
+  object-fit: cover;
+  border-radius: var(--ms-radius-lg);
+  box-shadow: var(--ms-shadow);
+}
+.ms-collage .ms-c1 {
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 78%;
+  block-size: 82%;
+}
+.ms-collage-1 .ms-c1 {
+  inline-size: 100%;
+  block-size: 100%;
+}
+.ms-collage .ms-c2 {
+  inset-block-start: 8%;
+  inset-inline-end: 0;
+  inline-size: 44%;
+  block-size: 44%;
+  border: 6px solid var(--ms-paper);
+}
+.ms-collage .ms-c3 {
+  inset-block-end: 0;
+  inset-inline-end: 6%;
+  inline-size: 40%;
+  aspect-ratio: 1;
+  block-size: auto;
+  border-radius: 50%;
+  border: 6px solid var(--ms-paper);
+}
+
+/* shelves */
+.ms-shelf {
+  margin-block: 2rem;
+}
+.ms-shelf-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 1rem;
+}
+.ms-shelf-head h2 {
+  margin: 0;
+}
+.ms-shelf-head p {
+  margin: 0.25rem 0 0;
+  color: var(--ms-muted);
+}
+.ms .ms-link {
+  color: var(--ms-accent);
+  font-weight: 700;
+}
+
+/* dish photos */
+.ms-dish-ph {
+  display: block;
+  inline-size: 100%;
+  object-fit: cover;
+  background: var(--ms-tag);
+}
+.ms-dish-drawn {
+  display: grid;
+  place-items: center;
+  font: 800 1.6rem var(--ms-font-display);
+  color: var(--ms-ink);
+}
+
+/* dish rail */
+.ms-dish-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(13.5rem, 15rem);
+  gap: 1rem;
+  overflow-x: auto;
+  list-style: none;
+  padding: 0.25rem 0.25rem 0.75rem;
+  margin: 0;
+  scroll-snap-type: x mandatory;
+}
+.ms-dish-rail > li {
+  scroll-snap-align: start;
+}
+.ms-dish-card {
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+  background: var(--ms-surface);
+  border-radius: var(--ms-radius);
+  overflow: hidden;
+  box-shadow: var(--ms-shadow);
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.ms-dish-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--ms-shadow-lift);
+}
+.ms-dish-card-ph {
+  position: relative;
+  display: block;
+}
+.ms-dish-card-ph .ms-dish-ph {
+  aspect-ratio: 1 / 0.78;
+}
+.ms-dish-card-ph .ms-chip {
+  position: absolute;
+  inset-block-start: 0.6rem;
+  inset-inline-start: 0.6rem;
+}
+.ms-dish-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem 0.9rem;
+}
+.ms-dish-card-body b {
+  font-size: 1rem;
+}
+.ms-dish-card-body small {
+  color: var(--ms-muted);
+}
+.ms-dish-card-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-block-start: 0.4rem;
+  font-size: 0.85rem;
+}
+.ms-dish-card-star {
+  font-weight: 700;
+  color: var(--ms-saffron-ink);
+}
+
+/* cuisine circles */
+.ms-circles {
+  display: flex;
+  gap: 1.1rem;
+  overflow-x: auto;
+  padding: 0.25rem 0.25rem 0.5rem;
+}
+.ms-circles button {
+  flex: 0 0 6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: inherit;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+.ms-circles small {
+  color: var(--ms-muted);
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+.ms-circle.ms-dish-ph {
+  inline-size: 5.5rem;
+  block-size: 5.5rem;
+  border-radius: 50%;
+  border: 3px solid var(--ms-surface);
+  box-shadow: var(--ms-shadow);
+  margin-block-end: 0.35rem;
+  transition: transform 0.2s;
+}
+.ms-circles button:hover .ms-circle {
+  transform: scale(1.05);
+}
+.ms-circles button.on .ms-circle {
+  outline: 3px solid var(--ms-accent);
+  outline-offset: 2px;
+}
+
+/* kitchen cards */
+.ms .ms-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 1.4rem;
+}
+.ms .ms-card.ms-kc {
+  background: var(--ms-surface);
+  border: 0;
+  border-radius: var(--ms-radius-lg);
+  box-shadow: var(--ms-shadow);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.ms .ms-card.ms-kc:hover,
+.ms .ms-card.ms-kc:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: var(--ms-shadow-lift);
+}
+.ms-kc-ph {
+  position: relative;
+}
+.ms-kc-ph .ms-cover {
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
+  margin: 0;
+}
+.ms-kc-ph .ms-cover img {
+  transition: transform 0.4s;
+}
+.ms-kc:hover .ms-kc-ph .ms-cover img {
+  transform: scale(1.04);
+}
+.ms-kc-price {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline-end: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: var(--ms-surface);
+  font-size: 0.8rem;
+  box-shadow: var(--ms-shadow);
+}
+.ms-kc-price strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+.ms-kc-badges {
+  position: absolute;
+  inset-block-end: 0.75rem;
+  inset-inline-start: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.ms-kc-badges > * {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--ms-surface);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin: 0;
+}
+.ms-kc-badges .ms-rating {
+  background: var(--ms-saffron);
+  color: #1e1410;
+}
+.ms-kc-badges .ms-rating .ms-rating-count {
+  color: inherit;
+  opacity: 0.75;
+}
+.ms-kc-badges .ms-safety {
+  background: var(--ms-ok-soft);
+  color: var(--ms-ok);
+}
+.ms-kc .ms-card-body {
+  padding: 0.9rem 1rem 1rem;
+  gap: 0.35rem;
+}
+.ms-kc .ms-card-head h2 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+.ms-kc-cu {
+  margin: 0;
+  color: var(--ms-muted);
+  font-size: 0.88rem;
+  text-transform: capitalize;
+}
+.ms-kc .ms-blurb {
+  -webkit-line-clamp: 2;
+  font-size: 0.9rem;
+}
+.ms-week {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-block-start: 0.4rem;
+  min-inline-size: 0;
+}
+.ms-week .ms-dish-ph {
+  flex: 0 0 2.5rem;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: 0.65rem;
+  font-size: 1rem;
+}
+.ms-week span:last-child {
+  font-size: 0.8rem;
+  color: var(--ms-muted);
+  margin-inline-start: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-kc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-start: 0.6rem;
+  padding-block-start: 0.7rem;
+  border-block-start: 1px dashed var(--ms-line);
+  font-size: 0.82rem;
+}
+.ms-kc-foot .ms-tags {
+  margin: 0;
+}
+.ms .ms-tag {
+  background: var(--ms-tag);
+  border-radius: 999px;
+}
+.ms .ms-tag-slot {
+  background: var(--ms-blush);
+  color: var(--ms-accent-deep);
+}
+.ms .ms-rot-pill {
+  align-self: start;
+  background: var(--ms-saffron-soft);
+  color: var(--ms-saffron-ink);
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+/* rotation promo: dark band with plates */
+.ms .ms-promo {
+  background: var(--ms-char);
+  color: var(--ms-char-ink);
+  border-radius: 1.75rem;
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  box-shadow: var(--ms-shadow);
+}
+.ms .ms-promo h2 {
+  color: var(--ms-char-ink);
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  margin-block: 0.75rem;
+}
+.ms .ms-promo p:not(.ms-eyebrow) {
+  color: var(--ms-char-muted);
+}
+.ms-plates {
+  display: flex;
+  margin-block: 0.75rem 1rem;
+}
+.ms-plates img {
+  inline-size: clamp(4.5rem, 10vw, 6.5rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 5px solid var(--ms-char);
+  margin-inline-start: -1.4rem;
+}
+.ms-plates img:first-child {
+  margin-inline-start: 0;
+}
+
+/* filters */
+.ms .ms-filters input[type="search"] {
+  border-radius: 999px;
+  background: var(--ms-surface);
+  border: 1.5px solid var(--ms-line);
+  padding: 0.75rem 1.1rem;
+}
+.ms .ms-chips button {
+  border-radius: 999px;
+  border: 1.5px solid var(--ms-line);
+  background: var(--ms-surface);
+  font-weight: 600;
+}
+.ms .ms-chips button.on {
+  background: var(--ms-ink);
+  border-color: var(--ms-ink);
+  color: var(--ms-paper);
+}
+
+/* banners */
+.ms .ms-banner,
+.ms .ms-banner > a,
+.ms .ms-banner > div {
+  border-radius: var(--ms-radius-lg);
+}
+.ms .ms-banner:not(.ms-banner-img) {
+  background: var(--ms-accent);
+  color: var(--ms-accent-ink);
+}
+.ms .ms-banner h2 {
+  font-weight: 800;
+}
+
+/* panels, plans, forms across checkout, rotation, subscriptions, business */
+.ms .ms-plan,
+.ms .ms-panel,
+.ms .ms-sub-card,
+.ms .ms-rot-card,
+.ms .ms-summary,
+.ms .ms-biz,
+.ms .ms-invite,
+.ms .ms-review {
+  background: var(--ms-surface);
+  border-color: var(--ms-line);
+  border-radius: var(--ms-radius);
+  box-shadow: var(--ms-shadow);
+}
+.ms input:not([type="radio"]):not([type="checkbox"]),
+.ms select,
+.ms textarea {
+  border-radius: 0.75rem;
+  border: 1.5px solid var(--ms-line);
+  background: var(--ms-surface);
+}
+.ms input:focus-visible,
+.ms select:focus-visible,
+.ms textarea:focus-visible,
+.ms button:focus-visible,
+.ms a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ms-accent) 45%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 52rem) {
+  .ms-hh {
+    grid-template-columns: 1fr;
+    padding-block-start: 0.5rem;
+  }
+  .ms-collage {
+    order: -1;
+    aspect-ratio: 1 / 0.75;
+  }
+  .ms-hh-lede {
+    font-size: 1rem;
+  }
+  .ms-dish-rail {
+    grid-auto-columns: 72%;
+  }
+  .ms-bar {
+    min-block-size: 3.6rem;
+  }
+}
+@media (max-width: 22rem) {
+  .ms-hh-cta .ms-btn {
+    inline-size: 100%;
+  }
+}
+.ms .ms-promo .ms-eyebrow {
+  background: var(--ms-saffron);
+  color: #1e1410;
+}
+
+/* kitchen page */
+.ms-khero {
+  position: relative;
+  block-size: clamp(16rem, 42vw, 26rem);
+  border-radius: var(--ms-radius-lg);
+  overflow: hidden;
+  isolation: isolate;
+}
+.ms-khero .ms-khero-img,
+.ms-khero .ms-khero-img.ms-cover {
+  position: absolute;
+  inset: 0;
+  block-size: 100%;
+  aspect-ratio: auto;
+  margin: 0;
+  border-radius: 0;
+  z-index: -1;
+}
+.ms-khero .ms-khero-img img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.ms-khero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, rgb(25 12 6 / 0.88), rgb(25 12 6 / 0) 65%);
+}
+.ms-khero-copy {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  padding: clamp(1rem, 4vw, 2rem);
+  color: var(--ms-char-ink);
+}
+.ms-khero-copy h1 {
+  color: var(--ms-char-ink);
+  margin: 0.6rem 0 0.25rem;
+  font-size: clamp(1.9rem, 5vw, 3.4rem);
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
+}
+.ms-khero-sub {
+  margin: 0;
+  color: var(--ms-char-muted);
+  text-transform: capitalize;
+}
+.ms-khero-badges {
+  position: static;
+}
+.ms-kgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 23rem);
+  gap: 2rem;
+  align-items: start;
+  margin-block-start: 1.5rem;
+}
+.ms-kmain {
+  min-inline-size: 0;
+}
+.ms-klede {
+  font-size: 1.05rem;
+  margin-block-start: 0;
+}
+.ms-kgrid .ms-k-plans {
+  position: sticky;
+  inset-block-start: 5.25rem;
+  background: var(--ms-surface);
+  border-radius: var(--ms-radius-lg);
+  box-shadow: var(--ms-shadow);
+  padding: 1.35rem;
+}
+.ms-kgrid .ms-k-plans > h2 {
+  margin-block-start: 0;
+}
+.ms-kgrid .ms-plans {
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.ms-kgrid .ms-plan {
+  position: relative;
+  border: 2px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  box-shadow: none;
+  padding: 1rem;
+}
+.ms-kgrid .ms-plan.is-popular {
+  border-color: var(--ms-accent);
+  background: color-mix(in srgb, var(--ms-blush) 35%, var(--ms-surface));
+}
+.ms-pop {
+  position: absolute;
+  inset-block-start: -0.75rem;
+  inset-inline-end: 0.9rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: var(--ms-saffron);
+  color: #1e1410;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.ms-kgrid .ms-plan-price strong {
+  font: 800 1.75rem var(--ms-font-display);
+  letter-spacing: -0.02em;
+}
+.ms-kgrid .ms-plan .ms-cta {
+  inline-size: 100%;
+}
+.ms-k-menu,
+.ms-kmain .ms-k-reviews {
+  margin-block-start: 2rem;
+}
+.ms-days {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.25rem 0.1rem 0.5rem;
+  margin-block: 1rem;
+}
+.ms-day {
+  flex: 0 0 auto;
+  min-inline-size: 4.5rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1.5px solid var(--ms-line);
+  background: var(--ms-surface);
+  color: var(--ms-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+.ms-day small {
+  font-weight: 500;
+  font-size: 0.7rem;
+  color: var(--ms-muted);
+}
+.ms-day.on {
+  background: var(--ms-accent);
+  border-color: var(--ms-accent);
+  color: var(--ms-accent-ink);
+}
+.ms-day.on small {
+  color: inherit;
+  opacity: 0.8;
+}
+.ms-mslot h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.ms-mcards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.ms-mdish {
+  background: var(--ms-surface);
+  border-radius: var(--ms-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--ms-shadow);
+}
+.ms-mdish-ph {
+  position: relative;
+  display: block;
+}
+.ms-mdish-ph .ms-dish-ph {
+  aspect-ratio: 16 / 10;
+  font-size: 2.5rem;
+}
+.ms-mdish-ph .ms-chip {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline-start: 0.75rem;
+}
+.ms-mdish-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0.8rem 1rem 1rem;
+}
+.ms-mdish-body b {
+  font: 700 1.1rem var(--ms-font-display);
+}
+.ms-mdish-body small {
+  color: var(--ms-muted);
+}
+.ms-glance-h {
+  font-size: 1.1rem;
+  margin: 1.75rem 0 0.75rem;
+}
+.ms-glance {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--ms-surface);
+  border-radius: var(--ms-radius-lg);
+  box-shadow: var(--ms-shadow);
+}
+.ms-glance li {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 1rem;
+  border-block-end: 1px solid var(--ms-line);
+}
+.ms-glance li:last-child {
+  border: 0;
+}
+.ms-glance .ms-dish-ph {
+  flex: 0 0 3.25rem;
+  inline-size: 3.25rem;
+  block-size: 3.25rem;
+  border-radius: 0.8rem;
+  font-size: 1.2rem;
+}
+.ms-glance-day {
+  flex: 0 0 2.75rem;
+  font-weight: 800;
+  color: var(--ms-accent);
+}
+.ms-glance-dish {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.ms-glance-dish small {
+  color: var(--ms-muted);
+}
+.ms-sticky {
+  display: none;
+}
+@media (max-width: 52rem) {
+  .ms-kgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ms-kgrid .ms-k-plans {
+    position: static;
+    scroll-margin-block-start: 4.5rem;
+  }
+  .ms-mcards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ms-kitchen2 {
+    padding-block-end: 5rem;
+  }
+  .ms-sticky {
+    display: flex;
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: 25;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    background: var(--ms-surface);
+    border-block-start: 1px solid var(--ms-line);
+    box-shadow: 0 -8px 24px rgb(30 20 16 / 0.08);
+  }
+  .ms-sticky b {
+    font: 800 1.05rem var(--ms-font-display);
+    min-inline-size: 0;
+  }
+  .ms-sticky .ms-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}

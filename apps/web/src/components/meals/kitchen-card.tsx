@@ -2,6 +2,7 @@ import { formatMoney } from "@marketplace/api-client";
 import Link from "next/link";
 
 import { KitchenCover } from "@/components/meals/cover";
+import { DishPhoto, dishName } from "@/components/meals/food";
 import { RatingBadge, SafetyBadge } from "@/components/meals/trust";
 import type { Banner, HomeSection, PublicKitchen } from "@/lib/meals-api";
 
@@ -27,6 +28,7 @@ export const COPY = {
     perCycle: "per cycle",
     perMeal: "a meal",
     perWeek: "a week in rotation",
+    thisWeek: "this week",
     empty: "No kitchen delivers here yet with those filters.",
     failed: "Could not load kitchens.",
     count: (n: number) => (n === 1 ? "1 kitchen" : `${n} kitchens`),
@@ -57,6 +59,7 @@ export const COPY = {
     perCycle: "لكل دورة",
     perMeal: "للوجبة",
     perWeek: "أسبوعيًا ضمن التناوب",
+    thisWeek: "هذا الأسبوع",
     empty: "لا يوجد مطبخ يوصل هنا بهذه الخيارات بعد.",
     failed: "تعذر تحميل المطابخ.",
     count: (n: number) => `${n} مطبخ`,
@@ -86,15 +89,39 @@ export function KitchenCard({
   const name = (locale === "ar" && k.name_ar) || k.name;
   const vendor = (locale === "ar" && k.vendor_name_ar) || k.vendor_name;
   const blurb = (locale === "ar" && k.description_ar) || k.description;
+  const money = (amount: number) =>
+    formatMoney({ amount, currency: k.currency }, locale);
+  const dishes = k.week_dishes ?? [];
   return (
     <li>
-      <Link className="ms-card" href={`/${locale}/kitchens/${k.branch_id}`}>
-        <KitchenCover
-          id={k.branch_id}
-          name={name}
-          src={k.cover_image_url}
-          caption={k.cuisines.slice(0, 3).join(" · ")}
-        />
+      <Link
+        className="ms-card ms-kc"
+        href={`/${locale}/kitchens/${k.branch_id}`}
+      >
+        <div className="ms-kc-ph">
+          <KitchenCover
+            id={k.branch_id}
+            name={name}
+            src={k.cover_image_url}
+            fallback={dishes.find((d) => d.image_url)?.image_url}
+            caption={k.cuisines.slice(0, 3).join(" · ")}
+          />
+          <span className="ms-kc-price">
+            <span className="ms-sub">{t.from}</span>{" "}
+            <strong>{money(k.from_meal_price_minor)}</strong>{" "}
+            <span className="ms-sub">{t.perMeal}</span>
+          </span>
+          {(k.rating_count > 0 || k.food_safety_verified) && (
+            <span className="ms-kc-badges">
+              <RatingBadge
+                rating={k.rating}
+                count={k.rating_count}
+                locale={locale}
+              />
+              {k.food_safety_verified && <SafetyBadge locale={locale} />}
+            </span>
+          )}
+        </div>
         <div className="ms-card-body">
           <div className="ms-card-head">
             <h2 dir="auto">{name}</h2>
@@ -104,61 +131,47 @@ export function KitchenCard({
               </span>
             )}
           </div>
+          {(k.cuisines.length > 0 || k.dietary_tags.length > 0) && (
+            <p className="ms-kc-cu" dir="auto">
+              {[...k.cuisines, ...k.dietary_tags].join(" · ")}
+            </p>
+          )}
           {blurb && (
             <p className="ms-blurb" dir="auto">
               {blurb}
             </p>
           )}
-          {(k.rating_count > 0 || k.food_safety_verified) && (
-            <div className="ms-trust">
-              <RatingBadge
-                rating={k.rating}
-                count={k.rating_count}
-                locale={locale}
-              />
-              {k.food_safety_verified && <SafetyBadge locale={locale} />}
+          {dishes.length > 0 && (
+            <div className="ms-week">
+              {dishes.map((d) => (
+                <DishPhoto
+                  key={d.name}
+                  name={dishName(d, locale)}
+                  src={d.image_url}
+                />
+              ))}
+              <span dir="auto">
+                {dishName(dishes[0]!, locale)} · {t.thisWeek}
+              </span>
             </div>
           )}
-          <div className="ms-tags">
-            {k.meal_slots.map((s) => (
-              <span key={s} className="ms-tag ms-tag-slot">
-                {t.slot[s] ?? s}
-              </span>
-            ))}
-            {[...k.cuisines, ...k.dietary_tags].map((c) => (
-              <span key={c} className="ms-tag">
-                {c}
-              </span>
-            ))}
-          </div>
-          <div className="ms-price">
-            <span className="ms-meal-price">
-              {t.from}{" "}
-              <strong>
-                {formatMoney(
-                  { amount: k.from_meal_price_minor, currency: k.currency },
-                  locale,
-                )}
-              </strong>{" "}
-              {t.perMeal}
+          <div className="ms-kc-foot">
+            <span className="ms-tags">
+              {k.meal_slots.map((s) => (
+                <span key={s} className="ms-tag ms-tag-slot">
+                  {t.slot[s] ?? s}
+                </span>
+              ))}
             </span>
             <span className="ms-sub">
-              {formatMoney(
-                { amount: k.from_price_minor, currency: k.currency },
-                locale,
-              )}{" "}
-              {t.perCycle}
+              {money(k.from_price_minor)} {t.perCycle}
             </span>
-            {k.rotation_week_price_minor != null && (
-              <span className="ms-rot-pill">
-                {formatMoney(
-                  { amount: k.rotation_week_price_minor, currency: k.currency },
-                  locale,
-                )}{" "}
-                {t.perWeek}
-              </span>
-            )}
           </div>
+          {k.rotation_week_price_minor != null && (
+            <span className="ms-rot-pill">
+              {money(k.rotation_week_price_minor)} {t.perWeek}
+            </span>
+          )}
         </div>
       </Link>
     </li>

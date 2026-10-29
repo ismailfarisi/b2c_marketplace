@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import {
+  Bricolage_Grotesque,
+  DM_Sans,
+  IBM_Plex_Sans_Arabic,
+} from "next/font/google";
 import type { ReactNode } from "react";
 
 import { Providers } from "@/app/providers";
@@ -8,6 +13,25 @@ export const metadata: Metadata = {
   title: "Marketplace",
   description: "Discover local food, services and vehicles",
 };
+
+const display = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["500", "700", "800"],
+  variable: "--font-display",
+  display: "swap",
+});
+const body = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
+const arabic = IBM_Plex_Sans_Arabic({
+  subsets: ["arabic"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-arabic",
+  display: "swap",
+});
 
 export function generateStaticParams() {
   return [{ locale: "en" }, { locale: "ar" }];
@@ -33,7 +57,11 @@ export default async function LocaleLayout({
   const dir = locale === "ar" ? "rtl" : "ltr";
 
   return (
-    <html lang={locale} dir={dir}>
+    <html
+      lang={locale}
+      dir={dir}
+      className={`${display.variable} ${body.variable} ${arabic.variable}`}
+    >
       <body>
         <Providers locale={locale === "ar" ? "ar" : "en"}>{children}</Providers>
       </body>

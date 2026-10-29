@@ -32,7 +32,13 @@ const COPY = {
 };
 
 /** One review per subscription, from a customer who has had a delivery. */
-export function RateKitchen({ subscriptionId, locale }: { subscriptionId: string; locale: "en" | "ar" }) {
+export function RateKitchen({
+  subscriptionId,
+  locale,
+}: {
+  subscriptionId: string;
+  locale: "en" | "ar";
+}) {
   const t = COPY[locale];
   const qc = useQueryClient();
   const q = useQuery({
@@ -52,7 +58,9 @@ export function RateKitchen({ subscriptionId, locale }: { subscriptionId: string
     mutationFn: () => writeReview(subscriptionId, { rating, comment }),
     onSuccess: async () => {
       setDone(true);
-      await qc.invalidateQueries({ queryKey: ["me", "review", subscriptionId] });
+      await qc.invalidateQueries({
+        queryKey: ["me", "review", subscriptionId],
+      });
     },
   });
   if (!q.data) return null;
@@ -72,7 +80,9 @@ export function RateKitchen({ subscriptionId, locale }: { subscriptionId: string
   return (
     <section>
       <h2>{t.title}</h2>
-      {q.data.review?.status === "hidden" && <p className="ms-bad">{t.hidden}</p>}
+      {q.data.review?.status === "hidden" && (
+        <p className="ms-bad">{t.hidden}</p>
+      )}
       <form
         className="ms-form"
         onSubmit={(e) => {
@@ -111,7 +121,11 @@ export function RateKitchen({ subscriptionId, locale }: { subscriptionId: string
           </p>
         )}
         {done && !save.isPending && <p className="ms-ok">{t.saved}</p>}
-        <button className="ms-cta" type="submit" disabled={rating === 0 || save.isPending}>
+        <button
+          className="ms-cta"
+          type="submit"
+          disabled={rating === 0 || save.isPending}
+        >
           {q.data.review ? t.update : t.save}
         </button>
       </form>

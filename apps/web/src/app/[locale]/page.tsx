@@ -4,6 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 
+import {
+  CuisineCircles,
+  DishRail,
+  FOOD_COPY,
+  HomeHero,
+} from "@/components/meals/food";
 import { useCustomerPoint } from "@/components/meals/location";
 import {
   BannerCarousel,
@@ -14,12 +20,20 @@ import {
   MERCH_COPY,
   sectionTitle,
 } from "@/components/meals/kitchen-card";
-import { CustomerShell } from "@/components/meals/shell";
+import { CustomerShell, formatDay } from "@/components/meals/shell";
 import {
   getMealKitchens,
   getMealsHome,
+  getTomorrowDishes,
   type HomeSection,
 } from "@/lib/meals-api";
+
+/** Tomorrow's date in Asia/Dubai as YYYY-MM-DD. */
+function dubaiTomorrow() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(
+    Date.now() + 86_400_000,
+  );
+}
 
 /**
  * The front door: meal kitchens that deliver to you.
@@ -68,18 +82,60 @@ export default function MealsHome({
     enabled: point != null && showList,
   });
 
+  const tomorrow = useQuery({
+    queryKey: ["meal-dishes-next", point?.lat, point?.lng],
+    queryFn: () => getTomorrowDishes(point),
+    enabled: point != null,
+  });
+  const f = FOOD_COPY[locale];
+  const seen = [
+    ...(sections ?? []).flatMap((s) => s.kitchens ?? []),
+    ...(list.data?.items ?? []),
+  ];
+  const photos = [
+    ...(tomorrow.data?.items ?? []).map((d) => ({
+      name: d.name,
+      name_ar: d.name_ar,
+      image_url: d.image_url,
+    })),
+    ...seen.flatMap((k) => k.week_dishes ?? []),
+  ].filter(
+    (p, i, all) =>
+      p.image_url && all.findIndex((x) => x.image_url === p.image_url) === i,
+  );
+
   const intro = (
-    <div className="ms-intro">
-      <h1>{t.title}</h1>
-      <p>{t.lede}</p>
+    <>
+      <HomeHero locale={locale} photos={photos} />
       {point && !precise && <p className="ms-note">{t.fallback}</p>}
-    </div>
+    </>
+  );
+
+  const next = tomorrow.data;
+  const dishRail = next && next.items.length > 0 && (
+    <DishRail
+      locale={locale}
+      items={next.items}
+      title={
+        next.date === dubaiTomorrow()
+          ? f.tomorrow
+          : f.onDay(formatDay(locale, next.date, { weekday: "long" }))
+      }
+      slotLabel={(s) => t.slot[s] ?? s}
+    />
   );
 
   const promo = (
     <aside className="ms-promo">
       <p className="ms-eyebrow">{t.promoEyebrow}</p>
       <h2>{t.promoTitle}</h2>
+      {photos.length >= 4 && (
+        <div className="ms-plates" aria-hidden>
+          {photos.slice(0, 4).map((p) => (
+            <img key={p.image_url} src={p.image_url!} alt="" />
+          ))}
+        </div>
+      )}
       <div className="ms-promo-weeks" aria-hidden>
         <span />
         <span />
@@ -173,7 +229,7 @@ export default function MealsHome({
   if (!point || home.isPending) {
     return (
       <CustomerShell locale={locale}>
-        <section className="ms-home-head ms-home-solo">{intro}</section>
+        {intro}
         <p className="ms-note">{t.locating}</p>
       </CustomerShell>
     );
@@ -182,10 +238,9 @@ export default function MealsHome({
   if (sections == null) {
     return (
       <CustomerShell locale={locale}>
-        <section className="ms-home-head">
-          {intro}
-          {promo}
-        </section>
+        {intro}
+        {dishRail}
+        <div className="ms-promo-wide">{promo}</div>
         {allKitchens}
       </CustomerShell>
     );
@@ -193,7 +248,8 @@ export default function MealsHome({
 
   return (
     <CustomerShell locale={locale}>
-      <section className="ms-home-head ms-home-solo">{intro}</section>
+      {intro}
+      {dishRail}
       {sections.map((s) => {
         switch (s.type) {
           case "banner_carousel":
@@ -214,26 +270,14 @@ export default function MealsHome({
             );
           case "cuisine_strip":
             return (
-              <section key={s.id} className="ms-shelf">
-                <div className="ms-shelf-head">
-                  <h2>
-                    {sectionTitle(s, locale) || MERCH_COPY[locale].cuisines}
-                  </h2>
-                </div>
-                <div className="ms-rail ms-cuisines">
-                  {(s.cuisines ?? []).map((c) => (
-                    <button
-                      key={c.cuisine}
-                      type="button"
-                      className={cuisine === c.cuisine ? "on" : undefined}
-                      onClick={() => pickCuisine(c.cuisine)}
-                    >
-                      <span dir="auto">{c.cuisine}</span>
-                      <small>{t.count(c.kitchens)}</small>
-                    </button>
-                  ))}
-                </div>
-              </section>
+              <CuisineCircles
+                key={s.id}
+                title={sectionTitle(s, locale) || f.cuisines}
+                items={s.cuisines ?? []}
+                active={cuisine}
+                count={t.count}
+                onPick={pickCuisine}
+              />
             );
           case "all_kitchens":
             return <div key={s.id}>{allKitchens}</div>;

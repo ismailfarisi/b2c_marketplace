@@ -3,9 +3,10 @@
 import { ApiError, formatMoney } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { use } from "react";
+import { use, useState } from "react";
 
 import { KitchenCover } from "@/components/meals/cover";
+import { DishPhoto } from "@/components/meals/food";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
 import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
@@ -43,6 +44,10 @@ const COPY = {
     rotationMeal: (m: string) => `${m} a meal`,
     rotation: "In the 4-kitchen rotation",
     choice: "Choose 1 of 2",
+    popular: "Most popular",
+    seePlans: "See plans",
+    fromMeal: (m: string) => `from ${m} a meal`,
+    glance: "The week at a glance",
     rotationWeek: "a week",
     subscribe: "Subscribe",
     allergens: "Allergens",
@@ -84,6 +89,10 @@ const COPY = {
     rotationMeal: (m: string) => `${m} للوجبة`,
     rotation: "ضمن تناوب المطابخ الأربعة",
     choice: "اختر طبقًا من اثنين",
+    popular: "الأكثر طلبًا",
+    seePlans: "عرض الخطط",
+    fromMeal: (m: string) => `من ${m} للوجبة`,
+    glance: "الأسبوع في لمحة",
     rotationWeek: "أسبوعيًا",
     subscribe: "اشترك",
     allergens: "مسببات الحساسية",
@@ -112,28 +121,45 @@ const COPY = {
 };
 type Copy = (typeof COPY)["en"];
 
-function Dish({
+/** Weekday (0 = Sunday) of tomorrow in Asia/Dubai. */
+function dubaiTomorrowWeekday() {
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+  }).format(Date.now() + 86_400_000);
+  return new Date(`${ymd}T00:00:00Z`).getUTCDay();
+}
+
+function DishCard({
   d,
+  alt,
   locale,
   t,
 }: {
   d: MenuChoice;
+  alt?: boolean;
   locale: "en" | "ar";
   t: Copy;
 }) {
+  const name = (locale === "ar" && d.name_ar) || d.name;
   return (
-    <span className="ms-dish">
-      <span dir="auto">{(locale === "ar" && d.name_ar) || d.name}</span>
-      {(d.calories != null || d.allergens.length > 0) && (
-        <small>
-          {d.calories != null && `${d.calories} ${t.kcal}`}
-          {d.calories != null && d.allergens.length > 0 && " · "}
-          {d.allergens.length > 0 && (
-            <span title={t.allergens}>{d.allergens.join(", ")}</span>
-          )}
-        </small>
-      )}
-    </span>
+    <div className="ms-mdish">
+      <span className="ms-mdish-ph">
+        <DishPhoto name={name} src={d.image_url} />
+        {alt && <span className="ms-chip ms-chip-hot">{t.or}</span>}
+      </span>
+      <span className="ms-mdish-body">
+        <b dir="auto">{name}</b>
+        {(d.calories != null || d.allergens.length > 0) && (
+          <small>
+            {d.calories != null && `${d.calories} ${t.kcal}`}
+            {d.calories != null && d.allergens.length > 0 && " · "}
+            {d.allergens.length > 0 && (
+              <span title={t.allergens}>{d.allergens.join(", ")}</span>
+            )}
+          </small>
+        )}
+      </span>
+    </div>
   );
 }
 
@@ -147,52 +173,85 @@ function Menu({
   t: Copy;
 }) {
   const slots = [...new Set(k.menu.slots.map((s) => s.slot))];
-  if (slots.length === 0) return <p className="ms-note">{t.noMenu}</p>;
   const days = [0, 1, 2, 3, 4, 5, 6].filter((d) =>
-    k.menu.slots.some((s) => s.weekday === d),
+    k.menu.slots.some((s) => s.weekday === d && s.default),
   );
+  const [picked, setPicked] = useState<number | null>(null);
+  if (slots.length === 0 || days.length === 0)
+    return <p className="ms-note">{t.noMenu}</p>;
+  const from = dubaiTomorrowWeekday();
+  const day =
+    picked ??
+    [...days].sort((a, b) => ((a - from + 7) % 7) - ((b - from + 7) % 7))[0]!;
+  const cell = (d: number, slot: string) =>
+    k.menu.slots.find((s) => s.weekday === d && s.slot === slot);
+  const dishName = (d: MenuChoice) => (locale === "ar" && d.name_ar) || d.name;
   return (
-    <div className="ms-menu">
-      {slots.map((slot) => (
-        <div key={slot} className="ms-menu-slot">
-          <h3>{t.slot[slot] ?? slot}</h3>
-          <dl>
-            {days.map((day) => {
-              const cell = k.menu.slots.find(
-                (s) => s.weekday === day && s.slot === slot,
-              );
-              return (
-                <div
-                  key={day}
-                  className={
-                    cell?.alternative ? "ms-menu-row has-choice" : "ms-menu-row"
-                  }
-                >
-                  <dt>
-                    {t.weekdays[day]}
-                    {cell?.alternative && (
-                      <small className="ms-choice-tag">{t.choice}</small>
-                    )}
-                  </dt>
-                  <dd>
-                    {cell?.default ? (
-                      <Dish d={cell.default} locale={locale} t={t} />
-                    ) : (
-                      <span className="ms-sub">—</span>
-                    )}
-                    {cell?.alternative && (
-                      <>
-                        <span className="ms-or">{t.or}</span>
-                        <Dish d={cell.alternative} locale={locale} t={t} />
-                      </>
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        </div>
-      ))}
+    <div className="ms-menu2">
+      <div className="ms-days" role="tablist" aria-label={t.menu}>
+        {days.map((d) => (
+          <button
+            key={d}
+            type="button"
+            role="tab"
+            aria-selected={d === day}
+            className={d === day ? "ms-day on" : "ms-day"}
+            onClick={() => setPicked(d)}
+          >
+            {t.weekdays[d]}
+            {slots.some((slot) => cell(d, slot)?.alternative) && (
+              <small>{t.or}</small>
+            )}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">
+        {slots.map((slot) => {
+          const c = cell(day, slot);
+          if (!c?.default) return null;
+          return (
+            <div key={slot} className="ms-mslot">
+              <h3>
+                {t.slot[slot] ?? slot}
+                {c.alternative && (
+                  <small className="ms-choice-tag">{t.choice}</small>
+                )}
+              </h3>
+              <div className="ms-mcards">
+                <DishCard d={c.default} locale={locale} t={t} />
+                {c.alternative && (
+                  <DishCard d={c.alternative} alt locale={locale} t={t} />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <h3 className="ms-glance-h">{t.glance}</h3>
+      <ul className="ms-glance">
+        {days.flatMap((d) =>
+          slots.map((slot) => {
+            const c = cell(d, slot);
+            if (!c?.default) return null;
+            return (
+              <li key={`${d}-${slot}`}>
+                <DishPhoto
+                  name={dishName(c.default)}
+                  src={c.default.image_url}
+                />
+                <span className="ms-glance-day">{t.weekdays[d]}</span>
+                <span className="ms-glance-dish">
+                  <b dir="auto">{dishName(c.default)}</b>
+                  <small dir="auto">
+                    {t.slot[slot] ?? slot}
+                    {c.alternative && ` · ${t.or} ${dishName(c.alternative)}`}
+                  </small>
+                </span>
+              </li>
+            );
+          }),
+        )}
+      </ul>
     </div>
   );
 }
@@ -246,31 +305,21 @@ export default function KitchenPage({
     const name = (locale === "ar" && k.name_ar) || k.name;
     const blurb = (locale === "ar" && k.description_ar) || k.description;
     body = (
-      <div className="ms-kitchen">
-        <section className="ms-hero ms-k-hero">
+      <div className="ms-kitchen2">
+        <section className="ms-khero">
           <KitchenCover
             id={k.branch_id}
             name={name}
             src={k.cover_image_url}
+            fallback={
+              k.menu.slots.find((s) => s.default?.image_url)?.default?.image_url
+            }
             caption={k.cuisines.join(" · ")}
-            className="ms-hero-img"
+            className="ms-khero-img"
           />
-          <div>
-            <h1 dir="auto">{name}</h1>
-            <p className="ms-sub" dir="auto">
-              {(locale === "ar" && k.vendor_name_ar) || k.vendor_name}
-              {k.city && ` · ${k.city}`}
-            </p>
-            {blurb && <p dir="auto">{blurb}</p>}
-            <div className="ms-tags">
-              {[...k.cuisines, ...k.dietary_tags].map((c) => (
-                <span key={c} className="ms-tag">
-                  {c}
-                </span>
-              ))}
-            </div>
+          <div className="ms-khero-copy">
             {(k.rating_count > 0 || k.food_safety_verified) && (
-              <div className="ms-trust">
+              <div className="ms-kc-badges ms-khero-badges">
                 <RatingBadge
                   rating={k.rating}
                   count={k.rating_count}
@@ -279,6 +328,29 @@ export default function KitchenPage({
                 {k.food_safety_verified && <SafetyBadge locale={locale} />}
               </div>
             )}
+            <h1 dir="auto">{name}</h1>
+            <p className="ms-khero-sub" dir="auto">
+              {(locale === "ar" && k.vendor_name_ar) || k.vendor_name}
+              {k.city && ` · ${k.city}`}
+              {k.cuisines.length > 0 && ` · ${k.cuisines.join(" · ")}`}
+            </p>
+          </div>
+        </section>
+
+        <div className="ms-kgrid">
+          <div className="ms-kmain">
+            {blurb && (
+              <p className="ms-klede" dir="auto">
+                {blurb}
+              </p>
+            )}
+            <div className="ms-tags">
+              {k.dietary_tags.map((c) => (
+                <span key={c} className="ms-tag">
+                  {c}
+                </span>
+              ))}
+            </div>
             <ul className="ms-facts">
               {k.delivers_here != null && (
                 <li className={k.delivers_here ? "ms-ok" : "ms-bad"}>
@@ -294,148 +366,181 @@ export default function KitchenPage({
                 </li>
               )}
             </ul>
+
+            <section className="ms-k-menu">
+              <h2>{t.menu}</h2>
+              <p className="ms-sub">{t.menuNote}</p>
+              <Menu k={k} locale={locale} t={t} />
+            </section>
+
+            <section className="ms-k-reviews">
+              <h2>{t.reviews}</h2>
+              {(reviews.data?.items ?? []).length === 0 ? (
+                <p className="ms-sub">{t.noReviews}</p>
+              ) : (
+                <ul className="ms-reviews">
+                  {reviews.data!.items.map((r) => (
+                    <li key={r.id} className="ms-review">
+                      <span className="ms-rating" aria-label={`${r.rating}/5`}>
+                        <span aria-hidden="true">{"★".repeat(r.rating)}</span>
+                        <span className="ms-rating-count">
+                          {" "}
+                          {new Date(r.created_at).toLocaleDateString(
+                            locale === "ar" ? "ar" : "en-GB",
+                            {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            },
+                          )}
+                        </span>
+                      </span>
+                      {r.comment && <p dir="auto">{r.comment}</p>}
+                      {r.reply && (
+                        <p className="ms-review-reply" dir="auto">
+                          <strong>{t.kitchenReply}:</strong> {r.reply}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
-        </section>
 
-        <aside className="ms-k-plans">
-          <h2>{t.plans}</h2>
-          <ul className="ms-plans">
-            {k.plan_list.map((plan) => (
-              <li key={plan.id} className="ms-plan">
-                <h3 dir="auto">
-                  {(locale === "ar" && plan.name_ar) || plan.name}
-                </h3>
-                {plan.description && (
-                  <p dir="auto">
-                    {(locale === "ar" && plan.description_ar) ||
-                      plan.description}
+          <aside id="plans" className="ms-k-plans">
+            <h2>{t.plans}</h2>
+            <ul className="ms-plans">
+              {k.plan_list.map((plan) => (
+                <li
+                  key={plan.id}
+                  className={
+                    plan.id === k.popular_plan_id
+                      ? "ms-plan is-popular"
+                      : "ms-plan"
+                  }
+                >
+                  {plan.id === k.popular_plan_id && (
+                    <span className="ms-pop">{t.popular}</span>
+                  )}
+                  <h3 dir="auto">
+                    {(locale === "ar" && plan.name_ar) || plan.name}
+                  </h3>
+                  {plan.description && (
+                    <p dir="auto">
+                      {(locale === "ar" && plan.description_ar) ||
+                        plan.description}
+                    </p>
+                  )}
+                  <p className="ms-sub">
+                    {plan.delivery_weekdays
+                      .map((d) => t.weekdays[d])
+                      .join(" · ")}
+                    <br />
+                    {plan.meal_slots
+                      .map((s) => t.slot[s] ?? s)
+                      .join(", ")} · {t.meals(plan.meals_per_day)}
+                    <br />
+                    {t.cutoff(plan.cutoff_hours)}
+                    {plan.allowed_pause_days > 0 &&
+                      ` · ${t.pause(plan.allowed_pause_days)}`}
                   </p>
-                )}
-                <p className="ms-sub">
-                  {plan.delivery_weekdays.map((d) => t.weekdays[d]).join(" · ")}
-                  <br />
-                  {plan.meal_slots.map((s) => t.slot[s] ?? s).join(", ")} ·{" "}
-                  {t.meals(plan.meals_per_day)}
-                  <br />
-                  {t.cutoff(plan.cutoff_hours)}
-                  {plan.allowed_pause_days > 0 &&
-                    ` · ${t.pause(plan.allowed_pause_days)}`}
-                </p>
-                <p className="ms-plan-price">
-                  <strong>{money(plan.price_minor, plan.currency)}</strong>{" "}
-                  {t.cycle(plan.cycle_days)}
-                </p>
-                <p className="ms-meal-price">
-                  {t.perMeal(
-                    money(
-                      Math.round(plan.price_minor / mealsPerCycle(plan)),
-                      plan.currency,
-                    ),
-                    mealsPerCycle(plan),
+                  <p className="ms-plan-price">
+                    <strong>{money(plan.price_minor, plan.currency)}</strong>{" "}
+                    {t.cycle(plan.cycle_days)}
+                  </p>
+                  <p className="ms-meal-price">
+                    {t.perMeal(
+                      money(
+                        Math.round(plan.price_minor / mealsPerCycle(plan)),
+                        plan.currency,
+                      ),
+                      mealsPerCycle(plan),
+                    )}
+                  </p>
+                  {plan.tiers.length > 1 && (
+                    <ul className="ms-tiers">
+                      {plan.tiers.map((tier) => (
+                        <li key={tier.id}>
+                          <span dir="auto">
+                            {(locale === "ar" && tier.name_ar) || tier.name}
+                          </span>
+                          <span>{money(tier.price_minor, plan.currency)}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </p>
-                {plan.tiers.length > 1 && (
-                  <ul className="ms-tiers">
-                    {plan.tiers.map((tier) => (
-                      <li key={tier.id}>
-                        <span dir="auto">
-                          {(locale === "ar" && tier.name_ar) || tier.name}
-                        </span>
-                        <span>{money(tier.price_minor, plan.currency)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {plan.rotation_enabled &&
-                  plan.rotation_week_price_minor != null && (
-                    <p className="ms-rot">
-                      {t.rotation}:{" "}
-                      {money(plan.rotation_week_price_minor, plan.currency)}{" "}
-                      {t.rotationWeek} ·{" "}
-                      {t.rotationMeal(
-                        money(
-                          Math.round(
-                            plan.rotation_week_price_minor /
-                              Math.max(
-                                1,
-                                plan.days_per_week * plan.meals_per_day,
-                              ),
+                  {plan.rotation_enabled &&
+                    plan.rotation_week_price_minor != null && (
+                      <p className="ms-rot">
+                        {t.rotation}:{" "}
+                        {money(plan.rotation_week_price_minor, plan.currency)}{" "}
+                        {t.rotationWeek} ·{" "}
+                        {t.rotationMeal(
+                          money(
+                            Math.round(
+                              plan.rotation_week_price_minor /
+                                Math.max(
+                                  1,
+                                  plan.days_per_week * plan.meals_per_day,
+                                ),
+                            ),
+                            plan.currency,
                           ),
-                          plan.currency,
-                        ),
-                      )}
-                    </p>
-                  )}
-                {k.delivers_here === false ? (
-                  <small className="ms-bad">{t.deliversNo}</small>
-                ) : (
-                  <>
-                    {subOffers.map((o) => (
+                        )}
+                      </p>
+                    )}
+                  {k.delivers_here === false ? (
+                    <small className="ms-bad">{t.deliversNo}</small>
+                  ) : (
+                    <>
+                      {subOffers.map((o) => (
+                        <Link
+                          key={o.id}
+                          className="ms-offer"
+                          href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}?promo=${o.id}`}
+                        >
+                          <strong dir="auto">{offerLabel(o, locale)}</strong>
+                          <span dir="auto">
+                            {offerName(o, locale)}
+                            {o.audience === "new_customers" &&
+                              ` · ${OFFER_COPY[locale].newOnly}`}
+                          </span>
+                        </Link>
+                      ))}
                       <Link
-                        key={o.id}
-                        className="ms-offer"
-                        href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}?promo=${o.id}`}
+                        className="ms-cta"
+                        href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}`}
                       >
-                        <strong dir="auto">{offerLabel(o, locale)}</strong>
-                        <span dir="auto">
-                          {offerName(o, locale)}
-                          {o.audience === "new_customers" &&
-                            ` · ${OFFER_COPY[locale].newOnly}`}
-                        </span>
+                        {t.subscribe}
                       </Link>
-                    ))}
-                    <Link
-                      className="ms-cta"
-                      href={`/${locale}/kitchens/${k.branch_id}/subscribe/${plan.id}`}
-                    >
-                      {t.subscribe}
-                    </Link>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </aside>
-
-        <section className="ms-k-menu">
-          <h2>{t.menu}</h2>
-          <p className="ms-sub">{t.menuNote}</p>
-          <Menu k={k} locale={locale} t={t} />
-        </section>
-
-        <section className="ms-k-reviews">
-          <h2>{t.reviews}</h2>
-          {(reviews.data?.items ?? []).length === 0 ? (
-            <p className="ms-sub">{t.noReviews}</p>
-          ) : (
-            <ul className="ms-reviews">
-              {reviews.data!.items.map((r) => (
-                <li key={r.id} className="ms-review">
-                  <span className="ms-rating" aria-label={`${r.rating}/5`}>
-                    <span aria-hidden="true">{"★".repeat(r.rating)}</span>
-                    <span className="ms-rating-count">
-                      {" "}
-                      {new Date(r.created_at).toLocaleDateString(
-                        locale === "ar" ? "ar" : "en-GB",
-                        {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        },
-                      )}
-                    </span>
-                  </span>
-                  {r.comment && <p dir="auto">{r.comment}</p>}
-                  {r.reply && (
-                    <p className="ms-review-reply" dir="auto">
-                      <strong>{t.kitchenReply}:</strong> {r.reply}
-                    </p>
+                    </>
                   )}
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </aside>
+        </div>
+
+        {k.plan_list.length > 0 && (
+          <div className="ms-sticky">
+            <b>
+              {t.fromMeal(
+                money(
+                  Math.min(
+                    ...k.plan_list.map((pl) =>
+                      Math.round(pl.price_minor / mealsPerCycle(pl)),
+                    ),
+                  ),
+                  k.currency,
+                ),
+              )}
+            </b>
+            <a className="ms-btn" href="#plans">
+              {t.seePlans}
+            </a>
+          </div>
+        )}
       </div>
     );
   }
