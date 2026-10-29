@@ -48,6 +48,14 @@ export function DishPhoto({
   );
 }
 
+/** Price for browsing: a whole amount drops its zero decimals (AED 60, not AED 60.00). */
+export function shortMoney(amount: number, currency: string, locale: Locale) {
+  return formatMoney({ amount, currency }, locale).replace(
+    /[.\u066B][0\u0660]+(?![0-9\u0660-\u0669])/,
+    "",
+  );
+}
+
 export const dishName = (d: DishThumb, locale: Locale) =>
   (locale === "ar" && d.name_ar) || d.name;
 
@@ -116,7 +124,15 @@ export function HomeHero({
       {shown.length > 0 && (
         <div className={`ms-collage ms-collage-${shown.length}`} aria-hidden>
           {shown.map((p, i) => (
-            <img key={i} className={`ms-c${i + 1}`} src={p.image_url!} alt="" />
+            <img
+              key={i}
+              className={`ms-c${i + 1}`}
+              src={p.image_url!}
+              alt=""
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
           ))}
         </div>
       )}
@@ -170,11 +186,9 @@ export function DishRail({
                   <span className="ms-dish-card-meta">
                     <span>
                       <strong>
-                        {formatMoney(
-                          {
-                            amount: d.from_meal_price_minor,
-                            currency: d.currency,
-                          },
+                        {shortMoney(
+                          d.from_meal_price_minor,
+                          d.currency,
                           locale,
                         )}
                       </strong>{" "}

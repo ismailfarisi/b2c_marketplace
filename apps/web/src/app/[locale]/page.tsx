@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Fragment, use, useState } from "react";
+import { Fragment, use, useRef, useState } from "react";
 
 import {
   CuisineCircles,
@@ -50,12 +50,14 @@ export default function MealsHome({
 }) {
   const locale = use(params).locale === "ar" ? "ar" : "en";
   const t = COPY[locale];
-  const { point, precise } = useCustomerPoint();
+  const { point, precise, retry } = useCustomerPoint();
   const [q, setQ] = useState("");
   const [slot, setSlot] = useState("");
   const [rotation, setRotation] = useState(false);
 
   const [cuisine, setCuisine] = useState("");
+  // Kitchen count before any filter, so the cuisine strip stays put while filtering.
+  const unfiltered = useRef<number | null>(null);
 
   const home = useQuery({
     queryKey: ["meals-home", point?.lat, point?.lng],
@@ -93,7 +95,15 @@ export default function MealsHome({
     ...(sections ?? []).flatMap((s) => s.kitchens ?? []),
     ...(list.data?.items ?? []),
   ];
+  // Kitchen covers lead: kitchens pick them to show their signature food.
   const photos = [
+    ...seen
+      .filter((k) => k.cover_image_url)
+      .map((k) => ({
+        name: k.name,
+        name_ar: k.name_ar,
+        image_url: k.cover_image_url,
+      })),
     ...(tomorrow.data?.items ?? []).map((d) => ({
       name: d.name,
       name_ar: d.name_ar,
@@ -108,7 +118,6 @@ export default function MealsHome({
   const intro = (
     <>
       <HomeHero locale={locale} photos={photos} />
-      {point && !precise && <p className="ms-note">{t.fallback}</p>}
     </>
   );
 
@@ -132,7 +141,14 @@ export default function MealsHome({
       {photos.length >= 4 && (
         <div className="ms-plates" aria-hidden>
           {photos.slice(0, 4).map((p) => (
-            <img key={p.image_url} src={p.image_url!} alt="" />
+            <img
+              key={p.image_url}
+              src={p.image_url!}
+              alt=""
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
           ))}
         </div>
       )}
@@ -218,7 +234,18 @@ export default function MealsHome({
       <p className="ms-empty">{t.empty}</p>
     ) : (
       <section className="ms-all-list">
-        <p className="ms-count">{t.count(list.data.items.length)}</p>
+        <div className="ms-count">
+          <h2>
+            {precise
+              ? t.near(list.data.items.length)
+              : t.nearFallback(list.data.items.length)}
+          </h2>
+          {!precise && (
+            <button type="button" onClick={retry}>
+              {t.useLocation}
+            </button>
+          )}
+        </div>
         <ul className="ms-grid">
           {list.data.items.map((k, i) => (
             <Fragment key={k.branch_id}>
@@ -260,21 +287,46 @@ export default function MealsHome({
   }
 
   const cuisineStrip = sections.find((s) => s.type === "cuisine_strip");
+  if (!filtering && list.data) unfiltered.current = list.data.items.length;
+  // A cuisine every kitchen serves narrows nothing, so it isn't offered.
+  const cuisines = (cuisineStrip?.cuisines ?? []).filter(
+    (c) =>
+      c.cuisine === cuisine ||
+      unfiltered.current == null ||
+      c.kitchens < unfiltered.current,
+  );
+  // Rails skip kitchens the grid already shows above them.
+  const inGrid = new Set(
+    showList && !filtering
+      ? (list.data?.items ?? []).slice(0, promoAfter).map((k) => k.branch_id)
+      : [],
+  );
+  const rails = sections
+    .filter((s) => s.type === "kitchen_rail")
+    .map((s) => ({
+      ...s,
+      kitchens: (s.kitchens ?? []).filter((k) => !inGrid.has(k.branch_id)),
+    }))
+    .filter((s) => s.kitchens.length > 0);
 
   return (
     <CustomerShell locale={locale}>
       {intro}
       {showList && filters}
-      {cuisineStrip && (
+      {cuisineStrip && cuisines.length > 1 && (
         <CuisineCircles
           title={sectionTitle(cuisineStrip, locale) || f.cuisines}
-          items={cuisineStrip.cuisines ?? []}
+          items={cuisines}
           active={cuisine}
           count={t.count}
           label={(c) => tagLabel(c, locale)}
           onPick={pickCuisine}
         />
       )}
+      {showList
+        ? kitchenList
+        : !filtering &&
+          showPromo && <div className="ms-promo-wide">{promo}</div>}
       {!filtering &&
         sections
           .filter((s) => s.type === "banner_carousel")
@@ -285,15 +337,9 @@ export default function MealsHome({
               locale={locale}
             />
           ))}
-      {showList
-        ? kitchenList
-        : !filtering &&
-          showPromo && <div className="ms-promo-wide">{promo}</div>}
       {!filtering && dishRail}
       {!filtering &&
-        sections
-          .filter((s) => s.type === "kitchen_rail")
-          .map((s) => <KitchenRail key={s.id} s={s} locale={locale} />)}
+        rails.map((s) => <KitchenRail key={s.id} s={s} locale={locale} />)}
     </CustomerShell>
   );
 }

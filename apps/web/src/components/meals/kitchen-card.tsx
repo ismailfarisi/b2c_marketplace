@@ -1,8 +1,7 @@
-import { formatMoney } from "@marketplace/api-client";
 import Link from "next/link";
 
 import { KitchenCover } from "@/components/meals/cover";
-import { DishPhoto, dishName } from "@/components/meals/food";
+import { DishPhoto, dishName, shortMoney } from "@/components/meals/food";
 import { RatingBadge, SafetyBadge } from "@/components/meals/trust";
 import type { Banner, HomeSection, PublicKitchen } from "@/lib/meals-api";
 
@@ -27,11 +26,18 @@ export const COPY = {
     from: "from",
     perCycle: "per cycle",
     perMeal: "a meal",
-    perWeek: "a week in rotation",
+    perWeek: "a week in a 4-kitchen rotation",
     thisWeek: "this week",
     empty: "No kitchen delivers here yet with those filters.",
     failed: "Could not load kitchens.",
     count: (n: number) => (n === 1 ? "1 kitchen" : `${n} kitchens`),
+    near: (n: number) =>
+      n === 1 ? "1 kitchen delivers to you" : `${n} kitchens deliver to you`,
+    nearFallback: (n: number) =>
+      n === 1
+        ? "1 kitchen delivers to Dubai Marina"
+        : `${n} kitchens deliver to Dubai Marina`,
+    useLocation: "Use my location",
     slot: {
       breakfast: "Breakfast",
       lunch: "Lunch",
@@ -58,11 +64,14 @@ export const COPY = {
     from: "من",
     perCycle: "لكل دورة",
     perMeal: "للوجبة",
-    perWeek: "أسبوعيًا ضمن التناوب",
+    perWeek: "أسبوعيًا ضمن تناوب ٤ مطابخ",
     thisWeek: "هذا الأسبوع",
     empty: "لا يوجد مطبخ يوصل هنا بهذه الخيارات بعد.",
     failed: "تعذر تحميل المطابخ.",
     count: (n: number) => `${n} مطبخ`,
+    near: (n: number) => `${n} مطبخ يوصل إليك`,
+    nearFallback: (n: number) => `${n} مطبخ يوصل إلى دبي مارينا`,
+    useLocation: "استخدم موقعي",
     slot: {
       breakfast: "فطور",
       lunch: "غداء",
@@ -121,8 +130,7 @@ export function KitchenCard({
 }) {
   const name = (locale === "ar" && k.name_ar) || k.name;
   const vendor = (locale === "ar" && k.vendor_name_ar) || k.vendor_name;
-  const money = (amount: number) =>
-    formatMoney({ amount, currency: k.currency }, locale);
+  const money = (amount: number) => shortMoney(amount, k.currency, locale);
   const dishes = k.week_dishes ?? [];
   return (
     <li>

@@ -14,6 +14,8 @@ export function useCustomerPoint() {
   const [point, setPoint] = useState<Point | null>(null);
   const [precise, setPrecise] = useState(false);
 
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setPoint(FALLBACK_POINT);
@@ -25,9 +27,9 @@ export function useCustomerPoint() {
         setPrecise(true);
       },
       () => setPoint(FALLBACK_POINT),
-      { timeout: 4000, maximumAge: 300_000 },
+      { timeout: 4000, maximumAge: attempt > 0 ? 0 : 300_000 },
     );
-  }, []);
+  }, [attempt]);
 
-  return { point, precise };
+  return { point, precise, retry: () => setAttempt((n) => n + 1) };
 }
