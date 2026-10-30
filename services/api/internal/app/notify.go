@@ -44,6 +44,16 @@ func BuildNotify(cfg config.Config, pool *pgxpool.Pool) *notify.Service {
 		}
 	}
 
+	// A configured WhatsApp Cloud API account replaces the log provider for
+	// WhatsApp in every environment, so staging sends real messages.
+	if cfg.WhatsAppAccessToken != "" && cfg.WhatsAppPhoneNumberID != "" {
+		providers[notify.ChannelWhatsApp] = notify.MetaWhatsApp{
+			AccessToken:   cfg.WhatsAppAccessToken,
+			PhoneNumberID: cfg.WhatsAppPhoneNumberID,
+			APIVersion:    cfg.WhatsAppAPIVersion,
+		}
+	}
+
 	loc, err := time.LoadLocation(cfg.DefaultTimezone)
 	if err != nil {
 		// A missing tzdata is not a reason to refuse to boot, but it is a reason
