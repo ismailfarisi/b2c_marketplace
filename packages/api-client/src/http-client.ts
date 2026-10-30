@@ -115,10 +115,12 @@ export const apiFetch = async <T>(
   { url, method, params, data, headers, signal }: {
     url: string;
     method: string;
-    params?: Record<string, unknown>;
+    // `| undefined` because generated callers pass optional values through
+    // as-is, which exactOptionalPropertyTypes otherwise rejects.
+    params?: object | undefined;
     data?: unknown;
-    headers?: HeadersInit;
-    signal?: AbortSignal;
+    headers?: HeadersInit | undefined;
+    signal?: AbortSignal | undefined;
   },
 ): Promise<T> => {
   const send = async (retryOn401: boolean): Promise<T> => {
