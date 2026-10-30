@@ -67,7 +67,7 @@ struct BottomNav: View {
     private static let muted = Color(red: 0.463, green: 0.404, blue: 0.357)
 
     /// Meals is a light food-photo page; the scrim is for video only.
-    private var light: Bool { selected == .meals }
+    private var light: Bool { selected == .meals || selected == .myMeals }
 
     var body: some View {
         HStack {

@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.meals
 
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.semantics.selected
 import ae.marketplace.mobile.model.MealTags
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -334,12 +335,14 @@ private fun PlacePicker(
     val areas = ae.marketplace.mobile.model.MealAreas.search(q)
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = M.Surface) {
         LazyColumn(
-            Modifier.fillMaxWidth().padding(horizontal = Space.Edge),
+            Modifier.fillMaxWidth().imePadding().padding(horizontal = Space.Edge),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item { Text(stringResource(R.string.meals_where), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.Bold) }
-            item { PickRow(stringResource(R.string.meals_use_location), null, current == null) { onPick(null) } }
-            if (addresses.isNotEmpty()) {
+            // Search sits first so its results stay above the keyboard.
+            item { Field(q, { q = it }, Modifier.fillMaxWidth(), placeholder = stringResource(R.string.meals_search_areas)) }
+            if (q.isBlank()) item { PickRow(stringResource(R.string.meals_use_location), null, current == null) { onPick(null) } }
+            if (q.isBlank() && addresses.isNotEmpty()) {
                 item { PickLabel(stringResource(R.string.meals_your_addresses)) }
                 items(addresses, key = { "a" + it.id }) { a ->
                     PickRow(a.label, a.line, current?.kind == "address" && current.id == a.id) {
@@ -347,8 +350,7 @@ private fun PlacePicker(
                     }
                 }
             }
-            item { PickLabel(stringResource(R.string.meals_choose_area)) }
-            item { Field(q, { q = it }, Modifier.fillMaxWidth(), placeholder = stringResource(R.string.meals_search_areas)) }
+            if (q.isBlank()) item { PickLabel(stringResource(R.string.meals_choose_area)) }
             if (areas.isEmpty()) item { Text(stringResource(R.string.meals_no_area), color = M.Muted, fontSize = Type.Secondary) }
             items(areas, key = { "z" + it.id }) { a ->
                 PickRow(a.name(arabic), a.city(arabic), current?.kind == "area" && current.id == a.id) {
@@ -641,14 +643,13 @@ private fun KitchenBody(
     val plansShown by remember {
         derivedStateOf { list.layoutInfo.visibleItemsInfo.any { it.key == "plans" || it.index > plansIndex } }
     }
-    val photo = k.coverImageUrl
-        ?: k.menu.slots.firstNotNullOfOrNull { it.default?.imageUrl ?: it.alternative?.imageUrl }
+    val dishPhoto = k.menu.slots.firstNotNullOfOrNull { it.default?.imageUrl ?: it.alternative?.imageUrl }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = list) {
             item(key = "hero") {
                 Box {
-                    KitchenCover(name, photo, k.cuisines.map { MealTags.label(it, arabic) }, Modifier.fillMaxWidth().aspectRatio(1.35f))
+                    KitchenCover(name, k.coverImageUrl, k.cuisines.map { MealTags.label(it, arabic) }, Modifier.fillMaxWidth().aspectRatio(1.35f), fallbackUrl = dishPhoto)
                     Text(
                         if (arabic) "→" else "←",
                         color = M.Ink,

@@ -85,7 +85,7 @@ fun BottomNav(
     modifier: Modifier = Modifier,
 ) {
     // Meals is a light, food-photo page; the scrim is for video only.
-    val light = selected == Destination.Meals
+    val light = selected == Destination.Meals || selected == Destination.MyMeals
     Column(
         modifier
             .fillMaxWidth()

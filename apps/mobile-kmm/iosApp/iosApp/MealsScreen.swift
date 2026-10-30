@@ -1002,7 +1002,7 @@ private struct KitchenBody: View {
         let days = byDay.keys.sorted()
         let selected = day.flatMap { byDay[$0] != nil ? $0 : nil } ?? days.first
         let name = pick(k.name, k.nameAr)
-        let hero = k.coverImageUrl ?? k.menu.slots.compactMap { $0.`default`?.imageUrl }.first
+        let dishPhoto = k.menu.slots.compactMap { $0.`default`?.imageUrl ?? $0.alternative?.imageUrl }.first
         let enabled = k.deliversHere?.boolValue != false
         let from = k.plans.map { $0.mealPriceMinor }.min()
         let currency = k.plans.first?.currency ?? "AED"
@@ -1010,7 +1010,7 @@ private struct KitchenBody: View {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        FoodPhoto(seed: name, imageUrl: hero)
+                        FoodPhoto(seed: name, imageUrl: k.coverImageUrl, fallbackUrl: dishPhoto)
                             .frame(height: 260)
                             .overlay(alignment: .topLeading) {
                                 Button(action: onBack) {
