@@ -275,3 +275,19 @@
 "meals_promo_invalid" = "لا يمكن استخدام رمز العرض هنا.";
 
 "action_back" = "رجوع";
+
+/* Meals: location, help and navigation (mobile critique) */
+"nav_my_meals" = "وجباتي";
+"meals_subscriber" = "مشترك";
+"meals_choice_help" = "في الأيام المعلَّمة بخيارين يمكنك اختيار أحد الطبقين قبل الموعد النهائي.";
+"meals_near_count" = "%lld مطبخ يوصل إليك";
+"meals_near_place" = "%1$lld مطبخ يوصل إلى %2$@";
+"meals_none_near" = "لا توجد مطابخ توصل إلى %@ بعد";
+"meals_change" = "تغيير";
+"meals_where" = "أين نوصل؟";
+"meals_use_location" = "استخدم موقعي الحالي";
+"meals_your_addresses" = "عناوينك";
+"meals_choose_area" = "أو اختر منطقة";
+"meals_search_areas" = "ابحث عن منطقة";
+"meals_no_area" = "لا توجد منطقة مطابقة. جرّب كتابة أخرى.";
+"meals_office_lunch" = "غداء المكاتب لشركتك";

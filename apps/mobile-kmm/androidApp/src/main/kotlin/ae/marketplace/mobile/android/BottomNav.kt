@@ -38,12 +38,20 @@ import androidx.compose.ui.unit.sp
  */
 enum class Destination {
     Meals,
+    MyMeals,
     Feed,
     Search,
     Sell,
     Saved,
     Me,
 }
+
+/**
+ * What the bar shows. Meals is the product, so it and the customer's own
+ * meals lead; Search, Sell and Saved belong to the video marketplace and are
+ * reached from the feed's top row instead.
+ */
+val BarDestinations = listOf(Destination.Meals, Destination.MyMeals, Destination.Feed, Destination.Me)
 
 // Was a private copy of the same hex in four files, two of which had drifted.
 // See ae.marketplace.mobile.android.ui.Palette.
@@ -104,7 +112,7 @@ fun BottomNav(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Destination.entries.forEach { destination ->
+            BarDestinations.forEach { destination ->
                 NavItem(
                     label = stringResource(destination.labelRes()),
                     active = destination == selected,
@@ -155,6 +163,7 @@ private fun Destination.labelRes(): Int = when (this) {
     Destination.Sell -> R.string.nav_sell
     Destination.Saved -> R.string.nav_saved
     Destination.Me -> R.string.nav_me
+    Destination.MyMeals -> R.string.nav_my_meals
 }
 
 /**

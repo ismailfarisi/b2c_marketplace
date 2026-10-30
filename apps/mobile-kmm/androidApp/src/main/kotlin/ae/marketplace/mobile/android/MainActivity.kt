@@ -1,5 +1,7 @@
 package ae.marketplace.mobile.android
 
+import androidx.compose.runtime.key
+import androidx.compose.ui.res.stringResource
 import ae.marketplace.mobile.android.me.InboxScreen
 import ae.marketplace.mobile.android.me.MeScreen
 import ae.marketplace.mobile.android.me.SavedScreen
@@ -252,6 +254,11 @@ class MainActivity : ComponentActivity() {
                             ReelFeed(
                                 viewModel = current,
                                 onOpenFilters = { filtersOpen = true },
+                                extras = listOf(
+                                    stringResource(R.string.nav_search) to { destination = Destination.Search },
+                                    stringResource(R.string.nav_saved) to { destination = Destination.Saved },
+                                    stringResource(R.string.nav_sell) to { destination = Destination.Sell },
+                                ),
                                 onActionPressed = { action, reelId ->
                                     // The branch is on `kind`, never on
                                     // `target_type`. That distinction is the
@@ -326,7 +333,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         val needsAccount = destination in
-                            setOf(Destination.Sell, Destination.Saved, Destination.Me)
+                            setOf(Destination.Sell, Destination.Saved, Destination.Me, Destination.MyMeals)
 
                         if (needsAccount && !sessionState.isSettled) {
                             // The token store is still being read. Neither the
@@ -346,7 +353,7 @@ class MainActivity : ComponentActivity() {
                         } else when (destination) {
                             Destination.Feed -> Unit // drawn above, always composed
 
-                            Destination.Meals -> mealsVm?.let {
+                            Destination.Meals, Destination.MyMeals -> mealsVm?.let { key(destination) {
                                 LaunchedEffect(authorised) {
                                     if (authorised) pendingMeals?.let { run -> pendingMeals = null; run() }
                                 }
@@ -361,6 +368,7 @@ class MainActivity : ComponentActivity() {
                                     MealsTab(
                                         viewModel = it,
                                         location = here,
+                                        startOnMine = destination == Destination.MyMeals,
                                         requireAccount = { run -> if (authorised) run() else pendingMeals = run },
                                     )
                                     if (pendingMeals != null && !authorised && gate != null) {
@@ -376,7 +384,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
-                            }
+                            } }
 
                             Destination.Search -> me?.let {
                                 SearchScreen(

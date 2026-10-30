@@ -18,6 +18,7 @@ import SwiftUI
 /// reaches without looking.
 enum Destination: String, CaseIterable {
     case meals
+    case myMeals
     case feed
     case search
     case sell
@@ -27,6 +28,7 @@ enum Destination: String, CaseIterable {
     var labelKey: String {
         switch self {
         case .meals: return "nav_meals"
+        case .myMeals: return "nav_my_meals"
         case .feed: return "nav_feed"
         case .search: return "nav_search"
         case .sell: return "nav_sell"
@@ -34,6 +36,12 @@ enum Destination: String, CaseIterable {
         case .me: return "nav_me"
         }
     }
+}
+
+extension Destination {
+    /// What the bar shows. Meals lead; Search, Sell and Saved belong to the
+    /// video marketplace and are reached from the feed's top row instead.
+    static let bar: [Destination] = [.meals, .myMeals, .feed, .me]
 }
 
 /// Height of the bar's content, excluding the home-indicator inset that SwiftUI
@@ -63,7 +71,7 @@ struct BottomNav: View {
 
     var body: some View {
         HStack {
-            ForEach(Destination.allCases, id: \.self) { destination in
+            ForEach(Destination.bar, id: \.self) { destination in
                 let active = destination == selected
                 VStack(spacing: 3) {
                     Text(NSLocalizedString(destination.labelKey, comment: ""))

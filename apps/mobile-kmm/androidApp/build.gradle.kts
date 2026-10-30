@@ -18,6 +18,8 @@ android {
         // Pointed at the Go API. 10.0.2.2 is the emulator's route to the host,
         // which is where `make dev` runs cmd/api.
         buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/v1\"")
+        // The web app, for pages the app links out to (office lunch sign-up).
+        buildConfigField("String", "WEB_BASE_URL", "\"http://10.0.2.2:3000\"")
     }
 
     buildFeatures {

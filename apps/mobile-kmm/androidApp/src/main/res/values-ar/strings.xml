@@ -77,6 +77,7 @@
     <string name="nav_sell">بيع</string>
     <string name="nav_saved">المحفوظات</string>
     <string name="nav_me">حسابي</string>
+    <string name="nav_my_meals">وجباتي</string>
     <string name="nav_not_built">لم تُبنَ هذه الشاشة بعد. التبويب موجود ليتضح شكل المنتج.</string>
 
     <!--
@@ -377,4 +378,17 @@
     <string name="meals_promo_used">لقد استخدمت هذا العرض من قبل.</string>
     <string name="meals_promo_exhausted">نفد هذا العرض.</string>
     <string name="meals_promo_invalid">لا يمكن استخدام رمز العرض هنا.</string>
+    <string name="meals_subscriber">مشترك</string>
+    <string name="meals_choice_help">في الأيام المعلَّمة بخيارين يمكنك اختيار أحد الطبقين قبل الموعد النهائي.</string>
+    <string name="meals_near_count">%1$d مطبخ يوصل إليك</string>
+    <string name="meals_near_place">%1$d مطبخ يوصل إلى %2$s</string>
+    <string name="meals_none_near">لا توجد مطابخ توصل إلى %1$s بعد</string>
+    <string name="meals_change">تغيير</string>
+    <string name="meals_where">أين نوصل؟</string>
+    <string name="meals_use_location">استخدم موقعي الحالي</string>
+    <string name="meals_your_addresses">عناوينك</string>
+    <string name="meals_choose_area">أو اختر منطقة</string>
+    <string name="meals_search_areas">ابحث عن منطقة</string>
+    <string name="meals_no_area">لا توجد منطقة مطابقة. جرّب كتابة أخرى.</string>
+    <string name="meals_office_lunch">غداء المكاتب لشركتك</string>
 </resources>

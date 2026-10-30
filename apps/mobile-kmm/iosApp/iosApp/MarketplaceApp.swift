@@ -39,6 +39,8 @@ final class AppEnvironment: ObservableObject {
 enum Config {
     /// The simulator reaches the host directly, unlike Android's 10.0.2.2.
     static let apiBaseUrl = "http://localhost:8080/v1"
+    /// The web app, for pages the app links out to (office lunch sign-up).
+    static let webBaseUrl = "http://localhost:3000"
 }
 
 @main
@@ -118,7 +120,7 @@ struct RootView: View {
     /// into a bounce. The same call the API makes by leaving GET /listings
     /// public.
     private var needsAccount: Bool {
-        destination == .sell || destination == .saved || destination == .me
+        destination == .sell || destination == .saved || destination == .me || destination == .myMeals
     }
 
     var body: some View {
@@ -132,7 +134,11 @@ struct RootView: View {
                 // would cost a fresh network page and the viewer's place — and
                 // the feed is the one screen where losing your place is the
                 // whole cost.
-                FeedScreen(viewModel: vm)
+                FeedScreen(viewModel: vm, extras: [
+                    (NSLocalizedString("nav_search", comment: ""), { destinationRaw = Destination.search.rawValue }),
+                    (NSLocalizedString("nav_saved", comment: ""), { destinationRaw = Destination.saved.rawValue }),
+                    (NSLocalizedString("nav_sell", comment: ""), { destinationRaw = Destination.sell.rawValue }),
+                ])
                     .opacity(destination == .feed ? 1 : 0)
 
                 if destination != .feed {
@@ -246,7 +252,7 @@ struct RootView: View {
             SignInGate(viewModel: gate) { destinationRaw = Destination.feed.rawValue }
         } else {
             switch destination {
-            case .meals:
+            case .meals, .myMeals:
                 if let meals = mealsViewModel {
                     ZStack {
                         MealsScreen(
@@ -255,8 +261,10 @@ struct RootView: View {
                             lng: lat != 0 || lng != 0 ? lng : 55.1403,
                             requireAccount: { run in
                                 if authorised { run() } else { pendingMeals = run }
-                            }
+                            },
+                            startOnMine: destination == .myMeals
                         )
+                        .id(destination)
                         if pendingMeals != nil && !authorised, let gate = signInViewModel {
                             SignInGate(viewModel: gate, onCancel: { pendingMeals = nil },
                                        titleKey: "meals_signin_title", whyKey: "meals_signin_why")

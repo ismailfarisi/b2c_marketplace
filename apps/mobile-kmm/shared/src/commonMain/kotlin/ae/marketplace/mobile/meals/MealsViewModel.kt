@@ -40,6 +40,8 @@ data class StorefrontUiState(
     val kitchens: List<Kitchen> = emptyList(),
     /** The next delivery day's dishes; empty when that call fails, which never blocks the page. */
     val dishes: List<DayDish> = emptyList(),
+    /** The signed-in customer's saved addresses, for the location picker. */
+    val addresses: List<Address> = emptyList(),
     val loading: Boolean = false,
     val error: Failure? = null,
 )
@@ -216,6 +218,14 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
             } catch (e: Throwable) {
                 _checkout.update { it.copy(error = e.toFailure()) }
             }
+        }
+    }
+
+    /** Saved addresses for the storefront's location picker; quietly empty when signed out. */
+    fun loadPlaceAddresses() {
+        viewModelScope.launch {
+            val items = runCatching { api.addresses().items }.getOrDefault(emptyList())
+            _store.update { it.copy(addresses = items) }
         }
     }
 

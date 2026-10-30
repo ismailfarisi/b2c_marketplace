@@ -11,6 +11,8 @@ import Shared
 /// paging scroll view, an `AVPlayerLayer` and some text.
 struct FeedScreen: View {
     let viewModel: FeedViewModel
+    /// Search, Saved and Sell, shown after the feed surfaces.
+    var extras: [(String, () -> Void)] = []
 
     @State private var items: [FeedItem] = []
     @State private var surface: FeedSurface = FeedSurface.forYou
@@ -75,7 +77,7 @@ struct FeedScreen: View {
                     }
                 }
 
-                FeedTabsView(selected: surface) { viewModel.onSurfaceSelected(surface: $0) }
+                FeedTabsView(selected: surface, onSelect: { viewModel.onSurfaceSelected(surface: $0) }, extras: extras)
             }
             .ignoresSafeArea(edges: .bottom)
         }
@@ -109,6 +111,8 @@ struct FeedScreen: View {
 struct FeedTabsView: View {
     let selected: FeedSurface
     let onSelect: (FeedSurface) -> Void
+    /// Marketplace destinations reached from the feed rather than the bottom bar.
+    var extras: [(String, () -> Void)] = []
 
     private static let accent = Color(red: 0.706, green: 0.396, blue: 0.165)
 
@@ -144,6 +148,15 @@ struct FeedTabsView: View {
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
                     .onTapGesture { onSelect(surface) }
+                }
+                ForEach(Array(extras.enumerated()), id: \.offset) { _, extra in
+                    Text(extra.0)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                        .onTapGesture { extra.1() }
                 }
             }
             .padding(.horizontal, 12)

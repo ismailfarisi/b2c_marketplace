@@ -79,6 +79,7 @@
     <string name="nav_sell">Sell</string>
     <string name="nav_saved">Saved</string>
     <string name="nav_me">Me</string>
+    <string name="nav_my_meals">My meals</string>
     <string name="nav_not_built">This screen has not been built yet. The tab is here so the shape of the product is visible.</string>
 
     <!--
@@ -447,4 +448,17 @@
     <string name="meals_promo_used">You have already used this promo.</string>
     <string name="meals_promo_exhausted">This promo has been fully used.</string>
     <string name="meals_promo_invalid">This promo code cannot be used here.</string>
+    <string name="meals_subscriber">Subscriber</string>
+    <string name="meals_choice_help">Days marked 2 choices let you pick one of two mains before the cutoff.</string>
+    <string name="meals_near_count">%1$d kitchens deliver to you</string>
+    <string name="meals_near_place">%1$d kitchens deliver to %2$s</string>
+    <string name="meals_none_near">No kitchens deliver to %1$s yet</string>
+    <string name="meals_change">Change</string>
+    <string name="meals_where">Where should we deliver?</string>
+    <string name="meals_use_location">Use my current location</string>
+    <string name="meals_your_addresses">Your addresses</string>
+    <string name="meals_choose_area">Or choose an area</string>
+    <string name="meals_search_areas">Search areas</string>
+    <string name="meals_no_area">No area matches. Try another spelling.</string>
+    <string name="meals_office_lunch">Office lunches for your company</string>
 </resources>

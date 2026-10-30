@@ -91,8 +91,11 @@ internal object M {
 /** Upright, heavy headings (the web uses Bricolage Grotesque; no serif). */
 internal val Serif = FontFamily.SansSerif
 
-internal fun money(minor: Long, currency: String): String =
-    "$currency " + String.format(Locale.US, "%,.2f", minor / 100.0)
+/** Whole amounts drop their zero decimals (AED 60, not AED 60.00), as on the web. */
+internal fun money(minor: Long, currency: String): String {
+    val s = String.format(Locale.US, "%,.2f", minor / 100.0)
+    return "$currency " + if (s.endsWith(".00")) s.dropLast(3) else s
+}
 
 internal fun weekday(day: Int, arabic: Boolean, style: TextStyle = TextStyle.SHORT): String {
     // Weekday 0 is Sunday in the API; java.time counts Monday as 1.
@@ -133,6 +136,8 @@ internal fun KitchenCover(
     imageUrl: String?,
     cuisines: List<String>,
     modifier: Modifier = Modifier,
+    /** Tried when [imageUrl] is missing or fails, e.g. one of the kitchen's dish photos. */
+    fallbackUrl: String? = null,
 ) {
     val tint = Warm.Covers[(name.hashCode() and 0x7fffffff) % Warm.Covers.size]
     Box(
@@ -158,20 +163,26 @@ internal fun KitchenCover(
                 )
             }
         }
-        if (!imageUrl.isNullOrBlank()) {
-            // Drawn over the monogram, and only once it loads: a broken link
-            // leaves the designed cover rather than an empty box.
-            val painter = rememberAsyncImagePainter(imageUrl)
-            val state by painter.state.collectAsState()
-            if (state is AsyncImagePainter.State.Success) {
-                Image(
-                    painter = painter,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
-                )
-            }
-        }
+        // Drawn over the monogram, and only once it loads: a broken link falls
+        // through to the next photo, then to the designed cover.
+        CoverPhoto(listOfNotNull(imageUrl, fallbackUrl).filter { it.isNotBlank() }.distinct())
+    }
+}
+
+@Composable
+private fun CoverPhoto(urls: List<String>) {
+    val url = urls.firstOrNull() ?: return
+    val painter = rememberAsyncImagePainter(url)
+    val state by painter.state.collectAsState()
+    when (state) {
+        is AsyncImagePainter.State.Success -> Image(
+            painter = painter,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
+        )
+        is AsyncImagePainter.State.Error -> CoverPhoto(urls.drop(1))
+        else -> Unit
     }
 }
 

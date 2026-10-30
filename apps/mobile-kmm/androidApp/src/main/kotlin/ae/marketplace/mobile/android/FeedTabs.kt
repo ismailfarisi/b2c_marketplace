@@ -55,6 +55,8 @@ fun FeedTabs(
     selected: FeedSurface,
     onSelect: (FeedSurface) -> Unit,
     modifier: Modifier = Modifier,
+    /** Marketplace destinations reached from the feed rather than the bottom bar. */
+    extras: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     Row(
         modifier
@@ -70,6 +72,7 @@ fun FeedTabs(
                 onClick = { onSelect(surface) },
             )
         }
+        extras.forEach { (label, open) -> Tab(label = label, active = false, onClick = open) }
     }
 }
 

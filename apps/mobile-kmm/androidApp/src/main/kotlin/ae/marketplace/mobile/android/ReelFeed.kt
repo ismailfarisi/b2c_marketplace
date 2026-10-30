@@ -49,6 +49,8 @@ fun ReelFeed(
      * its target type, which is the line this whole seam is drawn along.
      */
     onActionPressed: (ResolvedAction, String) -> Unit = { _, _ -> },
+    /** Search, Saved and Sell, shown after the feed surfaces. */
+    extras: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -125,6 +127,7 @@ fun ReelFeed(
                 selected = state.surface,
                 onSelect = viewModel::onSurfaceSelected,
                 modifier = Modifier.padding(top = 4.dp),
+                extras = extras,
             )
             // Its own line, under the surfaces rather than beside them. Sharing
             // the row cost "Nearby" its last three characters: four tab labels

@@ -277,3 +277,19 @@
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */
 "action_back" = "Back";
+
+/* Meals: location, help and navigation (mobile critique) */
+"nav_my_meals" = "My meals";
+"meals_subscriber" = "Subscriber";
+"meals_choice_help" = "Days marked 2 choices let you pick one of two mains before the cutoff.";
+"meals_near_count" = "%lld kitchens deliver to you";
+"meals_near_place" = "%1$lld kitchens deliver to %2$@";
+"meals_none_near" = "No kitchens deliver to %@ yet";
+"meals_change" = "Change";
+"meals_where" = "Where should we deliver?";
+"meals_use_location" = "Use my current location";
+"meals_your_addresses" = "Your addresses";
+"meals_choose_area" = "Or choose an area";
+"meals_search_areas" = "Search areas";
+"meals_no_area" = "No area matches. Try another spelling.";
+"meals_office_lunch" = "Office lunches for your company";

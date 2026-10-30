@@ -1,5 +1,7 @@
 package ae.marketplace.mobile.android.meals
 
+import androidx.compose.ui.semantics.selected
+import ae.marketplace.mobile.model.MealTags
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -103,9 +105,20 @@ fun MealsTab(
     location: LatLng,
     requireAccount: (() -> Unit) -> Unit,
     modifier: Modifier = Modifier,
+    /** The My meals tab: same flow, opened on the customer's subscriptions. */
+    startOnMine: Boolean = false,
 ) {
-    LaunchedEffect(location) { viewModel.setLocation(location.lat, location.lng) }
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("meals", android.content.Context.MODE_PRIVATE) }
+    var place by remember { mutableStateOf(readPlace(prefs)) }
+    LaunchedEffect(location, place) {
+        val p = place
+        if (p != null) viewModel.setLocation(p.lat, p.lng) else viewModel.setLocation(location.lat, location.lng)
+    }
     val stack = remember { mutableStateListOf(Page.Home) }
+    LaunchedEffect(Unit) {
+        if (startOnMine) { viewModel.loadMine(); stack.add(Page.Mine) }
+    }
     val page = stack.last()
     fun go(p: Page) { stack.add(p) }
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
@@ -130,11 +143,20 @@ fun MealsTab(
                 onKitchen = { viewModel.openKitchen(it); go(Page.Kitchen) },
                 onRotation = { requireAccount { viewModel.startRotation(); go(Page.Rotation) } },
                 onMine = { requireAccount { viewModel.loadMine(); go(Page.Mine) } },
+                place = place,
+                onPlace = { place = it; writePlace(prefs, it) },
             )
             Page.Kitchen -> KitchenPage(
                 viewModel,
                 onBack = ::back,
-                onSubscribe = { plan -> requireAccount { viewModel.startCheckout(plan); go(Page.Checkout) } },
+                onSubscribe = { plan ->
+                    requireAccount {
+                        viewModel.startCheckout(plan)
+                        // The address picked on home leads at checkout.
+                        place?.takeIf { it.kind == "address" }?.let { viewModel.selectAddress(it.id) }
+                        go(Page.Checkout)
+                    }
+                },
             )
             Page.Checkout -> CheckoutPage(viewModel, location, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Rotation -> RotationPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
@@ -155,9 +177,15 @@ private fun HomePage(
     onKitchen: (String) -> Unit,
     onRotation: () -> Unit,
     onMine: () -> Unit,
+    place: ChosenPlace?,
+    onPlace: (ChosenPlace?) -> Unit,
 ) {
     val s by vm.store.collectAsState()
     val arabic = rememberArabic()
+    var picking by remember { mutableStateOf(false) }
+    if (picking) {
+        PlacePicker(vm, s.addresses, place, arabic, onDismiss = { picking = false }) { onPlace(it); picking = false }
+    }
     LazyColumn(Modifier.fillMaxSize().background(M.Blush).statusBarsPadding().background(M.Paper)) {
         item {
             Column(
@@ -204,16 +232,171 @@ private fun HomePage(
             failure != null && s.kitchens.isEmpty() -> item { FailureBlock(failure, onRetry = vm::loadStore) }
             s.loading && s.kitchens.isEmpty() -> item { LoadingBlock() }
             else -> {
-                if (s.dishes.isNotEmpty()) item(key = "dishes") { DishRail(s.dishes, arabic, onKitchen) }
-                if (s.slot == null) item { RotationPromo(onRotation) }
-                s.sections.forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation) } }
-                item { SectionTitle(stringResource(R.string.meals_near_you)) }
+                // Kitchens first: the choice is the page. Merchandising follows.
+                val listed = s.kitchens.map { it.branchId }.toSet()
+                item(key = "near") { NearHeader(s.kitchens.size, place, arabic) { picking = true } }
                 if (s.kitchens.isEmpty()) item { EmptyBlock(stringResource(R.string.meals_none)) }
-                items(s.kitchens, key = { it.branchId }) { KitchenCard(it, arabic) { onKitchen(it.branchId) } }
+                items(s.kitchens.take(3), key = { it.branchId }) { KitchenCard(it, arabic) { onKitchen(it.branchId) } }
+                if (s.slot == null) item(key = "rotation") { RotationPromo(onRotation) }
+                items(s.kitchens.drop(3), key = { it.branchId }) { KitchenCard(it, arabic) { onKitchen(it.branchId) } }
+                s.sections.filter { it.type == "banner_carousel" }
+                    .forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation) } }
+                if (s.dishes.isNotEmpty()) item(key = "dishes") { DishRail(s.dishes, arabic, onKitchen) }
+                // Staff rails skip kitchens the list above already shows.
+                s.sections.filter { it.type == "kitchen_rail" }
+                    .map { it.copy(kitchens = it.kitchens.orEmpty().filterNot { k -> k.branchId in listed }) }
+                    .filter { !it.kitchens.isNullOrEmpty() }
+                    .forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation) } }
+                item(key = "office") { OfficeLink(arabic) }
             }
         }
         item { BottomPad() }
     }
+}
+
+/** Where the customer chose to browse kitchens for; kept on the device. */
+internal data class ChosenPlace(
+    val kind: String,
+    val id: String,
+    val label: String,
+    val labelAr: String?,
+    val lat: Double,
+    val lng: Double,
+) {
+    fun name(arabic: Boolean) = if (arabic) labelAr ?: label else label
+}
+
+private fun readPlace(p: android.content.SharedPreferences): ChosenPlace? {
+    val id = p.getString("place_id", null) ?: return null
+    return ChosenPlace(
+        p.getString("place_kind", "area") ?: "area",
+        id,
+        p.getString("place_label", "") ?: "",
+        p.getString("place_label_ar", null),
+        p.getFloat("place_lat", 0f).toDouble(),
+        p.getFloat("place_lng", 0f).toDouble(),
+    )
+}
+
+private fun writePlace(p: android.content.SharedPreferences, c: ChosenPlace?) {
+    p.edit().apply {
+        if (c == null) {
+            listOf("place_id", "place_kind", "place_label", "place_label_ar", "place_lat", "place_lng").forEach(::remove)
+        } else {
+            putString("place_id", c.id)
+            putString("place_kind", c.kind)
+            putString("place_label", c.label)
+            putString("place_label_ar", c.labelAr)
+            putFloat("place_lat", c.lat.toFloat())
+            putFloat("place_lng", c.lng.toFloat())
+        }
+    }.apply()
+}
+
+@Composable
+private fun NearHeader(count: Int, place: ChosenPlace?, arabic: Boolean, onChange: () -> Unit) {
+    val title = when {
+        place != null && count == 0 -> stringResource(R.string.meals_none_near, place.name(arabic))
+        place != null -> stringResource(R.string.meals_near_place, count, place.name(arabic))
+        else -> stringResource(R.string.meals_near_count, count)
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(start = Space.Edge, end = Space.Small, top = Space.Large, bottom = Space.Small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, color = M.Ink, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Text(
+            stringResource(R.string.meals_change),
+            color = M.Chilli,
+            fontSize = Type.Body,
+            fontWeight = FontWeight.SemiBold,
+            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+            modifier = Modifier
+                .semantics { role = Role.Button }
+                .clickable(onClick = onChange)
+                .padding(horizontal = 12.dp, vertical = 14.dp),
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PlacePicker(
+    vm: MealsViewModel,
+    addresses: List<ae.marketplace.mobile.model.Address>,
+    current: ChosenPlace?,
+    arabic: Boolean,
+    onDismiss: () -> Unit,
+    onPick: (ChosenPlace?) -> Unit,
+) {
+    LaunchedEffect(Unit) { vm.loadPlaceAddresses() }
+    var q by remember { mutableStateOf("") }
+    val areas = ae.marketplace.mobile.model.MealAreas.search(q)
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = M.Surface) {
+        LazyColumn(
+            Modifier.fillMaxWidth().padding(horizontal = Space.Edge),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            item { Text(stringResource(R.string.meals_where), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.Bold) }
+            item { PickRow(stringResource(R.string.meals_use_location), null, current == null) { onPick(null) } }
+            if (addresses.isNotEmpty()) {
+                item { PickLabel(stringResource(R.string.meals_your_addresses)) }
+                items(addresses, key = { "a" + it.id }) { a ->
+                    PickRow(a.label, a.line, current?.kind == "address" && current.id == a.id) {
+                        onPick(ChosenPlace("address", a.id, a.area?.takeIf { it.isNotBlank() } ?: a.label, null, a.point.lat, a.point.lng))
+                    }
+                }
+            }
+            item { PickLabel(stringResource(R.string.meals_choose_area)) }
+            item { Field(q, { q = it }, Modifier.fillMaxWidth(), placeholder = stringResource(R.string.meals_search_areas)) }
+            if (areas.isEmpty()) item { Text(stringResource(R.string.meals_no_area), color = M.Muted, fontSize = Type.Secondary) }
+            items(areas, key = { "z" + it.id }) { a ->
+                PickRow(a.name(arabic), a.city(arabic), current?.kind == "area" && current.id == a.id) {
+                    onPick(ChosenPlace("area", a.id, a.en, a.ar, a.lat, a.lng))
+                }
+            }
+            item { Spacer(Modifier.height(32.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun PickLabel(text: String) {
+    Text(text, color = M.Muted, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = Space.Medium))
+}
+
+@Composable
+private fun PickRow(title: String, detail: String?, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .semantics { this.selected = selected; role = Role.Button }
+            .clickable(onClick = onClick)
+            .border(1.dp, if (selected) M.Chilli else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(title, color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+        if (!detail.isNullOrBlank()) Text(detail, color = M.Muted, fontSize = Type.Secondary)
+    }
+}
+
+@Composable
+private fun OfficeLink(arabic: Boolean) {
+    val context = LocalContext.current
+    Text(
+        stringResource(R.string.meals_office_lunch),
+        color = M.Ink,
+        fontSize = Type.Body,
+        fontWeight = FontWeight.SemiBold,
+        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+        modifier = Modifier
+            .padding(horizontal = Space.Edge, vertical = Space.Medium)
+            .clickable {
+                val url = ae.marketplace.mobile.android.BuildConfig.WEB_BASE_URL + (if (arabic) "/ar" else "/en") + "/business"
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+            .padding(vertical = 12.dp),
+    )
 }
 
 @Composable
@@ -249,7 +432,7 @@ private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -
             ) {
                 items(kitchens, key = { it.branchId }) { k ->
                     Column(Modifier.width(220.dp).clickable { onKitchen(k.branchId) }) {
-                        KitchenCover(pick(k.name, k.nameAr, arabic), k.coverImageUrl, k.cuisines, Modifier.fillMaxWidth().height(124.dp))
+                        KitchenCover(pick(k.name, k.nameAr, arabic), k.coverImageUrl, k.cuisines.map { MealTags.label(it, arabic) }, Modifier.fillMaxWidth().height(124.dp), fallbackUrl = k.weekDishes.firstOrNull { it.imageUrl != null }?.imageUrl)
                         Text(pick(k.name, k.nameAr, arabic), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                         Text(stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)), color = M.Chilli, fontSize = Type.Secondary)
                     }
@@ -285,7 +468,7 @@ private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -
 @Composable
 private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
     val name = pick(k.name, k.nameAr, arabic)
-    val photo = k.coverImageUrl ?: k.weekDishes.firstOrNull { it.imageUrl != null }?.imageUrl
+    val dishPhoto = k.weekDishes.firstOrNull { it.imageUrl != null }?.imageUrl
     Column(
         Modifier
             .fillMaxWidth()
@@ -295,7 +478,7 @@ private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick),
     ) {
         Box {
-            KitchenCover(name, photo, k.cuisines, Modifier.fillMaxWidth().aspectRatio(1.8f))
+            KitchenCover(name, k.coverImageUrl, k.cuisines.map { MealTags.label(it, arabic) }, Modifier.fillMaxWidth().aspectRatio(1.8f), fallbackUrl = dishPhoto)
             Text(
                 stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)),
                 color = M.Ink,
@@ -334,7 +517,7 @@ private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
         Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(name, color = M.Ink, fontFamily = Serif, fontSize = Type.Heading, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                (k.cuisines + listOfNotNull(k.city)).joinToString(" · "),
+                MealTags.line(k.cuisines + k.dietaryTags, arabic),
                 color = M.Muted,
                 fontSize = Type.Secondary,
                 maxLines = 1,
@@ -465,7 +648,7 @@ private fun KitchenBody(
         LazyColumn(Modifier.fillMaxSize(), state = list) {
             item(key = "hero") {
                 Box {
-                    KitchenCover(name, photo, k.cuisines, Modifier.fillMaxWidth().aspectRatio(1.35f))
+                    KitchenCover(name, photo, k.cuisines.map { MealTags.label(it, arabic) }, Modifier.fillMaxWidth().aspectRatio(1.35f))
                     Text(
                         if (arabic) "→" else "←",
                         color = M.Ink,
@@ -492,7 +675,7 @@ private fun KitchenBody(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(name, color = M.Ink, fontFamily = Serif, fontSize = Type.Title * 1.25f, fontWeight = FontWeight.ExtraBold)
-                    if (k.cuisines.isNotEmpty()) Text(k.cuisines.joinToString(" · "), color = M.Muted, fontSize = Type.Secondary)
+                    if (k.cuisines.isNotEmpty()) Text(MealTags.line(k.cuisines, arabic), color = M.Muted, fontSize = Type.Secondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)),
@@ -513,6 +696,14 @@ private fun KitchenBody(
             if (byDay.isNotEmpty()) {
                 item(key = "menuTitle") { SectionTitle(stringResource(R.string.meals_weekly_menu)) }
                 item(key = "tabs") {
+                    if (k.menu.slots.any { it.alternative != null }) {
+                        Text(
+                            stringResource(R.string.meals_choice_help),
+                            color = M.Muted,
+                            fontSize = Type.Secondary,
+                            modifier = Modifier.padding(horizontal = Space.Edge).padding(bottom = Space.Small),
+                        )
+                    }
                     Row(
                         Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.Edge),
                         horizontalArrangement = Arrangement.spacedBy(Space.Small),
@@ -566,6 +757,11 @@ private fun KitchenBody(
                     Card {
                         Text("★".repeat(r.rating) + "☆".repeat(5 - r.rating), color = M.Saffron, fontSize = Type.Secondary)
                         if (r.comment.isNotBlank()) Text(r.comment, color = M.Ink, fontSize = Type.Body)
+                        Text(
+                            stringResource(R.string.meals_subscriber) + " · " + shortDate(r.createdAt, arabic),
+                            color = M.Muted,
+                            fontSize = Type.Caption,
+                        )
                     }
                 }
             }
@@ -657,9 +853,12 @@ private fun PlanCard(p: MealPlan, arabic: Boolean, popular: Boolean, enabled: Bo
             )
         }
         Text(pick(p.name, p.nameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.Bold)
-        Text(stringResource(R.string.meals_meal_price, money(p.mealPriceMinor, p.currency)), color = M.Chilli, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.ExtraBold)
+        val slots = p.mealSlots.map { slotLabel(it) }
+        Text(stringResource(R.string.meals_meal_price, money(p.mealPriceMinor, p.currency)), color = M.Ink, fontFamily = Serif, fontSize = Type.Title, fontWeight = FontWeight.ExtraBold)
+        Text(stringResource(R.string.meals_cycle_from, money(p.priceMinor, p.currency)), color = M.Muted, fontSize = Type.Secondary)
         Text(
-            stringResource(R.string.meals_plan_summary, p.mealsPerCycle, p.daysPerWeek) + " · " + stringResource(R.string.meals_cycle_from, money(p.priceMinor, p.currency)),
+            stringResource(R.string.meals_plan_summary, p.mealsPerCycle, p.daysPerWeek) +
+                slots.joinToString(prefix = " · ", separator = ", ").takeIf { slots.isNotEmpty() }.orEmpty(),
             color = M.Muted,
             fontSize = Type.Secondary,
         )
