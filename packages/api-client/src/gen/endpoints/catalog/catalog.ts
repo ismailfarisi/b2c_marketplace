@@ -20,14 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useQuery
 } from '@tanstack/react-query';
 import type {
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -47,53 +44,20 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary Public vendor profile
  */
-export type getVendorResponse200 = {
-  data: Vendor
-  status: 200
-}
-
-export type getVendorResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getVendorResponseSuccess = (getVendorResponse200) & {
-  headers: Headers;
-};
-export type getVendorResponseError = (getVendorResponse404) & {
-  headers: Headers;
-};
-
-export type getVendorResponse = (getVendorResponseSuccess | getVendorResponseError)
-
-export const getGetVendorUrl = (vendorId: string,) => {
-
-
-  
-
-  return `/vendors/${vendorId}`
-}
-
-export const getVendor = async (vendorId: string, options?: RequestInit): Promise<getVendorResponse> => {
-  
-  return apiFetch<getVendorResponse>(getGetVendorUrl(vendorId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetVendorInfiniteQueryKey = (vendorId?: string,) => {
-    return [
-    'infinite', `/vendors/${vendorId}`
-    ] as const;
+export const getVendor = (
+    vendorId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Vendor>(
+      {url: `/vendors/${vendorId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetVendorQueryKey = (vendorId?: string,) => {
     return [
@@ -102,49 +66,6 @@ export const getGetVendorQueryKey = (vendorId?: string,) => {
     }
 
     
-export const getGetVendorInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getVendor>>, TError = NotFoundResponse>(vendorId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getVendor>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetVendorInfiniteQueryKey(vendorId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVendor>>> = ({ signal }) => getVendor(vendorId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(vendorId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getVendor>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetVendorInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getVendor>>>
-export type GetVendorInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary Public vendor profile
- */
-
-export function useGetVendorInfinite<TData = Awaited<ReturnType<typeof getVendor>>, TError = NotFoundResponse>(
- vendorId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getVendor>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetVendorInfiniteQueryOptions(vendorId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetVendorQueryOptions = <TData = Awaited<ReturnType<typeof getVendor>>, TError = NotFoundResponse>(vendorId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVendor>>, TError, TData>, }
 ) => {
 
@@ -191,63 +112,22 @@ export function useGetVendor<TData = Awaited<ReturnType<typeof getVendor>>, TErr
 /**
  * @summary Bookable offerings at a branch
  */
-export type listOfferingsResponse200 = {
-  data: ListOfferings200
-  status: 200
-}
-
-export type listOfferingsResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type listOfferingsResponseSuccess = (listOfferingsResponse200) & {
-  headers: Headers;
-};
-export type listOfferingsResponseError = (listOfferingsResponse404) & {
-  headers: Headers;
-};
-
-export type listOfferingsResponse = (listOfferingsResponseSuccess | listOfferingsResponseError)
-
-export const getListOfferingsUrl = (branchId: string,
-    params?: ListOfferingsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listOfferings = (
+    branchId: string,
+    params?: ListOfferingsParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListOfferings200>(
+      {url: `/branches/${branchId}/offerings`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/branches/${branchId}/offerings?${stringifiedParams}` : `/branches/${branchId}/offerings`
-}
-
-export const listOfferings = async (branchId: string,
-    params?: ListOfferingsParams, options?: RequestInit): Promise<listOfferingsResponse> => {
   
-  return apiFetch<listOfferingsResponse>(getListOfferingsUrl(branchId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListOfferingsInfiniteQueryKey = (branchId?: string,
-    params?: ListOfferingsParams,) => {
-    return [
-    'infinite', `/branches/${branchId}/offerings`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListOfferingsQueryKey = (branchId?: string,
     params?: ListOfferingsParams,) => {
@@ -257,51 +137,6 @@ export const getListOfferingsQueryKey = (branchId?: string,
     }
 
     
-export const getListOfferingsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listOfferings>>, TError = NotFoundResponse>(branchId: string,
-    params?: ListOfferingsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOfferings>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListOfferingsInfiniteQueryKey(branchId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOfferings>>> = ({ signal, pageParam }) => listOfferings(branchId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOfferings>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListOfferingsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listOfferings>>>
-export type ListOfferingsInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary Bookable offerings at a branch
- */
-
-export function useListOfferingsInfinite<TData = Awaited<ReturnType<typeof listOfferings>>, TError = NotFoundResponse>(
- branchId: string,
-    params?: ListOfferingsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOfferings>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListOfferingsInfiniteQueryOptions(branchId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListOfferingsQueryOptions = <TData = Awaited<ReturnType<typeof listOfferings>>, TError = NotFoundResponse>(branchId: string,
     params?: ListOfferingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOfferings>>, TError, TData>, }
 ) => {

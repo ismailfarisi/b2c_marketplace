@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -56,46 +53,20 @@ being one-time.
 
  * @summary The in-app inbox
  */
-export type listNotificationsResponse200 = {
-  data: ListNotifications200
-  status: 200
-}
+export const listNotifications = (
     
-export type listNotificationsResponseSuccess = (listNotificationsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listNotificationsResponse = (listNotificationsResponseSuccess)
-
-export const getListNotificationsUrl = () => {
-
-
-  
-
-  return `/me/notifications`
-}
-
-export const listNotifications = async ( options?: RequestInit): Promise<listNotificationsResponse> => {
-  
-  return apiFetch<listNotificationsResponse>(getListNotificationsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListNotificationsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/notifications`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListNotifications200>(
+      {url: `/me/notifications`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListNotificationsQueryKey = () => {
     return [
@@ -104,49 +75,6 @@ export const getListNotificationsQueryKey = () => {
     }
 
     
-export const getListNotificationsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listNotifications>>, TError = unknown>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListNotificationsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNotifications>>> = ({ signal }) => listNotifications(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListNotificationsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listNotifications>>>
-export type ListNotificationsInfiniteQueryError = unknown
-
-
-/**
- * @summary The in-app inbox
- */
-
-export function useListNotificationsInfinite<TData = Awaited<ReturnType<typeof listNotifications>>, TError = unknown>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListNotificationsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listNotifications>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData>, }
 ) => {
 
@@ -190,45 +118,18 @@ export function useListNotifications<TData = Awaited<ReturnType<typeof listNotif
 
 
 
-export type markNotificationReadResponse204 = {
-  data: void
-  status: 204
-}
-
-export type markNotificationReadResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type markNotificationReadResponseSuccess = (markNotificationReadResponse204) & {
-  headers: Headers;
-};
-export type markNotificationReadResponseError = (markNotificationReadResponse404) & {
-  headers: Headers;
-};
-
-export type markNotificationReadResponse = (markNotificationReadResponseSuccess | markNotificationReadResponseError)
-
-export const getMarkNotificationReadUrl = (notificationId: string,) => {
-
-
+export const markNotificationRead = (
+    notificationId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me/notifications/${notificationId}/read`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/me/notifications/${notificationId}/read`
-}
-
-export const markNotificationRead = async (notificationId: string, options?: RequestInit): Promise<markNotificationReadResponse> => {
-  
-  return apiFetch<markNotificationReadResponse>(getMarkNotificationReadUrl(notificationId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getMarkNotificationReadMutationOptions = <TError = NotFoundResponse,
@@ -284,46 +185,19 @@ is the only place anyone can act on it.
 
  * @summary Opt in or out of a category on a channel
  */
-export type setNotificationPreferenceResponse204 = {
-  data: void
-  status: 204
-}
-
-export type setNotificationPreferenceResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type setNotificationPreferenceResponseSuccess = (setNotificationPreferenceResponse204) & {
-  headers: Headers;
-};
-export type setNotificationPreferenceResponseError = (setNotificationPreferenceResponse422) & {
-  headers: Headers;
-};
-
-export type setNotificationPreferenceResponse = (setNotificationPreferenceResponseSuccess | setNotificationPreferenceResponseError)
-
-export const getSetNotificationPreferenceUrl = () => {
-
-
+export const setNotificationPreference = (
+    setNotificationPreferenceBody: SetNotificationPreferenceBody,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me/notification-preferences`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: setNotificationPreferenceBody
+    },
+      );
+    }
   
-
-  return `/me/notification-preferences`
-}
-
-export const setNotificationPreference = async (setNotificationPreferenceBody: SetNotificationPreferenceBody, options?: RequestInit): Promise<setNotificationPreferenceResponse> => {
-  
-  return apiFetch<setNotificationPreferenceResponse>(getSetNotificationPreferenceUrl(),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      setNotificationPreferenceBody,)
-  }
-);}
-
-
 
 
 export const getSetNotificationPreferenceMutationOptions = <TError = UnprocessableEntityResponse,

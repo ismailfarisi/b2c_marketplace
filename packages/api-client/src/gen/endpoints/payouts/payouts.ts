@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -58,53 +55,20 @@ June" gets it renewed.
 
  * @summary Why this vendor can or cannot be paid
  */
-export type getVendorComplianceResponse200 = {
-  data: GetVendorCompliance200
-  status: 200
-}
-
-export type getVendorComplianceResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type getVendorComplianceResponseSuccess = (getVendorComplianceResponse200) & {
-  headers: Headers;
-};
-export type getVendorComplianceResponseError = (getVendorComplianceResponse403) & {
-  headers: Headers;
-};
-
-export type getVendorComplianceResponse = (getVendorComplianceResponseSuccess | getVendorComplianceResponseError)
-
-export const getGetVendorComplianceUrl = (vendorId: string,) => {
-
-
-  
-
-  return `/vendors/${vendorId}/compliance`
-}
-
-export const getVendorCompliance = async (vendorId: string, options?: RequestInit): Promise<getVendorComplianceResponse> => {
-  
-  return apiFetch<getVendorComplianceResponse>(getGetVendorComplianceUrl(vendorId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetVendorComplianceInfiniteQueryKey = (vendorId?: string,) => {
-    return [
-    'infinite', `/vendors/${vendorId}/compliance`
-    ] as const;
+export const getVendorCompliance = (
+    vendorId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetVendorCompliance200>(
+      {url: `/vendors/${vendorId}/compliance`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetVendorComplianceQueryKey = (vendorId?: string,) => {
     return [
@@ -113,49 +77,6 @@ export const getGetVendorComplianceQueryKey = (vendorId?: string,) => {
     }
 
     
-export const getGetVendorComplianceInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getVendorCompliance>>, TError = ForbiddenResponse>(vendorId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getVendorCompliance>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetVendorComplianceInfiniteQueryKey(vendorId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVendorCompliance>>> = ({ signal }) => getVendorCompliance(vendorId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(vendorId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getVendorCompliance>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetVendorComplianceInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getVendorCompliance>>>
-export type GetVendorComplianceInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Why this vendor can or cannot be paid
- */
-
-export function useGetVendorComplianceInfinite<TData = Awaited<ReturnType<typeof getVendorCompliance>>, TError = ForbiddenResponse>(
- vendorId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getVendorCompliance>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetVendorComplianceInfiniteQueryOptions(vendorId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetVendorComplianceQueryOptions = <TData = Awaited<ReturnType<typeof getVendorCompliance>>, TError = ForbiddenResponse>(vendorId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVendorCompliance>>, TError, TData>, }
 ) => {
 
@@ -214,52 +135,21 @@ screenshotted in ways request bodies are not.
 
  * @summary Register the bank account payouts go to
  */
-export type addPayoutAccountResponse201 = {
-  data: AddPayoutAccount201
-  status: 201
-}
-
-export type addPayoutAccountResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type addPayoutAccountResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type addPayoutAccountResponseSuccess = (addPayoutAccountResponse201) & {
-  headers: Headers;
-};
-export type addPayoutAccountResponseError = (addPayoutAccountResponse403 | addPayoutAccountResponse422) & {
-  headers: Headers;
-};
-
-export type addPayoutAccountResponse = (addPayoutAccountResponseSuccess | addPayoutAccountResponseError)
-
-export const getAddPayoutAccountUrl = (vendorId: string,) => {
-
-
+export const addPayoutAccount = (
+    vendorId: string,
+    addPayoutAccountBody: AddPayoutAccountBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<AddPayoutAccount201>(
+      {url: `/vendors/${vendorId}/payout-account`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: addPayoutAccountBody, signal
+    },
+      );
+    }
   
-
-  return `/vendors/${vendorId}/payout-account`
-}
-
-export const addPayoutAccount = async (vendorId: string,
-    addPayoutAccountBody: AddPayoutAccountBody, options?: RequestInit): Promise<addPayoutAccountResponse> => {
-  
-  return apiFetch<addPayoutAccountResponse>(getAddPayoutAccountUrl(vendorId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      addPayoutAccountBody,)
-  }
-);}
-
-
 
 
 export const getAddPayoutAccountMutationOptions = <TError = ForbiddenResponse | UnprocessableEntityResponse,
@@ -314,47 +204,21 @@ comparison happened and who says so.
 
  * @summary Confirm the account holder matches the identity check
  */
-export type verifyPayoutAccountResponse204 = {
-  data: void
-  status: 204
-}
-
-export type verifyPayoutAccountResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type verifyPayoutAccountResponseSuccess = (verifyPayoutAccountResponse204) & {
-  headers: Headers;
-};
-export type verifyPayoutAccountResponseError = (verifyPayoutAccountResponse403) & {
-  headers: Headers;
-};
-
-export type verifyPayoutAccountResponse = (verifyPayoutAccountResponseSuccess | verifyPayoutAccountResponseError)
-
-export const getVerifyPayoutAccountUrl = (accountId: string,) => {
-
-
+export const verifyPayoutAccount = (
+    accountId: string,
+    verifyPayoutAccountBody: VerifyPayoutAccountBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/payout-accounts/${accountId}/verify`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: verifyPayoutAccountBody, signal
+    },
+      );
+    }
   
-
-  return `/payout-accounts/${accountId}/verify`
-}
-
-export const verifyPayoutAccount = async (accountId: string,
-    verifyPayoutAccountBody: VerifyPayoutAccountBody, options?: RequestInit): Promise<verifyPayoutAccountResponse> => {
-  
-  return apiFetch<verifyPayoutAccountResponse>(getVerifyPayoutAccountUrl(accountId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      verifyPayoutAccountBody,)
-  }
-);}
-
-
 
 
 export const getVerifyPayoutAccountMutationOptions = <TError = ForbiddenResponse,
@@ -414,53 +278,20 @@ The IBAN is masked. The check digits were validated when it was stored.
 
  * @summary Bank accounts awaiting the name check
  */
-export type listPendingPayoutAccountsResponse200 = {
-  data: ListPendingPayoutAccounts200
-  status: 200
-}
-
-export type listPendingPayoutAccountsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
+export const listPendingPayoutAccounts = (
     
-export type listPendingPayoutAccountsResponseSuccess = (listPendingPayoutAccountsResponse200) & {
-  headers: Headers;
-};
-export type listPendingPayoutAccountsResponseError = (listPendingPayoutAccountsResponse403) & {
-  headers: Headers;
-};
-
-export type listPendingPayoutAccountsResponse = (listPendingPayoutAccountsResponseSuccess | listPendingPayoutAccountsResponseError)
-
-export const getListPendingPayoutAccountsUrl = () => {
-
-
-  
-
-  return `/payout-accounts`
-}
-
-export const listPendingPayoutAccounts = async ( options?: RequestInit): Promise<listPendingPayoutAccountsResponse> => {
-  
-  return apiFetch<listPendingPayoutAccountsResponse>(getListPendingPayoutAccountsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListPendingPayoutAccountsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/payout-accounts`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListPendingPayoutAccounts200>(
+      {url: `/payout-accounts`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListPendingPayoutAccountsQueryKey = () => {
     return [
@@ -469,49 +300,6 @@ export const getListPendingPayoutAccountsQueryKey = () => {
     }
 
     
-export const getListPendingPayoutAccountsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listPendingPayoutAccounts>>, TError = ForbiddenResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listPendingPayoutAccounts>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListPendingPayoutAccountsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPendingPayoutAccounts>>> = ({ signal }) => listPendingPayoutAccounts(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listPendingPayoutAccounts>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListPendingPayoutAccountsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listPendingPayoutAccounts>>>
-export type ListPendingPayoutAccountsInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Bank accounts awaiting the name check
- */
-
-export function useListPendingPayoutAccountsInfinite<TData = Awaited<ReturnType<typeof listPendingPayoutAccounts>>, TError = ForbiddenResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listPendingPayoutAccounts>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListPendingPayoutAccountsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListPendingPayoutAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listPendingPayoutAccounts>>, TError = ForbiddenResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPendingPayoutAccounts>>, TError, TData>, }
 ) => {
 

@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -53,63 +50,22 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary The branch's routes for a day
  */
-export type getDispatchBoardResponse200 = {
-  data: DispatchBoard
-  status: 200
-}
-
-export type getDispatchBoardResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getDispatchBoardResponseSuccess = (getDispatchBoardResponse200) & {
-  headers: Headers;
-};
-export type getDispatchBoardResponseError = (getDispatchBoardResponse404) & {
-  headers: Headers;
-};
-
-export type getDispatchBoardResponse = (getDispatchBoardResponseSuccess | getDispatchBoardResponseError)
-
-export const getGetDispatchBoardUrl = (branchId: string,
-    params?: GetDispatchBoardParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getDispatchBoard = (
+    branchId: string,
+    params?: GetDispatchBoardParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<DispatchBoard>(
+      {url: `/branches/${branchId}/dispatch`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/branches/${branchId}/dispatch?${stringifiedParams}` : `/branches/${branchId}/dispatch`
-}
-
-export const getDispatchBoard = async (branchId: string,
-    params?: GetDispatchBoardParams, options?: RequestInit): Promise<getDispatchBoardResponse> => {
   
-  return apiFetch<getDispatchBoardResponse>(getGetDispatchBoardUrl(branchId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetDispatchBoardInfiniteQueryKey = (branchId?: string,
-    params?: GetDispatchBoardParams,) => {
-    return [
-    'infinite', `/branches/${branchId}/dispatch`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetDispatchBoardQueryKey = (branchId?: string,
     params?: GetDispatchBoardParams,) => {
@@ -119,51 +75,6 @@ export const getGetDispatchBoardQueryKey = (branchId?: string,
     }
 
     
-export const getGetDispatchBoardInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getDispatchBoard>>, TError = NotFoundResponse>(branchId: string,
-    params?: GetDispatchBoardParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getDispatchBoard>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetDispatchBoardInfiniteQueryKey(branchId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDispatchBoard>>> = ({ signal, pageParam }) => getDispatchBoard(branchId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getDispatchBoard>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetDispatchBoardInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getDispatchBoard>>>
-export type GetDispatchBoardInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary The branch's routes for a day
- */
-
-export function useGetDispatchBoardInfinite<TData = Awaited<ReturnType<typeof getDispatchBoard>>, TError = NotFoundResponse>(
- branchId: string,
-    params?: GetDispatchBoardParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getDispatchBoard>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetDispatchBoardInfiniteQueryOptions(branchId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetDispatchBoardQueryOptions = <TData = Awaited<ReturnType<typeof getDispatchBoard>>, TError = NotFoundResponse>(branchId: string,
     params?: GetDispatchBoardParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDispatchBoard>>, TError, TData>, }
 ) => {
@@ -226,54 +137,20 @@ in three hours.
 
  * @summary Sequence unrouted work into routes
  */
-export type planRoutesResponse200 = {
-  data: PlanRoutes200
-  status: 200
-}
-
-export type planRoutesResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type planRoutesResponseSuccess = (planRoutesResponse200) & {
-  headers: Headers;
-};
-export type planRoutesResponseError = (planRoutesResponse404) & {
-  headers: Headers;
-};
-
-export type planRoutesResponse = (planRoutesResponseSuccess | planRoutesResponseError)
-
-export const getPlanRoutesUrl = (branchId: string,
-    params?: PlanRoutesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const planRoutes = (
+    branchId: string,
+    params?: PlanRoutesParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<PlanRoutes200>(
+      {url: `/branches/${branchId}/dispatch/plan`, method: 'POST',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/branches/${branchId}/dispatch/plan?${stringifiedParams}` : `/branches/${branchId}/dispatch/plan`
-}
-
-export const planRoutes = async (branchId: string,
-    params?: PlanRoutesParams, options?: RequestInit): Promise<planRoutesResponse> => {
   
-  return apiFetch<planRoutesResponse>(getPlanRoutesUrl(branchId,params),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getPlanRoutesMutationOptions = <TError = NotFoundResponse,
@@ -328,47 +205,21 @@ a bike.
 
  * @summary Give a route to a driver
  */
-export type assignRouteResponse200 = {
-  data: void
-  status: 200
-}
-
-export type assignRouteResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type assignRouteResponseSuccess = (assignRouteResponse200) & {
-  headers: Headers;
-};
-export type assignRouteResponseError = (assignRouteResponse409) & {
-  headers: Headers;
-};
-
-export type assignRouteResponse = (assignRouteResponseSuccess | assignRouteResponseError)
-
-export const getAssignRouteUrl = (routeId: string,) => {
-
-
+export const assignRoute = (
+    routeId: string,
+    assignRouteBody: AssignRouteBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/routes/${routeId}/assign`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: assignRouteBody, signal
+    },
+      );
+    }
   
-
-  return `/routes/${routeId}/assign`
-}
-
-export const assignRoute = async (routeId: string,
-    assignRouteBody: AssignRouteBody, options?: RequestInit): Promise<assignRouteResponse> => {
-  
-  return apiFetch<assignRouteResponse>(getAssignRouteUrl(routeId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      assignRouteBody,)
-  }
-);}
-
-
 
 
 export const getAssignRouteMutationOptions = <TError = void,

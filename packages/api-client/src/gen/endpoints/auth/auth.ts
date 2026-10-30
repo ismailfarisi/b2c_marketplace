@@ -48,51 +48,20 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary Send a one-time code to a phone number
  */
-export type requestOtpResponse202 = {
-  data: OtpChallenge
-  status: 202
-}
-
-export type requestOtpResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-
-export type requestOtpResponse429 = {
-  data: TooManyRequestsResponse
-  status: 429
-}
-    
-export type requestOtpResponseSuccess = (requestOtpResponse202) & {
-  headers: Headers;
-};
-export type requestOtpResponseError = (requestOtpResponse422 | requestOtpResponse429) & {
-  headers: Headers;
-};
-
-export type requestOtpResponse = (requestOtpResponseSuccess | requestOtpResponseError)
-
-export const getRequestOtpUrl = () => {
-
-
+export const requestOtp = (
+    otpRequest: OtpRequest,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<OtpChallenge>(
+      {url: `/auth/otp/request`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: otpRequest, signal
+    },
+      );
+    }
   
-
-  return `/auth/otp/request`
-}
-
-export const requestOtp = async (otpRequest: OtpRequest, options?: RequestInit): Promise<requestOtpResponse> => {
-  
-  return apiFetch<requestOtpResponse>(getRequestOtpUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      otpRequest,)
-  }
-);}
-
-
 
 
 export const getRequestOtpMutationOptions = <TError = UnprocessableEntityResponse | TooManyRequestsResponse,
@@ -143,51 +112,20 @@ export const useRequestOtp = <TError = UnprocessableEntityResponse | TooManyRequ
     /**
  * @summary Exchange a one-time code for a token pair
  */
-export type verifyOtpResponse200 = {
-  data: TokenPair
-  status: 200
-}
-
-export type verifyOtpResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type verifyOtpResponse429 = {
-  data: TooManyRequestsResponse
-  status: 429
-}
-    
-export type verifyOtpResponseSuccess = (verifyOtpResponse200) & {
-  headers: Headers;
-};
-export type verifyOtpResponseError = (verifyOtpResponse401 | verifyOtpResponse429) & {
-  headers: Headers;
-};
-
-export type verifyOtpResponse = (verifyOtpResponseSuccess | verifyOtpResponseError)
-
-export const getVerifyOtpUrl = () => {
-
-
+export const verifyOtp = (
+    otpVerification: OtpVerification,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<TokenPair>(
+      {url: `/auth/otp/verify`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: otpVerification, signal
+    },
+      );
+    }
   
-
-  return `/auth/otp/verify`
-}
-
-export const verifyOtp = async (otpVerification: OtpVerification, options?: RequestInit): Promise<verifyOtpResponse> => {
-  
-  return apiFetch<verifyOtpResponse>(getVerifyOtpUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      otpVerification,)
-  }
-);}
-
-
 
 
 export const getVerifyOtpMutationOptions = <TError = UnauthorizedResponse | TooManyRequestsResponse,
@@ -238,46 +176,20 @@ export const useVerifyOtp = <TError = UnauthorizedResponse | TooManyRequestsResp
     /**
  * @summary Rotate a refresh token
  */
-export type refreshSessionResponse200 = {
-  data: TokenPair
-  status: 200
-}
-
-export type refreshSessionResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type refreshSessionResponseSuccess = (refreshSessionResponse200) & {
-  headers: Headers;
-};
-export type refreshSessionResponseError = (refreshSessionResponse401) & {
-  headers: Headers;
-};
-
-export type refreshSessionResponse = (refreshSessionResponseSuccess | refreshSessionResponseError)
-
-export const getRefreshSessionUrl = () => {
-
-
+export const refreshSession = (
+    refreshSessionBody: RefreshSessionBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<TokenPair>(
+      {url: `/auth/refresh`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: refreshSessionBody, signal
+    },
+      );
+    }
   
-
-  return `/auth/refresh`
-}
-
-export const refreshSession = async (refreshSessionBody: RefreshSessionBody, options?: RequestInit): Promise<refreshSessionResponse> => {
-  
-  return apiFetch<refreshSessionResponse>(getRefreshSessionUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      refreshSessionBody,)
-  }
-);}
-
-
 
 
 export const getRefreshSessionMutationOptions = <TError = UnauthorizedResponse,
@@ -328,46 +240,20 @@ export const useRefreshSession = <TError = UnauthorizedResponse,
     /**
  * @summary Revoke the current session, or all sessions for this user
  */
-export type logoutResponse204 = {
-  data: void
-  status: 204
-}
-
-export type logoutResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type logoutResponseSuccess = (logoutResponse204) & {
-  headers: Headers;
-};
-export type logoutResponseError = (logoutResponse401) & {
-  headers: Headers;
-};
-
-export type logoutResponse = (logoutResponseSuccess | logoutResponseError)
-
-export const getLogoutUrl = () => {
-
-
+export const logout = (
+    logoutBody?: LogoutBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/auth/logout`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: logoutBody, signal
+    },
+      );
+    }
   
-
-  return `/auth/logout`
-}
-
-export const logout = async (logoutBody?: LogoutBody, options?: RequestInit): Promise<logoutResponse> => {
-  
-  return apiFetch<logoutResponse>(getLogoutUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      logoutBody,)
-  }
-);}
-
-
 
 
 export const getLogoutMutationOptions = <TError = UnauthorizedResponse,

@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -51,50 +48,18 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary Spend a bump credit
  */
-export type bumpListingResponse200 = {
-  data: void
-  status: 200
-}
-
-export type bumpListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type bumpListingResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type bumpListingResponseSuccess = (bumpListingResponse200) & {
-  headers: Headers;
-};
-export type bumpListingResponseError = (bumpListingResponse401 | bumpListingResponse409) & {
-  headers: Headers;
-};
-
-export type bumpListingResponse = (bumpListingResponseSuccess | bumpListingResponseError)
-
-export const getBumpListingUrl = (listingId: string,) => {
-
-
+export const bumpListing = (
+    listingId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/bump`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/bump`
-}
-
-export const bumpListing = async (listingId: string, options?: RequestInit): Promise<bumpListingResponse> => {
-  
-  return apiFetch<bumpListingResponse>(getBumpListingUrl(listingId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getBumpListingMutationOptions = <TError = UnauthorizedResponse | void,
@@ -149,50 +114,18 @@ disagreeing with the money behind it.
 
  * @summary Spend featured days
  */
-export type featureListingResponse200 = {
-  data: void
-  status: 200
-}
-
-export type featureListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type featureListingResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type featureListingResponseSuccess = (featureListingResponse200) & {
-  headers: Headers;
-};
-export type featureListingResponseError = (featureListingResponse401 | featureListingResponse409) & {
-  headers: Headers;
-};
-
-export type featureListingResponse = (featureListingResponseSuccess | featureListingResponseError)
-
-export const getFeatureListingUrl = (listingId: string,) => {
-
-
+export const featureListing = (
+    listingId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/feature`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/feature`
-}
-
-export const featureListing = async (listingId: string, options?: RequestInit): Promise<featureListingResponse> => {
-  
-  return apiFetch<featureListingResponse>(getFeatureListingUrl(listingId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getFeatureListingMutationOptions = <TError = UnauthorizedResponse | void,
@@ -251,53 +184,21 @@ only car before there are buyers is how the listing count stays at zero.
 
  * @summary What a listing costs
  */
-export type listListingPackagesResponse200 = {
-  data: ListListingPackages200
-  status: 200
-}
-    
-export type listListingPackagesResponseSuccess = (listListingPackagesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listListingPackagesResponse = (listListingPackagesResponseSuccess)
-
-export const getListListingPackagesUrl = (params?: ListListingPackagesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listListingPackages = (
+    params?: ListListingPackagesParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListListingPackages200>(
+      {url: `/listing-packages`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/listing-packages?${stringifiedParams}` : `/listing-packages`
-}
-
-export const listListingPackages = async (params?: ListListingPackagesParams, options?: RequestInit): Promise<listListingPackagesResponse> => {
   
-  return apiFetch<listListingPackagesResponse>(getListListingPackagesUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListListingPackagesInfiniteQueryKey = (params?: ListListingPackagesParams,) => {
-    return [
-    'infinite', `/listing-packages`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListListingPackagesQueryKey = (params?: ListListingPackagesParams,) => {
     return [
@@ -306,49 +207,6 @@ export const getListListingPackagesQueryKey = (params?: ListListingPackagesParam
     }
 
     
-export const getListListingPackagesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listListingPackages>>, TError = unknown>(params?: ListListingPackagesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listListingPackages>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListListingPackagesInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listListingPackages>>> = ({ signal, pageParam }) => listListingPackages({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listListingPackages>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListListingPackagesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listListingPackages>>>
-export type ListListingPackagesInfiniteQueryError = unknown
-
-
-/**
- * @summary What a listing costs
- */
-
-export function useListListingPackagesInfinite<TData = Awaited<ReturnType<typeof listListingPackages>>, TError = unknown>(
- params?: ListListingPackagesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listListingPackages>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListListingPackagesInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListListingPackagesQueryOptions = <TData = Awaited<ReturnType<typeof listListingPackages>>, TError = unknown>(params?: ListListingPackagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listListingPackages>>, TError, TData>, }
 ) => {
 
@@ -401,50 +259,18 @@ arithmetic a prepaid meal cycle uses.
 
  * @summary Buy a listing package
  */
-export type purchaseListingPackageResponse201 = {
-  data: PackagePurchase
-  status: 201
-}
-
-export type purchaseListingPackageResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type purchaseListingPackageResponse403 = {
-  data: void
-  status: 403
-}
-    
-export type purchaseListingPackageResponseSuccess = (purchaseListingPackageResponse201) & {
-  headers: Headers;
-};
-export type purchaseListingPackageResponseError = (purchaseListingPackageResponse401 | purchaseListingPackageResponse403) & {
-  headers: Headers;
-};
-
-export type purchaseListingPackageResponse = (purchaseListingPackageResponseSuccess | purchaseListingPackageResponseError)
-
-export const getPurchaseListingPackageUrl = (packageId: string,) => {
-
-
+export const purchaseListingPackage = (
+    packageId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<PackagePurchase>(
+      {url: `/listing-packages/${packageId}/purchase`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/listing-packages/${packageId}/purchase`
-}
-
-export const purchaseListingPackage = async (packageId: string, options?: RequestInit): Promise<purchaseListingPackageResponse> => {
-  
-  return apiFetch<purchaseListingPackageResponse>(getPurchaseListingPackageUrl(packageId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getPurchaseListingPackageMutationOptions = <TError = UnauthorizedResponse | void,

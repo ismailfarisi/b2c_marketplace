@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -55,53 +52,20 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary Message inbox
  */
-export type listConversationsResponse200 = {
-  data: ListConversations200
-  status: 200
-}
-
-export type listConversationsResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
+export const listConversations = (
     
-export type listConversationsResponseSuccess = (listConversationsResponse200) & {
-  headers: Headers;
-};
-export type listConversationsResponseError = (listConversationsResponse401) & {
-  headers: Headers;
-};
-
-export type listConversationsResponse = (listConversationsResponseSuccess | listConversationsResponseError)
-
-export const getListConversationsUrl = () => {
-
-
-  
-
-  return `/me/conversations`
-}
-
-export const listConversations = async ( options?: RequestInit): Promise<listConversationsResponse> => {
-  
-  return apiFetch<listConversationsResponse>(getListConversationsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListConversationsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/conversations`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListConversations200>(
+      {url: `/me/conversations`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListConversationsQueryKey = () => {
     return [
@@ -110,49 +74,6 @@ export const getListConversationsQueryKey = () => {
     }
 
     
-export const getListConversationsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listConversations>>, TError = UnauthorizedResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listConversations>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListConversationsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listConversations>>> = ({ signal }) => listConversations(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listConversations>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListConversationsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listConversations>>>
-export type ListConversationsInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary Message inbox
- */
-
-export function useListConversationsInfinite<TData = Awaited<ReturnType<typeof listConversations>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listConversations>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListConversationsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListConversationsQueryOptions = <TData = Awaited<ReturnType<typeof listConversations>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listConversations>>, TError, TData>, }
 ) => {
 
@@ -203,68 +124,22 @@ each attempt is another row for a moderator to read.
 
  * @summary Read a thread
  */
-export type listMessagesResponse200 = {
-  data: ListMessages200
-  status: 200
-}
-
-export type listMessagesResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type listMessagesResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type listMessagesResponseSuccess = (listMessagesResponse200) & {
-  headers: Headers;
-};
-export type listMessagesResponseError = (listMessagesResponse401 | listMessagesResponse404) & {
-  headers: Headers;
-};
-
-export type listMessagesResponse = (listMessagesResponseSuccess | listMessagesResponseError)
-
-export const getListMessagesUrl = (conversationId: string,
-    params?: ListMessagesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listMessages = (
+    conversationId: string,
+    params?: ListMessagesParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMessages200>(
+      {url: `/conversations/${conversationId}/messages`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/conversations/${conversationId}/messages?${stringifiedParams}` : `/conversations/${conversationId}/messages`
-}
-
-export const listMessages = async (conversationId: string,
-    params?: ListMessagesParams, options?: RequestInit): Promise<listMessagesResponse> => {
   
-  return apiFetch<listMessagesResponse>(getListMessagesUrl(conversationId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListMessagesInfiniteQueryKey = (conversationId?: string,
-    params?: ListMessagesParams,) => {
-    return [
-    'infinite', `/conversations/${conversationId}/messages`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListMessagesQueryKey = (conversationId?: string,
     params?: ListMessagesParams,) => {
@@ -274,51 +149,6 @@ export const getListMessagesQueryKey = (conversationId?: string,
     }
 
     
-export const getListMessagesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listMessages>>, TError = UnauthorizedResponse | NotFoundResponse>(conversationId: string,
-    params?: ListMessagesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMessages>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListMessagesInfiniteQueryKey(conversationId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMessages>>> = ({ signal, pageParam }) => listMessages(conversationId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(conversationId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMessages>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListMessagesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listMessages>>>
-export type ListMessagesInfiniteQueryError = UnauthorizedResponse | NotFoundResponse
-
-
-/**
- * @summary Read a thread
- */
-
-export function useListMessagesInfinite<TData = Awaited<ReturnType<typeof listMessages>>, TError = UnauthorizedResponse | NotFoundResponse>(
- conversationId: string,
-    params?: ListMessagesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMessages>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListMessagesInfiniteQueryOptions(conversationId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListMessagesQueryOptions = <TData = Awaited<ReturnType<typeof listMessages>>, TError = UnauthorizedResponse | NotFoundResponse>(conversationId: string,
     params?: ListMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMessages>>, TError, TData>, }
 ) => {
@@ -385,62 +215,21 @@ The scanner folds Arabic-Indic digits before matching. A number typed as
 
  * @summary Send a message
  */
-export type sendMessageResponse201 = {
-  data: SentMessage
-  status: 201
-}
-
-export type sendMessageResponse202 = {
-  data: SentMessage
-  status: 202
-}
-
-export type sendMessageResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type sendMessageResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type sendMessageResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type sendMessageResponseSuccess = (sendMessageResponse201 | sendMessageResponse202) & {
-  headers: Headers;
-};
-export type sendMessageResponseError = (sendMessageResponse401 | sendMessageResponse404 | sendMessageResponse422) & {
-  headers: Headers;
-};
-
-export type sendMessageResponse = (sendMessageResponseSuccess | sendMessageResponseError)
-
-export const getSendMessageUrl = (conversationId: string,) => {
-
-
+export const sendMessage = (
+    conversationId: string,
+    sendMessageBody: SendMessageBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<SentMessage | SentMessage>(
+      {url: `/conversations/${conversationId}/messages`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: sendMessageBody, signal
+    },
+      );
+    }
   
-
-  return `/conversations/${conversationId}/messages`
-}
-
-export const sendMessage = async (conversationId: string,
-    sendMessageBody: SendMessageBody, options?: RequestInit): Promise<sendMessageResponse> => {
-  
-  return apiFetch<sendMessageResponse>(getSendMessageUrl(conversationId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      sendMessageBody,)
-  }
-);}
-
-
 
 
 export const getSendMessageMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -491,45 +280,18 @@ export const useSendMessage = <TError = UnauthorizedResponse | NotFoundResponse 
     /**
  * @summary Clear the unread badge
  */
-export type markConversationReadResponse204 = {
-  data: void
-  status: 204
-}
-
-export type markConversationReadResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type markConversationReadResponseSuccess = (markConversationReadResponse204) & {
-  headers: Headers;
-};
-export type markConversationReadResponseError = (markConversationReadResponse401) & {
-  headers: Headers;
-};
-
-export type markConversationReadResponse = (markConversationReadResponseSuccess | markConversationReadResponseError)
-
-export const getMarkConversationReadUrl = (conversationId: string,) => {
-
-
+export const markConversationRead = (
+    conversationId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/conversations/${conversationId}/read`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/conversations/${conversationId}/read`
-}
-
-export const markConversationRead = async (conversationId: string, options?: RequestInit): Promise<markConversationReadResponse> => {
-  
-  return apiFetch<markConversationReadResponse>(getMarkConversationReadUrl(conversationId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getMarkConversationReadMutationOptions = <TError = UnauthorizedResponse,

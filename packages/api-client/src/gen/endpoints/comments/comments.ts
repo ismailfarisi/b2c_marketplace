@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -62,56 +59,22 @@ Reading does not require an account. Writing does.
 
  * @summary A reel's comment thread
  */
-export type listCommentsResponse200 = {
-  data: CommentPage
-  status: 200
-}
-    
-export type listCommentsResponseSuccess = (listCommentsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listCommentsResponse = (listCommentsResponseSuccess)
-
-export const getListCommentsUrl = (reelId: string,
-    params?: ListCommentsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listComments = (
+    reelId: string,
+    params?: ListCommentsParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<CommentPage>(
+      {url: `/reels/${reelId}/comments`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/reels/${reelId}/comments?${stringifiedParams}` : `/reels/${reelId}/comments`
-}
-
-export const listComments = async (reelId: string,
-    params?: ListCommentsParams, options?: RequestInit): Promise<listCommentsResponse> => {
   
-  return apiFetch<listCommentsResponse>(getListCommentsUrl(reelId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListCommentsInfiniteQueryKey = (reelId?: string,
-    params?: ListCommentsParams,) => {
-    return [
-    'infinite', `/reels/${reelId}/comments`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListCommentsQueryKey = (reelId?: string,
     params?: ListCommentsParams,) => {
@@ -121,51 +84,6 @@ export const getListCommentsQueryKey = (reelId?: string,
     }
 
     
-export const getListCommentsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listComments>>, TError = unknown>(reelId: string,
-    params?: ListCommentsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListCommentsInfiniteQueryKey(reelId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listComments>>> = ({ signal, pageParam }) => listComments(reelId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(reelId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListCommentsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listComments>>>
-export type ListCommentsInfiniteQueryError = unknown
-
-
-/**
- * @summary A reel's comment thread
- */
-
-export function useListCommentsInfinite<TData = Awaited<ReturnType<typeof listComments>>, TError = unknown>(
- reelId: string,
-    params?: ListCommentsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListCommentsInfiniteQueryOptions(reelId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListCommentsQueryOptions = <TData = Awaited<ReturnType<typeof listComments>>, TError = unknown>(reelId: string,
     params?: ListCommentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData>, }
 ) => {
@@ -231,62 +149,21 @@ comment at a time. Rejected comments count toward both.
 
  * @summary Comment on a reel
  */
-export type postCommentResponse201 = {
-  data: Comment
-  status: 201
-}
-
-export type postCommentResponse202 = {
-  data: Comment
-  status: 202
-}
-
-export type postCommentResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type postCommentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type postCommentResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type postCommentResponseSuccess = (postCommentResponse201 | postCommentResponse202) & {
-  headers: Headers;
-};
-export type postCommentResponseError = (postCommentResponse401 | postCommentResponse404 | postCommentResponse422) & {
-  headers: Headers;
-};
-
-export type postCommentResponse = (postCommentResponseSuccess | postCommentResponseError)
-
-export const getPostCommentUrl = (reelId: string,) => {
-
-
+export const postComment = (
+    reelId: string,
+    postCommentBody: PostCommentBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Comment | Comment>(
+      {url: `/reels/${reelId}/comments`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: postCommentBody, signal
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}/comments`
-}
-
-export const postComment = async (reelId: string,
-    postCommentBody: PostCommentBody, options?: RequestInit): Promise<postCommentResponse> => {
-  
-  return apiFetch<postCommentResponse>(getPostCommentUrl(reelId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postCommentBody,)
-  }
-);}
-
-
 
 
 export const getPostCommentMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -345,50 +222,17 @@ thread is reported.
 
  * @summary Delete a comment
  */
-export type deleteCommentResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteCommentResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type deleteCommentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type deleteCommentResponseSuccess = (deleteCommentResponse204) & {
-  headers: Headers;
-};
-export type deleteCommentResponseError = (deleteCommentResponse401 | deleteCommentResponse404) & {
-  headers: Headers;
-};
-
-export type deleteCommentResponse = (deleteCommentResponseSuccess | deleteCommentResponseError)
-
-export const getDeleteCommentUrl = (commentId: string,) => {
-
-
+export const deleteComment = (
+    commentId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/comments/${commentId}`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/comments/${commentId}`
-}
-
-export const deleteComment = async (commentId: string, options?: RequestInit): Promise<deleteCommentResponse> => {
-  
-  return apiFetch<deleteCommentResponse>(getDeleteCommentUrl(commentId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getDeleteCommentMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,
@@ -439,52 +283,21 @@ export const useDeleteComment = <TError = UnauthorizedResponse | NotFoundRespons
     /**
  * @summary Report a comment
  */
-export type reportCommentResponse202 = {
-  data: void
-  status: 202
-}
-
-export type reportCommentResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type reportCommentResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type reportCommentResponseSuccess = (reportCommentResponse202) & {
-  headers: Headers;
-};
-export type reportCommentResponseError = (reportCommentResponse401 | reportCommentResponse422) & {
-  headers: Headers;
-};
-
-export type reportCommentResponse = (reportCommentResponseSuccess | reportCommentResponseError)
-
-export const getReportCommentUrl = (commentId: string,) => {
-
-
+export const reportComment = (
+    commentId: string,
+    reportCommentBody: ReportCommentBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/comments/${commentId}/report`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: reportCommentBody, signal
+    },
+      );
+    }
   
-
-  return `/comments/${commentId}/report`
-}
-
-export const reportComment = async (commentId: string,
-    reportCommentBody: ReportCommentBody, options?: RequestInit): Promise<reportCommentResponse> => {
-  
-  return apiFetch<reportCommentResponse>(getReportCommentUrl(commentId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      reportCommentBody,)
-  }
-);}
-
-
 
 
 export const getReportCommentMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,

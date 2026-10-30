@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -63,51 +60,20 @@ is the first question asked after a late delivery.
 
  * @summary Go on shift
  */
-export type startShiftResponse201 = {
-  data: StartShift201
-  status: 201
-}
-
-export type startShiftResponse403 = {
-  data: void
-  status: 403
-}
-
-export type startShiftResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type startShiftResponseSuccess = (startShiftResponse201) & {
-  headers: Headers;
-};
-export type startShiftResponseError = (startShiftResponse403 | startShiftResponse409) & {
-  headers: Headers;
-};
-
-export type startShiftResponse = (startShiftResponseSuccess | startShiftResponseError)
-
-export const getStartShiftUrl = () => {
-
-
+export const startShift = (
+    startShiftBody?: StartShiftBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<StartShift201>(
+      {url: `/driver/shifts`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: startShiftBody, signal
+    },
+      );
+    }
   
-
-  return `/driver/shifts`
-}
-
-export const startShift = async (startShiftBody?: StartShiftBody, options?: RequestInit): Promise<startShiftResponse> => {
-  
-  return apiFetch<startShiftResponse>(getStartShiftUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      startShiftBody,)
-  }
-);}
-
-
 
 
 export const getStartShiftMutationOptions = <TError = void,
@@ -163,45 +129,18 @@ work entirely — the fulfillments look handled and nobody is handling them.
 
  * @summary Go off shift
  */
-export type endShiftResponse200 = {
-  data: void
-  status: 200
-}
-
-export type endShiftResponse403 = {
-  data: void
-  status: 403
-}
+export const endShift = (
     
-export type endShiftResponseSuccess = (endShiftResponse200) & {
-  headers: Headers;
-};
-export type endShiftResponseError = (endShiftResponse403) & {
-  headers: Headers;
-};
-
-export type endShiftResponse = (endShiftResponseSuccess | endShiftResponseError)
-
-export const getEndShiftUrl = () => {
-
-
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/driver/shifts/end`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/driver/shifts/end`
-}
-
-export const endShift = async ( options?: RequestInit): Promise<endShiftResponse> => {
-  
-  return apiFetch<endShiftResponse>(getEndShiftUrl(),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getEndShiftMutationOptions = <TError = void,
@@ -252,60 +191,21 @@ export const useEndShift = <TError = void,
     /**
  * @summary The driver's stops for a day
  */
-export type getManifestResponse200 = {
-  data: Manifest
-  status: 200
-}
-
-export type getManifestResponse403 = {
-  data: void
-  status: 403
-}
-    
-export type getManifestResponseSuccess = (getManifestResponse200) & {
-  headers: Headers;
-};
-export type getManifestResponseError = (getManifestResponse403) & {
-  headers: Headers;
-};
-
-export type getManifestResponse = (getManifestResponseSuccess | getManifestResponseError)
-
-export const getGetManifestUrl = (params?: GetManifestParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getManifest = (
+    params?: GetManifestParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Manifest>(
+      {url: `/driver/manifest`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/driver/manifest?${stringifiedParams}` : `/driver/manifest`
-}
-
-export const getManifest = async (params?: GetManifestParams, options?: RequestInit): Promise<getManifestResponse> => {
   
-  return apiFetch<getManifestResponse>(getGetManifestUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetManifestInfiniteQueryKey = (params?: GetManifestParams,) => {
-    return [
-    'infinite', `/driver/manifest`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetManifestQueryKey = (params?: GetManifestParams,) => {
     return [
@@ -314,49 +214,6 @@ export const getGetManifestQueryKey = (params?: GetManifestParams,) => {
     }
 
     
-export const getGetManifestInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getManifest>>, TError = void>(params?: GetManifestParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetManifestInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getManifest>>> = ({ signal, pageParam }) => getManifest({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetManifestInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getManifest>>>
-export type GetManifestInfiniteQueryError = void
-
-
-/**
- * @summary The driver's stops for a day
- */
-
-export function useGetManifestInfinite<TData = Awaited<ReturnType<typeof getManifest>>, TError = void>(
- params?: GetManifestParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetManifestInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetManifestQueryOptions = <TData = Awaited<ReturnType<typeof getManifest>>, TError = void>(params?: GetManifestParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getManifest>>, TError, TData>, }
 ) => {
 
@@ -411,50 +268,18 @@ every delivery complete.
 
  * @summary Pick up the work and issue the delivery code
  */
-export type dispatchStopResponse200 = {
-  data: void
-  status: 200
-}
-
-export type dispatchStopResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type dispatchStopResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type dispatchStopResponseSuccess = (dispatchStopResponse200) & {
-  headers: Headers;
-};
-export type dispatchStopResponseError = (dispatchStopResponse404 | dispatchStopResponse409) & {
-  headers: Headers;
-};
-
-export type dispatchStopResponse = (dispatchStopResponseSuccess | dispatchStopResponseError)
-
-export const getDispatchStopUrl = (fulfillmentId: string,) => {
-
-
+export const dispatchStop = (
+    fulfillmentId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/driver/stops/${fulfillmentId}/dispatch`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/driver/stops/${fulfillmentId}/dispatch`
-}
-
-export const dispatchStop = async (fulfillmentId: string, options?: RequestInit): Promise<dispatchStopResponse> => {
-  
-  return apiFetch<dispatchStopResponse>(getDispatchStopUrl(fulfillmentId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getDispatchStopMutationOptions = <TError = NotFoundResponse | void,
@@ -517,47 +342,21 @@ they fail and redeliver, and the failure statistics stop meaning anything.
 
  * @summary Move a stop through the lifecycle
  */
-export type advanceStopResponse200 = {
-  data: void
-  status: 200
-}
-
-export type advanceStopResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type advanceStopResponseSuccess = (advanceStopResponse200) & {
-  headers: Headers;
-};
-export type advanceStopResponseError = (advanceStopResponse409) & {
-  headers: Headers;
-};
-
-export type advanceStopResponse = (advanceStopResponseSuccess | advanceStopResponseError)
-
-export const getAdvanceStopUrl = (fulfillmentId: string,) => {
-
-
+export const advanceStop = (
+    fulfillmentId: string,
+    advanceStopBody: AdvanceStopBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/driver/stops/${fulfillmentId}/advance`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: advanceStopBody, signal
+    },
+      );
+    }
   
-
-  return `/driver/stops/${fulfillmentId}/advance`
-}
-
-export const advanceStop = async (fulfillmentId: string,
-    advanceStopBody: AdvanceStopBody, options?: RequestInit): Promise<advanceStopResponse> => {
-  
-  return apiFetch<advanceStopResponse>(getAdvanceStopUrl(fulfillmentId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      advanceStopBody,)
-  }
-);}
-
-
 
 
 export const getAdvanceStopMutationOptions = <TError = void,
@@ -626,52 +425,21 @@ is a bill they will query and win.
 
  * @summary Close a stop with proof
  */
-export type completeStopResponse200 = {
-  data: void
-  status: 200
-}
-
-export type completeStopResponse403 = {
-  data: void
-  status: 403
-}
-
-export type completeStopResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type completeStopResponseSuccess = (completeStopResponse200) & {
-  headers: Headers;
-};
-export type completeStopResponseError = (completeStopResponse403 | completeStopResponse409) & {
-  headers: Headers;
-};
-
-export type completeStopResponse = (completeStopResponseSuccess | completeStopResponseError)
-
-export const getCompleteStopUrl = (fulfillmentId: string,) => {
-
-
+export const completeStop = (
+    fulfillmentId: string,
+    deliveryProof: DeliveryProof,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/driver/stops/${fulfillmentId}/complete`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: deliveryProof, signal
+    },
+      );
+    }
   
-
-  return `/driver/stops/${fulfillmentId}/complete`
-}
-
-export const completeStop = async (fulfillmentId: string,
-    deliveryProof: DeliveryProof, options?: RequestInit): Promise<completeStopResponse> => {
-  
-  return apiFetch<completeStopResponse>(getCompleteStopUrl(fulfillmentId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      deliveryProof,)
-  }
-);}
-
-
 
 
 export const getCompleteStopMutationOptions = <TError = void,
@@ -731,47 +499,21 @@ the incentive points exactly the wrong way.
 
  * @summary Close a stop without delivering
  */
-export type failStopResponse200 = {
-  data: void
-  status: 200
-}
-
-export type failStopResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type failStopResponseSuccess = (failStopResponse200) & {
-  headers: Headers;
-};
-export type failStopResponseError = (failStopResponse422) & {
-  headers: Headers;
-};
-
-export type failStopResponse = (failStopResponseSuccess | failStopResponseError)
-
-export const getFailStopUrl = (fulfillmentId: string,) => {
-
-
+export const failStop = (
+    fulfillmentId: string,
+    failStopBody: FailStopBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/driver/stops/${fulfillmentId}/fail`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: failStopBody, signal
+    },
+      );
+    }
   
-
-  return `/driver/stops/${fulfillmentId}/fail`
-}
-
-export const failStop = async (fulfillmentId: string,
-    failStopBody: FailStopBody, options?: RequestInit): Promise<failStopResponse> => {
-  
-  return apiFetch<failStopResponse>(getFailStopUrl(fulfillmentId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      failStopBody,)
-  }
-);}
-
-
 
 
 export const getFailStopMutationOptions = <TError = UnprocessableEntityResponse,
@@ -830,39 +572,20 @@ rather than an asset, and its operational value is spent within days.
 
  * @summary Report position
  */
-export type reportLocationResponse204 = {
-  data: void
-  status: 204
-}
-    
-export type reportLocationResponseSuccess = (reportLocationResponse204) & {
-  headers: Headers;
-};
-;
-
-export type reportLocationResponse = (reportLocationResponseSuccess)
-
-export const getReportLocationUrl = () => {
-
-
+export const reportLocation = (
+    reportLocationBody: ReportLocationBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/driver/location`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: reportLocationBody, signal
+    },
+      );
+    }
   
-
-  return `/driver/location`
-}
-
-export const reportLocation = async (reportLocationBody: ReportLocationBody, options?: RequestInit): Promise<reportLocationResponse> => {
-  
-  return apiFetch<reportLocationResponse>(getReportLocationUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      reportLocationBody,)
-  }
-);}
-
-
 
 
 export const getReportLocationMutationOptions = <TError = unknown,
@@ -917,46 +640,20 @@ follows from keeping that sentence true.
 
  * @summary What this driver is carrying
  */
-export type getHeldCashResponse200 = {
-  data: GetHeldCash200
-  status: 200
-}
+export const getHeldCash = (
     
-export type getHeldCashResponseSuccess = (getHeldCashResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getHeldCashResponse = (getHeldCashResponseSuccess)
-
-export const getGetHeldCashUrl = () => {
-
-
-  
-
-  return `/driver/cash`
-}
-
-export const getHeldCash = async ( options?: RequestInit): Promise<getHeldCashResponse> => {
-  
-  return apiFetch<getHeldCashResponse>(getGetHeldCashUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetHeldCashInfiniteQueryKey = () => {
-    return [
-    'infinite', `/driver/cash`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetHeldCash200>(
+      {url: `/driver/cash`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetHeldCashQueryKey = () => {
     return [
@@ -965,49 +662,6 @@ export const getGetHeldCashQueryKey = () => {
     }
 
     
-export const getGetHeldCashInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getHeldCash>>, TError = unknown>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getHeldCash>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetHeldCashInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHeldCash>>> = ({ signal }) => getHeldCash(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getHeldCash>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetHeldCashInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getHeldCash>>>
-export type GetHeldCashInfiniteQueryError = unknown
-
-
-/**
- * @summary What this driver is carrying
- */
-
-export function useGetHeldCashInfinite<TData = Awaited<ReturnType<typeof getHeldCash>>, TError = unknown>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getHeldCash>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetHeldCashInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetHeldCashQueryOptions = <TData = Awaited<ReturnType<typeof getHeldCash>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHeldCash>>, TError, TData>, }
 ) => {
 
@@ -1059,45 +713,18 @@ shortfall gets one anyway, silently.
 
  * @summary Declare cash for hand-in
  */
-export type declareRemittanceResponse201 = {
-  data: DeclareRemittance201
-  status: 201
-}
-
-export type declareRemittanceResponse409 = {
-  data: void
-  status: 409
-}
+export const declareRemittance = (
     
-export type declareRemittanceResponseSuccess = (declareRemittanceResponse201) & {
-  headers: Headers;
-};
-export type declareRemittanceResponseError = (declareRemittanceResponse409) & {
-  headers: Headers;
-};
-
-export type declareRemittanceResponse = (declareRemittanceResponseSuccess | declareRemittanceResponseError)
-
-export const getDeclareRemittanceUrl = () => {
-
-
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<DeclareRemittance201>(
+      {url: `/driver/cash/remittances`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/driver/cash/remittances`
-}
-
-export const declareRemittance = async ( options?: RequestInit): Promise<declareRemittanceResponse> => {
-  
-  return apiFetch<declareRemittanceResponse>(getDeclareRemittanceUrl(),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getDeclareRemittanceMutationOptions = <TError = void,

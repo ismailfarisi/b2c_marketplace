@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -72,56 +69,20 @@ may complete in either order.
 
  * @summary Reserve a reel and get a presigned upload URL
  */
-export type createReelUploadResponse201 = {
-  data: ReelUpload
-  status: 201
-}
-
-export type createReelUploadResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createReelUploadResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type createReelUploadResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createReelUploadResponseSuccess = (createReelUploadResponse201) & {
-  headers: Headers;
-};
-export type createReelUploadResponseError = (createReelUploadResponse401 | createReelUploadResponse403 | createReelUploadResponse422) & {
-  headers: Headers;
-};
-
-export type createReelUploadResponse = (createReelUploadResponseSuccess | createReelUploadResponseError)
-
-export const getCreateReelUploadUrl = () => {
-
-
+export const createReelUpload = (
+    createReelUploadBody: CreateReelUploadBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ReelUpload>(
+      {url: `/reels/uploads`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: createReelUploadBody, signal
+    },
+      );
+    }
   
-
-  return `/reels/uploads`
-}
-
-export const createReelUpload = async (createReelUploadBody: CreateReelUploadBody, options?: RequestInit): Promise<createReelUploadResponse> => {
-  
-  return apiFetch<createReelUploadResponse>(getCreateReelUploadUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createReelUploadBody,)
-  }
-);}
-
-
 
 
 export const getCreateReelUploadMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | UnprocessableEntityResponse,
@@ -177,62 +138,21 @@ review would let clean text be swapped for dirty text post-approval.
 
  * @summary Set caption, tags, category and visibility
  */
-export type updateReelResponse200 = {
-  data: AuthorReel
-  status: 200
-}
-
-export type updateReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type updateReelResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type updateReelResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type updateReelResponse409 = {
-  data: Problem
-  status: 409
-}
-    
-export type updateReelResponseSuccess = (updateReelResponse200) & {
-  headers: Headers;
-};
-export type updateReelResponseError = (updateReelResponse401 | updateReelResponse403 | updateReelResponse404 | updateReelResponse409) & {
-  headers: Headers;
-};
-
-export type updateReelResponse = (updateReelResponseSuccess | updateReelResponseError)
-
-export const getUpdateReelUrl = (reelId: string,) => {
-
-
+export const updateReel = (
+    reelId: string,
+    reelMetadata: ReelMetadata,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<AuthorReel>(
+      {url: `/reels/${reelId}`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: reelMetadata, signal
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}`
-}
-
-export const updateReel = async (reelId: string,
-    reelMetadata: ReelMetadata, options?: RequestInit): Promise<updateReelResponse> => {
-  
-  return apiFetch<updateReelResponse>(getUpdateReelUrl(reelId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      reelMetadata,)
-  }
-);}
-
-
 
 
 export const getUpdateReelMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem,
@@ -283,63 +203,20 @@ export const useUpdateReel = <TError = UnauthorizedResponse | ForbiddenResponse 
     /**
  * @summary Author-visible state, including the rejection reason
  */
-export type getReelResponse200 = {
-  data: AuthorReel
-  status: 200
-}
-
-export type getReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getReelResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type getReelResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getReelResponseSuccess = (getReelResponse200) & {
-  headers: Headers;
-};
-export type getReelResponseError = (getReelResponse401 | getReelResponse403 | getReelResponse404) & {
-  headers: Headers;
-};
-
-export type getReelResponse = (getReelResponseSuccess | getReelResponseError)
-
-export const getGetReelUrl = (reelId: string,) => {
-
-
-  
-
-  return `/reels/${reelId}`
-}
-
-export const getReel = async (reelId: string, options?: RequestInit): Promise<getReelResponse> => {
-  
-  return apiFetch<getReelResponse>(getGetReelUrl(reelId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetReelInfiniteQueryKey = (reelId?: string,) => {
-    return [
-    'infinite', `/reels/${reelId}`
-    ] as const;
+export const getReel = (
+    reelId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<AuthorReel>(
+      {url: `/reels/${reelId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetReelQueryKey = (reelId?: string,) => {
     return [
@@ -348,49 +225,6 @@ export const getGetReelQueryKey = (reelId?: string,) => {
     }
 
     
-export const getGetReelInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getReel>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(reelId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReel>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetReelInfiniteQueryKey(reelId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReel>>> = ({ signal }) => getReel(reelId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(reelId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReel>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetReelInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getReel>>>
-export type GetReelInfiniteQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
-
-
-/**
- * @summary Author-visible state, including the rejection reason
- */
-
-export function useGetReelInfinite<TData = Awaited<ReturnType<typeof getReel>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
- reelId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReel>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetReelInfiniteQueryOptions(reelId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetReelQueryOptions = <TData = Awaited<ReturnType<typeof getReel>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(reelId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReel>>, TError, TData>, }
 ) => {
 
@@ -441,55 +275,17 @@ decision is disputed.
 
  * @summary Take the reel down
  */
-export type deleteReelResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type deleteReelResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type deleteReelResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type deleteReelResponseSuccess = (deleteReelResponse204) & {
-  headers: Headers;
-};
-export type deleteReelResponseError = (deleteReelResponse401 | deleteReelResponse403 | deleteReelResponse404) & {
-  headers: Headers;
-};
-
-export type deleteReelResponse = (deleteReelResponseSuccess | deleteReelResponseError)
-
-export const getDeleteReelUrl = (reelId: string,) => {
-
-
+export const deleteReel = (
+    reelId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/reels/${reelId}`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}`
-}
-
-export const deleteReel = async (reelId: string, options?: RequestInit): Promise<deleteReelResponse> => {
-  
-  return apiFetch<deleteReelResponse>(getDeleteReelUrl(reelId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getDeleteReelMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
@@ -544,52 +340,21 @@ nothing useful and invites them to try again with another account.
 
  * @summary Report a reel for policy violation
  */
-export type reportReelResponse202 = {
-  data: ReportReel202
-  status: 202
-}
-
-export type reportReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type reportReelResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type reportReelResponseSuccess = (reportReelResponse202) & {
-  headers: Headers;
-};
-export type reportReelResponseError = (reportReelResponse401 | reportReelResponse404) & {
-  headers: Headers;
-};
-
-export type reportReelResponse = (reportReelResponseSuccess | reportReelResponseError)
-
-export const getReportReelUrl = (reelId: string,) => {
-
-
+export const reportReel = (
+    reelId: string,
+    reportReelBody: ReportReelBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ReportReel202>(
+      {url: `/reels/${reelId}/report`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: reportReelBody, signal
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}/report`
-}
-
-export const reportReel = async (reelId: string,
-    reportReelBody: ReportReelBody, options?: RequestInit): Promise<reportReelResponse> => {
-  
-  return apiFetch<reportReelResponse>(getReportReelUrl(reelId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      reportReelBody,)
-  }
-);}
-
-
 
 
 export const getReportReelMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,
@@ -651,51 +416,20 @@ a one-star review about a system working exactly as designed.
 
  * @summary Upload a seller reel
  */
-export type createPersonalReelUploadResponse201 = {
-  data: ReelUpload
-  status: 201
-}
-
-export type createPersonalReelUploadResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createPersonalReelUploadResponse403 = {
-  data: void
-  status: 403
-}
-    
-export type createPersonalReelUploadResponseSuccess = (createPersonalReelUploadResponse201) & {
-  headers: Headers;
-};
-export type createPersonalReelUploadResponseError = (createPersonalReelUploadResponse401 | createPersonalReelUploadResponse403) & {
-  headers: Headers;
-};
-
-export type createPersonalReelUploadResponse = (createPersonalReelUploadResponseSuccess | createPersonalReelUploadResponseError)
-
-export const getCreatePersonalReelUploadUrl = () => {
-
-
+export const createPersonalReelUpload = (
+    createPersonalReelUploadBody: CreatePersonalReelUploadBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ReelUpload>(
+      {url: `/reels/uploads/personal`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: createPersonalReelUploadBody, signal
+    },
+      );
+    }
   
-
-  return `/reels/uploads/personal`
-}
-
-export const createPersonalReelUpload = async (createPersonalReelUploadBody: CreatePersonalReelUploadBody, options?: RequestInit): Promise<createPersonalReelUploadResponse> => {
-  
-  return apiFetch<createPersonalReelUploadResponse>(getCreatePersonalReelUploadUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createPersonalReelUploadBody,)
-  }
-);}
-
-
 
 
 export const getCreatePersonalReelUploadMutationOptions = <TError = UnauthorizedResponse | void,

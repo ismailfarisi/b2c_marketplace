@@ -20,14 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useQuery
 } from '@tanstack/react-query';
 import type {
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -44,46 +41,20 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary Liveness — process is up
  */
-export type getLivenessResponse200 = {
-  data: HealthStatus
-  status: 200
-}
+export const getLiveness = (
     
-export type getLivenessResponseSuccess = (getLivenessResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getLivenessResponse = (getLivenessResponseSuccess)
-
-export const getGetLivenessUrl = () => {
-
-
-  
-
-  return `/healthz`
-}
-
-export const getLiveness = async ( options?: RequestInit): Promise<getLivenessResponse> => {
-  
-  return apiFetch<getLivenessResponse>(getGetLivenessUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetLivenessInfiniteQueryKey = () => {
-    return [
-    'infinite', `/healthz`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<HealthStatus>(
+      {url: `/healthz`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetLivenessQueryKey = () => {
     return [
@@ -92,49 +63,6 @@ export const getGetLivenessQueryKey = () => {
     }
 
     
-export const getGetLivenessInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getLiveness>>, TError = unknown>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getLiveness>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetLivenessInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLiveness>>> = ({ signal }) => getLiveness(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getLiveness>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetLivenessInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getLiveness>>>
-export type GetLivenessInfiniteQueryError = unknown
-
-
-/**
- * @summary Liveness — process is up
- */
-
-export function useGetLivenessInfinite<TData = Awaited<ReturnType<typeof getLiveness>>, TError = unknown>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getLiveness>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetLivenessInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetLivenessQueryOptions = <TData = Awaited<ReturnType<typeof getLiveness>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveness>>, TError, TData>, }
 ) => {
 
@@ -181,53 +109,20 @@ export function useGetLiveness<TData = Awaited<ReturnType<typeof getLiveness>>, 
 /**
  * @summary Readiness — dependencies reachable
  */
-export type getReadinessResponse200 = {
-  data: HealthStatus
-  status: 200
-}
-
-export type getReadinessResponse503 = {
-  data: HealthStatus
-  status: 503
-}
+export const getReadiness = (
     
-export type getReadinessResponseSuccess = (getReadinessResponse200) & {
-  headers: Headers;
-};
-export type getReadinessResponseError = (getReadinessResponse503) & {
-  headers: Headers;
-};
-
-export type getReadinessResponse = (getReadinessResponseSuccess | getReadinessResponseError)
-
-export const getGetReadinessUrl = () => {
-
-
-  
-
-  return `/readyz`
-}
-
-export const getReadiness = async ( options?: RequestInit): Promise<getReadinessResponse> => {
-  
-  return apiFetch<getReadinessResponse>(getGetReadinessUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetReadinessInfiniteQueryKey = () => {
-    return [
-    'infinite', `/readyz`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<HealthStatus>(
+      {url: `/readyz`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetReadinessQueryKey = () => {
     return [
@@ -236,49 +131,6 @@ export const getGetReadinessQueryKey = () => {
     }
 
     
-export const getGetReadinessInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getReadiness>>, TError = HealthStatus>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetReadinessInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReadiness>>> = ({ signal }) => getReadiness(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetReadinessInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getReadiness>>>
-export type GetReadinessInfiniteQueryError = HealthStatus
-
-
-/**
- * @summary Readiness — dependencies reachable
- */
-
-export function useGetReadinessInfinite<TData = Awaited<ReturnType<typeof getReadiness>>, TError = HealthStatus>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetReadinessInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getReadiness>>, TError = HealthStatus>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData>, }
 ) => {
 

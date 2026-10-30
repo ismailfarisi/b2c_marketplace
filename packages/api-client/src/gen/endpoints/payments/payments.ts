@@ -42,55 +42,18 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary One payment for all four weeks of a rotation
  */
-export type payRotationResponse201 = {
-  data: PaymentIntent
-  status: 201
-}
-
-export type payRotationResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type payRotationResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type payRotationResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type payRotationResponseSuccess = (payRotationResponse201) & {
-  headers: Headers;
-};
-export type payRotationResponseError = (payRotationResponse401 | payRotationResponse404 | payRotationResponse409) & {
-  headers: Headers;
-};
-
-export type payRotationResponse = (payRotationResponseSuccess | payRotationResponseError)
-
-export const getPayRotationUrl = (rotationId: string,) => {
-
-
+export const payRotation = (
+    rotationId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<PaymentIntent>(
+      {url: `/rotations/${rotationId}/payment-intent`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/rotations/${rotationId}/payment-intent`
-}
-
-export const payRotation = async (rotationId: string, options?: RequestInit): Promise<payRotationResponse> => {
-  
-  return apiFetch<payRotationResponse>(getPayRotationUrl(rotationId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getPayRotationMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | void,

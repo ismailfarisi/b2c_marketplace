@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -68,68 +65,22 @@ was made, otherwise the weekday's default dish. Any branch member may read it.
 
  * @summary Portions to cook per dish for a day
  */
-export type getKitchenPrepSheetResponse200 = {
-  data: GetKitchenPrepSheet200
-  status: 200
-}
-
-export type getKitchenPrepSheetResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getKitchenPrepSheetResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type getKitchenPrepSheetResponseSuccess = (getKitchenPrepSheetResponse200) & {
-  headers: Headers;
-};
-export type getKitchenPrepSheetResponseError = (getKitchenPrepSheetResponse404 | getKitchenPrepSheetResponse422) & {
-  headers: Headers;
-};
-
-export type getKitchenPrepSheetResponse = (getKitchenPrepSheetResponseSuccess | getKitchenPrepSheetResponseError)
-
-export const getGetKitchenPrepSheetUrl = (branchId: string,
-    params: GetKitchenPrepSheetParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getKitchenPrepSheet = (
+    branchId: string,
+    params: GetKitchenPrepSheetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetKitchenPrepSheet200>(
+      {url: `/branches/${branchId}/prep`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/branches/${branchId}/prep?${stringifiedParams}` : `/branches/${branchId}/prep`
-}
-
-export const getKitchenPrepSheet = async (branchId: string,
-    params: GetKitchenPrepSheetParams, options?: RequestInit): Promise<getKitchenPrepSheetResponse> => {
   
-  return apiFetch<getKitchenPrepSheetResponse>(getGetKitchenPrepSheetUrl(branchId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetKitchenPrepSheetInfiniteQueryKey = (branchId?: string,
-    params?: GetKitchenPrepSheetParams,) => {
-    return [
-    'infinite', `/branches/${branchId}/prep`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetKitchenPrepSheetQueryKey = (branchId?: string,
     params?: GetKitchenPrepSheetParams,) => {
@@ -139,51 +90,6 @@ export const getGetKitchenPrepSheetQueryKey = (branchId?: string,
     }
 
     
-export const getGetKitchenPrepSheetInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenPrepSheet>>, TError = NotFoundResponse | UnprocessableEntityResponse>(branchId: string,
-    params: GetKitchenPrepSheetParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenPrepSheet>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetKitchenPrepSheetInfiniteQueryKey(branchId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getKitchenPrepSheet>>> = ({ signal, pageParam }) => getKitchenPrepSheet(branchId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenPrepSheet>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetKitchenPrepSheetInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getKitchenPrepSheet>>>
-export type GetKitchenPrepSheetInfiniteQueryError = NotFoundResponse | UnprocessableEntityResponse
-
-
-/**
- * @summary Portions to cook per dish for a day
- */
-
-export function useGetKitchenPrepSheetInfinite<TData = Awaited<ReturnType<typeof getKitchenPrepSheet>>, TError = NotFoundResponse | UnprocessableEntityResponse>(
- branchId: string,
-    params: GetKitchenPrepSheetParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenPrepSheet>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetKitchenPrepSheetInfiniteQueryOptions(branchId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetKitchenPrepSheetQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenPrepSheet>>, TError = NotFoundResponse | UnprocessableEntityResponse>(branchId: string,
     params: GetKitchenPrepSheetParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getKitchenPrepSheet>>, TError, TData>, }
 ) => {
@@ -236,46 +142,20 @@ branch row, the strongest role wins.
 
  * @summary Every branch this user can open in the vendor portal
  */
-export type listMyBranchesResponse200 = {
-  data: ListMyBranches200
-  status: 200
-}
+export const listMyBranches = (
     
-export type listMyBranchesResponseSuccess = (listMyBranchesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listMyBranchesResponse = (listMyBranchesResponseSuccess)
-
-export const getListMyBranchesUrl = () => {
-
-
-  
-
-  return `/me/branches`
-}
-
-export const listMyBranches = async ( options?: RequestInit): Promise<listMyBranchesResponse> => {
-  
-  return apiFetch<listMyBranchesResponse>(getListMyBranchesUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListMyBranchesInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/branches`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMyBranches200>(
+      {url: `/me/branches`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListMyBranchesQueryKey = () => {
     return [
@@ -284,49 +164,6 @@ export const getListMyBranchesQueryKey = () => {
     }
 
     
-export const getListMyBranchesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listMyBranches>>, TError = unknown>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyBranches>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListMyBranchesInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyBranches>>> = ({ signal }) => listMyBranches(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyBranches>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListMyBranchesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listMyBranches>>>
-export type ListMyBranchesInfiniteQueryError = unknown
-
-
-/**
- * @summary Every branch this user can open in the vendor portal
- */
-
-export function useListMyBranchesInfinite<TData = Awaited<ReturnType<typeof listMyBranches>>, TError = unknown>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyBranches>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListMyBranchesInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListMyBranchesQueryOptions = <TData = Awaited<ReturnType<typeof listMyBranches>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyBranches>>, TError, TData>, }
 ) => {
 
@@ -373,53 +210,20 @@ export function useListMyBranches<TData = Awaited<ReturnType<typeof listMyBranch
 /**
  * @summary Subscriber counts and the setup checklist
  */
-export type getKitchenOverviewResponse200 = {
-  data: KitchenOverview
-  status: 200
-}
-
-export type getKitchenOverviewResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getKitchenOverviewResponseSuccess = (getKitchenOverviewResponse200) & {
-  headers: Headers;
-};
-export type getKitchenOverviewResponseError = (getKitchenOverviewResponse404) & {
-  headers: Headers;
-};
-
-export type getKitchenOverviewResponse = (getKitchenOverviewResponseSuccess | getKitchenOverviewResponseError)
-
-export const getGetKitchenOverviewUrl = (branchId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/overview`
-}
-
-export const getKitchenOverview = async (branchId: string, options?: RequestInit): Promise<getKitchenOverviewResponse> => {
-  
-  return apiFetch<getKitchenOverviewResponse>(getGetKitchenOverviewUrl(branchId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetKitchenOverviewInfiniteQueryKey = (branchId?: string,) => {
-    return [
-    'infinite', `/branches/${branchId}/overview`
-    ] as const;
+export const getKitchenOverview = (
+    branchId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<KitchenOverview>(
+      {url: `/branches/${branchId}/overview`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetKitchenOverviewQueryKey = (branchId?: string,) => {
     return [
@@ -428,49 +232,6 @@ export const getGetKitchenOverviewQueryKey = (branchId?: string,) => {
     }
 
     
-export const getGetKitchenOverviewInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenOverview>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenOverview>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetKitchenOverviewInfiniteQueryKey(branchId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getKitchenOverview>>> = ({ signal }) => getKitchenOverview(branchId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenOverview>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetKitchenOverviewInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getKitchenOverview>>>
-export type GetKitchenOverviewInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary Subscriber counts and the setup checklist
- */
-
-export function useGetKitchenOverviewInfinite<TData = Awaited<ReturnType<typeof getKitchenOverview>>, TError = NotFoundResponse>(
- branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenOverview>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetKitchenOverviewInfiniteQueryOptions(branchId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetKitchenOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenOverview>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getKitchenOverview>>, TError, TData>, }
 ) => {
 
@@ -517,53 +278,20 @@ export function useGetKitchenOverview<TData = Awaited<ReturnType<typeof getKitch
 /**
  * @summary The kitchen's storefront card
  */
-export type getKitchenProfileResponse200 = {
-  data: KitchenProfile
-  status: 200
-}
-
-export type getKitchenProfileResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getKitchenProfileResponseSuccess = (getKitchenProfileResponse200) & {
-  headers: Headers;
-};
-export type getKitchenProfileResponseError = (getKitchenProfileResponse404) & {
-  headers: Headers;
-};
-
-export type getKitchenProfileResponse = (getKitchenProfileResponseSuccess | getKitchenProfileResponseError)
-
-export const getGetKitchenProfileUrl = (branchId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/profile`
-}
-
-export const getKitchenProfile = async (branchId: string, options?: RequestInit): Promise<getKitchenProfileResponse> => {
-  
-  return apiFetch<getKitchenProfileResponse>(getGetKitchenProfileUrl(branchId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetKitchenProfileInfiniteQueryKey = (branchId?: string,) => {
-    return [
-    'infinite', `/branches/${branchId}/profile`
-    ] as const;
+export const getKitchenProfile = (
+    branchId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<KitchenProfile>(
+      {url: `/branches/${branchId}/profile`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetKitchenProfileQueryKey = (branchId?: string,) => {
     return [
@@ -572,49 +300,6 @@ export const getGetKitchenProfileQueryKey = (branchId?: string,) => {
     }
 
     
-export const getGetKitchenProfileInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenProfile>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenProfile>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetKitchenProfileInfiniteQueryKey(branchId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getKitchenProfile>>> = ({ signal }) => getKitchenProfile(branchId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenProfile>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetKitchenProfileInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getKitchenProfile>>>
-export type GetKitchenProfileInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary The kitchen's storefront card
- */
-
-export function useGetKitchenProfileInfinite<TData = Awaited<ReturnType<typeof getKitchenProfile>>, TError = NotFoundResponse>(
- branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenProfile>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetKitchenProfileInfiniteQueryOptions(branchId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetKitchenProfileQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenProfile>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getKitchenProfile>>, TError, TData>, }
 ) => {
 
@@ -661,57 +346,20 @@ export function useGetKitchenProfile<TData = Awaited<ReturnType<typeof getKitche
 /**
  * @summary Edit the storefront card (owner or manager)
  */
-export type updateKitchenProfileResponse200 = {
-  data: KitchenProfile
-  status: 200
-}
-
-export type updateKitchenProfileResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type updateKitchenProfileResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type updateKitchenProfileResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type updateKitchenProfileResponseSuccess = (updateKitchenProfileResponse200) & {
-  headers: Headers;
-};
-export type updateKitchenProfileResponseError = (updateKitchenProfileResponse403 | updateKitchenProfileResponse404 | updateKitchenProfileResponse422) & {
-  headers: Headers;
-};
-
-export type updateKitchenProfileResponse = (updateKitchenProfileResponseSuccess | updateKitchenProfileResponseError)
-
-export const getUpdateKitchenProfileUrl = (branchId: string,) => {
-
-
+export const updateKitchenProfile = (
+    branchId: string,
+    kitchenProfileInput: KitchenProfileInput,
+ ) => {
+      
+      
+      return apiFetch<KitchenProfile>(
+      {url: `/branches/${branchId}/profile`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: kitchenProfileInput
+    },
+      );
+    }
   
-
-  return `/branches/${branchId}/profile`
-}
-
-export const updateKitchenProfile = async (branchId: string,
-    kitchenProfileInput: KitchenProfileInput, options?: RequestInit): Promise<updateKitchenProfileResponse> => {
-  
-  return apiFetch<updateKitchenProfileResponse>(getUpdateKitchenProfileUrl(branchId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      kitchenProfileInput,)
-  }
-);}
-
-
 
 
 export const getUpdateKitchenProfileMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -762,53 +410,20 @@ export const useUpdateKitchenProfile = <TError = ForbiddenResponse | NotFoundRes
     /**
  * @summary Every dish this branch cooks, archived ones last
  */
-export type listDishesResponse200 = {
-  data: ListDishes200
-  status: 200
-}
-
-export type listDishesResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type listDishesResponseSuccess = (listDishesResponse200) & {
-  headers: Headers;
-};
-export type listDishesResponseError = (listDishesResponse404) & {
-  headers: Headers;
-};
-
-export type listDishesResponse = (listDishesResponseSuccess | listDishesResponseError)
-
-export const getListDishesUrl = (branchId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/dishes`
-}
-
-export const listDishes = async (branchId: string, options?: RequestInit): Promise<listDishesResponse> => {
-  
-  return apiFetch<listDishesResponse>(getListDishesUrl(branchId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListDishesInfiniteQueryKey = (branchId?: string,) => {
-    return [
-    'infinite', `/branches/${branchId}/dishes`
-    ] as const;
+export const listDishes = (
+    branchId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListDishes200>(
+      {url: `/branches/${branchId}/dishes`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListDishesQueryKey = (branchId?: string,) => {
     return [
@@ -817,49 +432,6 @@ export const getListDishesQueryKey = (branchId?: string,) => {
     }
 
     
-export const getListDishesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listDishes>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listDishes>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListDishesInfiniteQueryKey(branchId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDishes>>> = ({ signal }) => listDishes(branchId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listDishes>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListDishesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listDishes>>>
-export type ListDishesInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary Every dish this branch cooks, archived ones last
- */
-
-export function useListDishesInfinite<TData = Awaited<ReturnType<typeof listDishes>>, TError = NotFoundResponse>(
- branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listDishes>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListDishesInfiniteQueryOptions(branchId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListDishesQueryOptions = <TData = Awaited<ReturnType<typeof listDishes>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDishes>>, TError, TData>, }
 ) => {
 
@@ -906,57 +478,21 @@ export function useListDishes<TData = Awaited<ReturnType<typeof listDishes>>, TE
 /**
  * @summary Add a dish (owner or manager)
  */
-export type createDishResponse201 = {
-  data: Dish
-  status: 201
-}
-
-export type createDishResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type createDishResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type createDishResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createDishResponseSuccess = (createDishResponse201) & {
-  headers: Headers;
-};
-export type createDishResponseError = (createDishResponse403 | createDishResponse404 | createDishResponse422) & {
-  headers: Headers;
-};
-
-export type createDishResponse = (createDishResponseSuccess | createDishResponseError)
-
-export const getCreateDishUrl = (branchId: string,) => {
-
-
+export const createDish = (
+    branchId: string,
+    dishInput: DishInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Dish>(
+      {url: `/branches/${branchId}/dishes`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: dishInput, signal
+    },
+      );
+    }
   
-
-  return `/branches/${branchId}/dishes`
-}
-
-export const createDish = async (branchId: string,
-    dishInput: DishInput, options?: RequestInit): Promise<createDishResponse> => {
-  
-  return apiFetch<createDishResponse>(getCreateDishUrl(branchId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      dishInput,)
-  }
-);}
-
-
 
 
 export const getCreateDishMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -1007,59 +543,21 @@ export const useCreateDish = <TError = ForbiddenResponse | NotFoundResponse | Un
     /**
  * @summary Edit, archive (is_active false) or restore a dish
  */
-export type updateDishResponse200 = {
-  data: Dish
-  status: 200
-}
-
-export type updateDishResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type updateDishResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type updateDishResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type updateDishResponseSuccess = (updateDishResponse200) & {
-  headers: Headers;
-};
-export type updateDishResponseError = (updateDishResponse403 | updateDishResponse404 | updateDishResponse422) & {
-  headers: Headers;
-};
-
-export type updateDishResponse = (updateDishResponseSuccess | updateDishResponseError)
-
-export const getUpdateDishUrl = (branchId: string,
-    dishId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/dishes/${dishId}`
-}
-
-export const updateDish = async (branchId: string,
+export const updateDish = (
+    branchId: string,
     dishId: string,
-    dishInput: DishInput, options?: RequestInit): Promise<updateDishResponse> => {
+    dishInput: DishInput,
+ ) => {
+      
+      
+      return apiFetch<Dish>(
+      {url: `/branches/${branchId}/dishes/${dishId}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: dishInput
+    },
+      );
+    }
   
-  return apiFetch<updateDishResponse>(getUpdateDishUrl(branchId,dishId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      dishInput,)
-  }
-);}
-
-
 
 
 export const getUpdateDishMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -1114,53 +612,20 @@ the default.
 
  * @summary The branch's fixed weekly menu
  */
-export type getWeeklyMenuResponse200 = {
-  data: WeeklyMenu
-  status: 200
-}
-
-export type getWeeklyMenuResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getWeeklyMenuResponseSuccess = (getWeeklyMenuResponse200) & {
-  headers: Headers;
-};
-export type getWeeklyMenuResponseError = (getWeeklyMenuResponse404) & {
-  headers: Headers;
-};
-
-export type getWeeklyMenuResponse = (getWeeklyMenuResponseSuccess | getWeeklyMenuResponseError)
-
-export const getGetWeeklyMenuUrl = (branchId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/menu`
-}
-
-export const getWeeklyMenu = async (branchId: string, options?: RequestInit): Promise<getWeeklyMenuResponse> => {
-  
-  return apiFetch<getWeeklyMenuResponse>(getGetWeeklyMenuUrl(branchId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetWeeklyMenuInfiniteQueryKey = (branchId?: string,) => {
-    return [
-    'infinite', `/branches/${branchId}/menu`
-    ] as const;
+export const getWeeklyMenu = (
+    branchId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<WeeklyMenu>(
+      {url: `/branches/${branchId}/menu`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetWeeklyMenuQueryKey = (branchId?: string,) => {
     return [
@@ -1169,49 +634,6 @@ export const getGetWeeklyMenuQueryKey = (branchId?: string,) => {
     }
 
     
-export const getGetWeeklyMenuInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getWeeklyMenu>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getWeeklyMenu>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetWeeklyMenuInfiniteQueryKey(branchId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWeeklyMenu>>> = ({ signal }) => getWeeklyMenu(branchId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getWeeklyMenu>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetWeeklyMenuInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getWeeklyMenu>>>
-export type GetWeeklyMenuInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary The branch's fixed weekly menu
- */
-
-export function useGetWeeklyMenuInfinite<TData = Awaited<ReturnType<typeof getWeeklyMenu>>, TError = NotFoundResponse>(
- branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getWeeklyMenu>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetWeeklyMenuInfiniteQueryOptions(branchId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetWeeklyMenuQueryOptions = <TData = Awaited<ReturnType<typeof getWeeklyMenu>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeeklyMenu>>, TError, TData>, }
 ) => {
 
@@ -1261,61 +683,22 @@ dish twice, is a 422. Dishes must be active and belong to the branch.
 
  * @summary Replace one cell of the weekly menu
  */
-export type setMenuSlotResponse200 = {
-  data: WeeklyMenu
-  status: 200
-}
-
-export type setMenuSlotResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type setMenuSlotResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type setMenuSlotResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type setMenuSlotResponseSuccess = (setMenuSlotResponse200) & {
-  headers: Headers;
-};
-export type setMenuSlotResponseError = (setMenuSlotResponse403 | setMenuSlotResponse404 | setMenuSlotResponse422) & {
-  headers: Headers;
-};
-
-export type setMenuSlotResponse = (setMenuSlotResponseSuccess | setMenuSlotResponseError)
-
-export const getSetMenuSlotUrl = (branchId: string,
-    weekday: number,
-    slot: MealSlot,) => {
-
-
-  
-
-  return `/branches/${branchId}/menu/${weekday}/${slot}`
-}
-
-export const setMenuSlot = async (branchId: string,
+export const setMenuSlot = (
+    branchId: string,
     weekday: number,
     slot: MealSlot,
-    setMenuSlotBody: SetMenuSlotBody, options?: RequestInit): Promise<setMenuSlotResponse> => {
+    setMenuSlotBody: SetMenuSlotBody,
+ ) => {
+      
+      
+      return apiFetch<WeeklyMenu>(
+      {url: `/branches/${branchId}/menu/${weekday}/${slot}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: setMenuSlotBody
+    },
+      );
+    }
   
-  return apiFetch<setMenuSlotResponse>(getSetMenuSlotUrl(branchId,weekday,slot),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      setMenuSlotBody,)
-  }
-);}
-
-
 
 
 export const getSetMenuSlotMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -1366,53 +749,20 @@ export const useSetMenuSlot = <TError = ForbiddenResponse | NotFoundResponse | U
     /**
  * @summary The branch's meal plans with tiers
  */
-export type listKitchenPlansResponse200 = {
-  data: ListKitchenPlans200
-  status: 200
-}
-
-export type listKitchenPlansResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type listKitchenPlansResponseSuccess = (listKitchenPlansResponse200) & {
-  headers: Headers;
-};
-export type listKitchenPlansResponseError = (listKitchenPlansResponse404) & {
-  headers: Headers;
-};
-
-export type listKitchenPlansResponse = (listKitchenPlansResponseSuccess | listKitchenPlansResponseError)
-
-export const getListKitchenPlansUrl = (branchId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/plans`
-}
-
-export const listKitchenPlans = async (branchId: string, options?: RequestInit): Promise<listKitchenPlansResponse> => {
-  
-  return apiFetch<listKitchenPlansResponse>(getListKitchenPlansUrl(branchId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListKitchenPlansInfiniteQueryKey = (branchId?: string,) => {
-    return [
-    'infinite', `/branches/${branchId}/plans`
-    ] as const;
+export const listKitchenPlans = (
+    branchId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListKitchenPlans200>(
+      {url: `/branches/${branchId}/plans`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListKitchenPlansQueryKey = (branchId?: string,) => {
     return [
@@ -1421,49 +771,6 @@ export const getListKitchenPlansQueryKey = (branchId?: string,) => {
     }
 
     
-export const getListKitchenPlansInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listKitchenPlans>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listKitchenPlans>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListKitchenPlansInfiniteQueryKey(branchId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listKitchenPlans>>> = ({ signal }) => listKitchenPlans(branchId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listKitchenPlans>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListKitchenPlansInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listKitchenPlans>>>
-export type ListKitchenPlansInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary The branch's meal plans with tiers
- */
-
-export function useListKitchenPlansInfinite<TData = Awaited<ReturnType<typeof listKitchenPlans>>, TError = NotFoundResponse>(
- branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listKitchenPlans>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListKitchenPlansInfiniteQueryOptions(branchId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListKitchenPlansQueryOptions = <TData = Awaited<ReturnType<typeof listKitchenPlans>>, TError = NotFoundResponse>(branchId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listKitchenPlans>>, TError, TData>, }
 ) => {
 
@@ -1510,57 +817,21 @@ export function useListKitchenPlans<TData = Awaited<ReturnType<typeof listKitche
 /**
  * @summary Create a plan (owner or manager)
  */
-export type createKitchenPlanResponse201 = {
-  data: KitchenPlan
-  status: 201
-}
-
-export type createKitchenPlanResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type createKitchenPlanResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type createKitchenPlanResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createKitchenPlanResponseSuccess = (createKitchenPlanResponse201) & {
-  headers: Headers;
-};
-export type createKitchenPlanResponseError = (createKitchenPlanResponse403 | createKitchenPlanResponse404 | createKitchenPlanResponse422) & {
-  headers: Headers;
-};
-
-export type createKitchenPlanResponse = (createKitchenPlanResponseSuccess | createKitchenPlanResponseError)
-
-export const getCreateKitchenPlanUrl = (branchId: string,) => {
-
-
+export const createKitchenPlan = (
+    branchId: string,
+    kitchenPlanInput: KitchenPlanInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<KitchenPlan>(
+      {url: `/branches/${branchId}/plans`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: kitchenPlanInput, signal
+    },
+      );
+    }
   
-
-  return `/branches/${branchId}/plans`
-}
-
-export const createKitchenPlan = async (branchId: string,
-    kitchenPlanInput: KitchenPlanInput, options?: RequestInit): Promise<createKitchenPlanResponse> => {
-  
-  return apiFetch<createKitchenPlanResponse>(getCreateKitchenPlanUrl(branchId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      kitchenPlanInput,)
-  }
-);}
-
-
 
 
 export const getCreateKitchenPlanMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -1611,56 +882,21 @@ export const useCreateKitchenPlan = <TError = ForbiddenResponse | NotFoundRespon
     /**
  * @summary One plan with tiers
  */
-export type getKitchenPlanResponse200 = {
-  data: KitchenPlan
-  status: 200
-}
-
-export type getKitchenPlanResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getKitchenPlanResponseSuccess = (getKitchenPlanResponse200) & {
-  headers: Headers;
-};
-export type getKitchenPlanResponseError = (getKitchenPlanResponse404) & {
-  headers: Headers;
-};
-
-export type getKitchenPlanResponse = (getKitchenPlanResponseSuccess | getKitchenPlanResponseError)
-
-export const getGetKitchenPlanUrl = (branchId: string,
-    planId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/plans/${planId}`
-}
-
-export const getKitchenPlan = async (branchId: string,
-    planId: string, options?: RequestInit): Promise<getKitchenPlanResponse> => {
-  
-  return apiFetch<getKitchenPlanResponse>(getGetKitchenPlanUrl(branchId,planId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetKitchenPlanInfiniteQueryKey = (branchId?: string,
-    planId?: string,) => {
-    return [
-    'infinite', `/branches/${branchId}/plans/${planId}`
-    ] as const;
+export const getKitchenPlan = (
+    branchId: string,
+    planId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<KitchenPlan>(
+      {url: `/branches/${branchId}/plans/${planId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetKitchenPlanQueryKey = (branchId?: string,
     planId?: string,) => {
@@ -1670,51 +906,6 @@ export const getGetKitchenPlanQueryKey = (branchId?: string,
     }
 
     
-export const getGetKitchenPlanInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenPlan>>, TError = NotFoundResponse>(branchId: string,
-    planId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenPlan>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetKitchenPlanInfiniteQueryKey(branchId,planId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getKitchenPlan>>> = ({ signal }) => getKitchenPlan(branchId,planId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId && planId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenPlan>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetKitchenPlanInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getKitchenPlan>>>
-export type GetKitchenPlanInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary One plan with tiers
- */
-
-export function useGetKitchenPlanInfinite<TData = Awaited<ReturnType<typeof getKitchenPlan>>, TError = NotFoundResponse>(
- branchId: string,
-    planId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenPlan>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetKitchenPlanInfiniteQueryOptions(branchId,planId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetKitchenPlanQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenPlan>>, TError = NotFoundResponse>(branchId: string,
     planId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getKitchenPlan>>, TError, TData>, }
 ) => {
@@ -1766,64 +957,21 @@ change touches cycle_days, days_per_week or meal_slots.
 
  * @summary Edit a plan; tiers are replaced by key, removed tiers deactivated
  */
-export type updateKitchenPlanResponse200 = {
-  data: KitchenPlan
-  status: 200
-}
-
-export type updateKitchenPlanResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type updateKitchenPlanResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type updateKitchenPlanResponse409 = {
-  data: void
-  status: 409
-}
-
-export type updateKitchenPlanResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type updateKitchenPlanResponseSuccess = (updateKitchenPlanResponse200) & {
-  headers: Headers;
-};
-export type updateKitchenPlanResponseError = (updateKitchenPlanResponse403 | updateKitchenPlanResponse404 | updateKitchenPlanResponse409 | updateKitchenPlanResponse422) & {
-  headers: Headers;
-};
-
-export type updateKitchenPlanResponse = (updateKitchenPlanResponseSuccess | updateKitchenPlanResponseError)
-
-export const getUpdateKitchenPlanUrl = (branchId: string,
-    planId: string,) => {
-
-
-  
-
-  return `/branches/${branchId}/plans/${planId}`
-}
-
-export const updateKitchenPlan = async (branchId: string,
+export const updateKitchenPlan = (
+    branchId: string,
     planId: string,
-    kitchenPlanInput: KitchenPlanInput, options?: RequestInit): Promise<updateKitchenPlanResponse> => {
+    kitchenPlanInput: KitchenPlanInput,
+ ) => {
+      
+      
+      return apiFetch<KitchenPlan>(
+      {url: `/branches/${branchId}/plans/${planId}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: kitchenPlanInput
+    },
+      );
+    }
   
-  return apiFetch<updateKitchenPlanResponse>(getUpdateKitchenPlanUrl(branchId,planId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      kitchenPlanInput,)
-  }
-);}
-
-
 
 
 export const getUpdateKitchenPlanMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | void | UnprocessableEntityResponse,

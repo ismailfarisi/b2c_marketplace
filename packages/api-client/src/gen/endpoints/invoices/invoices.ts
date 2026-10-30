@@ -20,14 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useQuery
 } from '@tanstack/react-query';
 import type {
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -44,46 +41,20 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary Tax invoices issued to the caller
  */
-export type listMyInvoicesResponse200 = {
-  data: ListMyInvoices200
-  status: 200
-}
+export const listMyInvoices = (
     
-export type listMyInvoicesResponseSuccess = (listMyInvoicesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listMyInvoicesResponse = (listMyInvoicesResponseSuccess)
-
-export const getListMyInvoicesUrl = () => {
-
-
-  
-
-  return `/me/invoices`
-}
-
-export const listMyInvoices = async ( options?: RequestInit): Promise<listMyInvoicesResponse> => {
-  
-  return apiFetch<listMyInvoicesResponse>(getListMyInvoicesUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListMyInvoicesInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/invoices`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMyInvoices200>(
+      {url: `/me/invoices`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListMyInvoicesQueryKey = () => {
     return [
@@ -92,49 +63,6 @@ export const getListMyInvoicesQueryKey = () => {
     }
 
     
-export const getListMyInvoicesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listMyInvoices>>, TError = unknown>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListMyInvoicesInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyInvoices>>> = ({ signal }) => listMyInvoices(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListMyInvoicesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listMyInvoices>>>
-export type ListMyInvoicesInfiniteQueryError = unknown
-
-
-/**
- * @summary Tax invoices issued to the caller
- */
-
-export function useListMyInvoicesInfinite<TData = Awaited<ReturnType<typeof listMyInvoices>>, TError = unknown>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListMyInvoicesInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListMyInvoicesQueryOptions = <TData = Awaited<ReturnType<typeof listMyInvoices>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData>, }
 ) => {
 

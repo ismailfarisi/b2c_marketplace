@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -71,56 +68,20 @@ relaxes it.
 
  * @summary Open a draft campaign
  */
-export type createCampaignResponse201 = {
-  data: CreateCampaign201
-  status: 201
-}
-
-export type createCampaignResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type createCampaignResponse409 = {
-  data: void
-  status: 409
-}
-
-export type createCampaignResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createCampaignResponseSuccess = (createCampaignResponse201) & {
-  headers: Headers;
-};
-export type createCampaignResponseError = (createCampaignResponse403 | createCampaignResponse409 | createCampaignResponse422) & {
-  headers: Headers;
-};
-
-export type createCampaignResponse = (createCampaignResponseSuccess | createCampaignResponseError)
-
-export const getCreateCampaignUrl = () => {
-
-
+export const createCampaign = (
+    createCampaignBody: CreateCampaignBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<CreateCampaign201>(
+      {url: `/boosts`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: createCampaignBody, signal
+    },
+      );
+    }
   
-
-  return `/boosts`
-}
-
-export const createCampaign = async (createCampaignBody: CreateCampaignBody, options?: RequestInit): Promise<createCampaignResponse> => {
-  
-  return apiFetch<createCampaignResponse>(getCreateCampaignUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createCampaignBody,)
-  }
-);}
-
-
 
 
 export const getCreateCampaignMutationOptions = <TError = ForbiddenResponse | void | UnprocessableEntityResponse,
@@ -179,60 +140,21 @@ presenting picks the flattering one.
 
  * @summary Campaign performance
  */
-export type listCampaignsResponse200 = {
-  data: ListCampaigns200
-  status: 200
-}
-
-export type listCampaignsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type listCampaignsResponseSuccess = (listCampaignsResponse200) & {
-  headers: Headers;
-};
-export type listCampaignsResponseError = (listCampaignsResponse403) & {
-  headers: Headers;
-};
-
-export type listCampaignsResponse = (listCampaignsResponseSuccess | listCampaignsResponseError)
-
-export const getListCampaignsUrl = (params?: ListCampaignsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listCampaigns = (
+    params?: ListCampaignsParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListCampaigns200>(
+      {url: `/boosts`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/boosts?${stringifiedParams}` : `/boosts`
-}
-
-export const listCampaigns = async (params?: ListCampaignsParams, options?: RequestInit): Promise<listCampaignsResponse> => {
   
-  return apiFetch<listCampaignsResponse>(getListCampaignsUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListCampaignsInfiniteQueryKey = (params?: ListCampaignsParams,) => {
-    return [
-    'infinite', `/boosts`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListCampaignsQueryKey = (params?: ListCampaignsParams,) => {
     return [
@@ -241,49 +163,6 @@ export const getListCampaignsQueryKey = (params?: ListCampaignsParams,) => {
     }
 
     
-export const getListCampaignsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listCampaigns>>, TError = ForbiddenResponse>(params?: ListCampaignsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listCampaigns>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListCampaignsInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCampaigns>>> = ({ signal, pageParam }) => listCampaigns({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listCampaigns>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListCampaignsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listCampaigns>>>
-export type ListCampaignsInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Campaign performance
- */
-
-export function useListCampaignsInfinite<TData = Awaited<ReturnType<typeof listCampaigns>>, TError = ForbiddenResponse>(
- params?: ListCampaignsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listCampaigns>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListCampaignsInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListCampaignsQueryOptions = <TData = Awaited<ReturnType<typeof listCampaigns>>, TError = ForbiddenResponse>(params?: ListCampaignsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCampaigns>>, TError, TData>, }
 ) => {
 
@@ -330,52 +209,21 @@ export function useListCampaigns<TData = Awaited<ReturnType<typeof listCampaigns
 /**
  * @summary Pause or resume
  */
-export type setCampaignStatusResponse204 = {
-  data: void
-  status: 204
-}
-
-export type setCampaignStatusResponse404 = {
-  data: void
-  status: 404
-}
-
-export type setCampaignStatusResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type setCampaignStatusResponseSuccess = (setCampaignStatusResponse204) & {
-  headers: Headers;
-};
-export type setCampaignStatusResponseError = (setCampaignStatusResponse404 | setCampaignStatusResponse409) & {
-  headers: Headers;
-};
-
-export type setCampaignStatusResponse = (setCampaignStatusResponseSuccess | setCampaignStatusResponseError)
-
-export const getSetCampaignStatusUrl = (campaignId: string,) => {
-
-
+export const setCampaignStatus = (
+    campaignId: string,
+    setCampaignStatusBody: SetCampaignStatusBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/boosts/${campaignId}/status`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: setCampaignStatusBody, signal
+    },
+      );
+    }
   
-
-  return `/boosts/${campaignId}/status`
-}
-
-export const setCampaignStatus = async (campaignId: string,
-    setCampaignStatusBody: SetCampaignStatusBody, options?: RequestInit): Promise<setCampaignStatusResponse> => {
-  
-  return apiFetch<setCampaignStatusResponse>(getSetCampaignStatusUrl(campaignId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      setCampaignStatusBody,)
-  }
-);}
-
-
 
 
 export const getSetCampaignStatusMutationOptions = <TError = void,
@@ -431,57 +279,21 @@ this a competitor's video. Different question, different queue.
 
  * @summary Approve or reject a campaign
  */
-export type reviewCampaignResponse204 = {
-  data: void
-  status: 204
-}
-
-export type reviewCampaignResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type reviewCampaignResponse409 = {
-  data: void
-  status: 409
-}
-
-export type reviewCampaignResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type reviewCampaignResponseSuccess = (reviewCampaignResponse204) & {
-  headers: Headers;
-};
-export type reviewCampaignResponseError = (reviewCampaignResponse403 | reviewCampaignResponse409 | reviewCampaignResponse422) & {
-  headers: Headers;
-};
-
-export type reviewCampaignResponse = (reviewCampaignResponseSuccess | reviewCampaignResponseError)
-
-export const getReviewCampaignUrl = (campaignId: string,) => {
-
-
+export const reviewCampaign = (
+    campaignId: string,
+    reviewCampaignBody: ReviewCampaignBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/moderation/boosts/${campaignId}/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: reviewCampaignBody, signal
+    },
+      );
+    }
   
-
-  return `/moderation/boosts/${campaignId}/decide`
-}
-
-export const reviewCampaign = async (campaignId: string,
-    reviewCampaignBody: ReviewCampaignBody, options?: RequestInit): Promise<reviewCampaignResponse> => {
-  
-  return apiFetch<reviewCampaignResponse>(getReviewCampaignUrl(campaignId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      reviewCampaignBody,)
-  }
-);}
-
-
 
 
 export const getReviewCampaignMutationOptions = <TError = ForbiddenResponse | void | UnprocessableEntityResponse,
@@ -540,53 +352,20 @@ answers it.
 
  * @summary Campaigns awaiting review
  */
-export type listCampaignQueueResponse200 = {
-  data: ListCampaignQueue200
-  status: 200
-}
-
-export type listCampaignQueueResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
+export const listCampaignQueue = (
     
-export type listCampaignQueueResponseSuccess = (listCampaignQueueResponse200) & {
-  headers: Headers;
-};
-export type listCampaignQueueResponseError = (listCampaignQueueResponse403) & {
-  headers: Headers;
-};
-
-export type listCampaignQueueResponse = (listCampaignQueueResponseSuccess | listCampaignQueueResponseError)
-
-export const getListCampaignQueueUrl = () => {
-
-
-  
-
-  return `/moderation/boosts`
-}
-
-export const listCampaignQueue = async ( options?: RequestInit): Promise<listCampaignQueueResponse> => {
-  
-  return apiFetch<listCampaignQueueResponse>(getListCampaignQueueUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListCampaignQueueInfiniteQueryKey = () => {
-    return [
-    'infinite', `/moderation/boosts`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListCampaignQueue200>(
+      {url: `/moderation/boosts`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListCampaignQueueQueryKey = () => {
     return [
@@ -595,49 +374,6 @@ export const getListCampaignQueueQueryKey = () => {
     }
 
     
-export const getListCampaignQueueInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listCampaignQueue>>, TError = ForbiddenResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listCampaignQueue>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListCampaignQueueInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCampaignQueue>>> = ({ signal }) => listCampaignQueue(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listCampaignQueue>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListCampaignQueueInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listCampaignQueue>>>
-export type ListCampaignQueueInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Campaigns awaiting review
- */
-
-export function useListCampaignQueueInfinite<TData = Awaited<ReturnType<typeof listCampaignQueue>>, TError = ForbiddenResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listCampaignQueue>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListCampaignQueueInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListCampaignQueueQueryOptions = <TData = Awaited<ReturnType<typeof listCampaignQueue>>, TError = ForbiddenResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCampaignQueue>>, TError, TData>, }
 ) => {
 

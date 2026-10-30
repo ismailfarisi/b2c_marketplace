@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -62,51 +59,20 @@ import { apiFetch } from '../../../http-client';
  * The caller becomes the company's first lunch admin. The company starts pending until staff approve it and set a credit limit.
  * @summary Apply for an office lunch account
  */
-export type registerCompanyResponse201 = {
-  data: Company
-  status: 201
-}
-
-export type registerCompanyResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type registerCompanyResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type registerCompanyResponseSuccess = (registerCompanyResponse201) & {
-  headers: Headers;
-};
-export type registerCompanyResponseError = (registerCompanyResponse401 | registerCompanyResponse422) & {
-  headers: Headers;
-};
-
-export type registerCompanyResponse = (registerCompanyResponseSuccess | registerCompanyResponseError)
-
-export const getRegisterCompanyUrl = () => {
-
-
+export const registerCompany = (
+    registerCompanyInput: RegisterCompanyInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Company>(
+      {url: `/companies`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: registerCompanyInput, signal
+    },
+      );
+    }
   
-
-  return `/companies`
-}
-
-export const registerCompany = async (registerCompanyInput: RegisterCompanyInput, options?: RequestInit): Promise<registerCompanyResponse> => {
-  
-  return apiFetch<registerCompanyResponse>(getRegisterCompanyUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      registerCompanyInput,)
-  }
-);}
-
-
 
 
 export const getRegisterCompanyMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
@@ -158,53 +124,20 @@ export const useRegisterCompany = <TError = UnauthorizedResponse | Unprocessable
  * Invitations by phone number are linked to the caller here.
  * @summary Companies that cover the caller's lunches
  */
-export type listMyCompaniesResponse200 = {
-  data: ListMyCompanies200
-  status: 200
-}
-
-export type listMyCompaniesResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
+export const listMyCompanies = (
     
-export type listMyCompaniesResponseSuccess = (listMyCompaniesResponse200) & {
-  headers: Headers;
-};
-export type listMyCompaniesResponseError = (listMyCompaniesResponse401) & {
-  headers: Headers;
-};
-
-export type listMyCompaniesResponse = (listMyCompaniesResponseSuccess | listMyCompaniesResponseError)
-
-export const getListMyCompaniesUrl = () => {
-
-
-  
-
-  return `/me/companies`
-}
-
-export const listMyCompanies = async ( options?: RequestInit): Promise<listMyCompaniesResponse> => {
-  
-  return apiFetch<listMyCompaniesResponse>(getListMyCompaniesUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListMyCompaniesInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/companies`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMyCompanies200>(
+      {url: `/me/companies`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListMyCompaniesQueryKey = () => {
     return [
@@ -213,49 +146,6 @@ export const getListMyCompaniesQueryKey = () => {
     }
 
     
-export const getListMyCompaniesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listMyCompanies>>, TError = UnauthorizedResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyCompanies>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListMyCompaniesInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyCompanies>>> = ({ signal }) => listMyCompanies(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyCompanies>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListMyCompaniesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listMyCompanies>>>
-export type ListMyCompaniesInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary Companies that cover the caller's lunches
- */
-
-export function useListMyCompaniesInfinite<TData = Awaited<ReturnType<typeof listMyCompanies>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyCompanies>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListMyCompaniesInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListMyCompaniesQueryOptions = <TData = Awaited<ReturnType<typeof listMyCompanies>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyCompanies>>, TError, TData>, }
 ) => {
 
@@ -303,58 +193,20 @@ export function useListMyCompanies<TData = Awaited<ReturnType<typeof listMyCompa
  * Admins see employees, lunches and statements; employees see the policy and offices only.
  * @summary Company dashboard
  */
-export type getCompanyResponse200 = {
-  data: CompanyDashboard
-  status: 200
-}
-
-export type getCompanyResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getCompanyResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getCompanyResponseSuccess = (getCompanyResponse200) & {
-  headers: Headers;
-};
-export type getCompanyResponseError = (getCompanyResponse401 | getCompanyResponse404) & {
-  headers: Headers;
-};
-
-export type getCompanyResponse = (getCompanyResponseSuccess | getCompanyResponseError)
-
-export const getGetCompanyUrl = (companyId: string,) => {
-
-
-  
-
-  return `/companies/${companyId}`
-}
-
-export const getCompany = async (companyId: string, options?: RequestInit): Promise<getCompanyResponse> => {
-  
-  return apiFetch<getCompanyResponse>(getGetCompanyUrl(companyId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCompanyInfiniteQueryKey = (companyId?: string,) => {
-    return [
-    'infinite', `/companies/${companyId}`
-    ] as const;
+export const getCompany = (
+    companyId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<CompanyDashboard>(
+      {url: `/companies/${companyId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetCompanyQueryKey = (companyId?: string,) => {
     return [
@@ -363,49 +215,6 @@ export const getGetCompanyQueryKey = (companyId?: string,) => {
     }
 
     
-export const getGetCompanyInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getCompany>>, TError = UnauthorizedResponse | NotFoundResponse>(companyId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCompany>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCompanyInfiniteQueryKey(companyId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompany>>> = ({ signal }) => getCompany(companyId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(companyId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCompany>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetCompanyInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getCompany>>>
-export type GetCompanyInfiniteQueryError = UnauthorizedResponse | NotFoundResponse
-
-
-/**
- * @summary Company dashboard
- */
-
-export function useGetCompanyInfinite<TData = Awaited<ReturnType<typeof getCompany>>, TError = UnauthorizedResponse | NotFoundResponse>(
- companyId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCompany>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetCompanyInfiniteQueryOptions(companyId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetCompanyQueryOptions = <TData = Awaited<ReturnType<typeof getCompany>>, TError = UnauthorizedResponse | NotFoundResponse>(companyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompany>>, TError, TData>, }
 ) => {
 
@@ -452,61 +261,21 @@ export function useGetCompany<TData = Awaited<ReturnType<typeof getCompany>>, TE
 /**
  * @summary One monthly statement with its lines (company admins)
  */
-export type getCompanyStatementResponse200 = {
-  data: CompanyStatement
-  status: 200
-}
-
-export type getCompanyStatementResponse403 = {
-  data: void
-  status: 403
-}
-
-export type getCompanyStatementResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getCompanyStatementResponseSuccess = (getCompanyStatementResponse200) & {
-  headers: Headers;
-};
-export type getCompanyStatementResponseError = (getCompanyStatementResponse403 | getCompanyStatementResponse404) & {
-  headers: Headers;
-};
-
-export type getCompanyStatementResponse = (getCompanyStatementResponseSuccess | getCompanyStatementResponseError)
-
-export const getGetCompanyStatementUrl = (companyId: string,
-    statementId: string,) => {
-
-
-  
-
-  return `/companies/${companyId}/statements/${statementId}`
-}
-
-export const getCompanyStatement = async (companyId: string,
-    statementId: string, options?: RequestInit): Promise<getCompanyStatementResponse> => {
-  
-  return apiFetch<getCompanyStatementResponse>(getGetCompanyStatementUrl(companyId,statementId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCompanyStatementInfiniteQueryKey = (companyId?: string,
-    statementId?: string,) => {
-    return [
-    'infinite', `/companies/${companyId}/statements/${statementId}`
-    ] as const;
+export const getCompanyStatement = (
+    companyId: string,
+    statementId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<CompanyStatement>(
+      {url: `/companies/${companyId}/statements/${statementId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetCompanyStatementQueryKey = (companyId?: string,
     statementId?: string,) => {
@@ -516,51 +285,6 @@ export const getGetCompanyStatementQueryKey = (companyId?: string,
     }
 
     
-export const getGetCompanyStatementInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getCompanyStatement>>, TError = void | NotFoundResponse>(companyId: string,
-    statementId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCompanyStatement>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCompanyStatementInfiniteQueryKey(companyId,statementId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanyStatement>>> = ({ signal }) => getCompanyStatement(companyId,statementId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(companyId && statementId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCompanyStatement>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetCompanyStatementInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanyStatement>>>
-export type GetCompanyStatementInfiniteQueryError = void | NotFoundResponse
-
-
-/**
- * @summary One monthly statement with its lines (company admins)
- */
-
-export function useGetCompanyStatementInfinite<TData = Awaited<ReturnType<typeof getCompanyStatement>>, TError = void | NotFoundResponse>(
- companyId: string,
-    statementId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCompanyStatement>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetCompanyStatementInfiniteQueryOptions(companyId,statementId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetCompanyStatementQueryOptions = <TData = Awaited<ReturnType<typeof getCompanyStatement>>, TError = void | NotFoundResponse>(companyId: string,
     statementId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanyStatement>>, TError, TData>, }
 ) => {
@@ -609,57 +333,21 @@ export function useGetCompanyStatement<TData = Awaited<ReturnType<typeof getComp
 /**
  * @summary Invite an employee or admin by phone number
  */
-export type addCompanyMemberResponse204 = {
-  data: void
-  status: 204
-}
-
-export type addCompanyMemberResponse403 = {
-  data: void
-  status: 403
-}
-
-export type addCompanyMemberResponse409 = {
-  data: void
-  status: 409
-}
-
-export type addCompanyMemberResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type addCompanyMemberResponseSuccess = (addCompanyMemberResponse204) & {
-  headers: Headers;
-};
-export type addCompanyMemberResponseError = (addCompanyMemberResponse403 | addCompanyMemberResponse409 | addCompanyMemberResponse422) & {
-  headers: Headers;
-};
-
-export type addCompanyMemberResponse = (addCompanyMemberResponseSuccess | addCompanyMemberResponseError)
-
-export const getAddCompanyMemberUrl = (companyId: string,) => {
-
-
+export const addCompanyMember = (
+    companyId: string,
+    addCompanyMemberBody: AddCompanyMemberBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/companies/${companyId}/members`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: addCompanyMemberBody, signal
+    },
+      );
+    }
   
-
-  return `/companies/${companyId}/members`
-}
-
-export const addCompanyMember = async (companyId: string,
-    addCompanyMemberBody: AddCompanyMemberBody, options?: RequestInit): Promise<addCompanyMemberResponse> => {
-  
-  return apiFetch<addCompanyMemberResponse>(getAddCompanyMemberUrl(companyId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      addCompanyMemberBody,)
-  }
-);}
-
-
 
 
 export const getAddCompanyMemberMutationOptions = <TError = void | UnprocessableEntityResponse,
@@ -710,52 +398,18 @@ export const useAddCompanyMember = <TError = void | UnprocessableEntityResponse,
     /**
  * @summary Remove an employee; their running lunches end at their paid period
  */
-export type removeCompanyMemberResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removeCompanyMemberResponse403 = {
-  data: void
-  status: 403
-}
-
-export type removeCompanyMemberResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type removeCompanyMemberResponseSuccess = (removeCompanyMemberResponse204) & {
-  headers: Headers;
-};
-export type removeCompanyMemberResponseError = (removeCompanyMemberResponse403 | removeCompanyMemberResponse409) & {
-  headers: Headers;
-};
-
-export type removeCompanyMemberResponse = (removeCompanyMemberResponseSuccess | removeCompanyMemberResponseError)
-
-export const getRemoveCompanyMemberUrl = (companyId: string,
-    memberId: string,) => {
-
-
+export const removeCompanyMember = (
+    companyId: string,
+    memberId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/companies/${companyId}/members/${memberId}`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/companies/${companyId}/members/${memberId}`
-}
-
-export const removeCompanyMember = async (companyId: string,
-    memberId: string, options?: RequestInit): Promise<removeCompanyMemberResponse> => {
-  
-  return apiFetch<removeCompanyMemberResponse>(getRemoveCompanyMemberUrl(companyId,memberId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getRemoveCompanyMemberMutationOptions = <TError = void,
@@ -806,52 +460,20 @@ export const useRemoveCompanyMember = <TError = void,
     /**
  * @summary Covered weekdays (Sunday is 0), meal slots and per-meal cap
  */
-export type setCompanyPolicyResponse204 = {
-  data: void
-  status: 204
-}
-
-export type setCompanyPolicyResponse403 = {
-  data: void
-  status: 403
-}
-
-export type setCompanyPolicyResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type setCompanyPolicyResponseSuccess = (setCompanyPolicyResponse204) & {
-  headers: Headers;
-};
-export type setCompanyPolicyResponseError = (setCompanyPolicyResponse403 | setCompanyPolicyResponse422) & {
-  headers: Headers;
-};
-
-export type setCompanyPolicyResponse = (setCompanyPolicyResponseSuccess | setCompanyPolicyResponseError)
-
-export const getSetCompanyPolicyUrl = (companyId: string,) => {
-
-
+export const setCompanyPolicy = (
+    companyId: string,
+    companyPolicy: CompanyPolicy,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/companies/${companyId}/policy`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: companyPolicy
+    },
+      );
+    }
   
-
-  return `/companies/${companyId}/policy`
-}
-
-export const setCompanyPolicy = async (companyId: string,
-    companyPolicy: CompanyPolicy, options?: RequestInit): Promise<setCompanyPolicyResponse> => {
-  
-  return apiFetch<setCompanyPolicyResponse>(getSetCompanyPolicyUrl(companyId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      companyPolicy,)
-  }
-);}
-
-
 
 
 export const getSetCompanyPolicyMutationOptions = <TError = void | UnprocessableEntityResponse,
@@ -902,52 +524,21 @@ export const useSetCompanyPolicy = <TError = void | UnprocessableEntityResponse,
     /**
  * @summary Add an office delivery address
  */
-export type addCompanyOfficeResponse204 = {
-  data: void
-  status: 204
-}
-
-export type addCompanyOfficeResponse403 = {
-  data: void
-  status: 403
-}
-
-export type addCompanyOfficeResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type addCompanyOfficeResponseSuccess = (addCompanyOfficeResponse204) & {
-  headers: Headers;
-};
-export type addCompanyOfficeResponseError = (addCompanyOfficeResponse403 | addCompanyOfficeResponse422) & {
-  headers: Headers;
-};
-
-export type addCompanyOfficeResponse = (addCompanyOfficeResponseSuccess | addCompanyOfficeResponseError)
-
-export const getAddCompanyOfficeUrl = (companyId: string,) => {
-
-
+export const addCompanyOffice = (
+    companyId: string,
+    companyOfficeInput: CompanyOfficeInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/companies/${companyId}/offices`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: companyOfficeInput, signal
+    },
+      );
+    }
   
-
-  return `/companies/${companyId}/offices`
-}
-
-export const addCompanyOffice = async (companyId: string,
-    companyOfficeInput: CompanyOfficeInput, options?: RequestInit): Promise<addCompanyOfficeResponse> => {
-  
-  return apiFetch<addCompanyOfficeResponse>(getAddCompanyOfficeUrl(companyId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      companyOfficeInput,)
-  }
-);}
-
-
 
 
 export const getAddCompanyOfficeMutationOptions = <TError = void | UnprocessableEntityResponse,
@@ -998,52 +589,18 @@ export const useAddCompanyOffice = <TError = void | UnprocessableEntityResponse,
     /**
  * @summary Stop offering an office for new lunches
  */
-export type removeCompanyOfficeResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removeCompanyOfficeResponse403 = {
-  data: void
-  status: 403
-}
-
-export type removeCompanyOfficeResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type removeCompanyOfficeResponseSuccess = (removeCompanyOfficeResponse204) & {
-  headers: Headers;
-};
-export type removeCompanyOfficeResponseError = (removeCompanyOfficeResponse403 | removeCompanyOfficeResponse409) & {
-  headers: Headers;
-};
-
-export type removeCompanyOfficeResponse = (removeCompanyOfficeResponseSuccess | removeCompanyOfficeResponseError)
-
-export const getRemoveCompanyOfficeUrl = (companyId: string,
-    officeId: string,) => {
-
-
+export const removeCompanyOffice = (
+    companyId: string,
+    officeId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/companies/${companyId}/offices/${officeId}`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/companies/${companyId}/offices/${officeId}`
-}
-
-export const removeCompanyOffice = async (companyId: string,
-    officeId: string, options?: RequestInit): Promise<removeCompanyOfficeResponse> => {
-  
-  return apiFetch<removeCompanyOfficeResponse>(getRemoveCompanyOfficeUrl(companyId,officeId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getRemoveCompanyOfficeMutationOptions = <TError = void,
@@ -1094,52 +651,21 @@ export const useRemoveCompanyOffice = <TError = void,
     /**
  * @summary Price a company-paid lunch and check it against the policy
  */
-export type previewLunchResponse200 = {
-  data: PreviewLunch200
-  status: 200
-}
-
-export type previewLunchResponse409 = {
-  data: void
-  status: 409
-}
-
-export type previewLunchResponse422 = {
-  data: void
-  status: 422
-}
-    
-export type previewLunchResponseSuccess = (previewLunchResponse200) & {
-  headers: Headers;
-};
-export type previewLunchResponseError = (previewLunchResponse409 | previewLunchResponse422) & {
-  headers: Headers;
-};
-
-export type previewLunchResponse = (previewLunchResponseSuccess | previewLunchResponseError)
-
-export const getPreviewLunchUrl = (companyId: string,) => {
-
-
+export const previewLunch = (
+    companyId: string,
+    lunchInput: LunchInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<PreviewLunch200>(
+      {url: `/companies/${companyId}/lunches/preview`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: lunchInput, signal
+    },
+      );
+    }
   
-
-  return `/companies/${companyId}/lunches/preview`
-}
-
-export const previewLunch = async (companyId: string,
-    lunchInput: LunchInput, options?: RequestInit): Promise<previewLunchResponse> => {
-  
-  return apiFetch<previewLunchResponse>(getPreviewLunchUrl(companyId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      lunchInput,)
-  }
-);}
-
-
 
 
 export const getPreviewLunchMutationOptions = <TError = void,
@@ -1191,57 +717,21 @@ export const usePreviewLunch = <TError = void,
  * Creates an ordinary subscription for the employee and authorises its order on the company account inside the credit limit. The employee pays nothing. Kitchen fulfilment, ledger and payouts are unchanged.
  * @summary Start a lunch subscription billed to the company
  */
-export type startLunchResponse201 = {
-  data: SubscriptionCreated
-  status: 201
-}
-
-export type startLunchResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type startLunchResponse409 = {
-  data: void
-  status: 409
-}
-
-export type startLunchResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type startLunchResponseSuccess = (startLunchResponse201) & {
-  headers: Headers;
-};
-export type startLunchResponseError = (startLunchResponse404 | startLunchResponse409 | startLunchResponse422) & {
-  headers: Headers;
-};
-
-export type startLunchResponse = (startLunchResponseSuccess | startLunchResponseError)
-
-export const getStartLunchUrl = (companyId: string,) => {
-
-
+export const startLunch = (
+    companyId: string,
+    lunchInput: LunchInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<SubscriptionCreated>(
+      {url: `/companies/${companyId}/lunches`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: lunchInput, signal
+    },
+      );
+    }
   
-
-  return `/companies/${companyId}/lunches`
-}
-
-export const startLunch = async (companyId: string,
-    lunchInput: LunchInput, options?: RequestInit): Promise<startLunchResponse> => {
-  
-  return apiFetch<startLunchResponse>(getStartLunchUrl(companyId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      lunchInput,)
-  }
-);}
-
-
 
 
 export const getStartLunchMutationOptions = <TError = NotFoundResponse | void | UnprocessableEntityResponse,

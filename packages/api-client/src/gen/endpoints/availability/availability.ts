@@ -20,14 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useQuery
 } from '@tanstack/react-query';
 import type {
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -50,63 +47,22 @@ must not distinguish between those cases.
 
  * @summary Remaining capacity per day and time window
  */
-export type getAvailabilityResponse200 = {
-  data: GetAvailability200
-  status: 200
-}
-
-export type getAvailabilityResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type getAvailabilityResponseSuccess = (getAvailabilityResponse200) & {
-  headers: Headers;
-};
-export type getAvailabilityResponseError = (getAvailabilityResponse422) & {
-  headers: Headers;
-};
-
-export type getAvailabilityResponse = (getAvailabilityResponseSuccess | getAvailabilityResponseError)
-
-export const getGetAvailabilityUrl = (branchId: string,
-    params: GetAvailabilityParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getAvailability = (
+    branchId: string,
+    params: GetAvailabilityParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetAvailability200>(
+      {url: `/branches/${branchId}/availability`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/branches/${branchId}/availability?${stringifiedParams}` : `/branches/${branchId}/availability`
-}
-
-export const getAvailability = async (branchId: string,
-    params: GetAvailabilityParams, options?: RequestInit): Promise<getAvailabilityResponse> => {
   
-  return apiFetch<getAvailabilityResponse>(getGetAvailabilityUrl(branchId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetAvailabilityInfiniteQueryKey = (branchId?: string,
-    params?: GetAvailabilityParams,) => {
-    return [
-    'infinite', `/branches/${branchId}/availability`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetAvailabilityQueryKey = (branchId?: string,
     params?: GetAvailabilityParams,) => {
@@ -116,51 +72,6 @@ export const getGetAvailabilityQueryKey = (branchId?: string,
     }
 
     
-export const getGetAvailabilityInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getAvailability>>, TError = UnprocessableEntityResponse>(branchId: string,
-    params: GetAvailabilityParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getAvailability>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetAvailabilityInfiniteQueryKey(branchId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAvailability>>> = ({ signal, pageParam }) => getAvailability(branchId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getAvailability>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetAvailabilityInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getAvailability>>>
-export type GetAvailabilityInfiniteQueryError = UnprocessableEntityResponse
-
-
-/**
- * @summary Remaining capacity per day and time window
- */
-
-export function useGetAvailabilityInfinite<TData = Awaited<ReturnType<typeof getAvailability>>, TError = UnprocessableEntityResponse>(
- branchId: string,
-    params: GetAvailabilityParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getAvailability>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetAvailabilityInfiniteQueryOptions(branchId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof getAvailability>>, TError = UnprocessableEntityResponse>(branchId: string,
     params: GetAvailabilityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAvailability>>, TError, TData>, }
 ) => {

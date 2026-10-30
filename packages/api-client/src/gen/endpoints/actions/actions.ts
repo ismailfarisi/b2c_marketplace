@@ -62,67 +62,20 @@ greyed-out button in the feed, which everyone reads as a feed bug.
 
  * @summary Set a reel's call-to-action buttons
  */
-export type setReelActionsResponse200 = {
-  data: SetReelActions200
-  status: 200
-}
-
-export type setReelActionsResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type setReelActionsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type setReelActionsResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type setReelActionsResponse409 = {
-  data: Problem
-  status: 409
-}
-
-export type setReelActionsResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type setReelActionsResponseSuccess = (setReelActionsResponse200) & {
-  headers: Headers;
-};
-export type setReelActionsResponseError = (setReelActionsResponse401 | setReelActionsResponse403 | setReelActionsResponse404 | setReelActionsResponse409 | setReelActionsResponse422) & {
-  headers: Headers;
-};
-
-export type setReelActionsResponse = (setReelActionsResponseSuccess | setReelActionsResponseError)
-
-export const getSetReelActionsUrl = (reelId: string,) => {
-
-
+export const setReelActions = (
+    reelId: string,
+    setReelActionsBody: SetReelActionsBody,
+ ) => {
+      
+      
+      return apiFetch<SetReelActions200>(
+      {url: `/reels/${reelId}/actions`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: setReelActionsBody
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}/actions`
-}
-
-export const setReelActions = async (reelId: string,
-    setReelActionsBody: SetReelActionsBody, options?: RequestInit): Promise<setReelActionsResponse> => {
-  
-  return apiFetch<setReelActionsResponse>(getSetReelActionsUrl(reelId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      setReelActionsBody,)
-  }
-);}
-
-
 
 
 export const getSetReelActionsMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
@@ -189,61 +142,23 @@ visible if the click carried a key that survives the sign-up.
 
  * @summary Record a CTA press and get the route
  */
-export type clickActionResponse200 = {
-  data: ResolvedAction
-  status: 200
-}
-
-export type clickActionResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type clickActionResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type clickActionResponseSuccess = (clickActionResponse200) & {
-  headers: Headers;
-};
-export type clickActionResponseError = (clickActionResponse404 | clickActionResponse422) & {
-  headers: Headers;
-};
-
-export type clickActionResponse = (clickActionResponseSuccess | clickActionResponseError)
-
-export const getClickActionUrl = (actionId: string,
-    params?: ClickActionParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/actions/${actionId}/click?${stringifiedParams}` : `/actions/${actionId}/click`
-}
-
-export const clickAction = async (actionId: string,
+export const clickAction = (
+    actionId: string,
     clickActionBody?: ClickActionBody,
-    params?: ClickActionParams, options?: RequestInit): Promise<clickActionResponse> => {
+    params?: ClickActionParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ResolvedAction>(
+      {url: `/actions/${actionId}/click`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: clickActionBody,
+        params, signal
+    },
+      );
+    }
   
-  return apiFetch<clickActionResponse>(getClickActionUrl(actionId,params),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      clickActionBody,)
-  }
-);}
-
-
 
 
 export const getClickActionMutationOptions = <TError = NotFoundResponse | UnprocessableEntityResponse,

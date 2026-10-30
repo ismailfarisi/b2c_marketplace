@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -72,46 +69,20 @@ import { apiFetch } from '../../../http-client';
  * Takes the createSubscription body and runs the same checks. A promo problem comes back as a 422 on `promo_code`.
  * @summary Price the first cycle, with any promo, without subscribing
  */
-export type previewSubscriptionResponse200 = {
-  data: SubscriptionPreview
-  status: 200
-}
-
-export type previewSubscriptionResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type previewSubscriptionResponseSuccess = (previewSubscriptionResponse200) & {
-  headers: Headers;
-};
-export type previewSubscriptionResponseError = (previewSubscriptionResponse422) & {
-  headers: Headers;
-};
-
-export type previewSubscriptionResponse = (previewSubscriptionResponseSuccess | previewSubscriptionResponseError)
-
-export const getPreviewSubscriptionUrl = () => {
-
-
+export const previewSubscription = (
+    previewSubscriptionBody: PreviewSubscriptionBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<SubscriptionPreview>(
+      {url: `/subscriptions/preview`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: previewSubscriptionBody, signal
+    },
+      );
+    }
   
-
-  return `/subscriptions/preview`
-}
-
-export const previewSubscription = async (previewSubscriptionBody: PreviewSubscriptionBody, options?: RequestInit): Promise<previewSubscriptionResponse> => {
-  
-  return apiFetch<previewSubscriptionResponse>(getPreviewSubscriptionUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      previewSubscriptionBody,)
-  }
-);}
-
-
 
 
 export const getPreviewSubscriptionMutationOptions = <TError = UnprocessableEntityResponse,
@@ -182,56 +153,20 @@ Monday-first numbering delivers every meal one day late.
 
  * @summary Subscribe to a plan
  */
-export type createSubscriptionResponse201 = {
-  data: SubscriptionCreated
-  status: 201
-}
-
-export type createSubscriptionResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createSubscriptionResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type createSubscriptionResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createSubscriptionResponseSuccess = (createSubscriptionResponse201) & {
-  headers: Headers;
-};
-export type createSubscriptionResponseError = (createSubscriptionResponse401 | createSubscriptionResponse404 | createSubscriptionResponse422) & {
-  headers: Headers;
-};
-
-export type createSubscriptionResponse = (createSubscriptionResponseSuccess | createSubscriptionResponseError)
-
-export const getCreateSubscriptionUrl = () => {
-
-
+export const createSubscription = (
+    createSubscriptionBody: CreateSubscriptionBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<SubscriptionCreated>(
+      {url: `/subscriptions`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: createSubscriptionBody, signal
+    },
+      );
+    }
   
-
-  return `/subscriptions`
-}
-
-export const createSubscription = async (createSubscriptionBody: CreateSubscriptionBody, options?: RequestInit): Promise<createSubscriptionResponse> => {
-  
-  return apiFetch<createSubscriptionResponse>(getCreateSubscriptionUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createSubscriptionBody,)
-  }
-);}
-
-
 
 
 export const getCreateSubscriptionMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -297,57 +232,21 @@ ingredients, and a late pause is waste the vendor absorbs.
 
  * @summary Pause deliveries over a date range
  */
-export type pauseSubscriptionResponse200 = {
-  data: void
-  status: 200
-}
-
-export type pauseSubscriptionResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type pauseSubscriptionResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type pauseSubscriptionResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type pauseSubscriptionResponseSuccess = (pauseSubscriptionResponse200) & {
-  headers: Headers;
-};
-export type pauseSubscriptionResponseError = (pauseSubscriptionResponse401 | pauseSubscriptionResponse404 | pauseSubscriptionResponse422) & {
-  headers: Headers;
-};
-
-export type pauseSubscriptionResponse = (pauseSubscriptionResponseSuccess | pauseSubscriptionResponseError)
-
-export const getPauseSubscriptionUrl = (subscriptionId: string,) => {
-
-
+export const pauseSubscription = (
+    subscriptionId: string,
+    pauseSubscriptionBody: PauseSubscriptionBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/subscriptions/${subscriptionId}/pause`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: pauseSubscriptionBody, signal
+    },
+      );
+    }
   
-
-  return `/subscriptions/${subscriptionId}/pause`
-}
-
-export const pauseSubscription = async (subscriptionId: string,
-    pauseSubscriptionBody: PauseSubscriptionBody, options?: RequestInit): Promise<pauseSubscriptionResponse> => {
-  
-  return apiFetch<pauseSubscriptionResponse>(getPauseSubscriptionUrl(subscriptionId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      pauseSubscriptionBody,)
-  }
-);}
-
-
 
 
 export const getPauseSubscriptionMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -408,57 +307,21 @@ Omitting `meal_slot` skips every slot on that date.
 
  * @summary Skip a single delivery
  */
-export type skipDeliveryResponse200 = {
-  data: void
-  status: 200
-}
-
-export type skipDeliveryResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type skipDeliveryResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type skipDeliveryResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type skipDeliveryResponseSuccess = (skipDeliveryResponse200) & {
-  headers: Headers;
-};
-export type skipDeliveryResponseError = (skipDeliveryResponse401 | skipDeliveryResponse404 | skipDeliveryResponse422) & {
-  headers: Headers;
-};
-
-export type skipDeliveryResponse = (skipDeliveryResponseSuccess | skipDeliveryResponseError)
-
-export const getSkipDeliveryUrl = (subscriptionId: string,) => {
-
-
+export const skipDelivery = (
+    subscriptionId: string,
+    skipDeliveryBody: SkipDeliveryBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/subscriptions/${subscriptionId}/skip`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: skipDeliveryBody, signal
+    },
+      );
+    }
   
-
-  return `/subscriptions/${subscriptionId}/skip`
-}
-
-export const skipDelivery = async (subscriptionId: string,
-    skipDeliveryBody: SkipDeliveryBody, options?: RequestInit): Promise<skipDeliveryResponse> => {
-  
-  return apiFetch<skipDeliveryResponse>(getSkipDeliveryUrl(subscriptionId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      skipDeliveryBody,)
-  }
-);}
-
-
 
 
 export const getSkipDeliveryMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -517,52 +380,21 @@ stop" from `subscription_events`, and a deleted row cannot answer it.
 
  * @summary Cancel a subscription
  */
-export type cancelSubscriptionResponse200 = {
-  data: void
-  status: 200
-}
-
-export type cancelSubscriptionResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type cancelSubscriptionResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type cancelSubscriptionResponseSuccess = (cancelSubscriptionResponse200) & {
-  headers: Headers;
-};
-export type cancelSubscriptionResponseError = (cancelSubscriptionResponse401 | cancelSubscriptionResponse404) & {
-  headers: Headers;
-};
-
-export type cancelSubscriptionResponse = (cancelSubscriptionResponseSuccess | cancelSubscriptionResponseError)
-
-export const getCancelSubscriptionUrl = (subscriptionId: string,) => {
-
-
+export const cancelSubscription = (
+    subscriptionId: string,
+    cancelSubscriptionBody?: CancelSubscriptionBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/subscriptions/${subscriptionId}/cancel`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: cancelSubscriptionBody, signal
+    },
+      );
+    }
   
-
-  return `/subscriptions/${subscriptionId}/cancel`
-}
-
-export const cancelSubscription = async (subscriptionId: string,
-    cancelSubscriptionBody?: CancelSubscriptionBody, options?: RequestInit): Promise<cancelSubscriptionResponse> => {
-  
-  return apiFetch<cancelSubscriptionResponse>(getCancelSubscriptionUrl(subscriptionId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      cancelSubscriptionBody,)
-  }
-);}
-
-
 
 
 export const getCancelSubscriptionMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,
@@ -618,61 +450,22 @@ is not on that day's menu. Without a choice the kitchen cooks the default.
 
  * @summary Choose between the day's dishes
  */
-export type chooseSubscriptionMealResponse200 = {
-  data: UpcomingMeal
-  status: 200
-}
-
-export type chooseSubscriptionMealResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type chooseSubscriptionMealResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type chooseSubscriptionMealResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type chooseSubscriptionMealResponseSuccess = (chooseSubscriptionMealResponse200) & {
-  headers: Headers;
-};
-export type chooseSubscriptionMealResponseError = (chooseSubscriptionMealResponse401 | chooseSubscriptionMealResponse404 | chooseSubscriptionMealResponse422) & {
-  headers: Headers;
-};
-
-export type chooseSubscriptionMealResponse = (chooseSubscriptionMealResponseSuccess | chooseSubscriptionMealResponseError)
-
-export const getChooseSubscriptionMealUrl = (subscriptionId: string,
-    date: string,
-    mealSlot: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'suhoor' | 'iftar',) => {
-
-
-  
-
-  return `/subscriptions/${subscriptionId}/meals/${date}/${mealSlot}`
-}
-
-export const chooseSubscriptionMeal = async (subscriptionId: string,
+export const chooseSubscriptionMeal = (
+    subscriptionId: string,
     date: string,
     mealSlot: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'suhoor' | 'iftar',
-    chooseSubscriptionMealBody: ChooseSubscriptionMealBody, options?: RequestInit): Promise<chooseSubscriptionMealResponse> => {
+    chooseSubscriptionMealBody: ChooseSubscriptionMealBody,
+ ) => {
+      
+      
+      return apiFetch<UpcomingMeal>(
+      {url: `/subscriptions/${subscriptionId}/meals/${date}/${mealSlot}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: chooseSubscriptionMealBody
+    },
+      );
+    }
   
-  return apiFetch<chooseSubscriptionMealResponse>(getChooseSubscriptionMealUrl(subscriptionId,date,mealSlot),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      chooseSubscriptionMealBody,)
-  }
-);}
-
-
 
 
 export const getChooseSubscriptionMealMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -723,53 +516,20 @@ export const useChooseSubscriptionMeal = <TError = UnauthorizedResponse | NotFou
     /**
  * @summary The signed-in customer's meal subscriptions
  */
-export type listMySubscriptionsResponse200 = {
-  data: ListMySubscriptions200
-  status: 200
-}
-
-export type listMySubscriptionsResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
+export const listMySubscriptions = (
     
-export type listMySubscriptionsResponseSuccess = (listMySubscriptionsResponse200) & {
-  headers: Headers;
-};
-export type listMySubscriptionsResponseError = (listMySubscriptionsResponse401) & {
-  headers: Headers;
-};
-
-export type listMySubscriptionsResponse = (listMySubscriptionsResponseSuccess | listMySubscriptionsResponseError)
-
-export const getListMySubscriptionsUrl = () => {
-
-
-  
-
-  return `/me/subscriptions`
-}
-
-export const listMySubscriptions = async ( options?: RequestInit): Promise<listMySubscriptionsResponse> => {
-  
-  return apiFetch<listMySubscriptionsResponse>(getListMySubscriptionsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListMySubscriptionsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/subscriptions`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMySubscriptions200>(
+      {url: `/me/subscriptions`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListMySubscriptionsQueryKey = () => {
     return [
@@ -778,49 +538,6 @@ export const getListMySubscriptionsQueryKey = () => {
     }
 
     
-export const getListMySubscriptionsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listMySubscriptions>>, TError = UnauthorizedResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMySubscriptions>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListMySubscriptionsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMySubscriptions>>> = ({ signal }) => listMySubscriptions(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMySubscriptions>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListMySubscriptionsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listMySubscriptions>>>
-export type ListMySubscriptionsInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary The signed-in customer's meal subscriptions
- */
-
-export function useListMySubscriptionsInfinite<TData = Awaited<ReturnType<typeof listMySubscriptions>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMySubscriptions>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListMySubscriptionsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListMySubscriptionsQueryOptions = <TData = Awaited<ReturnType<typeof listMySubscriptions>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMySubscriptions>>, TError, TData>, }
 ) => {
 
@@ -869,62 +586,20 @@ export function useListMySubscriptions<TData = Awaited<ReturnType<typeof listMyS
 
  * @summary Turn automatic renewal on or off
  */
-export type setSubscriptionRenewalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type setSubscriptionRenewalResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type setSubscriptionRenewalResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type setSubscriptionRenewalResponse409 = {
-  data: Problem
-  status: 409
-}
-
-export type setSubscriptionRenewalResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type setSubscriptionRenewalResponseSuccess = (setSubscriptionRenewalResponse204) & {
-  headers: Headers;
-};
-export type setSubscriptionRenewalResponseError = (setSubscriptionRenewalResponse401 | setSubscriptionRenewalResponse404 | setSubscriptionRenewalResponse409 | setSubscriptionRenewalResponse422) & {
-  headers: Headers;
-};
-
-export type setSubscriptionRenewalResponse = (setSubscriptionRenewalResponseSuccess | setSubscriptionRenewalResponseError)
-
-export const getSetSubscriptionRenewalUrl = (subscriptionId: string,) => {
-
-
+export const setSubscriptionRenewal = (
+    subscriptionId: string,
+    setSubscriptionRenewalBody: SetSubscriptionRenewalBody,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/subscriptions/${subscriptionId}/renewal`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: setSubscriptionRenewalBody
+    },
+      );
+    }
   
-
-  return `/subscriptions/${subscriptionId}/renewal`
-}
-
-export const setSubscriptionRenewal = async (subscriptionId: string,
-    setSubscriptionRenewalBody: SetSubscriptionRenewalBody, options?: RequestInit): Promise<setSubscriptionRenewalResponse> => {
-  
-  return apiFetch<setSubscriptionRenewalResponse>(getSetSubscriptionRenewalUrl(subscriptionId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      setSubscriptionRenewalBody,)
-  }
-);}
-
-
 
 
 export const getSetSubscriptionRenewalMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
@@ -977,60 +652,18 @@ export const useSetSubscriptionRenewal = <TError = UnauthorizedResponse | NotFou
 
  * @summary One-tap renew of a subscription that has ended or will end
  */
-export type renewSubscriptionResponse201 = {
-  data: RenewSubscription201
-  status: 201
-}
-
-export type renewSubscriptionResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type renewSubscriptionResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type renewSubscriptionResponse409 = {
-  data: Problem
-  status: 409
-}
-
-export type renewSubscriptionResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type renewSubscriptionResponseSuccess = (renewSubscriptionResponse201) & {
-  headers: Headers;
-};
-export type renewSubscriptionResponseError = (renewSubscriptionResponse401 | renewSubscriptionResponse404 | renewSubscriptionResponse409 | renewSubscriptionResponse422) & {
-  headers: Headers;
-};
-
-export type renewSubscriptionResponse = (renewSubscriptionResponseSuccess | renewSubscriptionResponseError)
-
-export const getRenewSubscriptionUrl = (subscriptionId: string,) => {
-
-
+export const renewSubscription = (
+    subscriptionId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<RenewSubscription201>(
+      {url: `/subscriptions/${subscriptionId}/renew`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/subscriptions/${subscriptionId}/renew`
-}
-
-export const renewSubscription = async (subscriptionId: string, options?: RequestInit): Promise<renewSubscriptionResponse> => {
-  
-  return apiFetch<renewSubscriptionResponse>(getRenewSubscriptionUrl(subscriptionId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getRenewSubscriptionMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
@@ -1082,58 +715,20 @@ export const useRenewSubscription = <TError = UnauthorizedResponse | NotFoundRes
  * Someone else's subscription answers 404.
  * @summary One subscription with the next two weeks of meals
  */
-export type getMySubscriptionResponse200 = {
-  data: MySubscriptionDetail
-  status: 200
-}
-
-export type getMySubscriptionResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getMySubscriptionResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getMySubscriptionResponseSuccess = (getMySubscriptionResponse200) & {
-  headers: Headers;
-};
-export type getMySubscriptionResponseError = (getMySubscriptionResponse401 | getMySubscriptionResponse404) & {
-  headers: Headers;
-};
-
-export type getMySubscriptionResponse = (getMySubscriptionResponseSuccess | getMySubscriptionResponseError)
-
-export const getGetMySubscriptionUrl = (subscriptionId: string,) => {
-
-
-  
-
-  return `/me/subscriptions/${subscriptionId}`
-}
-
-export const getMySubscription = async (subscriptionId: string, options?: RequestInit): Promise<getMySubscriptionResponse> => {
-  
-  return apiFetch<getMySubscriptionResponse>(getGetMySubscriptionUrl(subscriptionId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetMySubscriptionInfiniteQueryKey = (subscriptionId?: string,) => {
-    return [
-    'infinite', `/me/subscriptions/${subscriptionId}`
-    ] as const;
+export const getMySubscription = (
+    subscriptionId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<MySubscriptionDetail>(
+      {url: `/me/subscriptions/${subscriptionId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetMySubscriptionQueryKey = (subscriptionId?: string,) => {
     return [
@@ -1142,49 +737,6 @@ export const getGetMySubscriptionQueryKey = (subscriptionId?: string,) => {
     }
 
     
-export const getGetMySubscriptionInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getMySubscription>>, TError = UnauthorizedResponse | NotFoundResponse>(subscriptionId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMySubscription>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMySubscriptionInfiniteQueryKey(subscriptionId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMySubscription>>> = ({ signal }) => getMySubscription(subscriptionId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(subscriptionId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMySubscription>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetMySubscriptionInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getMySubscription>>>
-export type GetMySubscriptionInfiniteQueryError = UnauthorizedResponse | NotFoundResponse
-
-
-/**
- * @summary One subscription with the next two weeks of meals
- */
-
-export function useGetMySubscriptionInfinite<TData = Awaited<ReturnType<typeof getMySubscription>>, TError = UnauthorizedResponse | NotFoundResponse>(
- subscriptionId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMySubscription>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetMySubscriptionInfiniteQueryOptions(subscriptionId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetMySubscriptionQueryOptions = <TData = Awaited<ReturnType<typeof getMySubscription>>, TError = UnauthorizedResponse | NotFoundResponse>(subscriptionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMySubscription>>, TError, TData>, }
 ) => {
 
@@ -1232,51 +784,20 @@ export function useGetMySubscription<TData = Awaited<ReturnType<typeof getMySubs
  * Checks the four plans the same way createRotation does (all in the rotation, four different kitchens, the schedule fits every plan, every kitchen delivers to the address) and returns the week order the platform would assign. Creates nothing.
  * @summary Which kitchen would cook which week, and the total
  */
-export type previewRotationResponse200 = {
-  data: RotationQuote
-  status: 200
-}
-
-export type previewRotationResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type previewRotationResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type previewRotationResponseSuccess = (previewRotationResponse200) & {
-  headers: Headers;
-};
-export type previewRotationResponseError = (previewRotationResponse401 | previewRotationResponse422) & {
-  headers: Headers;
-};
-
-export type previewRotationResponse = (previewRotationResponseSuccess | previewRotationResponseError)
-
-export const getPreviewRotationUrl = () => {
-
-
+export const previewRotation = (
+    rotationInput: RotationInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<RotationQuote>(
+      {url: `/rotations/preview`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: rotationInput, signal
+    },
+      );
+    }
   
-
-  return `/rotations/preview`
-}
-
-export const previewRotation = async (rotationInput: RotationInput, options?: RequestInit): Promise<previewRotationResponse> => {
-  
-  return apiFetch<previewRotationResponse>(getPreviewRotationUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      rotationInput,)
-  }
-);}
-
-
 
 
 export const getPreviewRotationMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
@@ -1328,51 +849,20 @@ export const usePreviewRotation = <TError = UnauthorizedResponse | Unprocessable
  * Creates the rotation and one subscription per week, each with its own billing order at that kitchen's weekly price. All start pending payment; pay them together with payRotation.
  * @summary Buy a four-kitchen rotation
  */
-export type createRotationResponse201 = {
-  data: Rotation
-  status: 201
-}
-
-export type createRotationResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createRotationResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createRotationResponseSuccess = (createRotationResponse201) & {
-  headers: Headers;
-};
-export type createRotationResponseError = (createRotationResponse401 | createRotationResponse422) & {
-  headers: Headers;
-};
-
-export type createRotationResponse = (createRotationResponseSuccess | createRotationResponseError)
-
-export const getCreateRotationUrl = () => {
-
-
+export const createRotation = (
+    rotationInput: RotationInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Rotation>(
+      {url: `/rotations`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: rotationInput, signal
+    },
+      );
+    }
   
-
-  return `/rotations`
-}
-
-export const createRotation = async (rotationInput: RotationInput, options?: RequestInit): Promise<createRotationResponse> => {
-  
-  return apiFetch<createRotationResponse>(getCreateRotationUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      rotationInput,)
-  }
-);}
-
-
 
 
 export const getCreateRotationMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
@@ -1423,52 +913,21 @@ export const useCreateRotation = <TError = UnauthorizedResponse | UnprocessableE
     /**
  * @summary Cancel every unfinished week of a rotation
  */
-export type cancelRotationResponse204 = {
-  data: void
-  status: 204
-}
-
-export type cancelRotationResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type cancelRotationResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type cancelRotationResponseSuccess = (cancelRotationResponse204) & {
-  headers: Headers;
-};
-export type cancelRotationResponseError = (cancelRotationResponse401 | cancelRotationResponse404) & {
-  headers: Headers;
-};
-
-export type cancelRotationResponse = (cancelRotationResponseSuccess | cancelRotationResponseError)
-
-export const getCancelRotationUrl = (rotationId: string,) => {
-
-
+export const cancelRotation = (
+    rotationId: string,
+    cancelRotationBody: CancelRotationBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/rotations/${rotationId}/cancel`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: cancelRotationBody, signal
+    },
+      );
+    }
   
-
-  return `/rotations/${rotationId}/cancel`
-}
-
-export const cancelRotation = async (rotationId: string,
-    cancelRotationBody: CancelRotationBody, options?: RequestInit): Promise<cancelRotationResponse> => {
-  
-  return apiFetch<cancelRotationResponse>(getCancelRotationUrl(rotationId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      cancelRotationBody,)
-  }
-);}
-
-
 
 
 export const getCancelRotationMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,
@@ -1520,62 +979,20 @@ export const useCancelRotation = <TError = UnauthorizedResponse | NotFoundRespon
  * Off also cancels an automatic renewal that has not been paid.
  * @summary Turn automatic renewal of a rotation on or off
  */
-export type setRotationRenewalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type setRotationRenewalResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type setRotationRenewalResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type setRotationRenewalResponse409 = {
-  data: Problem
-  status: 409
-}
-
-export type setRotationRenewalResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type setRotationRenewalResponseSuccess = (setRotationRenewalResponse204) & {
-  headers: Headers;
-};
-export type setRotationRenewalResponseError = (setRotationRenewalResponse401 | setRotationRenewalResponse404 | setRotationRenewalResponse409 | setRotationRenewalResponse422) & {
-  headers: Headers;
-};
-
-export type setRotationRenewalResponse = (setRotationRenewalResponseSuccess | setRotationRenewalResponseError)
-
-export const getSetRotationRenewalUrl = (rotationId: string,) => {
-
-
+export const setRotationRenewal = (
+    rotationId: string,
+    setRotationRenewalBody: SetRotationRenewalBody,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/rotations/${rotationId}/renewal`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: setRotationRenewalBody
+    },
+      );
+    }
   
-
-  return `/rotations/${rotationId}/renewal`
-}
-
-export const setRotationRenewal = async (rotationId: string,
-    setRotationRenewalBody: SetRotationRenewalBody, options?: RequestInit): Promise<setRotationRenewalResponse> => {
-  
-  return apiFetch<setRotationRenewalResponse>(getSetRotationRenewalUrl(rotationId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      setRotationRenewalBody,)
-  }
-);}
-
-
 
 
 export const getSetRotationRenewalMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
@@ -1628,60 +1045,18 @@ export const useSetRotationRenewal = <TError = UnauthorizedResponse | NotFoundRe
 
  * @summary Start the next rotation with the same four kitchens
  */
-export type renewRotationResponse201 = {
-  data: Rotation
-  status: 201
-}
-
-export type renewRotationResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type renewRotationResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type renewRotationResponse409 = {
-  data: Problem
-  status: 409
-}
-
-export type renewRotationResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type renewRotationResponseSuccess = (renewRotationResponse201) & {
-  headers: Headers;
-};
-export type renewRotationResponseError = (renewRotationResponse401 | renewRotationResponse404 | renewRotationResponse409 | renewRotationResponse422) & {
-  headers: Headers;
-};
-
-export type renewRotationResponse = (renewRotationResponseSuccess | renewRotationResponseError)
-
-export const getRenewRotationUrl = (rotationId: string,) => {
-
-
+export const renewRotation = (
+    rotationId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Rotation>(
+      {url: `/rotations/${rotationId}/renew`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/rotations/${rotationId}/renew`
-}
-
-export const renewRotation = async (rotationId: string, options?: RequestInit): Promise<renewRotationResponse> => {
-  
-  return apiFetch<renewRotationResponse>(getRenewRotationUrl(rotationId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getRenewRotationMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
@@ -1732,53 +1107,20 @@ export const useRenewRotation = <TError = UnauthorizedResponse | NotFoundRespons
     /**
  * @summary The signed-in customer's rotations
  */
-export type listMyRotationsResponse200 = {
-  data: ListMyRotations200
-  status: 200
-}
-
-export type listMyRotationsResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
+export const listMyRotations = (
     
-export type listMyRotationsResponseSuccess = (listMyRotationsResponse200) & {
-  headers: Headers;
-};
-export type listMyRotationsResponseError = (listMyRotationsResponse401) & {
-  headers: Headers;
-};
-
-export type listMyRotationsResponse = (listMyRotationsResponseSuccess | listMyRotationsResponseError)
-
-export const getListMyRotationsUrl = () => {
-
-
-  
-
-  return `/me/rotations`
-}
-
-export const listMyRotations = async ( options?: RequestInit): Promise<listMyRotationsResponse> => {
-  
-  return apiFetch<listMyRotationsResponse>(getListMyRotationsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListMyRotationsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/rotations`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMyRotations200>(
+      {url: `/me/rotations`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListMyRotationsQueryKey = () => {
     return [
@@ -1787,49 +1129,6 @@ export const getListMyRotationsQueryKey = () => {
     }
 
     
-export const getListMyRotationsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listMyRotations>>, TError = UnauthorizedResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyRotations>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListMyRotationsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyRotations>>> = ({ signal }) => listMyRotations(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyRotations>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListMyRotationsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listMyRotations>>>
-export type ListMyRotationsInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary The signed-in customer's rotations
- */
-
-export function useListMyRotationsInfinite<TData = Awaited<ReturnType<typeof listMyRotations>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listMyRotations>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListMyRotationsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListMyRotationsQueryOptions = <TData = Awaited<ReturnType<typeof listMyRotations>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyRotations>>, TError, TData>, }
 ) => {
 
@@ -1878,53 +1177,20 @@ export function useListMyRotations<TData = Awaited<ReturnType<typeof listMyRotat
 
  * @summary The signed-in customer's invite code and referral vouchers
  */
-export type getMyReferralsResponse200 = {
-  data: GetMyReferrals200
-  status: 200
-}
-
-export type getMyReferralsResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
+export const getMyReferrals = (
     
-export type getMyReferralsResponseSuccess = (getMyReferralsResponse200) & {
-  headers: Headers;
-};
-export type getMyReferralsResponseError = (getMyReferralsResponse401) & {
-  headers: Headers;
-};
-
-export type getMyReferralsResponse = (getMyReferralsResponseSuccess | getMyReferralsResponseError)
-
-export const getGetMyReferralsUrl = () => {
-
-
-  
-
-  return `/me/referrals`
-}
-
-export const getMyReferrals = async ( options?: RequestInit): Promise<getMyReferralsResponse> => {
-  
-  return apiFetch<getMyReferralsResponse>(getGetMyReferralsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetMyReferralsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/referrals`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetMyReferrals200>(
+      {url: `/me/referrals`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetMyReferralsQueryKey = () => {
     return [
@@ -1933,49 +1199,6 @@ export const getGetMyReferralsQueryKey = () => {
     }
 
     
-export const getGetMyReferralsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getMyReferrals>>, TError = UnauthorizedResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyReferrals>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMyReferralsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyReferrals>>> = ({ signal }) => getMyReferrals(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyReferrals>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetMyReferralsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getMyReferrals>>>
-export type GetMyReferralsInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary The signed-in customer's invite code and referral vouchers
- */
-
-export function useGetMyReferralsInfinite<TData = Awaited<ReturnType<typeof getMyReferrals>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyReferrals>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetMyReferralsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetMyReferralsQueryOptions = <TData = Awaited<ReturnType<typeof getMyReferrals>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReferrals>>, TError, TData>, }
 ) => {
 
@@ -2023,58 +1246,20 @@ export function useGetMyReferrals<TData = Awaited<ReturnType<typeof getMyReferra
  * Someone else's rotation answers 404.
  * @summary One rotation with its four weeks
  */
-export type getMyRotationResponse200 = {
-  data: Rotation
-  status: 200
-}
-
-export type getMyRotationResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getMyRotationResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getMyRotationResponseSuccess = (getMyRotationResponse200) & {
-  headers: Headers;
-};
-export type getMyRotationResponseError = (getMyRotationResponse401 | getMyRotationResponse404) & {
-  headers: Headers;
-};
-
-export type getMyRotationResponse = (getMyRotationResponseSuccess | getMyRotationResponseError)
-
-export const getGetMyRotationUrl = (rotationId: string,) => {
-
-
-  
-
-  return `/me/rotations/${rotationId}`
-}
-
-export const getMyRotation = async (rotationId: string, options?: RequestInit): Promise<getMyRotationResponse> => {
-  
-  return apiFetch<getMyRotationResponse>(getGetMyRotationUrl(rotationId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetMyRotationInfiniteQueryKey = (rotationId?: string,) => {
-    return [
-    'infinite', `/me/rotations/${rotationId}`
-    ] as const;
+export const getMyRotation = (
+    rotationId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Rotation>(
+      {url: `/me/rotations/${rotationId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetMyRotationQueryKey = (rotationId?: string,) => {
     return [
@@ -2083,49 +1268,6 @@ export const getGetMyRotationQueryKey = (rotationId?: string,) => {
     }
 
     
-export const getGetMyRotationInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getMyRotation>>, TError = UnauthorizedResponse | NotFoundResponse>(rotationId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyRotation>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMyRotationInfiniteQueryKey(rotationId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyRotation>>> = ({ signal }) => getMyRotation(rotationId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(rotationId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyRotation>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetMyRotationInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getMyRotation>>>
-export type GetMyRotationInfiniteQueryError = UnauthorizedResponse | NotFoundResponse
-
-
-/**
- * @summary One rotation with its four weeks
- */
-
-export function useGetMyRotationInfinite<TData = Awaited<ReturnType<typeof getMyRotation>>, TError = UnauthorizedResponse | NotFoundResponse>(
- rotationId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyRotation>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetMyRotationInfiniteQueryOptions(rotationId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetMyRotationQueryOptions = <TData = Awaited<ReturnType<typeof getMyRotation>>, TError = UnauthorizedResponse | NotFoundResponse>(rotationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyRotation>>, TError, TData>, }
 ) => {
 

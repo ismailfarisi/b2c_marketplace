@@ -54,46 +54,20 @@ a model learns the wrong thing.
 
  * @summary Batched client engagement events
  */
-export type submitEventsResponse202 = {
-  data: void
-  status: 202
-}
-
-export type submitEventsResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type submitEventsResponseSuccess = (submitEventsResponse202) & {
-  headers: Headers;
-};
-export type submitEventsResponseError = (submitEventsResponse422) & {
-  headers: Headers;
-};
-
-export type submitEventsResponse = (submitEventsResponseSuccess | submitEventsResponseError)
-
-export const getSubmitEventsUrl = () => {
-
-
+export const submitEvents = (
+    submitEventsBody: SubmitEventsBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/events`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: submitEventsBody, signal
+    },
+      );
+    }
   
-
-  return `/events`
-}
-
-export const submitEvents = async (submitEventsBody: SubmitEventsBody, options?: RequestInit): Promise<submitEventsResponse> => {
-  
-  return apiFetch<submitEventsResponse>(getSubmitEventsUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      submitEventsBody,)
-  }
-);}
-
-
 
 
 export const getSubmitEventsMutationOptions = <TError = UnprocessableEntityResponse,

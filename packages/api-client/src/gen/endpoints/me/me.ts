@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -54,53 +51,20 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary The authenticated user
  */
-export type getCurrentUserResponse200 = {
-  data: User
-  status: 200
-}
-
-export type getCurrentUserResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
+export const getCurrentUser = (
     
-export type getCurrentUserResponseSuccess = (getCurrentUserResponse200) & {
-  headers: Headers;
-};
-export type getCurrentUserResponseError = (getCurrentUserResponse401) & {
-  headers: Headers;
-};
-
-export type getCurrentUserResponse = (getCurrentUserResponseSuccess | getCurrentUserResponseError)
-
-export const getGetCurrentUserUrl = () => {
-
-
-  
-
-  return `/me`
-}
-
-export const getCurrentUser = async ( options?: RequestInit): Promise<getCurrentUserResponse> => {
-  
-  return apiFetch<getCurrentUserResponse>(getGetCurrentUserUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCurrentUserInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<User>(
+      {url: `/me`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetCurrentUserQueryKey = () => {
     return [
@@ -109,49 +73,6 @@ export const getGetCurrentUserQueryKey = () => {
     }
 
     
-export const getGetCurrentUserInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getCurrentUser>>, TError = UnauthorizedResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCurrentUserInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentUser>>> = ({ signal }) => getCurrentUser(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetCurrentUserInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
-export type GetCurrentUserInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary The authenticated user
- */
-
-export function useGetCurrentUserInfinite<TData = Awaited<ReturnType<typeof getCurrentUser>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetCurrentUserInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetCurrentUserQueryOptions = <TData = Awaited<ReturnType<typeof getCurrentUser>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>, }
 ) => {
 
@@ -198,53 +119,20 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
 /**
  * @summary The user's saved addresses
  */
-export type listAddressesResponse200 = {
-  data: ListAddresses200
-  status: 200
-}
-
-export type listAddressesResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
+export const listAddresses = (
     
-export type listAddressesResponseSuccess = (listAddressesResponse200) & {
-  headers: Headers;
-};
-export type listAddressesResponseError = (listAddressesResponse401) & {
-  headers: Headers;
-};
-
-export type listAddressesResponse = (listAddressesResponseSuccess | listAddressesResponseError)
-
-export const getListAddressesUrl = () => {
-
-
-  
-
-  return `/me/addresses`
-}
-
-export const listAddresses = async ( options?: RequestInit): Promise<listAddressesResponse> => {
-  
-  return apiFetch<listAddressesResponse>(getListAddressesUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListAddressesInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/addresses`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListAddresses200>(
+      {url: `/me/addresses`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListAddressesQueryKey = () => {
     return [
@@ -253,49 +141,6 @@ export const getListAddressesQueryKey = () => {
     }
 
     
-export const getListAddressesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listAddresses>>, TError = UnauthorizedResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAddresses>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListAddressesInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAddresses>>> = ({ signal }) => listAddresses(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAddresses>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListAddressesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listAddresses>>>
-export type ListAddressesInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary The user's saved addresses
- */
-
-export function useListAddressesInfinite<TData = Awaited<ReturnType<typeof listAddresses>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAddresses>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListAddressesInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListAddressesQueryOptions = <TData = Awaited<ReturnType<typeof listAddresses>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAddresses>>, TError, TData>, }
 ) => {
 
@@ -342,51 +187,20 @@ export function useListAddresses<TData = Awaited<ReturnType<typeof listAddresses
 /**
  * @summary Save an address
  */
-export type createAddressResponse201 = {
-  data: Address
-  status: 201
-}
-
-export type createAddressResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createAddressResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createAddressResponseSuccess = (createAddressResponse201) & {
-  headers: Headers;
-};
-export type createAddressResponseError = (createAddressResponse401 | createAddressResponse422) & {
-  headers: Headers;
-};
-
-export type createAddressResponse = (createAddressResponseSuccess | createAddressResponseError)
-
-export const getCreateAddressUrl = () => {
-
-
+export const createAddress = (
+    addressInput: AddressInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Address>(
+      {url: `/me/addresses`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: addressInput, signal
+    },
+      );
+    }
   
-
-  return `/me/addresses`
-}
-
-export const createAddress = async (addressInput: AddressInput, options?: RequestInit): Promise<createAddressResponse> => {
-  
-  return apiFetch<createAddressResponse>(getCreateAddressUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      addressInput,)
-  }
-);}
-
-
 
 
 export const getCreateAddressMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
@@ -437,50 +251,17 @@ export const useCreateAddress = <TError = UnauthorizedResponse | UnprocessableEn
     /**
  * @summary Remove a saved address
  */
-export type deleteAddressResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteAddressResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type deleteAddressResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type deleteAddressResponseSuccess = (deleteAddressResponse204) & {
-  headers: Headers;
-};
-export type deleteAddressResponseError = (deleteAddressResponse401 | deleteAddressResponse404) & {
-  headers: Headers;
-};
-
-export type deleteAddressResponse = (deleteAddressResponseSuccess | deleteAddressResponseError)
-
-export const getDeleteAddressUrl = (addressId: string,) => {
-
-
+export const deleteAddress = (
+    addressId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me/addresses/${addressId}`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/me/addresses/${addressId}`
-}
-
-export const deleteAddress = async (addressId: string, options?: RequestInit): Promise<deleteAddressResponse> => {
-  
-  return apiFetch<deleteAddressResponse>(getDeleteAddressUrl(addressId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getDeleteAddressMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,

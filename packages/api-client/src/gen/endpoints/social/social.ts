@@ -46,51 +46,20 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary Follow a vendor, branch or creator
  */
-export type followResponse204 = {
-  data: void
-  status: 204
-}
-
-export type followResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type followResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type followResponseSuccess = (followResponse204) & {
-  headers: Headers;
-};
-export type followResponseError = (followResponse401 | followResponse422) & {
-  headers: Headers;
-};
-
-export type followResponse = (followResponseSuccess | followResponseError)
-
-export const getFollowUrl = () => {
-
-
+export const follow = (
+    followBody: FollowBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me/follows`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: followBody, signal
+    },
+      );
+    }
   
-
-  return `/me/follows`
-}
-
-export const follow = async (followBody: FollowBody, options?: RequestInit): Promise<followResponse> => {
-  
-  return apiFetch<followResponse>(getFollowUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      followBody,)
-  }
-);}
-
-
 
 
 export const getFollowMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
@@ -141,54 +110,19 @@ export const useFollow = <TError = UnauthorizedResponse | UnprocessableEntityRes
     /**
  * @summary Unfollow
  */
-export type unfollowResponse204 = {
-  data: void
-  status: 204
-}
-
-export type unfollowResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type unfollowResponseSuccess = (unfollowResponse204) & {
-  headers: Headers;
-};
-export type unfollowResponseError = (unfollowResponse401) & {
-  headers: Headers;
-};
-
-export type unfollowResponse = (unfollowResponseSuccess | unfollowResponseError)
-
-export const getUnfollowUrl = (followeeId: string,
-    params?: UnfollowParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const unfollow = (
+    followeeId: string,
+    params?: UnfollowParams,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me/follows/${followeeId}`, method: 'DELETE',
+        params
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/me/follows/${followeeId}?${stringifiedParams}` : `/me/follows/${followeeId}`
-}
-
-export const unfollow = async (followeeId: string,
-    params?: UnfollowParams, options?: RequestInit): Promise<unfollowResponse> => {
   
-  return apiFetch<unfollowResponse>(getUnfollowUrl(followeeId,params),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getUnfollowMutationOptions = <TError = UnauthorizedResponse,
@@ -239,50 +173,17 @@ export const useUnfollow = <TError = UnauthorizedResponse,
     /**
  * @summary Save a reel
  */
-export type saveReelResponse204 = {
-  data: void
-  status: 204
-}
-
-export type saveReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type saveReelResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type saveReelResponseSuccess = (saveReelResponse204) & {
-  headers: Headers;
-};
-export type saveReelResponseError = (saveReelResponse401 | saveReelResponse404) & {
-  headers: Headers;
-};
-
-export type saveReelResponse = (saveReelResponseSuccess | saveReelResponseError)
-
-export const getSaveReelUrl = (reelId: string,) => {
-
-
+export const saveReel = (
+    reelId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/reels/${reelId}/save`, method: 'PUT'
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}/save`
-}
-
-export const saveReel = async (reelId: string, options?: RequestInit): Promise<saveReelResponse> => {
-  
-  return apiFetch<saveReelResponse>(getSaveReelUrl(reelId),
-  {      
-    ...options,
-    method: 'PUT'
-    
-    
-  }
-);}
-
-
 
 
 export const getSaveReelMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,
@@ -333,45 +234,17 @@ export const useSaveReel = <TError = UnauthorizedResponse | NotFoundResponse,
     /**
  * @summary Remove a saved reel
  */
-export type unsaveReelResponse204 = {
-  data: void
-  status: 204
-}
-
-export type unsaveReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type unsaveReelResponseSuccess = (unsaveReelResponse204) & {
-  headers: Headers;
-};
-export type unsaveReelResponseError = (unsaveReelResponse401) & {
-  headers: Headers;
-};
-
-export type unsaveReelResponse = (unsaveReelResponseSuccess | unsaveReelResponseError)
-
-export const getUnsaveReelUrl = (reelId: string,) => {
-
-
+export const unsaveReel = (
+    reelId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/reels/${reelId}/save`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}/save`
-}
-
-export const unsaveReel = async (reelId: string, options?: RequestInit): Promise<unsaveReelResponse> => {
-  
-  return apiFetch<unsaveReelResponse>(getUnsaveReelUrl(reelId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getUnsaveReelMutationOptions = <TError = UnauthorizedResponse,
@@ -427,50 +300,17 @@ anything, and the status code is 200 either way.
 
  * @summary Like a reel
  */
-export type likeReelResponse200 = {
-  data: LikeReel200
-  status: 200
-}
-
-export type likeReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type likeReelResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type likeReelResponseSuccess = (likeReelResponse200) & {
-  headers: Headers;
-};
-export type likeReelResponseError = (likeReelResponse401 | likeReelResponse404) & {
-  headers: Headers;
-};
-
-export type likeReelResponse = (likeReelResponseSuccess | likeReelResponseError)
-
-export const getLikeReelUrl = (reelId: string,) => {
-
-
+export const likeReel = (
+    reelId: string,
+ ) => {
+      
+      
+      return apiFetch<LikeReel200>(
+      {url: `/reels/${reelId}/like`, method: 'PUT'
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}/like`
-}
-
-export const likeReel = async (reelId: string, options?: RequestInit): Promise<likeReelResponse> => {
-  
-  return apiFetch<likeReelResponse>(getLikeReelUrl(reelId),
-  {      
-    ...options,
-    method: 'PUT'
-    
-    
-  }
-);}
-
-
 
 
 export const getLikeReelMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,
@@ -521,45 +361,17 @@ export const useLikeReel = <TError = UnauthorizedResponse | NotFoundResponse,
     /**
  * @summary Remove a like
  */
-export type unlikeReelResponse200 = {
-  data: UnlikeReel200
-  status: 200
-}
-
-export type unlikeReelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type unlikeReelResponseSuccess = (unlikeReelResponse200) & {
-  headers: Headers;
-};
-export type unlikeReelResponseError = (unlikeReelResponse401) & {
-  headers: Headers;
-};
-
-export type unlikeReelResponse = (unlikeReelResponseSuccess | unlikeReelResponseError)
-
-export const getUnlikeReelUrl = (reelId: string,) => {
-
-
+export const unlikeReel = (
+    reelId: string,
+ ) => {
+      
+      
+      return apiFetch<UnlikeReel200>(
+      {url: `/reels/${reelId}/like`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/reels/${reelId}/like`
-}
-
-export const unlikeReel = async (reelId: string, options?: RequestInit): Promise<unlikeReelResponse> => {
-  
-  return apiFetch<unlikeReelResponse>(getUnlikeReelUrl(reelId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getUnlikeReelMutationOptions = <TError = UnauthorizedResponse,

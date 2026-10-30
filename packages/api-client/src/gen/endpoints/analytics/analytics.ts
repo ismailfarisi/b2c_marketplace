@@ -20,14 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useQuery
 } from '@tanstack/react-query';
 import type {
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -58,73 +55,22 @@ than summed.
 
  * @summary One reel's conversion funnel
  */
-export type getReelFunnelResponse200 = {
-  data: ReelFunnel
-  status: 200
-}
-
-export type getReelFunnelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getReelFunnelResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type getReelFunnelResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getReelFunnelResponseSuccess = (getReelFunnelResponse200) & {
-  headers: Headers;
-};
-export type getReelFunnelResponseError = (getReelFunnelResponse401 | getReelFunnelResponse403 | getReelFunnelResponse404) & {
-  headers: Headers;
-};
-
-export type getReelFunnelResponse = (getReelFunnelResponseSuccess | getReelFunnelResponseError)
-
-export const getGetReelFunnelUrl = (reelId: string,
-    params?: GetReelFunnelParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getReelFunnel = (
+    reelId: string,
+    params?: GetReelFunnelParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ReelFunnel>(
+      {url: `/reels/${reelId}/funnel`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/reels/${reelId}/funnel?${stringifiedParams}` : `/reels/${reelId}/funnel`
-}
-
-export const getReelFunnel = async (reelId: string,
-    params?: GetReelFunnelParams, options?: RequestInit): Promise<getReelFunnelResponse> => {
   
-  return apiFetch<getReelFunnelResponse>(getGetReelFunnelUrl(reelId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetReelFunnelInfiniteQueryKey = (reelId?: string,
-    params?: GetReelFunnelParams,) => {
-    return [
-    'infinite', `/reels/${reelId}/funnel`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetReelFunnelQueryKey = (reelId?: string,
     params?: GetReelFunnelParams,) => {
@@ -134,51 +80,6 @@ export const getGetReelFunnelQueryKey = (reelId?: string,
     }
 
     
-export const getGetReelFunnelInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getReelFunnel>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(reelId: string,
-    params?: GetReelFunnelParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReelFunnel>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetReelFunnelInfiniteQueryKey(reelId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReelFunnel>>> = ({ signal, pageParam }) => getReelFunnel(reelId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(reelId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReelFunnel>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetReelFunnelInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getReelFunnel>>>
-export type GetReelFunnelInfiniteQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
-
-
-/**
- * @summary One reel's conversion funnel
- */
-
-export function useGetReelFunnelInfinite<TData = Awaited<ReturnType<typeof getReelFunnel>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
- reelId: string,
-    params?: GetReelFunnelParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getReelFunnel>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetReelFunnelInfiniteQueryOptions(reelId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetReelFunnelQueryOptions = <TData = Awaited<ReturnType<typeof getReelFunnel>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(reelId: string,
     params?: GetReelFunnelParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReelFunnel>>, TError, TData>, }
 ) => {
@@ -238,65 +139,21 @@ orders placed, including organic. It is the conservative reading on purpose.
 
  * @summary Platform-wide conversion — does the feed produce bookings?
  */
-export type getFeedFunnelResponse200 = {
-  data: FeedFunnel
-  status: 200
-}
-
-export type getFeedFunnelResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getFeedFunnelResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type getFeedFunnelResponseSuccess = (getFeedFunnelResponse200) & {
-  headers: Headers;
-};
-export type getFeedFunnelResponseError = (getFeedFunnelResponse401 | getFeedFunnelResponse403) & {
-  headers: Headers;
-};
-
-export type getFeedFunnelResponse = (getFeedFunnelResponseSuccess | getFeedFunnelResponseError)
-
-export const getGetFeedFunnelUrl = (params?: GetFeedFunnelParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getFeedFunnel = (
+    params?: GetFeedFunnelParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<FeedFunnel>(
+      {url: `/analytics/feed-funnel`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/analytics/feed-funnel?${stringifiedParams}` : `/analytics/feed-funnel`
-}
-
-export const getFeedFunnel = async (params?: GetFeedFunnelParams, options?: RequestInit): Promise<getFeedFunnelResponse> => {
   
-  return apiFetch<getFeedFunnelResponse>(getGetFeedFunnelUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetFeedFunnelInfiniteQueryKey = (params?: GetFeedFunnelParams,) => {
-    return [
-    'infinite', `/analytics/feed-funnel`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetFeedFunnelQueryKey = (params?: GetFeedFunnelParams,) => {
     return [
@@ -305,49 +162,6 @@ export const getGetFeedFunnelQueryKey = (params?: GetFeedFunnelParams,) => {
     }
 
     
-export const getGetFeedFunnelInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getFeedFunnel>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: GetFeedFunnelParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeedFunnel>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetFeedFunnelInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedFunnel>>> = ({ signal, pageParam }) => getFeedFunnel({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeedFunnel>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetFeedFunnelInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getFeedFunnel>>>
-export type GetFeedFunnelInfiniteQueryError = UnauthorizedResponse | ForbiddenResponse
-
-
-/**
- * @summary Platform-wide conversion — does the feed produce bookings?
- */
-
-export function useGetFeedFunnelInfinite<TData = Awaited<ReturnType<typeof getFeedFunnel>>, TError = UnauthorizedResponse | ForbiddenResponse>(
- params?: GetFeedFunnelParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeedFunnel>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetFeedFunnelInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetFeedFunnelQueryOptions = <TData = Awaited<ReturnType<typeof getFeedFunnel>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: GetFeedFunnelParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedFunnel>>, TError, TData>, }
 ) => {
 

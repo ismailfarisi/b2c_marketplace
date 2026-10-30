@@ -20,14 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useQuery
 } from '@tanstack/react-query';
 import type {
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -60,53 +57,21 @@ delivers that weekday.
 
  * @summary Default dishes of the next delivery day near the customer
  */
-export type nextDayMealDishesResponse200 = {
-  data: NextDayMealDishes200
-  status: 200
-}
-    
-export type nextDayMealDishesResponseSuccess = (nextDayMealDishesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type nextDayMealDishesResponse = (nextDayMealDishesResponseSuccess)
-
-export const getNextDayMealDishesUrl = (params?: NextDayMealDishesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const nextDayMealDishes = (
+    params?: NextDayMealDishesParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<NextDayMealDishes200>(
+      {url: `/meals/dishes/tomorrow`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/meals/dishes/tomorrow?${stringifiedParams}` : `/meals/dishes/tomorrow`
-}
-
-export const nextDayMealDishes = async (params?: NextDayMealDishesParams, options?: RequestInit): Promise<nextDayMealDishesResponse> => {
   
-  return apiFetch<nextDayMealDishesResponse>(getNextDayMealDishesUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getNextDayMealDishesInfiniteQueryKey = (params?: NextDayMealDishesParams,) => {
-    return [
-    'infinite', `/meals/dishes/tomorrow`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getNextDayMealDishesQueryKey = (params?: NextDayMealDishesParams,) => {
     return [
@@ -115,49 +80,6 @@ export const getNextDayMealDishesQueryKey = (params?: NextDayMealDishesParams,) 
     }
 
     
-export const getNextDayMealDishesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof nextDayMealDishes>>, TError = unknown>(params?: NextDayMealDishesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof nextDayMealDishes>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getNextDayMealDishesInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof nextDayMealDishes>>> = ({ signal, pageParam }) => nextDayMealDishes({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof nextDayMealDishes>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type NextDayMealDishesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof nextDayMealDishes>>>
-export type NextDayMealDishesInfiniteQueryError = unknown
-
-
-/**
- * @summary Default dishes of the next delivery day near the customer
- */
-
-export function useNextDayMealDishesInfinite<TData = Awaited<ReturnType<typeof nextDayMealDishes>>, TError = unknown>(
- params?: NextDayMealDishesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof nextDayMealDishes>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getNextDayMealDishesInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getNextDayMealDishesQueryOptions = <TData = Awaited<ReturnType<typeof nextDayMealDishes>>, TError = unknown>(params?: NextDayMealDishesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof nextDayMealDishes>>, TError, TData>, }
 ) => {
 
@@ -208,60 +130,21 @@ whose delivery area contains the point are returned.
 
  * @summary Meal kitchens a customer can subscribe to
  */
-export type discoverMealKitchensResponse200 = {
-  data: DiscoverMealKitchens200
-  status: 200
-}
-
-export type discoverMealKitchensResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type discoverMealKitchensResponseSuccess = (discoverMealKitchensResponse200) & {
-  headers: Headers;
-};
-export type discoverMealKitchensResponseError = (discoverMealKitchensResponse422) & {
-  headers: Headers;
-};
-
-export type discoverMealKitchensResponse = (discoverMealKitchensResponseSuccess | discoverMealKitchensResponseError)
-
-export const getDiscoverMealKitchensUrl = (params?: DiscoverMealKitchensParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const discoverMealKitchens = (
+    params?: DiscoverMealKitchensParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<DiscoverMealKitchens200>(
+      {url: `/meals/kitchens`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/meals/kitchens?${stringifiedParams}` : `/meals/kitchens`
-}
-
-export const discoverMealKitchens = async (params?: DiscoverMealKitchensParams, options?: RequestInit): Promise<discoverMealKitchensResponse> => {
   
-  return apiFetch<discoverMealKitchensResponse>(getDiscoverMealKitchensUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getDiscoverMealKitchensInfiniteQueryKey = (params?: DiscoverMealKitchensParams,) => {
-    return [
-    'infinite', `/meals/kitchens`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getDiscoverMealKitchensQueryKey = (params?: DiscoverMealKitchensParams,) => {
     return [
@@ -270,49 +153,6 @@ export const getDiscoverMealKitchensQueryKey = (params?: DiscoverMealKitchensPar
     }
 
     
-export const getDiscoverMealKitchensInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof discoverMealKitchens>>, TError = UnprocessableEntityResponse>(params?: DiscoverMealKitchensParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof discoverMealKitchens>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getDiscoverMealKitchensInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof discoverMealKitchens>>> = ({ signal, pageParam }) => discoverMealKitchens({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof discoverMealKitchens>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type DiscoverMealKitchensInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof discoverMealKitchens>>>
-export type DiscoverMealKitchensInfiniteQueryError = UnprocessableEntityResponse
-
-
-/**
- * @summary Meal kitchens a customer can subscribe to
- */
-
-export function useDiscoverMealKitchensInfinite<TData = Awaited<ReturnType<typeof discoverMealKitchens>>, TError = UnprocessableEntityResponse>(
- params?: DiscoverMealKitchensParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof discoverMealKitchens>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getDiscoverMealKitchensInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getDiscoverMealKitchensQueryOptions = <TData = Awaited<ReturnType<typeof discoverMealKitchens>>, TError = UnprocessableEntityResponse>(params?: DiscoverMealKitchensParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverMealKitchens>>, TError, TData>, }
 ) => {
 
@@ -359,46 +199,20 @@ export function useDiscoverMealKitchens<TData = Awaited<ReturnType<typeof discov
 /**
  * @summary Public promos and trials usable at a kitchen now
  */
-export type getKitchenOffersResponse200 = {
-  data: GetKitchenOffers200
-  status: 200
-}
-    
-export type getKitchenOffersResponseSuccess = (getKitchenOffersResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getKitchenOffersResponse = (getKitchenOffersResponseSuccess)
-
-export const getGetKitchenOffersUrl = (branchId: string,) => {
-
-
-  
-
-  return `/meals/kitchens/${branchId}/offers`
-}
-
-export const getKitchenOffers = async (branchId: string, options?: RequestInit): Promise<getKitchenOffersResponse> => {
-  
-  return apiFetch<getKitchenOffersResponse>(getGetKitchenOffersUrl(branchId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetKitchenOffersInfiniteQueryKey = (branchId?: string,) => {
-    return [
-    'infinite', `/meals/kitchens/${branchId}/offers`
-    ] as const;
+export const getKitchenOffers = (
+    branchId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetKitchenOffers200>(
+      {url: `/meals/kitchens/${branchId}/offers`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetKitchenOffersQueryKey = (branchId?: string,) => {
     return [
@@ -407,49 +221,6 @@ export const getGetKitchenOffersQueryKey = (branchId?: string,) => {
     }
 
     
-export const getGetKitchenOffersInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenOffers>>, TError = unknown>(branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenOffers>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetKitchenOffersInfiniteQueryKey(branchId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getKitchenOffers>>> = ({ signal }) => getKitchenOffers(branchId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenOffers>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetKitchenOffersInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getKitchenOffers>>>
-export type GetKitchenOffersInfiniteQueryError = unknown
-
-
-/**
- * @summary Public promos and trials usable at a kitchen now
- */
-
-export function useGetKitchenOffersInfinite<TData = Awaited<ReturnType<typeof getKitchenOffers>>, TError = unknown>(
- branchId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getKitchenOffers>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetKitchenOffersInfiniteQueryOptions(branchId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetKitchenOffersQueryOptions = <TData = Awaited<ReturnType<typeof getKitchenOffers>>, TError = unknown>(branchId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getKitchenOffers>>, TError, TData>, }
 ) => {
 
@@ -499,68 +270,22 @@ windows. 404 when the kitchen is not currently sellable.
 
  * @summary A kitchen's storefront page
  */
-export type getMealKitchenResponse200 = {
-  data: PublicKitchenDetail
-  status: 200
-}
-
-export type getMealKitchenResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getMealKitchenResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type getMealKitchenResponseSuccess = (getMealKitchenResponse200) & {
-  headers: Headers;
-};
-export type getMealKitchenResponseError = (getMealKitchenResponse404 | getMealKitchenResponse422) & {
-  headers: Headers;
-};
-
-export type getMealKitchenResponse = (getMealKitchenResponseSuccess | getMealKitchenResponseError)
-
-export const getGetMealKitchenUrl = (branchId: string,
-    params?: GetMealKitchenParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getMealKitchen = (
+    branchId: string,
+    params?: GetMealKitchenParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<PublicKitchenDetail>(
+      {url: `/meals/kitchens/${branchId}`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/meals/kitchens/${branchId}?${stringifiedParams}` : `/meals/kitchens/${branchId}`
-}
-
-export const getMealKitchen = async (branchId: string,
-    params?: GetMealKitchenParams, options?: RequestInit): Promise<getMealKitchenResponse> => {
   
-  return apiFetch<getMealKitchenResponse>(getGetMealKitchenUrl(branchId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetMealKitchenInfiniteQueryKey = (branchId?: string,
-    params?: GetMealKitchenParams,) => {
-    return [
-    'infinite', `/meals/kitchens/${branchId}`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetMealKitchenQueryKey = (branchId?: string,
     params?: GetMealKitchenParams,) => {
@@ -570,51 +295,6 @@ export const getGetMealKitchenQueryKey = (branchId?: string,
     }
 
     
-export const getGetMealKitchenInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getMealKitchen>>, TError = NotFoundResponse | UnprocessableEntityResponse>(branchId: string,
-    params?: GetMealKitchenParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealKitchen>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMealKitchenInfiniteQueryKey(branchId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMealKitchen>>> = ({ signal, pageParam }) => getMealKitchen(branchId,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(branchId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealKitchen>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetMealKitchenInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getMealKitchen>>>
-export type GetMealKitchenInfiniteQueryError = NotFoundResponse | UnprocessableEntityResponse
-
-
-/**
- * @summary A kitchen's storefront page
- */
-
-export function useGetMealKitchenInfinite<TData = Awaited<ReturnType<typeof getMealKitchen>>, TError = NotFoundResponse | UnprocessableEntityResponse>(
- branchId: string,
-    params?: GetMealKitchenParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealKitchen>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetMealKitchenInfiniteQueryOptions(branchId,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetMealKitchenQueryOptions = <TData = Awaited<ReturnType<typeof getMealKitchen>>, TError = NotFoundResponse | UnprocessableEntityResponse>(branchId: string,
     params?: GetMealKitchenParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMealKitchen>>, TError, TData>, }
 ) => {
@@ -668,60 +348,21 @@ published, and clients render their default home.
 
  * @summary The merchandised storefront home for a location
  */
-export type getMealsHomeResponse200 = {
-  data: MealsHome
-  status: 200
-}
-
-export type getMealsHomeResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type getMealsHomeResponseSuccess = (getMealsHomeResponse200) & {
-  headers: Headers;
-};
-export type getMealsHomeResponseError = (getMealsHomeResponse422) & {
-  headers: Headers;
-};
-
-export type getMealsHomeResponse = (getMealsHomeResponseSuccess | getMealsHomeResponseError)
-
-export const getGetMealsHomeUrl = (params?: GetMealsHomeParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getMealsHome = (
+    params?: GetMealsHomeParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<MealsHome>(
+      {url: `/meals/home`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/meals/home?${stringifiedParams}` : `/meals/home`
-}
-
-export const getMealsHome = async (params?: GetMealsHomeParams, options?: RequestInit): Promise<getMealsHomeResponse> => {
   
-  return apiFetch<getMealsHomeResponse>(getGetMealsHomeUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetMealsHomeInfiniteQueryKey = (params?: GetMealsHomeParams,) => {
-    return [
-    'infinite', `/meals/home`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetMealsHomeQueryKey = (params?: GetMealsHomeParams,) => {
     return [
@@ -730,49 +371,6 @@ export const getGetMealsHomeQueryKey = (params?: GetMealsHomeParams,) => {
     }
 
     
-export const getGetMealsHomeInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getMealsHome>>, TError = UnprocessableEntityResponse>(params?: GetMealsHomeParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealsHome>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMealsHomeInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMealsHome>>> = ({ signal, pageParam }) => getMealsHome({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealsHome>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetMealsHomeInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getMealsHome>>>
-export type GetMealsHomeInfiniteQueryError = UnprocessableEntityResponse
-
-
-/**
- * @summary The merchandised storefront home for a location
- */
-
-export function useGetMealsHomeInfinite<TData = Awaited<ReturnType<typeof getMealsHome>>, TError = UnprocessableEntityResponse>(
- params?: GetMealsHomeParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealsHome>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetMealsHomeInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetMealsHomeQueryOptions = <TData = Awaited<ReturnType<typeof getMealsHome>>, TError = UnprocessableEntityResponse>(params?: GetMealsHomeParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMealsHome>>, TError, TData>, }
 ) => {
 
@@ -820,63 +418,22 @@ export function useGetMealsHome<TData = Awaited<ReturnType<typeof getMealsHome>>
  * 404 when the collection is inactive or outside its window.
  * @summary A kitchen collection page
  */
-export type getMealCollectionResponse200 = {
-  data: GetMealCollection200
-  status: 200
-}
-
-export type getMealCollectionResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getMealCollectionResponseSuccess = (getMealCollectionResponse200) & {
-  headers: Headers;
-};
-export type getMealCollectionResponseError = (getMealCollectionResponse404) & {
-  headers: Headers;
-};
-
-export type getMealCollectionResponse = (getMealCollectionResponseSuccess | getMealCollectionResponseError)
-
-export const getGetMealCollectionUrl = (slug: string,
-    params?: GetMealCollectionParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getMealCollection = (
+    slug: string,
+    params?: GetMealCollectionParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetMealCollection200>(
+      {url: `/meals/collections/${slug}`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/meals/collections/${slug}?${stringifiedParams}` : `/meals/collections/${slug}`
-}
-
-export const getMealCollection = async (slug: string,
-    params?: GetMealCollectionParams, options?: RequestInit): Promise<getMealCollectionResponse> => {
   
-  return apiFetch<getMealCollectionResponse>(getGetMealCollectionUrl(slug,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetMealCollectionInfiniteQueryKey = (slug?: string,
-    params?: GetMealCollectionParams,) => {
-    return [
-    'infinite', `/meals/collections/${slug}`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetMealCollectionQueryKey = (slug?: string,
     params?: GetMealCollectionParams,) => {
@@ -886,51 +443,6 @@ export const getGetMealCollectionQueryKey = (slug?: string,
     }
 
     
-export const getGetMealCollectionInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getMealCollection>>, TError = NotFoundResponse>(slug: string,
-    params?: GetMealCollectionParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealCollection>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMealCollectionInfiniteQueryKey(slug,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMealCollection>>> = ({ signal, pageParam }) => getMealCollection(slug,{...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(slug), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealCollection>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetMealCollectionInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getMealCollection>>>
-export type GetMealCollectionInfiniteQueryError = NotFoundResponse
-
-
-/**
- * @summary A kitchen collection page
- */
-
-export function useGetMealCollectionInfinite<TData = Awaited<ReturnType<typeof getMealCollection>>, TError = NotFoundResponse>(
- slug: string,
-    params?: GetMealCollectionParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMealCollection>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetMealCollectionInfiniteQueryOptions(slug,params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetMealCollectionQueryOptions = <TData = Awaited<ReturnType<typeof getMealCollection>>, TError = NotFoundResponse>(slug: string,
     params?: GetMealCollectionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMealCollection>>, TError, TData>, }
 ) => {

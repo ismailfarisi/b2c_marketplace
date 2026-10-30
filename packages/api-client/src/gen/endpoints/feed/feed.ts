@@ -20,14 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useQuery
 } from '@tanstack/react-query';
 import type {
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -71,60 +68,21 @@ one is keyed by `X-Device-Id`, which also keys their interest profile.
 
  * @summary The local video feed
  */
-export type getFeedResponse200 = {
-  data: FeedPage
-  status: 200
-}
-
-export type getFeedResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type getFeedResponseSuccess = (getFeedResponse200) & {
-  headers: Headers;
-};
-export type getFeedResponseError = (getFeedResponse422) & {
-  headers: Headers;
-};
-
-export type getFeedResponse = (getFeedResponseSuccess | getFeedResponseError)
-
-export const getGetFeedUrl = (params: GetFeedParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getFeed = (
+    params: GetFeedParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<FeedPage>(
+      {url: `/feed`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/feed?${stringifiedParams}` : `/feed`
-}
-
-export const getFeed = async (params: GetFeedParams, options?: RequestInit): Promise<getFeedResponse> => {
   
-  return apiFetch<getFeedResponse>(getGetFeedUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetFeedInfiniteQueryKey = (params?: GetFeedParams,) => {
-    return [
-    'infinite', `/feed`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetFeedQueryKey = (params?: GetFeedParams,) => {
     return [
@@ -133,49 +91,6 @@ export const getGetFeedQueryKey = (params?: GetFeedParams,) => {
     }
 
     
-export const getGetFeedInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getFeed>>, TError = UnprocessableEntityResponse>(params: GetFeedParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetFeedInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeed>>> = ({ signal, pageParam }) => getFeed({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetFeedInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getFeed>>>
-export type GetFeedInfiniteQueryError = UnprocessableEntityResponse
-
-
-/**
- * @summary The local video feed
- */
-
-export function useGetFeedInfinite<TData = Awaited<ReturnType<typeof getFeed>>, TError = UnprocessableEntityResponse>(
- params: GetFeedParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetFeedInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetFeedQueryOptions = <TData = Awaited<ReturnType<typeof getFeed>>, TError = UnprocessableEntityResponse>(params: GetFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, }
 ) => {
 

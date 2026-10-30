@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -79,60 +76,21 @@ then the placement is worth nothing to the seller who bought it.
 
  * @summary Faceted used-car search
  */
-export type searchListingsResponse200 = {
-  data: ListingSearchResult
-  status: 200
-}
-
-export type searchListingsResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type searchListingsResponseSuccess = (searchListingsResponse200) & {
-  headers: Headers;
-};
-export type searchListingsResponseError = (searchListingsResponse422) & {
-  headers: Headers;
-};
-
-export type searchListingsResponse = (searchListingsResponseSuccess | searchListingsResponseError)
-
-export const getSearchListingsUrl = (params?: SearchListingsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const searchListings = (
+    params?: SearchListingsParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListingSearchResult>(
+      {url: `/listings`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/listings?${stringifiedParams}` : `/listings`
-}
-
-export const searchListings = async (params?: SearchListingsParams, options?: RequestInit): Promise<searchListingsResponse> => {
   
-  return apiFetch<searchListingsResponse>(getSearchListingsUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getSearchListingsInfiniteQueryKey = (params?: SearchListingsParams,) => {
-    return [
-    'infinite', `/listings`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getSearchListingsQueryKey = (params?: SearchListingsParams,) => {
     return [
@@ -141,49 +99,6 @@ export const getSearchListingsQueryKey = (params?: SearchListingsParams,) => {
     }
 
     
-export const getSearchListingsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof searchListings>>, TError = UnprocessableEntityResponse>(params?: SearchListingsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof searchListings>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getSearchListingsInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchListings>>> = ({ signal, pageParam }) => searchListings({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof searchListings>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type SearchListingsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof searchListings>>>
-export type SearchListingsInfiniteQueryError = UnprocessableEntityResponse
-
-
-/**
- * @summary Faceted used-car search
- */
-
-export function useSearchListingsInfinite<TData = Awaited<ReturnType<typeof searchListings>>, TError = UnprocessableEntityResponse>(
- params?: SearchListingsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof searchListings>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getSearchListingsInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getSearchListingsQueryOptions = <TData = Awaited<ReturnType<typeof searchListings>>, TError = UnprocessableEntityResponse>(params?: SearchListingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchListings>>, TError, TData>, }
 ) => {
 
@@ -240,51 +155,20 @@ signal a buyer has.
 
  * @summary Create a listing draft
  */
-export type createListingResponse201 = {
-  data: ListingCreated
-  status: 201
-}
-
-export type createListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createListingResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createListingResponseSuccess = (createListingResponse201) & {
-  headers: Headers;
-};
-export type createListingResponseError = (createListingResponse401 | createListingResponse422) & {
-  headers: Headers;
-};
-
-export type createListingResponse = (createListingResponseSuccess | createListingResponseError)
-
-export const getCreateListingUrl = () => {
-
-
+export const createListing = (
+    listingDraft: ListingDraft,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListingCreated>(
+      {url: `/listings`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: listingDraft, signal
+    },
+      );
+    }
   
-
-  return `/listings`
-}
-
-export const createListing = async (listingDraft: ListingDraft, options?: RequestInit): Promise<createListingResponse> => {
-  
-  return apiFetch<createListingResponse>(getCreateListingUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      listingDraft,)
-  }
-);}
-
-
 
 
 export const getCreateListingMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
@@ -335,55 +219,18 @@ export const useCreateListing = <TError = UnauthorizedResponse | UnprocessableEn
     /**
  * @summary Send a draft to the review queue
  */
-export type submitListingResponse200 = {
-  data: void
-  status: 200
-}
-
-export type submitListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type submitListingResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type submitListingResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type submitListingResponseSuccess = (submitListingResponse200) & {
-  headers: Headers;
-};
-export type submitListingResponseError = (submitListingResponse401 | submitListingResponse403 | submitListingResponse409) & {
-  headers: Headers;
-};
-
-export type submitListingResponse = (submitListingResponseSuccess | submitListingResponseError)
-
-export const getSubmitListingUrl = (listingId: string,) => {
-
-
+export const submitListing = (
+    listingId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/submit`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/submit`
-}
-
-export const submitListing = async (listingId: string, options?: RequestInit): Promise<submitListingResponse> => {
-  
-  return apiFetch<submitListingResponse>(getSubmitListingUrl(listingId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getSubmitListingMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | void,
@@ -442,52 +289,20 @@ price-outlier detector reads.
 
  * @summary Change the asking price
  */
-export type changeListingPriceResponse200 = {
-  data: void
-  status: 200
-}
-
-export type changeListingPriceResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type changeListingPriceResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type changeListingPriceResponseSuccess = (changeListingPriceResponse200) & {
-  headers: Headers;
-};
-export type changeListingPriceResponseError = (changeListingPriceResponse401 | changeListingPriceResponse403) & {
-  headers: Headers;
-};
-
-export type changeListingPriceResponse = (changeListingPriceResponseSuccess | changeListingPriceResponseError)
-
-export const getChangeListingPriceUrl = (listingId: string,) => {
-
-
+export const changeListingPrice = (
+    listingId: string,
+    changeListingPriceBody: ChangeListingPriceBody,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/price`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: changeListingPriceBody
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/price`
-}
-
-export const changeListingPrice = async (listingId: string,
-    changeListingPriceBody: ChangeListingPriceBody, options?: RequestInit): Promise<changeListingPriceResponse> => {
-  
-  return apiFetch<changeListingPriceResponse>(getChangeListingPriceUrl(listingId),
-  {      
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      changeListingPriceBody,)
-  }
-);}
-
-
 
 
 export const getChangeListingPriceMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse,
@@ -546,52 +361,21 @@ lose the photos, the reel and the history the fraud detectors read.
 
  * @summary Mark a listing sold
  */
-export type markListingSoldResponse200 = {
-  data: void
-  status: 200
-}
-
-export type markListingSoldResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type markListingSoldResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type markListingSoldResponseSuccess = (markListingSoldResponse200) & {
-  headers: Headers;
-};
-export type markListingSoldResponseError = (markListingSoldResponse401 | markListingSoldResponse403) & {
-  headers: Headers;
-};
-
-export type markListingSoldResponse = (markListingSoldResponseSuccess | markListingSoldResponseError)
-
-export const getMarkListingSoldUrl = (listingId: string,) => {
-
-
+export const markListingSold = (
+    listingId: string,
+    markListingSoldBody?: MarkListingSoldBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/sold`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: markListingSoldBody, signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/sold`
-}
-
-export const markListingSold = async (listingId: string,
-    markListingSoldBody?: MarkListingSoldBody, options?: RequestInit): Promise<markListingSoldResponse> => {
-  
-  return apiFetch<markListingSoldResponse>(getMarkListingSoldUrl(listingId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      markListingSoldBody,)
-  }
-);}
-
-
 
 
 export const getMarkListingSoldMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse,
@@ -642,52 +426,21 @@ export const useMarkListingSold = <TError = UnauthorizedResponse | ForbiddenResp
     /**
  * @summary Pause, resume or remove a listing
  */
-export type setListingStatusResponse200 = {
-  data: void
-  status: 200
-}
-
-export type setListingStatusResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type setListingStatusResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type setListingStatusResponseSuccess = (setListingStatusResponse200) & {
-  headers: Headers;
-};
-export type setListingStatusResponseError = (setListingStatusResponse401 | setListingStatusResponse409) & {
-  headers: Headers;
-};
-
-export type setListingStatusResponse = (setListingStatusResponseSuccess | setListingStatusResponseError)
-
-export const getSetListingStatusUrl = (listingId: string,) => {
-
-
+export const setListingStatus = (
+    listingId: string,
+    setListingStatusBody: SetListingStatusBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/status`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: setListingStatusBody, signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/status`
-}
-
-export const setListingStatus = async (listingId: string,
-    setListingStatusBody: SetListingStatusBody, options?: RequestInit): Promise<setListingStatusResponse> => {
-  
-  return apiFetch<setListingStatusResponse>(getSetListingStatusUrl(listingId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      setListingStatusBody,)
-  }
-);}
-
-
 
 
 export const getSetListingStatusMutationOptions = <TError = UnauthorizedResponse | void,
@@ -749,57 +502,21 @@ lead, because a buyer who taps twice must not double a seller's lead count.
 
  * @summary Contact the seller — this vertical's conversion event
  */
-export type inquireAboutListingResponse200 = {
-  data: Inquiry
-  status: 200
-}
-
-export type inquireAboutListingResponse201 = {
-  data: Inquiry
-  status: 201
-}
-
-export type inquireAboutListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type inquireAboutListingResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type inquireAboutListingResponseSuccess = (inquireAboutListingResponse200 | inquireAboutListingResponse201) & {
-  headers: Headers;
-};
-export type inquireAboutListingResponseError = (inquireAboutListingResponse401 | inquireAboutListingResponse409) & {
-  headers: Headers;
-};
-
-export type inquireAboutListingResponse = (inquireAboutListingResponseSuccess | inquireAboutListingResponseError)
-
-export const getInquireAboutListingUrl = (listingId: string,) => {
-
-
+export const inquireAboutListing = (
+    listingId: string,
+    inquireAboutListingBody?: InquireAboutListingBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Inquiry | Inquiry>(
+      {url: `/listings/${listingId}/inquire`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: inquireAboutListingBody, signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/inquire`
-}
-
-export const inquireAboutListing = async (listingId: string,
-    inquireAboutListingBody?: InquireAboutListingBody, options?: RequestInit): Promise<inquireAboutListingResponse> => {
-  
-  return apiFetch<inquireAboutListingResponse>(getInquireAboutListingUrl(listingId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      inquireAboutListingBody,)
-  }
-);}
-
-
 
 
 export const getInquireAboutListingMutationOptions = <TError = UnauthorizedResponse | void,
@@ -855,52 +572,21 @@ client cannot render this as a commitment without ignoring the API.
 
  * @summary Offer a price — non-binding
  */
-export type makeOfferResponse201 = {
-  data: Offer
-  status: 201
-}
-
-export type makeOfferResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type makeOfferResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type makeOfferResponseSuccess = (makeOfferResponse201) & {
-  headers: Headers;
-};
-export type makeOfferResponseError = (makeOfferResponse401 | makeOfferResponse409) & {
-  headers: Headers;
-};
-
-export type makeOfferResponse = (makeOfferResponseSuccess | makeOfferResponseError)
-
-export const getMakeOfferUrl = (listingId: string,) => {
-
-
+export const makeOffer = (
+    listingId: string,
+    makeOfferBody: MakeOfferBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Offer>(
+      {url: `/listings/${listingId}/offers`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: makeOfferBody, signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/offers`
-}
-
-export const makeOffer = async (listingId: string,
-    makeOfferBody: MakeOfferBody, options?: RequestInit): Promise<makeOfferResponse> => {
-  
-  return apiFetch<makeOfferResponse>(getMakeOfferUrl(listingId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      makeOfferBody,)
-  }
-);}
-
-
 
 
 export const getMakeOfferMutationOptions = <TError = UnauthorizedResponse | void,
@@ -951,52 +637,21 @@ export const useMakeOffer = <TError = UnauthorizedResponse | void,
     /**
  * @summary Accept or reject an offer
  */
-export type respondToOfferResponse200 = {
-  data: void
-  status: 200
-}
-
-export type respondToOfferResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type respondToOfferResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type respondToOfferResponseSuccess = (respondToOfferResponse200) & {
-  headers: Headers;
-};
-export type respondToOfferResponseError = (respondToOfferResponse401 | respondToOfferResponse409) & {
-  headers: Headers;
-};
-
-export type respondToOfferResponse = (respondToOfferResponseSuccess | respondToOfferResponseError)
-
-export const getRespondToOfferUrl = (offerId: string,) => {
-
-
+export const respondToOffer = (
+    offerId: string,
+    respondToOfferBody: RespondToOfferBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/offers/${offerId}/respond`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: respondToOfferBody, signal
+    },
+      );
+    }
   
-
-  return `/offers/${offerId}/respond`
-}
-
-export const respondToOffer = async (offerId: string,
-    respondToOfferBody: RespondToOfferBody, options?: RequestInit): Promise<respondToOfferResponse> => {
-  
-  return apiFetch<respondToOfferResponse>(getRespondToOfferUrl(offerId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      respondToOfferBody,)
-  }
-);}
-
-
 
 
 export const getRespondToOfferMutationOptions = <TError = UnauthorizedResponse | void,
@@ -1051,45 +706,17 @@ would make "my saved cars" show sold cars.
 
  * @summary Save a listing
  */
-export type favouriteListingResponse204 = {
-  data: void
-  status: 204
-}
-
-export type favouriteListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type favouriteListingResponseSuccess = (favouriteListingResponse204) & {
-  headers: Headers;
-};
-export type favouriteListingResponseError = (favouriteListingResponse401) & {
-  headers: Headers;
-};
-
-export type favouriteListingResponse = (favouriteListingResponseSuccess | favouriteListingResponseError)
-
-export const getFavouriteListingUrl = (listingId: string,) => {
-
-
+export const favouriteListing = (
+    listingId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/favourite`, method: 'PUT'
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/favourite`
-}
-
-export const favouriteListing = async (listingId: string, options?: RequestInit): Promise<favouriteListingResponse> => {
-  
-  return apiFetch<favouriteListingResponse>(getFavouriteListingUrl(listingId),
-  {      
-    ...options,
-    method: 'PUT'
-    
-    
-  }
-);}
-
-
 
 
 export const getFavouriteListingMutationOptions = <TError = UnauthorizedResponse,
@@ -1140,45 +767,17 @@ export const useFavouriteListing = <TError = UnauthorizedResponse,
     /**
  * @summary Remove a saved listing
  */
-export type unfavouriteListingResponse204 = {
-  data: void
-  status: 204
-}
-
-export type unfavouriteListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type unfavouriteListingResponseSuccess = (unfavouriteListingResponse204) & {
-  headers: Headers;
-};
-export type unfavouriteListingResponseError = (unfavouriteListingResponse401) & {
-  headers: Headers;
-};
-
-export type unfavouriteListingResponse = (unfavouriteListingResponseSuccess | unfavouriteListingResponseError)
-
-export const getUnfavouriteListingUrl = (listingId: string,) => {
-
-
+export const unfavouriteListing = (
+    listingId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/favourite`, method: 'DELETE'
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/favourite`
-}
-
-export const unfavouriteListing = async (listingId: string, options?: RequestInit): Promise<unfavouriteListingResponse> => {
-  
-  return apiFetch<unfavouriteListingResponse>(getUnfavouriteListingUrl(listingId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
 
 
 export const getUnfavouriteListingMutationOptions = <TError = UnauthorizedResponse,
@@ -1233,47 +832,21 @@ listing still up.
 
  * @summary Report a listing
  */
-export type reportListingResponse202 = {
-  data: void
-  status: 202
-}
-
-export type reportListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type reportListingResponseSuccess = (reportListingResponse202) & {
-  headers: Headers;
-};
-export type reportListingResponseError = (reportListingResponse401) & {
-  headers: Headers;
-};
-
-export type reportListingResponse = (reportListingResponseSuccess | reportListingResponseError)
-
-export const getReportListingUrl = (listingId: string,) => {
-
-
+export const reportListing = (
+    listingId: string,
+    reportListingBody: ReportListingBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/listings/${listingId}/report`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: reportListingBody, signal
+    },
+      );
+    }
   
-
-  return `/listings/${listingId}/report`
-}
-
-export const reportListing = async (listingId: string,
-    reportListingBody: ReportListingBody, options?: RequestInit): Promise<reportListingResponse> => {
-  
-  return apiFetch<reportListingResponse>(getReportListingUrl(listingId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      reportListingBody,)
-  }
-);}
-
-
 
 
 export const getReportListingMutationOptions = <TError = UnauthorizedResponse,

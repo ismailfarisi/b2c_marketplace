@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -56,60 +53,21 @@ import { apiFetch } from '../../../http-client';
 /**
  * @summary The user's orders, newest first
  */
-export type listOrdersResponse200 = {
-  data: ListOrders200
-  status: 200
-}
-
-export type listOrdersResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-    
-export type listOrdersResponseSuccess = (listOrdersResponse200) & {
-  headers: Headers;
-};
-export type listOrdersResponseError = (listOrdersResponse401) & {
-  headers: Headers;
-};
-
-export type listOrdersResponse = (listOrdersResponseSuccess | listOrdersResponseError)
-
-export const getListOrdersUrl = (params?: ListOrdersParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listOrders = (
+    params?: ListOrdersParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListOrders200>(
+      {url: `/orders`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/orders?${stringifiedParams}` : `/orders`
-}
-
-export const listOrders = async (params?: ListOrdersParams, options?: RequestInit): Promise<listOrdersResponse> => {
   
-  return apiFetch<listOrdersResponse>(getListOrdersUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListOrdersInfiniteQueryKey = (params?: ListOrdersParams,) => {
-    return [
-    'infinite', `/orders`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListOrdersQueryKey = (params?: ListOrdersParams,) => {
     return [
@@ -118,49 +76,6 @@ export const getListOrdersQueryKey = (params?: ListOrdersParams,) => {
     }
 
     
-export const getListOrdersInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listOrders>>, TError = UnauthorizedResponse>(params?: ListOrdersParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOrders>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListOrdersInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOrders>>> = ({ signal, pageParam }) => listOrders({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOrders>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListOrdersInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listOrders>>>
-export type ListOrdersInfiniteQueryError = UnauthorizedResponse
-
-
-/**
- * @summary The user's orders, newest first
- */
-
-export function useListOrdersInfinite<TData = Awaited<ReturnType<typeof listOrders>>, TError = UnauthorizedResponse>(
- params?: ListOrdersParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOrders>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListOrdersInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListOrdersQueryOptions = <TData = Awaited<ReturnType<typeof listOrders>>, TError = UnauthorizedResponse>(params?: ListOrdersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOrders>>, TError, TData>, }
 ) => {
 
@@ -211,56 +126,20 @@ call so that a failed card does not orphan a capacity reservation.
 
  * @summary Place an order
  */
-export type createOrderResponse201 = {
-  data: Order
-  status: 201
-}
-
-export type createOrderResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createOrderResponse409 = {
-  data: Problem
-  status: 409
-}
-
-export type createOrderResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type createOrderResponseSuccess = (createOrderResponse201) & {
-  headers: Headers;
-};
-export type createOrderResponseError = (createOrderResponse401 | createOrderResponse409 | createOrderResponse422) & {
-  headers: Headers;
-};
-
-export type createOrderResponse = (createOrderResponseSuccess | createOrderResponseError)
-
-export const getCreateOrderUrl = () => {
-
-
+export const createOrder = (
+    orderInput: OrderInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Order>(
+      {url: `/orders`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: orderInput, signal
+    },
+      );
+    }
   
-
-  return `/orders`
-}
-
-export const createOrder = async (orderInput: OrderInput, options?: RequestInit): Promise<createOrderResponse> => {
-  
-  return apiFetch<createOrderResponse>(getCreateOrderUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      orderInput,)
-  }
-);}
-
-
 
 
 export const getCreateOrderMutationOptions = <TError = UnauthorizedResponse | Problem | UnprocessableEntityResponse,
@@ -311,58 +190,20 @@ export const useCreateOrder = <TError = UnauthorizedResponse | Problem | Unproce
     /**
  * @summary One order with its fulfillments and quote
  */
-export type getOrderResponse200 = {
-  data: Order
-  status: 200
-}
-
-export type getOrderResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getOrderResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-    
-export type getOrderResponseSuccess = (getOrderResponse200) & {
-  headers: Headers;
-};
-export type getOrderResponseError = (getOrderResponse401 | getOrderResponse404) & {
-  headers: Headers;
-};
-
-export type getOrderResponse = (getOrderResponseSuccess | getOrderResponseError)
-
-export const getGetOrderUrl = (orderId: string,) => {
-
-
-  
-
-  return `/orders/${orderId}`
-}
-
-export const getOrder = async (orderId: string, options?: RequestInit): Promise<getOrderResponse> => {
-  
-  return apiFetch<getOrderResponse>(getGetOrderUrl(orderId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetOrderInfiniteQueryKey = (orderId?: string,) => {
-    return [
-    'infinite', `/orders/${orderId}`
-    ] as const;
+export const getOrder = (
+    orderId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<Order>(
+      {url: `/orders/${orderId}`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetOrderQueryKey = (orderId?: string,) => {
     return [
@@ -371,49 +212,6 @@ export const getGetOrderQueryKey = (orderId?: string,) => {
     }
 
     
-export const getGetOrderInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getOrder>>, TError = UnauthorizedResponse | NotFoundResponse>(orderId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getOrder>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetOrderInfiniteQueryKey(orderId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrder>>> = ({ signal }) => getOrder(orderId, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(orderId), ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getOrder>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetOrderInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getOrder>>>
-export type GetOrderInfiniteQueryError = UnauthorizedResponse | NotFoundResponse
-
-
-/**
- * @summary One order with its fulfillments and quote
- */
-
-export function useGetOrderInfinite<TData = Awaited<ReturnType<typeof getOrder>>, TError = UnauthorizedResponse | NotFoundResponse>(
- orderId: string, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getOrder>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetOrderInfiniteQueryOptions(orderId,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetOrderQueryOptions = <TData = Awaited<ReturnType<typeof getOrder>>, TError = UnauthorizedResponse | NotFoundResponse>(orderId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrder>>, TError, TData>, }
 ) => {
 
@@ -464,55 +262,18 @@ the outcome by webhook, never by trusting the client.
 
  * @summary Authorize payment for an order
  */
-export type createPaymentIntentResponse201 = {
-  data: PaymentIntent
-  status: 201
-}
-
-export type createPaymentIntentResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type createPaymentIntentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type createPaymentIntentResponse409 = {
-  data: Problem
-  status: 409
-}
-    
-export type createPaymentIntentResponseSuccess = (createPaymentIntentResponse201) & {
-  headers: Headers;
-};
-export type createPaymentIntentResponseError = (createPaymentIntentResponse401 | createPaymentIntentResponse404 | createPaymentIntentResponse409) & {
-  headers: Headers;
-};
-
-export type createPaymentIntentResponse = (createPaymentIntentResponseSuccess | createPaymentIntentResponseError)
-
-export const getCreatePaymentIntentUrl = (orderId: string,) => {
-
-
+export const createPaymentIntent = (
+    orderId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<PaymentIntent>(
+      {url: `/orders/${orderId}/payment-intent`, method: 'POST', signal
+    },
+      );
+    }
   
-
-  return `/orders/${orderId}/payment-intent`
-}
-
-export const createPaymentIntent = async (orderId: string, options?: RequestInit): Promise<createPaymentIntentResponse> => {
-  
-  return apiFetch<createPaymentIntentResponse>(getCreatePaymentIntentUrl(orderId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
 
 
 export const getCreatePaymentIntentMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem,

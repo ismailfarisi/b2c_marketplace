@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -62,46 +59,20 @@ which are money and can wait a day without anyone going hungry.
 
  * @summary Raise a dispute
  */
-export type openDisputeResponse201 = {
-  data: OpenDispute201
-  status: 201
-}
-
-export type openDisputeResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type openDisputeResponseSuccess = (openDisputeResponse201) & {
-  headers: Headers;
-};
-export type openDisputeResponseError = (openDisputeResponse422) & {
-  headers: Headers;
-};
-
-export type openDisputeResponse = (openDisputeResponseSuccess | openDisputeResponseError)
-
-export const getOpenDisputeUrl = () => {
-
-
+export const openDispute = (
+    openDisputeBody: OpenDisputeBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<OpenDispute201>(
+      {url: `/disputes`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: openDisputeBody, signal
+    },
+      );
+    }
   
-
-  return `/disputes`
-}
-
-export const openDispute = async (openDisputeBody: OpenDisputeBody, options?: RequestInit): Promise<openDisputeResponse> => {
-  
-  return apiFetch<openDisputeResponse>(getOpenDisputeUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      openDisputeBody,)
-  }
-);}
-
-
 
 
 export const getOpenDisputeMutationOptions = <TError = UnprocessableEntityResponse,
@@ -161,60 +132,21 @@ able to move cash.
 
  * @summary The ops worklist
  */
-export type listDisputesResponse200 = {
-  data: ListDisputes200
-  status: 200
-}
-
-export type listDisputesResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type listDisputesResponseSuccess = (listDisputesResponse200) & {
-  headers: Headers;
-};
-export type listDisputesResponseError = (listDisputesResponse403) & {
-  headers: Headers;
-};
-
-export type listDisputesResponse = (listDisputesResponseSuccess | listDisputesResponseError)
-
-export const getListDisputesUrl = (params?: ListDisputesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listDisputes = (
+    params?: ListDisputesParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListDisputes200>(
+      {url: `/disputes`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/disputes?${stringifiedParams}` : `/disputes`
-}
-
-export const listDisputes = async (params?: ListDisputesParams, options?: RequestInit): Promise<listDisputesResponse> => {
   
-  return apiFetch<listDisputesResponse>(getListDisputesUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListDisputesInfiniteQueryKey = (params?: ListDisputesParams,) => {
-    return [
-    'infinite', `/disputes`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListDisputesQueryKey = (params?: ListDisputesParams,) => {
     return [
@@ -223,49 +155,6 @@ export const getListDisputesQueryKey = (params?: ListDisputesParams,) => {
     }
 
     
-export const getListDisputesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listDisputes>>, TError = ForbiddenResponse>(params?: ListDisputesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listDisputes>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListDisputesInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDisputes>>> = ({ signal, pageParam }) => listDisputes({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listDisputes>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListDisputesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listDisputes>>>
-export type ListDisputesInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary The ops worklist
- */
-
-export function useListDisputesInfinite<TData = Awaited<ReturnType<typeof listDisputes>>, TError = ForbiddenResponse>(
- params?: ListDisputesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listDisputes>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListDisputesInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListDisputesQueryOptions = <TData = Awaited<ReturnType<typeof listDisputes>>, TError = ForbiddenResponse>(params?: ListDisputesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDisputes>>, TError, TData>, }
 ) => {
 
@@ -321,57 +210,21 @@ and the record of who made it must not be able to come apart.
 
  * @summary Close a dispute
  */
-export type resolveDisputeResponse200 = {
-  data: void
-  status: 200
-}
-
-export type resolveDisputeResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type resolveDisputeResponse409 = {
-  data: void
-  status: 409
-}
-
-export type resolveDisputeResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type resolveDisputeResponseSuccess = (resolveDisputeResponse200) & {
-  headers: Headers;
-};
-export type resolveDisputeResponseError = (resolveDisputeResponse403 | resolveDisputeResponse409 | resolveDisputeResponse422) & {
-  headers: Headers;
-};
-
-export type resolveDisputeResponse = (resolveDisputeResponseSuccess | resolveDisputeResponseError)
-
-export const getResolveDisputeUrl = (disputeId: string,) => {
-
-
+export const resolveDispute = (
+    disputeId: string,
+    resolveDisputeBody: ResolveDisputeBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/disputes/${disputeId}/resolve`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: resolveDisputeBody, signal
+    },
+      );
+    }
   
-
-  return `/disputes/${disputeId}/resolve`
-}
-
-export const resolveDispute = async (disputeId: string,
-    resolveDisputeBody: ResolveDisputeBody, options?: RequestInit): Promise<resolveDisputeResponse> => {
-  
-  return apiFetch<resolveDisputeResponse>(getResolveDisputeUrl(disputeId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      resolveDisputeBody,)
-  }
-);}
-
-
 
 
 export const getResolveDisputeMutationOptions = <TError = ForbiddenResponse | void | UnprocessableEntityResponse,

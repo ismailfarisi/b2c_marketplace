@@ -20,7 +20,6 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -28,8 +27,6 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -84,65 +81,21 @@ effect immediately.
 
  * @summary Reels awaiting human review, oldest first
  */
-export type getModerationQueueResponse200 = {
-  data: GetModerationQueue200
-  status: 200
-}
-
-export type getModerationQueueResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getModerationQueueResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type getModerationQueueResponseSuccess = (getModerationQueueResponse200) & {
-  headers: Headers;
-};
-export type getModerationQueueResponseError = (getModerationQueueResponse401 | getModerationQueueResponse403) & {
-  headers: Headers;
-};
-
-export type getModerationQueueResponse = (getModerationQueueResponseSuccess | getModerationQueueResponseError)
-
-export const getGetModerationQueueUrl = (params?: GetModerationQueueParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getModerationQueue = (
+    params?: GetModerationQueueParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetModerationQueue200>(
+      {url: `/moderation/queue`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/moderation/queue?${stringifiedParams}` : `/moderation/queue`
-}
-
-export const getModerationQueue = async (params?: GetModerationQueueParams, options?: RequestInit): Promise<getModerationQueueResponse> => {
   
-  return apiFetch<getModerationQueueResponse>(getGetModerationQueueUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetModerationQueueInfiniteQueryKey = (params?: GetModerationQueueParams,) => {
-    return [
-    'infinite', `/moderation/queue`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetModerationQueueQueryKey = (params?: GetModerationQueueParams,) => {
     return [
@@ -151,49 +104,6 @@ export const getGetModerationQueueQueryKey = (params?: GetModerationQueueParams,
     }
 
     
-export const getGetModerationQueueInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getModerationQueue>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: GetModerationQueueParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getModerationQueue>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetModerationQueueInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getModerationQueue>>> = ({ signal, pageParam }) => getModerationQueue({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getModerationQueue>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetModerationQueueInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getModerationQueue>>>
-export type GetModerationQueueInfiniteQueryError = UnauthorizedResponse | ForbiddenResponse
-
-
-/**
- * @summary Reels awaiting human review, oldest first
- */
-
-export function useGetModerationQueueInfinite<TData = Awaited<ReturnType<typeof getModerationQueue>>, TError = UnauthorizedResponse | ForbiddenResponse>(
- params?: GetModerationQueueParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getModerationQueue>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetModerationQueueInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetModerationQueueQueryOptions = <TData = Awaited<ReturnType<typeof getModerationQueue>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: GetModerationQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getModerationQueue>>, TError, TData>, }
 ) => {
 
@@ -247,62 +157,21 @@ click publish a reel with no audience.
 
  * @summary Approve or reject a reel awaiting review
  */
-export type decideModerationResponse200 = {
-  data: DecideModeration200
-  status: 200
-}
-
-export type decideModerationResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type decideModerationResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type decideModerationResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type decideModerationResponse409 = {
-  data: Problem
-  status: 409
-}
-    
-export type decideModerationResponseSuccess = (decideModerationResponse200) & {
-  headers: Headers;
-};
-export type decideModerationResponseError = (decideModerationResponse401 | decideModerationResponse403 | decideModerationResponse404 | decideModerationResponse409) & {
-  headers: Headers;
-};
-
-export type decideModerationResponse = (decideModerationResponseSuccess | decideModerationResponseError)
-
-export const getDecideModerationUrl = (reelId: string,) => {
-
-
+export const decideModeration = (
+    reelId: string,
+    decideModerationBody: DecideModerationBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<DecideModeration200>(
+      {url: `/moderation/${reelId}/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: decideModerationBody, signal
+    },
+      );
+    }
   
-
-  return `/moderation/${reelId}/decide`
-}
-
-export const decideModeration = async (reelId: string,
-    decideModerationBody: DecideModerationBody, options?: RequestInit): Promise<decideModerationResponse> => {
-  
-  return apiFetch<decideModerationResponse>(getDecideModerationUrl(reelId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      decideModerationBody,)
-  }
-);}
-
-
 
 
 export const getDecideModerationMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem,
@@ -361,65 +230,21 @@ minutes, so mixing them would bury the queue that has a publish SLA on it.
 
  * @summary Comments awaiting a human
  */
-export type getCommentQueueResponse200 = {
-  data: GetCommentQueue200
-  status: 200
-}
-
-export type getCommentQueueResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getCommentQueueResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type getCommentQueueResponseSuccess = (getCommentQueueResponse200) & {
-  headers: Headers;
-};
-export type getCommentQueueResponseError = (getCommentQueueResponse401 | getCommentQueueResponse403) & {
-  headers: Headers;
-};
-
-export type getCommentQueueResponse = (getCommentQueueResponseSuccess | getCommentQueueResponseError)
-
-export const getGetCommentQueueUrl = (params?: GetCommentQueueParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const getCommentQueue = (
+    params?: GetCommentQueueParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetCommentQueue200>(
+      {url: `/moderation/comments`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/moderation/comments?${stringifiedParams}` : `/moderation/comments`
-}
-
-export const getCommentQueue = async (params?: GetCommentQueueParams, options?: RequestInit): Promise<getCommentQueueResponse> => {
   
-  return apiFetch<getCommentQueueResponse>(getGetCommentQueueUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getGetCommentQueueInfiniteQueryKey = (params?: GetCommentQueueParams,) => {
-    return [
-    'infinite', `/moderation/comments`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getGetCommentQueueQueryKey = (params?: GetCommentQueueParams,) => {
     return [
@@ -428,49 +253,6 @@ export const getGetCommentQueueQueryKey = (params?: GetCommentQueueParams,) => {
     }
 
     
-export const getGetCommentQueueInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getCommentQueue>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: GetCommentQueueParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCommentQueue>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCommentQueueInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommentQueue>>> = ({ signal, pageParam }) => getCommentQueue({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCommentQueue>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetCommentQueueInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getCommentQueue>>>
-export type GetCommentQueueInfiniteQueryError = UnauthorizedResponse | ForbiddenResponse
-
-
-/**
- * @summary Comments awaiting a human
- */
-
-export function useGetCommentQueueInfinite<TData = Awaited<ReturnType<typeof getCommentQueue>>, TError = UnauthorizedResponse | ForbiddenResponse>(
- params?: GetCommentQueueParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getCommentQueue>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetCommentQueueInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetCommentQueueQueryOptions = <TData = Awaited<ReturnType<typeof getCommentQueue>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: GetCommentQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommentQueue>>, TError, TData>, }
 ) => {
 
@@ -523,62 +305,21 @@ been judged.
 
  * @summary Rule on a comment
  */
-export type decideCommentResponse200 = {
-  data: void
-  status: 200
-}
-
-export type decideCommentResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type decideCommentResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type decideCommentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type decideCommentResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type decideCommentResponseSuccess = (decideCommentResponse200) & {
-  headers: Headers;
-};
-export type decideCommentResponseError = (decideCommentResponse401 | decideCommentResponse403 | decideCommentResponse404 | decideCommentResponse422) & {
-  headers: Headers;
-};
-
-export type decideCommentResponse = (decideCommentResponseSuccess | decideCommentResponseError)
-
-export const getDecideCommentUrl = (commentId: string,) => {
-
-
+export const decideComment = (
+    commentId: string,
+    decideCommentBody: DecideCommentBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/moderation/comments/${commentId}/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: decideCommentBody, signal
+    },
+      );
+    }
   
-
-  return `/moderation/comments/${commentId}/decide`
-}
-
-export const decideComment = async (commentId: string,
-    decideCommentBody: DecideCommentBody, options?: RequestInit): Promise<decideCommentResponse> => {
-  
-  return apiFetch<decideCommentResponse>(getDecideCommentUrl(commentId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      decideCommentBody,)
-  }
-);}
-
-
 
 
 export const getDecideCommentMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
@@ -640,58 +381,20 @@ Cached for up to one minute.
 
  * @summary What is ranking the feed right now
  */
-export type getRankingProfileResponse200 = {
-  data: RankingProfile
-  status: 200
-}
-
-export type getRankingProfileResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type getRankingProfileResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
+export const getRankingProfile = (
     
-export type getRankingProfileResponseSuccess = (getRankingProfileResponse200) & {
-  headers: Headers;
-};
-export type getRankingProfileResponseError = (getRankingProfileResponse401 | getRankingProfileResponse403) & {
-  headers: Headers;
-};
-
-export type getRankingProfileResponse = (getRankingProfileResponseSuccess | getRankingProfileResponseError)
-
-export const getGetRankingProfileUrl = () => {
-
-
-  
-
-  return `/ranking/profile`
-}
-
-export const getRankingProfile = async ( options?: RequestInit): Promise<getRankingProfileResponse> => {
-  
-  return apiFetch<getRankingProfileResponse>(getGetRankingProfileUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetRankingProfileInfiniteQueryKey = () => {
-    return [
-    'infinite', `/ranking/profile`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<RankingProfile>(
+      {url: `/ranking/profile`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetRankingProfileQueryKey = () => {
     return [
@@ -700,49 +403,6 @@ export const getGetRankingProfileQueryKey = () => {
     }
 
     
-export const getGetRankingProfileInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getRankingProfile>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getRankingProfile>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetRankingProfileInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRankingProfile>>> = ({ signal }) => getRankingProfile(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getRankingProfile>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetRankingProfileInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getRankingProfile>>>
-export type GetRankingProfileInfiniteQueryError = UnauthorizedResponse | ForbiddenResponse
-
-
-/**
- * @summary What is ranking the feed right now
- */
-
-export function useGetRankingProfileInfinite<TData = Awaited<ReturnType<typeof getRankingProfile>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getRankingProfile>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetRankingProfileInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetRankingProfileQueryOptions = <TData = Awaited<ReturnType<typeof getRankingProfile>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRankingProfile>>, TError, TData>, }
 ) => {
 
@@ -792,52 +452,21 @@ credit. Rejection costs them nothing.
 
  * @summary Approve or reject a listing
  */
-export type decideListingResponse200 = {
-  data: void
-  status: 200
-}
-
-export type decideListingResponse401 = {
-  data: UnauthorizedResponse
-  status: 401
-}
-
-export type decideListingResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type decideListingResponseSuccess = (decideListingResponse200) & {
-  headers: Headers;
-};
-export type decideListingResponseError = (decideListingResponse401 | decideListingResponse403) & {
-  headers: Headers;
-};
-
-export type decideListingResponse = (decideListingResponseSuccess | decideListingResponseError)
-
-export const getDecideListingUrl = (listingId: string,) => {
-
-
+export const decideListing = (
+    listingId: string,
+    decideListingBody: DecideListingBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/moderation/listings/${listingId}/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: decideListingBody, signal
+    },
+      );
+    }
   
-
-  return `/moderation/listings/${listingId}/decide`
-}
-
-export const decideListing = async (listingId: string,
-    decideListingBody: DecideListingBody, options?: RequestInit): Promise<decideListingResponse> => {
-  
-  return apiFetch<decideListingResponse>(getDecideListingUrl(listingId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      decideListingBody,)
-  }
-);}
-
-
 
 
 export const getDecideListingMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse,
@@ -895,60 +524,21 @@ whether a message is a scam needs the text that triggered the hold.
 
  * @summary Held chat messages
  */
-export type listHeldMessagesResponse200 = {
-  data: ListHeldMessages200
-  status: 200
-}
-
-export type listHeldMessagesResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type listHeldMessagesResponseSuccess = (listHeldMessagesResponse200) & {
-  headers: Headers;
-};
-export type listHeldMessagesResponseError = (listHeldMessagesResponse403) & {
-  headers: Headers;
-};
-
-export type listHeldMessagesResponse = (listHeldMessagesResponseSuccess | listHeldMessagesResponseError)
-
-export const getListHeldMessagesUrl = (params?: ListHeldMessagesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listHeldMessages = (
+    params?: ListHeldMessagesParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListHeldMessages200>(
+      {url: `/moderation/messages`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/moderation/messages?${stringifiedParams}` : `/moderation/messages`
-}
-
-export const listHeldMessages = async (params?: ListHeldMessagesParams, options?: RequestInit): Promise<listHeldMessagesResponse> => {
   
-  return apiFetch<listHeldMessagesResponse>(getListHeldMessagesUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListHeldMessagesInfiniteQueryKey = (params?: ListHeldMessagesParams,) => {
-    return [
-    'infinite', `/moderation/messages`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListHeldMessagesQueryKey = (params?: ListHeldMessagesParams,) => {
     return [
@@ -957,49 +547,6 @@ export const getListHeldMessagesQueryKey = (params?: ListHeldMessagesParams,) =>
     }
 
     
-export const getListHeldMessagesInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listHeldMessages>>, TError = ForbiddenResponse>(params?: ListHeldMessagesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listHeldMessages>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListHeldMessagesInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listHeldMessages>>> = ({ signal, pageParam }) => listHeldMessages({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listHeldMessages>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListHeldMessagesInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listHeldMessages>>>
-export type ListHeldMessagesInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Held chat messages
- */
-
-export function useListHeldMessagesInfinite<TData = Awaited<ReturnType<typeof listHeldMessages>>, TError = ForbiddenResponse>(
- params?: ListHeldMessagesParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listHeldMessages>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListHeldMessagesInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListHeldMessagesQueryOptions = <TData = Awaited<ReturnType<typeof listHeldMessages>>, TError = ForbiddenResponse>(params?: ListHeldMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHeldMessages>>, TError, TData>, }
 ) => {
 
@@ -1050,52 +597,21 @@ number inside it, and only one of them was asked for.
 
  * @summary Release or block a held message
  */
-export type decideHeldMessageResponse200 = {
-  data: void
-  status: 200
-}
-
-export type decideHeldMessageResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type decideHeldMessageResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type decideHeldMessageResponseSuccess = (decideHeldMessageResponse200) & {
-  headers: Headers;
-};
-export type decideHeldMessageResponseError = (decideHeldMessageResponse403 | decideHeldMessageResponse409) & {
-  headers: Headers;
-};
-
-export type decideHeldMessageResponse = (decideHeldMessageResponseSuccess | decideHeldMessageResponseError)
-
-export const getDecideHeldMessageUrl = (messageId: string,) => {
-
-
+export const decideHeldMessage = (
+    messageId: string,
+    decideHeldMessageBody: DecideHeldMessageBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/moderation/messages/${messageId}/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: decideHeldMessageBody, signal
+    },
+      );
+    }
   
-
-  return `/moderation/messages/${messageId}/decide`
-}
-
-export const decideHeldMessage = async (messageId: string,
-    decideHeldMessageBody: DecideHeldMessageBody, options?: RequestInit): Promise<decideHeldMessageResponse> => {
-  
-  return apiFetch<decideHeldMessageResponse>(getDecideHeldMessageUrl(messageId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      decideHeldMessageBody,)
-  }
-);}
-
-
 
 
 export const getDecideHeldMessageMutationOptions = <TError = ForbiddenResponse | void,
@@ -1154,60 +670,21 @@ own. Only a human confirming one can.**
 
  * @summary Open fraud evidence, worst subjects first
  */
-export type listFraudSignalsResponse200 = {
-  data: ListFraudSignals200
-  status: 200
-}
-
-export type listFraudSignalsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type listFraudSignalsResponseSuccess = (listFraudSignalsResponse200) & {
-  headers: Headers;
-};
-export type listFraudSignalsResponseError = (listFraudSignalsResponse403) & {
-  headers: Headers;
-};
-
-export type listFraudSignalsResponse = (listFraudSignalsResponseSuccess | listFraudSignalsResponseError)
-
-export const getListFraudSignalsUrl = (params?: ListFraudSignalsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+export const listFraudSignals = (
+    params?: ListFraudSignalsParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListFraudSignals200>(
+      {url: `/moderation/fraud`, method: 'GET',
+        params, signal
+    },
+      );
     }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/moderation/fraud?${stringifiedParams}` : `/moderation/fraud`
-}
-
-export const listFraudSignals = async (params?: ListFraudSignalsParams, options?: RequestInit): Promise<listFraudSignalsResponse> => {
   
-  return apiFetch<listFraudSignalsResponse>(getListFraudSignalsUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
 
 
-
-
-
-export const getListFraudSignalsInfiniteQueryKey = (params?: ListFraudSignalsParams,) => {
-    return [
-    'infinite', `/moderation/fraud`, ...(params ? [params]: [])
-    ] as const;
-    }
 
 export const getListFraudSignalsQueryKey = (params?: ListFraudSignalsParams,) => {
     return [
@@ -1216,49 +693,6 @@ export const getListFraudSignalsQueryKey = (params?: ListFraudSignalsParams,) =>
     }
 
     
-export const getListFraudSignalsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listFraudSignals>>, TError = ForbiddenResponse>(params?: ListFraudSignalsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listFraudSignals>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListFraudSignalsInfiniteQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFraudSignals>>> = ({ signal, pageParam }) => listFraudSignals({...params, 'cursor': pageParam || params?.['cursor']}, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listFraudSignals>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListFraudSignalsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listFraudSignals>>>
-export type ListFraudSignalsInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Open fraud evidence, worst subjects first
- */
-
-export function useListFraudSignalsInfinite<TData = Awaited<ReturnType<typeof listFraudSignals>>, TError = ForbiddenResponse>(
- params?: ListFraudSignalsParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listFraudSignals>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListFraudSignalsInfiniteQueryOptions(params,options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListFraudSignalsQueryOptions = <TData = Awaited<ReturnType<typeof listFraudSignals>>, TError = ForbiddenResponse>(params?: ListFraudSignalsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFraudSignals>>, TError, TData>, }
 ) => {
 
@@ -1309,46 +743,20 @@ appeal — or stops the next detector run raising it again.
 
  * @summary Confirm or dismiss fraud evidence
  */
-export type decideFraudSignalResponse200 = {
-  data: DecideFraudSignal200
-  status: 200
-}
-
-export type decideFraudSignalResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-    
-export type decideFraudSignalResponseSuccess = (decideFraudSignalResponse200) & {
-  headers: Headers;
-};
-export type decideFraudSignalResponseError = (decideFraudSignalResponse403) & {
-  headers: Headers;
-};
-
-export type decideFraudSignalResponse = (decideFraudSignalResponseSuccess | decideFraudSignalResponseError)
-
-export const getDecideFraudSignalUrl = () => {
-
-
+export const decideFraudSignal = (
+    decideFraudSignalBody: DecideFraudSignalBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<DecideFraudSignal200>(
+      {url: `/moderation/fraud/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: decideFraudSignalBody, signal
+    },
+      );
+    }
   
-
-  return `/moderation/fraud/decide`
-}
-
-export const decideFraudSignal = async (decideFraudSignalBody: DecideFraudSignalBody, options?: RequestInit): Promise<decideFraudSignalResponse> => {
-  
-  return apiFetch<decideFraudSignalResponse>(getDecideFraudSignalUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      decideFraudSignalBody,)
-  }
-);}
-
-
 
 
 export const getDecideFraudSignalMutationOptions = <TError = ForbiddenResponse,
@@ -1403,46 +811,20 @@ been banned does not come back when the restriction lifts.
 
  * @summary The caller's own moderation record
  */
-export type getMyStandingResponse200 = {
-  data: GetMyStanding200
-  status: 200
-}
+export const getMyStanding = (
     
-export type getMyStandingResponseSuccess = (getMyStandingResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getMyStandingResponse = (getMyStandingResponseSuccess)
-
-export const getGetMyStandingUrl = () => {
-
-
-  
-
-  return `/me/standing`
-}
-
-export const getMyStanding = async ( options?: RequestInit): Promise<getMyStandingResponse> => {
-  
-  return apiFetch<getMyStandingResponse>(getGetMyStandingUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetMyStandingInfiniteQueryKey = () => {
-    return [
-    'infinite', `/me/standing`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetMyStanding200>(
+      {url: `/me/standing`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetMyStandingQueryKey = () => {
     return [
@@ -1451,49 +833,6 @@ export const getGetMyStandingQueryKey = () => {
     }
 
     
-export const getGetMyStandingInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getMyStanding>>, TError = unknown>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyStanding>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMyStandingInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyStanding>>> = ({ signal }) => getMyStanding(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyStanding>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetMyStandingInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getMyStanding>>>
-export type GetMyStandingInfiniteQueryError = unknown
-
-
-/**
- * @summary The caller's own moderation record
- */
-
-export function useGetMyStandingInfinite<TData = Awaited<ReturnType<typeof getMyStanding>>, TError = unknown>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getMyStanding>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetMyStandingInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetMyStandingQueryOptions = <TData = Awaited<ReturnType<typeof getMyStanding>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyStanding>>, TError, TData>, }
 ) => {
 
@@ -1547,46 +886,20 @@ An appeal is never reviewed by the person whose decision is being appealed
 
  * @summary Challenge a moderation decision
  */
-export type openAppealResponse201 = {
-  data: OpenAppeal201
-  status: 201
-}
-
-export type openAppealResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type openAppealResponseSuccess = (openAppealResponse201) & {
-  headers: Headers;
-};
-export type openAppealResponseError = (openAppealResponse422) & {
-  headers: Headers;
-};
-
-export type openAppealResponse = (openAppealResponseSuccess | openAppealResponseError)
-
-export const getOpenAppealUrl = () => {
-
-
+export const openAppeal = (
+    openAppealBody: OpenAppealBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<OpenAppeal201>(
+      {url: `/appeals`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: openAppealBody, signal
+    },
+      );
+    }
   
-
-  return `/appeals`
-}
-
-export const openAppeal = async (openAppealBody: OpenAppealBody, options?: RequestInit): Promise<openAppealResponse> => {
-  
-  return apiFetch<openAppealResponse>(getOpenAppealUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      openAppealBody,)
-  }
-);}
-
-
 
 
 export const getOpenAppealMutationOptions = <TError = UnprocessableEntityResponse,
@@ -1641,52 +954,21 @@ expiring in March is not verified past March, whatever anyone sets.
 
  * @summary Approve or reject an identity check
  */
-export type decideKycCaseResponse204 = {
-  data: void
-  status: 204
-}
-
-export type decideKycCaseResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type decideKycCaseResponse422 = {
-  data: UnprocessableEntityResponse
-  status: 422
-}
-    
-export type decideKycCaseResponseSuccess = (decideKycCaseResponse204) & {
-  headers: Headers;
-};
-export type decideKycCaseResponseError = (decideKycCaseResponse403 | decideKycCaseResponse422) & {
-  headers: Headers;
-};
-
-export type decideKycCaseResponse = (decideKycCaseResponseSuccess | decideKycCaseResponseError)
-
-export const getDecideKycCaseUrl = (caseId: string,) => {
-
-
+export const decideKycCase = (
+    caseId: string,
+    decideKycCaseBody: DecideKycCaseBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/kyc/cases/${caseId}/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: decideKycCaseBody, signal
+    },
+      );
+    }
   
-
-  return `/kyc/cases/${caseId}/decide`
-}
-
-export const decideKycCase = async (caseId: string,
-    decideKycCaseBody: DecideKycCaseBody, options?: RequestInit): Promise<decideKycCaseResponse> => {
-  
-  return apiFetch<decideKycCaseResponse>(getDecideKycCaseUrl(caseId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      decideKycCaseBody,)
-  }
-);}
-
-
 
 
 export const getDecideKycCaseMutationOptions = <TError = ForbiddenResponse | UnprocessableEntityResponse,
@@ -1742,53 +1024,20 @@ breached ones among them.
 
  * @summary Appeals past their SLA
  */
-export type listOverdueAppealsResponse200 = {
-  data: ListOverdueAppeals200
-  status: 200
-}
-
-export type listOverdueAppealsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
+export const listOverdueAppeals = (
     
-export type listOverdueAppealsResponseSuccess = (listOverdueAppealsResponse200) & {
-  headers: Headers;
-};
-export type listOverdueAppealsResponseError = (listOverdueAppealsResponse403) & {
-  headers: Headers;
-};
-
-export type listOverdueAppealsResponse = (listOverdueAppealsResponseSuccess | listOverdueAppealsResponseError)
-
-export const getListOverdueAppealsUrl = () => {
-
-
-  
-
-  return `/moderation/appeals`
-}
-
-export const listOverdueAppeals = async ( options?: RequestInit): Promise<listOverdueAppealsResponse> => {
-  
-  return apiFetch<listOverdueAppealsResponse>(getListOverdueAppealsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListOverdueAppealsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/moderation/appeals`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListOverdueAppeals200>(
+      {url: `/moderation/appeals`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListOverdueAppealsQueryKey = () => {
     return [
@@ -1797,49 +1046,6 @@ export const getListOverdueAppealsQueryKey = () => {
     }
 
     
-export const getListOverdueAppealsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listOverdueAppeals>>, TError = ForbiddenResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOverdueAppeals>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListOverdueAppealsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOverdueAppeals>>> = ({ signal }) => listOverdueAppeals(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOverdueAppeals>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListOverdueAppealsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listOverdueAppeals>>>
-export type ListOverdueAppealsInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Appeals past their SLA
- */
-
-export function useListOverdueAppealsInfinite<TData = Awaited<ReturnType<typeof listOverdueAppeals>>, TError = ForbiddenResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listOverdueAppeals>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListOverdueAppealsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListOverdueAppealsQueryOptions = <TData = Awaited<ReturnType<typeof listOverdueAppeals>>, TError = ForbiddenResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOverdueAppeals>>, TError, TData>, }
 ) => {
 
@@ -1883,52 +1089,21 @@ export function useListOverdueAppeals<TData = Awaited<ReturnType<typeof listOver
 
 
 
-export type decideAppealResponse204 = {
-  data: void
-  status: 204
-}
-
-export type decideAppealResponse403 = {
-  data: void
-  status: 403
-}
-
-export type decideAppealResponse409 = {
-  data: void
-  status: 409
-}
-    
-export type decideAppealResponseSuccess = (decideAppealResponse204) & {
-  headers: Headers;
-};
-export type decideAppealResponseError = (decideAppealResponse403 | decideAppealResponse409) & {
-  headers: Headers;
-};
-
-export type decideAppealResponse = (decideAppealResponseSuccess | decideAppealResponseError)
-
-export const getDecideAppealUrl = (appealId: string,) => {
-
-
+export const decideAppeal = (
+    appealId: string,
+    decideAppealBody: DecideAppealBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/moderation/appeals/${appealId}/decide`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: decideAppealBody, signal
+    },
+      );
+    }
   
-
-  return `/moderation/appeals/${appealId}/decide`
-}
-
-export const decideAppeal = async (appealId: string,
-    decideAppealBody: DecideAppealBody, options?: RequestInit): Promise<decideAppealResponse> => {
-  
-  return apiFetch<decideAppealResponse>(getDecideAppealUrl(appealId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      decideAppealBody,)
-  }
-);}
-
-
 
 
 export const getDecideAppealMutationOptions = <TError = void,
@@ -1986,53 +1161,20 @@ than one a designer picked.
 
  * @summary Every review queue's depth in one call
  */
-export type getQueueDepthsResponse200 = {
-  data: GetQueueDepths200
-  status: 200
-}
-
-export type getQueueDepthsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
+export const getQueueDepths = (
     
-export type getQueueDepthsResponseSuccess = (getQueueDepthsResponse200) & {
-  headers: Headers;
-};
-export type getQueueDepthsResponseError = (getQueueDepthsResponse403) & {
-  headers: Headers;
-};
-
-export type getQueueDepthsResponse = (getQueueDepthsResponseSuccess | getQueueDepthsResponseError)
-
-export const getGetQueueDepthsUrl = () => {
-
-
-  
-
-  return `/moderation/queues`
-}
-
-export const getQueueDepths = async ( options?: RequestInit): Promise<getQueueDepthsResponse> => {
-  
-  return apiFetch<getQueueDepthsResponse>(getGetQueueDepthsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetQueueDepthsInfiniteQueryKey = () => {
-    return [
-    'infinite', `/moderation/queues`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetQueueDepths200>(
+      {url: `/moderation/queues`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getGetQueueDepthsQueryKey = () => {
     return [
@@ -2041,49 +1183,6 @@ export const getGetQueueDepthsQueryKey = () => {
     }
 
     
-export const getGetQueueDepthsInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getQueueDepths>>, TError = ForbiddenResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getQueueDepths>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetQueueDepthsInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getQueueDepths>>> = ({ signal }) => getQueueDepths(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getQueueDepths>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetQueueDepthsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getQueueDepths>>>
-export type GetQueueDepthsInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Every review queue's depth in one call
- */
-
-export function useGetQueueDepthsInfinite<TData = Awaited<ReturnType<typeof getQueueDepths>>, TError = ForbiddenResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getQueueDepths>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetQueueDepthsInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getGetQueueDepthsQueryOptions = <TData = Awaited<ReturnType<typeof getQueueDepths>>, TError = ForbiddenResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getQueueDepths>>, TError, TData>, }
 ) => {
 
@@ -2140,53 +1239,20 @@ fraudster's second dealership visible.
 
  * @summary Vehicle listings awaiting review
  */
-export type listListingQueueResponse200 = {
-  data: ListListingQueue200
-  status: 200
-}
-
-export type listListingQueueResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
+export const listListingQueue = (
     
-export type listListingQueueResponseSuccess = (listListingQueueResponse200) & {
-  headers: Headers;
-};
-export type listListingQueueResponseError = (listListingQueueResponse403) & {
-  headers: Headers;
-};
-
-export type listListingQueueResponse = (listListingQueueResponseSuccess | listListingQueueResponseError)
-
-export const getListListingQueueUrl = () => {
-
-
-  
-
-  return `/moderation/listings`
-}
-
-export const listListingQueue = async ( options?: RequestInit): Promise<listListingQueueResponse> => {
-  
-  return apiFetch<listListingQueueResponse>(getListListingQueueUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListListingQueueInfiniteQueryKey = () => {
-    return [
-    'infinite', `/moderation/listings`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListListingQueue200>(
+      {url: `/moderation/listings`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListListingQueueQueryKey = () => {
     return [
@@ -2195,49 +1261,6 @@ export const getListListingQueueQueryKey = () => {
     }
 
     
-export const getListListingQueueInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listListingQueue>>, TError = ForbiddenResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listListingQueue>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListListingQueueInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listListingQueue>>> = ({ signal }) => listListingQueue(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listListingQueue>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListListingQueueInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listListingQueue>>>
-export type ListListingQueueInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Vehicle listings awaiting review
- */
-
-export function useListListingQueueInfinite<TData = Awaited<ReturnType<typeof listListingQueue>>, TError = ForbiddenResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listListingQueue>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListListingQueueInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListListingQueueQueryOptions = <TData = Awaited<ReturnType<typeof listListingQueue>>, TError = ForbiddenResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listListingQueue>>, TError, TData>, }
 ) => {
 
@@ -2297,53 +1320,20 @@ to miss.
 
  * @summary Identity checks awaiting a decision
  */
-export type listKycQueueResponse200 = {
-  data: ListKycQueue200
-  status: 200
-}
-
-export type listKycQueueResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
+export const listKycQueue = (
     
-export type listKycQueueResponseSuccess = (listKycQueueResponse200) & {
-  headers: Headers;
-};
-export type listKycQueueResponseError = (listKycQueueResponse403) & {
-  headers: Headers;
-};
-
-export type listKycQueueResponse = (listKycQueueResponseSuccess | listKycQueueResponseError)
-
-export const getListKycQueueUrl = () => {
-
-
-  
-
-  return `/kyc/cases`
-}
-
-export const listKycQueue = async ( options?: RequestInit): Promise<listKycQueueResponse> => {
-  
-  return apiFetch<listKycQueueResponse>(getListKycQueueUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getListKycQueueInfiniteQueryKey = () => {
-    return [
-    'infinite', `/kyc/cases`
-    ] as const;
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListKycQueue200>(
+      {url: `/kyc/cases`, method: 'GET', signal
+    },
+      );
     }
+  
+
+
 
 export const getListKycQueueQueryKey = () => {
     return [
@@ -2352,49 +1342,6 @@ export const getListKycQueueQueryKey = () => {
     }
 
     
-export const getListKycQueueInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof listKycQueue>>, TError = ForbiddenResponse>( options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listKycQueue>>, TError, TData>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListKycQueueInfiniteQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listKycQueue>>> = ({ signal }) => listKycQueue(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listKycQueue>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListKycQueueInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listKycQueue>>>
-export type ListKycQueueInfiniteQueryError = ForbiddenResponse
-
-
-/**
- * @summary Identity checks awaiting a decision
- */
-
-export function useListKycQueueInfinite<TData = Awaited<ReturnType<typeof listKycQueue>>, TError = ForbiddenResponse>(
-  options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof listKycQueue>>, TError, TData>, }
-  
- ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListKycQueueInfiniteQueryOptions(options)
-
-  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
-}
-
-
-
-
 export const getListKycQueueQueryOptions = <TData = Awaited<ReturnType<typeof listKycQueue>>, TError = ForbiddenResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listKycQueue>>, TError, TData>, }
 ) => {
 
