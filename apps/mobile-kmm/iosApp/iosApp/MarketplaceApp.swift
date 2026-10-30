@@ -249,7 +249,12 @@ struct RootView: View {
             // screen to a returning viewer for a frame.
             ProgressView().tint(.white)
         } else if needsAccount && !authorised, let gate = signInViewModel {
-            SignInGate(viewModel: gate) { destinationRaw = Destination.feed.rawValue }
+            if destination == .myMeals {
+                SignInGate(viewModel: gate, onCancel: { destinationRaw = Destination.meals.rawValue },
+                           titleKey: "meals_signin_mine_title", whyKey: "meals_signin_why")
+            } else {
+                SignInGate(viewModel: gate) { destinationRaw = Destination.feed.rawValue }
+            }
         } else {
             switch destination {
             case .meals, .myMeals:

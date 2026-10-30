@@ -335,6 +335,11 @@ class MainActivity : ComponentActivity() {
                         val needsAccount = destination in
                             setOf(Destination.Sell, Destination.Saved, Destination.Me, Destination.MyMeals)
 
+                        // Search, Saved and Sell are reached from the feed, so Back returns there.
+                        BackHandler(enabled = destination in setOf(Destination.Search, Destination.Saved, Destination.Sell)) {
+                            destination = Destination.Feed
+                        }
+
                         if (needsAccount && !sessionState.isSettled) {
                             // The token store is still being read. Neither the
                             // gate nor the account screen is the right thing to
@@ -349,6 +354,8 @@ class MainActivity : ComponentActivity() {
                                 // and this composition is already observing it —
                                 // a local flag here is what let the two disagree.
                                 onCancel = { destination = Destination.Meals },
+                                title = if (destination == Destination.MyMeals) R.string.meals_signin_mine_title else R.string.signin_title,
+                                why = if (destination == Destination.MyMeals) R.string.meals_signin_why else R.string.signin_why,
                             )
                         } else when (destination) {
                             Destination.Feed -> Unit // drawn above, always composed

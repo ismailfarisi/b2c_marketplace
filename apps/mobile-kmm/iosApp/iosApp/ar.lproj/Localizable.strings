@@ -291,3 +291,4 @@
 "meals_search_areas" = "ابحث عن منطقة";
 "meals_no_area" = "لا توجد منطقة مطابقة. جرّب كتابة أخرى.";
 "meals_office_lunch" = "غداء المكاتب لشركتك";
+"meals_signin_mine_title" = "سجّل الدخول لعرض وجباتك";

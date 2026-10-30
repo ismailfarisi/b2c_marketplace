@@ -391,4 +391,5 @@
     <string name="meals_search_areas">ابحث عن منطقة</string>
     <string name="meals_no_area">لا توجد منطقة مطابقة. جرّب كتابة أخرى.</string>
     <string name="meals_office_lunch">غداء المكاتب لشركتك</string>
+    <string name="meals_signin_mine_title">سجّل الدخول لعرض وجباتك</string>
 </resources>

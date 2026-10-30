@@ -461,4 +461,5 @@
     <string name="meals_search_areas">Search areas</string>
     <string name="meals_no_area">No area matches. Try another spelling.</string>
     <string name="meals_office_lunch">Office lunches for your company</string>
+    <string name="meals_signin_mine_title">Sign in to see your meals</string>
 </resources>
