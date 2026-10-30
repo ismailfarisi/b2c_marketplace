@@ -23,13 +23,20 @@ console.log("→ regenerating TypeScript client");
 run("npx", ["orval", "--config", "api/orval.config.ts"]);
 
 console.log("→ regenerating Go server boundary");
+// The oapi-codegen tool directive lives in services/api/go.mod, so run from
+// there (as `make gen-go` does); from the repo root there is no module.
+let haveGo = true;
 try {
-  run("go", ["tool", "oapi-codegen", "-config", "api/oapi-codegen.yaml", "api/openapi.yaml"]);
+  capture("go", ["version"]);
 } catch {
+  haveGo = false;
   console.error(
     "! go toolchain unavailable — skipping the Go half of this check.\n" +
       "  CI must run with Go installed or this check is only half a check.",
   );
+}
+if (haveGo) {
+  run("go", ["tool", "-C", "services/api", "oapi-codegen", "-config", "../../api/oapi-codegen.yaml", "../../api/openapi.yaml"]);
 }
 
 const diff = capture("git", ["status", "--porcelain", "--", ...generated]);
