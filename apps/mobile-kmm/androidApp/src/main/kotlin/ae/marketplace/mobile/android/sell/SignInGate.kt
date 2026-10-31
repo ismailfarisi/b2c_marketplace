@@ -281,7 +281,11 @@ private fun Field(
         contentAlignment = Alignment.CenterStart,
     ) {
         if (value.isEmpty()) {
-            Text(placeholder, color = ink.copy(alpha = if (light) 0.4f else 0.25f), fontSize = 16.sp)
+            Text(
+                placeholder,
+                color = ink.copy(alpha = if (light) 0.4f else 0.25f),
+                style = TextStyle(fontSize = 16.sp, textDirection = TextDirection.Ltr),
+            )
         }
         BasicTextField(
             value = value,
