@@ -39,6 +39,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddCircleOutline
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -255,9 +259,9 @@ class MainActivity : ComponentActivity() {
                                 viewModel = current,
                                 onOpenFilters = { filtersOpen = true },
                                 extras = listOf(
-                                    stringResource(R.string.nav_search) to { destination = Destination.Search },
-                                    stringResource(R.string.nav_saved) to { destination = Destination.Saved },
-                                    stringResource(R.string.nav_sell) to { destination = Destination.Sell },
+                                    FeedExtra(stringResource(R.string.nav_search), Icons.Rounded.Search) { destination = Destination.Search },
+                                    FeedExtra(stringResource(R.string.nav_saved), Icons.Rounded.BookmarkBorder) { destination = Destination.Saved },
+                                    FeedExtra(stringResource(R.string.nav_sell), Icons.Rounded.AddCircleOutline) { destination = Destination.Sell },
                                 ),
                                 onActionPressed = { action, reelId ->
                                     // The branch is on `kind`, never on
@@ -348,14 +352,35 @@ class MainActivity : ComponentActivity() {
                             // milliseconds; a spinner is the honest answer.
                             CircularProgressIndicator()
                         } else if (needsAccount && !authorised && gate != null) {
+                            // Saved and Sell open from the feed, so cancelling returns there.
+                            val closeGate = {
+                                gate.reset()
+                                destination = if (destination == Destination.Saved || destination == Destination.Sell) {
+                                    Destination.Feed
+                                } else {
+                                    Destination.Meals
+                                }
+                            }
+                            BackHandler(onBack = closeGate)
                             SignInGate(
                                 viewModel = gate,
                                 // Nothing to set. The gate reports to Session,
                                 // and this composition is already observing it —
                                 // a local flag here is what let the two disagree.
-                                onCancel = { destination = Destination.Meals },
-                                title = if (destination == Destination.MyMeals) R.string.meals_signin_mine_title else R.string.signin_title,
-                                why = if (destination == Destination.MyMeals) R.string.meals_signin_why else R.string.signin_why,
+                                onCancel = closeGate,
+                                title = when (destination) {
+                                    Destination.MyMeals -> R.string.meals_signin_mine_title
+                                    Destination.Me -> R.string.me_signin_title
+                                    Destination.Saved -> R.string.saved_signin_title
+                                    else -> R.string.signin_title
+                                },
+                                why = when (destination) {
+                                    Destination.MyMeals -> R.string.meals_signin_why
+                                    Destination.Me -> R.string.me_signin_why
+                                    Destination.Saved -> R.string.saved_signin_why
+                                    else -> R.string.signin_why
+                                },
+                                light = destination == Destination.MyMeals,
                             )
                         } else when (destination) {
                             Destination.Feed -> Unit // drawn above, always composed
@@ -381,13 +406,14 @@ class MainActivity : ComponentActivity() {
                                     if (pendingMeals != null && !authorised && gate != null) {
                                         // Composed after MealsTab, so Back closes the gate
                                         // instead of popping the page underneath it.
-                                        BackHandler { pendingMeals = null }
+                                        BackHandler { gate.reset(); pendingMeals = null }
                                         SignInGate(
                                             viewModel = gate,
-                                            onCancel = { pendingMeals = null },
-                                            modifier = Modifier.fillMaxSize().background(Palette.Ink),
+                                            onCancel = { gate.reset(); pendingMeals = null },
+                                            modifier = Modifier.fillMaxSize(),
                                             title = R.string.meals_signin_title,
                                             why = R.string.meals_signin_why,
+                                            light = true,
                                         )
                                     }
                                 }

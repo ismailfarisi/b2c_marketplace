@@ -1,40 +1,46 @@
 package ae.marketplace.mobile.android
 
-import ae.marketplace.mobile.android.ui.Palette
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.SmartDisplay
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * The five destinations.
- *
- * Only [Feed] is built. The other four are listed anyway, and that is a
- * deliberate choice rather than an oversight: the bar's job is to tell a viewer
- * what the product *is*, and a bar with one item does not do that. What it must
- * not do is lie — tapping Search reaches a screen that says Search is not built
- * yet, instead of a tab that swallows the tap and reads as a freeze.
- *
- * Ordering follows the mock and is not arbitrary. [Sell] sits in the middle
- * because it is the supply side of a marketplace whose binding constraint is
- * supply, and the middle slot is the one a thumb reaches without looking.
+ * Every top-level screen. Only [BarDestinations] are on the bar; Search, Sell
+ * and Saved belong to the video marketplace and open from the feed.
  */
 enum class Destination {
     Meals,
@@ -46,37 +52,25 @@ enum class Destination {
     Me,
 }
 
-/**
- * What the bar shows. Meals is the product, so it and the customer's own
- * meals lead; Search, Sell and Saved belong to the video marketplace and are
- * reached from the feed's top row instead.
- */
+/** Meals is the product, so it and the customer's own meals lead. */
 val BarDestinations = listOf(Destination.Meals, Destination.MyMeals, Destination.Feed, Destination.Me)
 
-// Was a private copy of the same hex in four files, two of which had drifted.
-// See ae.marketplace.mobile.android.ui.Palette.
-private val Accent = Palette.Accent
-private val MealsChilli = Color(0xFFC43B16)
+private val Chilli = Color(0xFFC43B16)
+private val ChilliSoft = Color(0xFFFBE3DA)
+private val Muted = Color(0xFF76675B)
+private val Hairline = Color(0xFFF0E2D2)
 
 /**
- * NAV_BAR_HEIGHT excludes the system navigation inset, which the bar adds on top
- * via navigationBarsPadding. Callers that need to clear the bar — the reel
- * overlay, whose price and CTA would otherwise sit under it — add this plus the
- * same inset.
+ * Height of the bar above the system navigation inset. Screens that draw under
+ * the bar (the reel overlay, the sticky plans bar) clear this plus that inset.
  */
-val NAV_BAR_HEIGHT = 52.dp
+val NAV_BAR_HEIGHT = 64.dp
 
 /**
- * The bottom bar.
+ * The bottom bar: icon and label per destination.
  *
- * Drawn over the reel rather than beside it. A feed that letterboxed its video
- * above a solid bar would give back the full-bleed frame the whole product is
- * built on, so the bar floats and earns its legibility from a gradient scrim
- * instead of an opaque background.
- *
- * Text only, no icons, matching the mock. That is also the honest choice while
- * four of five destinations are unbuilt: an icon set implies a finished
- * information architecture, and this one is not finished.
+ * White on the meals tabs, with a Chilli Red selection pill. Over the video
+ * feed it floats on a gradient scrim so the reel stays full-bleed.
  */
 @Composable
 fun BottomNav(
@@ -84,28 +78,20 @@ fun BottomNav(
     onSelect: (Destination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Meals is a light, food-photo page; the scrim is for video only.
     val light = selected == Destination.Meals || selected == Destination.MyMeals
     Column(
         modifier
             .fillMaxWidth()
-            .then(if (light) Modifier.background(Color.White) else Modifier)
-            .navigationBarsPadding()
-            .then(if (light) Modifier else Modifier.background(
-                // Scrim rather than a flat fill. A solid bar over a dark reel
-                // reads as a black band across the bottom of the video; a
-                // gradient keeps the frame continuous and still gives the labels
-                // something to sit on when the reel is bright.
-                Brush.verticalGradient(
-                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
-                )
-            )),
+            .then(
+                if (light) Modifier.background(Color.White)
+                else Modifier.background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))),
+                ),
+            )
+            .navigationBarsPadding(),
     ) {
+        if (light) Box(Modifier.fillMaxWidth().height(1.dp).background(Hairline))
         Row(
-            // The system inset is applied to the Column above rather than here.
-            // Inside a fixed height it eats the content box instead of sitting
-            // below it, and the first casualty is the 2dp rule under the active
-            // label — which is the only thing distinguishing selected from not.
             Modifier
                 .fillMaxWidth()
                 .height(NAV_BAR_HEIGHT),
@@ -114,10 +100,11 @@ fun BottomNav(
         ) {
             BarDestinations.forEach { destination ->
                 NavItem(
-                    label = stringResource(destination.labelRes()),
+                    destination = destination,
                     active = destination == selected,
                     light = light,
                     onClick = { onSelect(destination) },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -125,35 +112,65 @@ fun BottomNav(
 }
 
 @Composable
-private fun NavItem(label: String, active: Boolean, light: Boolean, onClick: () -> Unit) {
+private fun NavItem(
+    destination: Destination,
+    active: Boolean,
+    light: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tint = when {
+        active && light -> Chilli
+        active -> Color.White
+        light -> Muted
+        else -> Color.White.copy(alpha = 0.7f)
+    }
+    // The whole slot is the target, so there is no dead space between tabs.
     Column(
+        modifier
+            .fillMaxHeight()
+            .selectable(selected = active, onClick = onClick, role = Role.Tab),
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            // clickable on the Column, not on the Text, so the touch target is
-            // the whole slot. A 12sp word is a 30-pixel target and misses are
-            // indistinguishable from an unresponsive app.
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = label,
-            color = when {
-                active && light -> MealsChilli
-                active -> Accent
-                light -> Color(0xFF76675B)
-                else -> Color.White.copy(alpha = 0.7f)
-            },
-            fontSize = 12.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-        )
         Box(
             Modifier
-                .padding(top = 3.dp)
-                .height(2.dp)
-                .width(if (active) 14.dp else 0.dp)
-                .background(if (active) Accent else Color.Transparent),
+                .width(56.dp)
+                .height(30.dp)
+                .background(
+                    when {
+                        active && light -> ChilliSoft
+                        active -> Color.White.copy(alpha = 0.18f)
+                        else -> Color.Transparent
+                    },
+                    RoundedCornerShape(50),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = destination.icon(active),
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Text(
+            text = stringResource(destination.labelRes()),
+            color = tint,
+            fontSize = 12.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
         )
     }
+}
+
+private fun Destination.icon(active: Boolean): ImageVector = when (this) {
+    Destination.Meals -> if (active) Icons.Rounded.Restaurant else Icons.Outlined.Restaurant
+    Destination.MyMeals -> if (active) Icons.Rounded.CalendarMonth else Icons.Outlined.CalendarMonth
+    Destination.Feed -> if (active) Icons.Rounded.SmartDisplay else Icons.Outlined.SmartDisplay
+    else -> if (active) Icons.Rounded.Person else Icons.Outlined.Person
 }
 
 private fun Destination.labelRes(): Int = when (this) {
@@ -164,32 +181,4 @@ private fun Destination.labelRes(): Int = when (this) {
     Destination.Saved -> R.string.nav_saved
     Destination.Me -> R.string.nav_me
     Destination.MyMeals -> R.string.nav_my_meals
-}
-
-/**
- * What an unbuilt destination shows.
- *
- * It names the destination and says plainly that it is not built. The
- * alternative — an empty screen, or a spinner that never resolves — is
- * indistinguishable from a bug, and the person most likely to hit it is someone
- * demoing the app.
- */
-@Composable
-fun NotBuiltYet(destination: Destination, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth(), Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = stringResource(destination.labelRes()),
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = stringResource(R.string.nav_not_built),
-                color = Color.White.copy(alpha = 0.55f),
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 8.dp, start = 32.dp, end = 32.dp),
-            )
-        }
-    }
 }

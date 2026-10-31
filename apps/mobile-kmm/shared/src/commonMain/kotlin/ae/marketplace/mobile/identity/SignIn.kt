@@ -214,6 +214,11 @@ class SignInViewModel(
         }
     }
 
+    /** Clears the form when the gate is dismissed, so the next gate starts empty. */
+    fun reset() {
+        if (!_state.value.busy) _state.value = SignInUiState()
+    }
+
     /** Back to the phone step, for a number typed wrong. */
     fun changeNumber() {
         _state.value = _state.value.copy(challengeId = "", code = "", error = null)
