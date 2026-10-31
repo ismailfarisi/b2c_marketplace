@@ -21,12 +21,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -56,25 +61,47 @@ fun FeedTabs(
     onSelect: (FeedSurface) -> Unit,
     modifier: Modifier = Modifier,
     /** Marketplace destinations reached from the feed rather than the bottom bar. */
-    extras: List<Pair<String, () -> Unit>> = emptyList(),
+    extras: List<FeedExtra> = emptyList(),
 ) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        FeedSurface.entries.forEach { surface ->
-            Tab(
-                label = stringResource(surface.labelRes()),
-                active = surface == selected,
-                onClick = { onSelect(surface) },
-            )
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            FeedSurface.entries.forEach { surface ->
+                Tab(
+                    label = stringResource(surface.labelRes()),
+                    active = surface == selected,
+                    onClick = { onSelect(surface) },
+                )
+            }
         }
-        extras.forEach { (label, open) -> Tab(label = label, active = false, onClick = open) }
+        // Destinations, not filters: icon buttons pinned to the end so they never
+        // scroll off-screen behind the filter row.
+        if (extras.isNotEmpty()) {
+            Row(Modifier.padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(Color.White.copy(alpha = 0.25f)))
+                extras.forEach { extra ->
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .clickable(onClickLabel = extra.label, role = Role.Button, onClick = extra.open)
+                            .semantics { contentDescription = extra.label },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(extra.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+        }
     }
 }
+
+/** A marketplace destination opened from the feed's top row. */
+class FeedExtra(val label: String, val icon: ImageVector, val open: () -> Unit)
 
 @Composable
 private fun Tab(label: String, active: Boolean, onClick: () -> Unit) {

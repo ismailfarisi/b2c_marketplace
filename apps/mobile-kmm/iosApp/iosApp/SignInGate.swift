@@ -18,6 +18,11 @@ struct SignInGate: View {
     let onCancel: () -> Void
     var titleKey = "signin_title"
     var whyKey = "signin_why"
+    /// Cream and Chilli Red, for gates over the light meals tabs.
+    var light = false
+
+    private var ink: Color { light ? Warm.ink : Palette.text }
+    private var accent: Color { light ? Warm.chilli : Palette.accent }
 
     @State private var current: SignInUiState?
     private var state: SignInUiState { current ?? viewModel.state.value }
@@ -35,7 +40,7 @@ struct SignInGate: View {
             Button(action: onCancel) {
                 Image(systemName: "xmark")
                     .font(.system(size: 18))
-                    .foregroundStyle(Palette.text)
+                    .foregroundStyle(ink)
                     .frame(minWidth: Space.touch, minHeight: Space.touch)
             }
             .accessibilityLabel(Text("action_close"))
@@ -43,14 +48,14 @@ struct SignInGate: View {
 
             Text(LocalizedStringKey(titleKey))
                 .font(.system(size: 21).weight(.semibold))
-                .foregroundStyle(Palette.text)
+                .foregroundStyle(ink)
 
             Text(onCodeStep
                  ? String(format: String(localized: "signin_sent_to"),
                           phone.trimmingCharacters(in: .whitespaces))
                  : NSLocalizedString(whyKey, comment: ""))
                 .font(.system(size: TypeScale.secondary))
-                .foregroundStyle(Palette.text.opacity(0.55))
+                .foregroundStyle(light ? Warm.muted : Palette.text.opacity(0.55))
                 .padding(.top, Space.small)
                 .padding(.bottom, 26)
 
@@ -74,7 +79,7 @@ struct SignInGate: View {
                     Button { viewModel.changeNumber() } label: {
                         Text("signin_change_number")
                             .font(.system(size: TypeScale.secondary))
-                            .foregroundStyle(Palette.text.opacity(0.5))
+                            .foregroundStyle(light ? Warm.muted : Palette.text.opacity(0.5))
                     }
                     Spacer()
                     Button { viewModel.sendCode(nowMillis: Self.millis()) } label: {
@@ -86,7 +91,7 @@ struct SignInGate: View {
                              ? String(format: String(localized: "signin_resend_in"), cooldown)
                              : String(localized: "signin_resend"))
                             .font(.system(size: TypeScale.secondary))
-                            .foregroundStyle(cooldown > 0 ? Palette.text.opacity(0.3) : Palette.accent)
+                            .foregroundStyle(cooldown > 0 ? ink.opacity(0.35) : accent)
                     }
                     .disabled(cooldown > 0 || state.busy)
                 }
@@ -104,7 +109,7 @@ struct SignInGate: View {
             if let problem = state.error {
                 Text(Self.words(problem))
                     .font(.system(size: 12))
-                    .foregroundStyle(Palette.accent)
+                    .foregroundStyle(accent)
                     .padding(.top, 14)
             }
 
@@ -113,7 +118,7 @@ struct SignInGate: View {
         .padding(.horizontal, 22)
         .padding(.vertical, Space.large)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Palette.ink)
+        .background(light ? Warm.paper : Palette.ink)
         .task {
             for await s in viewModel.state {
                 current = s
@@ -140,14 +145,17 @@ struct SignInGate: View {
         keyboard: UIKeyboardType
     ) -> some View {
         TextField("", text: binding, prompt:
-            Text(placeholder).foregroundStyle(Palette.textGhost))
+            Text(placeholder).foregroundStyle(ink.opacity(light ? 0.4 : 0.25)))
             .textFieldStyle(.plain)
             .keyboardType(keyboard)
             .focused($focused)
-            .foregroundStyle(Palette.text)
+            .foregroundStyle(ink)
             .font(.system(size: 16))
             .padding(14)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Palette.line, lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 8).fill(light ? Color.white : Color.clear))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(light ? Warm.line : Palette.line, lineWidth: 1))
+            // Phone numbers and codes read left to right in Arabic too.
+            .environment(\.layoutDirection, .leftToRight)
     }
 
     private func primaryButton(
@@ -160,7 +168,7 @@ struct SignInGate: View {
                 .frame(maxWidth: .infinity, minHeight: Space.touch)
                 .padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 10)
-                    .fill(enabled ? Palette.accent : Palette.accent.opacity(0.3)))
+                    .fill(enabled ? accent : accent.opacity(0.3)))
         }
         .disabled(!enabled)
         .padding(.top, Space.large)

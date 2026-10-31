@@ -176,7 +176,6 @@ struct MealsScreen: View {
                     vm: viewModel,
                     onKitchen: { id in viewModel.openKitchen(branchId: id); go(.kitchen) },
                     onRotation: { requireAccount { viewModel.startRotation(); go(.rotation) } },
-                    onMine: { requireAccount { viewModel.loadMine(force: false); go(.mine) } },
                     place: place,
                     onPlace: { placeRaw = $0?.encoded ?? "" }
                 )
@@ -512,7 +511,6 @@ private struct MealsHomePage: View {
     let vm: MealsViewModel
     let onKitchen: (String) -> Void
     let onRotation: () -> Void
-    let onMine: () -> Void
     let place: ChosenPlace?
     let onPlace: (ChosenPlace?) -> Void
 
@@ -602,15 +600,6 @@ private struct MealsHomePage: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("meals_title").font(display(TypeScale.title * 1.3)).foregroundStyle(Warm.ink)
                     Text("meals_subtitle").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
-                }
-                Spacer()
-                Button(action: onMine) {
-                    Text("meals_my")
-                        .font(.system(size: TypeScale.secondary, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Warm.chilli, in: Capsule())
                 }
             }
             ScrollView(.horizontal, showsIndicators: false) {

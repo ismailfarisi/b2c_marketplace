@@ -135,9 +135,9 @@ struct RootView: View {
                 // the feed is the one screen where losing your place is the
                 // whole cost.
                 FeedScreen(viewModel: vm, extras: [
-                    (NSLocalizedString("nav_search", comment: ""), { destinationRaw = Destination.search.rawValue }),
-                    (NSLocalizedString("nav_saved", comment: ""), { destinationRaw = Destination.saved.rawValue }),
-                    (NSLocalizedString("nav_sell", comment: ""), { destinationRaw = Destination.sell.rawValue }),
+                    FeedExtra(label: NSLocalizedString("nav_search", comment: ""), symbol: "magnifyingglass") { destinationRaw = Destination.search.rawValue },
+                    FeedExtra(label: NSLocalizedString("nav_saved", comment: ""), symbol: "bookmark") { destinationRaw = Destination.saved.rawValue },
+                    FeedExtra(label: NSLocalizedString("nav_sell", comment: ""), symbol: "plus.circle") { destinationRaw = Destination.sell.rawValue },
                 ])
                     .opacity(destination == .feed ? 1 : 0)
 
@@ -241,6 +241,15 @@ struct RootView: View {
 
     // ── the tabs ─────────────────────────────────────────────────────────────
 
+    private var gateCopy: (String, String) {
+        switch destination {
+        case .myMeals: return ("meals_signin_mine_title", "meals_signin_why")
+        case .me: return ("me_signin_title", "me_signin_why")
+        case .saved: return ("saved_signin_title", "saved_signin_why")
+        default: return ("signin_title", "signin_why")
+        }
+    }
+
     @ViewBuilder
     private func tab(vm: FeedViewModel, me: MeViewModel) -> some View {
         if needsAccount && !settled {
@@ -249,12 +258,12 @@ struct RootView: View {
             // screen to a returning viewer for a frame.
             ProgressView().tint(.white)
         } else if needsAccount && !authorised, let gate = signInViewModel {
-            if destination == .myMeals {
-                SignInGate(viewModel: gate, onCancel: { destinationRaw = Destination.meals.rawValue },
-                           titleKey: "meals_signin_mine_title", whyKey: "meals_signin_why")
-            } else {
-                SignInGate(viewModel: gate) { destinationRaw = Destination.feed.rawValue }
-            }
+            // Saved and Sell open from the feed, so cancelling returns there.
+            SignInGate(viewModel: gate, onCancel: {
+                gate.reset()
+                destinationRaw = (destination == .saved || destination == .sell)
+                    ? Destination.feed.rawValue : Destination.meals.rawValue
+            }, titleKey: gateCopy.0, whyKey: gateCopy.1, light: destination == .myMeals)
         } else {
             switch destination {
             case .meals, .myMeals:

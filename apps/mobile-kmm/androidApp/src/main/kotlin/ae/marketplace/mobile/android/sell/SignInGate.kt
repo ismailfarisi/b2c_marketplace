@@ -14,11 +14,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +45,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -73,7 +78,11 @@ fun SignInGate(
     modifier: Modifier = Modifier,
     @StringRes title: Int = R.string.signin_title,
     @StringRes why: Int = R.string.signin_why,
+    /** Cream and Chilli Red, for gates over the light meals tabs. */
+    light: Boolean = false,
 ) {
+    val ink = if (light) MealsInk else Color.White
+    val accent = if (light) MealsChilli else Accent
     val state by viewModel.state.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = remember { FocusRequester() }
@@ -106,30 +115,32 @@ fun SignInGate(
     Column(
         modifier
             .fillMaxSize()
-            .background(Ink)
+            .background(if (light) MealsPaper else Ink)
             .statusBarsPadding()
             .imePadding()
             .padding(horizontal = 22.dp, vertical = 18.dp),
     ) {
-        Text(
-            text = "✕",
-            color = Color.White,
-            fontSize = 22.sp,
-            modifier = Modifier
+        val close = stringResource(R.string.action_close)
+        Box(
+            Modifier
+                .padding(bottom = 12.dp)
+                .size(48.dp)
                 .clickable(onClick = onCancel)
-                .semantics { contentDescription = "Close" }
-                .padding(bottom = 24.dp),
-        )
+                .semantics { contentDescription = close },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Icon(Icons.Rounded.Close, contentDescription = null, tint = ink, modifier = Modifier.size(24.dp))
+        }
         Text(
             text = stringResource(title),
-            color = Color.White,
+            color = ink,
             fontSize = 21.sp,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
             text = if (onCode) stringResource(R.string.signin_sent_to, state.phone.trim())
             else stringResource(why),
-            color = Color.White.copy(alpha = 0.55f),
+            color = if (light) MealsMuted else Color.White.copy(alpha = 0.55f),
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 8.dp, bottom = 26.dp),
         )
@@ -143,12 +154,14 @@ fun SignInGate(
                 imeAction = ImeAction.Send,
                 onImeAction = { viewModel.sendCode(currentMillis()) },
                 focusRequester = focus,
+                light = light,
             )
             Box(Modifier.padding(top = 16.dp)) {
                 PrimaryButton(
                     label = stringResource(R.string.signin_send_code),
                     enabled = state.phone.isNotBlank() && !state.busy,
                     onClick = { viewModel.sendCode(currentMillis()) },
+                    fill = accent,
                 )
             }
         } else {
@@ -160,6 +173,7 @@ fun SignInGate(
                 imeAction = ImeAction.Done,
                 onImeAction = viewModel::verify,
                 focusRequester = focus,
+                light = light,
             )
 
             // Submitted on the sixth digit rather than on a button press.
@@ -181,13 +195,14 @@ fun SignInGate(
                     label = stringResource(R.string.signin_verify),
                     enabled = state.code.length == CODE_LENGTH && !state.busy,
                     onClick = viewModel::verify,
+                    fill = accent,
                 )
             }
 
             Row(Modifier.fillMaxWidth().padding(top = 16.dp)) {
                 Text(
                     text = stringResource(R.string.signin_change_number),
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = if (light) MealsMuted else Color.White.copy(alpha = 0.5f),
                     fontSize = 13.sp,
                     modifier = Modifier.clickable(onClick = viewModel::changeNumber),
                 )
@@ -199,7 +214,7 @@ fun SignInGate(
                     // viewer would agree with if told.
                     text = if (cooldown > 0) stringResource(R.string.signin_resend_in, cooldown)
                     else stringResource(R.string.signin_resend),
-                    color = if (cooldown > 0) Color.White.copy(alpha = 0.3f) else Accent,
+                    color = if (cooldown > 0) ink.copy(alpha = 0.35f) else accent,
                     fontSize = 13.sp,
                     modifier = Modifier.clickable(enabled = cooldown == 0 && !state.busy) {
                         viewModel.sendCode(currentMillis())
@@ -211,7 +226,7 @@ fun SignInGate(
         state.error?.let { problem ->
             Text(
                 text = stringResource(problem.stringRes()),
-                color = Accent,
+                color = accent,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 14.dp),
             )
@@ -220,6 +235,12 @@ fun SignInGate(
 }
 
 private const val CODE_LENGTH = 6
+
+private val MealsPaper = Color(0xFFFFF8F0)
+private val MealsInk = Color(0xFF1E1410)
+private val MealsMuted = Color(0xFF76675B)
+private val MealsLine = Color(0xFFE6D5C3)
+private val MealsChilli = Color(0xFFC43B16)
 
 /**
  * Words for a problem, chosen by what the viewer should do next.
@@ -248,23 +269,31 @@ private fun Field(
     imeAction: ImeAction,
     onImeAction: () -> Unit,
     focusRequester: FocusRequester,
+    light: Boolean = false,
 ) {
+    val ink = if (light) MealsInk else Color.White
     Box(
         Modifier
             .fillMaxWidth()
-            .border(1.dp, Line, RoundedCornerShape(8.dp))
+            .then(if (light) Modifier.background(Color.White, RoundedCornerShape(8.dp)) else Modifier)
+            .border(1.dp, if (light) MealsLine else Line, RoundedCornerShape(8.dp))
             .padding(horizontal = 14.dp, vertical = 14.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         if (value.isEmpty()) {
-            Text(placeholder, color = Color.White.copy(alpha = 0.25f), fontSize = 16.sp)
+            Text(
+                placeholder,
+                color = ink.copy(alpha = if (light) 0.4f else 0.25f),
+                style = TextStyle(fontSize = 16.sp, textDirection = TextDirection.Ltr),
+            )
         }
         BasicTextField(
             value = value,
             onValueChange = onValue,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-            cursorBrush = SolidColor(Accent),
+            // Phone numbers and codes read left to right in Arabic too; without this "+971" renders as "971+".
+            textStyle = TextStyle(color = ink, fontSize = 16.sp, textDirection = TextDirection.Ltr),
+            cursorBrush = SolidColor(if (light) MealsChilli else Accent),
             keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = imeAction),
             keyboardActions = KeyboardActions(
                 onSend = { onImeAction() },
