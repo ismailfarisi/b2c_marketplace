@@ -189,7 +189,9 @@ class SignInViewModel(
         viewModelScope.launch {
             runCatching { api.verify(s.challengeId, s.code.trim()) }
                 .onSuccess {
-                    _state.value = _state.value.copy(busy = false)
+                    // Cleared rather than kept, so a gate opened after a later
+                    // sign-out starts on an empty phone step, not a spent code.
+                    _state.value = SignInUiState()
                     session.granted()
                 }
                 .onFailure { e ->

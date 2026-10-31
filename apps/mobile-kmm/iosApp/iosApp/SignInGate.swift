@@ -154,6 +154,8 @@ struct SignInGate: View {
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 8).fill(light ? Color.white : Color.clear))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(light ? Warm.line : Palette.line, lineWidth: 1))
+            // Phone numbers and codes read left to right in Arabic too.
+            .environment(\.layoutDirection, .leftToRight)
     }
 
     private func primaryButton(

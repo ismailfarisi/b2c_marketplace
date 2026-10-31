@@ -45,6 +45,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -286,7 +287,8 @@ private fun Field(
             value = value,
             onValueChange = onValue,
             singleLine = true,
-            textStyle = TextStyle(color = ink, fontSize = 16.sp),
+            // Phone numbers and codes read left to right in Arabic too; without this "+971" renders as "971+".
+            textStyle = TextStyle(color = ink, fontSize = 16.sp, textDirection = TextDirection.Ltr),
             cursorBrush = SolidColor(if (light) MealsChilli else Accent),
             keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = imeAction),
             keyboardActions = KeyboardActions(
