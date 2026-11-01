@@ -72,13 +72,12 @@
     <string name="filter_reach_note">لا يوجد فلتر للمسافة. تظهر لك فقط الأشياء التي يمكنها الوصول إلى الموقع الذي تختاره.</string>
     <string name="filter_location_denied">تم رفض إذن الموقع — يتم عرض دبي مارينا.</string>
 
-    <string name="nav_feed">الرئيسية</string>
+    <string name="nav_feed">فيديو</string>
     <string name="nav_search">بحث</string>
     <string name="nav_sell">بيع</string>
     <string name="nav_saved">المحفوظات</string>
     <string name="nav_me">حسابي</string>
     <string name="nav_my_meals">وجباتي</string>
-    <string name="nav_not_built">لم تُبنَ هذه الشاشة بعد. التبويب موجود ليتضح شكل المنتج.</string>
 
     <!--
         The sell flow's chrome only. Every label inside the form — "Car", "KM",
@@ -392,4 +391,9 @@
     <string name="meals_no_area">لا توجد منطقة مطابقة. جرّب كتابة أخرى.</string>
     <string name="meals_office_lunch">غداء المكاتب لشركتك</string>
     <string name="meals_signin_mine_title">سجّل الدخول لعرض وجباتك</string>
+    <string name="me_signin_title">سجّل الدخول إلى حسابك</string>
+    <string name="me_signin_why">رقمك يحفظ وجباتك ورسائلك والفيديوهات المحفوظة معاً على أي هاتف.</string>
+    <string name="saved_signin_title">سجّل الدخول لعرض الفيديوهات المحفوظة</string>
+    <string name="saved_signin_why">الفيديوهات التي تحفظها تبقى في حسابك، فتجدها على أي هاتف.</string>
+    <string name="feed_more">المزيد من سوق الفيديو</string>
 </resources>

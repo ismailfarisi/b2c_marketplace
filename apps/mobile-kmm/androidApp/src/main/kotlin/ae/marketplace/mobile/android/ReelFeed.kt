@@ -50,7 +50,7 @@ fun ReelFeed(
      */
     onActionPressed: (ResolvedAction, String) -> Unit = { _, _ -> },
     /** Search, Saved and Sell, shown after the feed surfaces. */
-    extras: List<Pair<String, () -> Unit>> = emptyList(),
+    extras: List<FeedExtra> = emptyList(),
 ) {
     val state by viewModel.state.collectAsState()
 

@@ -33,12 +33,12 @@
 "filter_nearby_you" = "قريب منك";
 "filter_reach_note" = "لا يوجد فلتر للمسافة. تظهر لك فقط الأشياء التي يمكنها الوصول إلى الموقع الذي تختاره.";
 "filter_location_denied" = "تم رفض إذن الموقع — يتم عرض دبي مارينا.";
-"nav_feed" = "الرئيسية";
+"nav_feed" = "فيديو";
 "nav_search" = "بحث";
 "nav_sell" = "بيع";
 "nav_saved" = "المحفوظات";
 "nav_me" = "حسابي";
-"nav_not_built" = "لم تُبنَ هذه الشاشة بعد. التبويب موجود ليتضح شكل المنتج.";
+"nav_my_meals" = "وجباتي";
 "sell_what_listing" = "ما الذي تريد عرضه؟";
 "sell_nothing_sellable" = "لا يمكن عرض أي شيء من التطبيق بعد.";
 "sell_three_fields" = "بعض التفاصيل، ثم تصبح منشوراً";
@@ -273,15 +273,10 @@
 "meals_promo_used" = "لقد استخدمت هذا العرض من قبل.";
 "meals_promo_exhausted" = "نفد هذا العرض.";
 "meals_promo_invalid" = "لا يمكن استخدام رمز العرض هنا.";
-
-"action_back" = "رجوع";
-
-/* Meals: location, help and navigation (mobile critique) */
-"nav_my_meals" = "وجباتي";
 "meals_subscriber" = "مشترك";
 "meals_choice_help" = "في الأيام المعلَّمة بخيارين يمكنك اختيار أحد الطبقين قبل الموعد النهائي.";
 "meals_near_count" = "%lld مطبخ يوصل إليك";
-"meals_near_place" = "%1$lld مطبخ يوصل إلى %2$@";
+"meals_near_place" = "%lld مطبخ يوصل إلى %@";
 "meals_none_near" = "لا توجد مطابخ توصل إلى %@ بعد";
 "meals_change" = "تغيير";
 "meals_where" = "أين نوصل؟";
@@ -292,3 +287,10 @@
 "meals_no_area" = "لا توجد منطقة مطابقة. جرّب كتابة أخرى.";
 "meals_office_lunch" = "غداء المكاتب لشركتك";
 "meals_signin_mine_title" = "سجّل الدخول لعرض وجباتك";
+"me_signin_title" = "سجّل الدخول إلى حسابك";
+"me_signin_why" = "رقمك يحفظ وجباتك ورسائلك والفيديوهات المحفوظة معاً على أي هاتف.";
+"saved_signin_title" = "سجّل الدخول لعرض الفيديوهات المحفوظة";
+"saved_signin_why" = "الفيديوهات التي تحفظها تبقى في حسابك، فتجدها على أي هاتف.";
+"feed_more" = "المزيد من سوق الفيديو";
+
+"action_back" = "رجوع";

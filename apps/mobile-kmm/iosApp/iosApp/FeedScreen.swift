@@ -12,7 +12,7 @@ import Shared
 struct FeedScreen: View {
     let viewModel: FeedViewModel
     /// Search, Saved and Sell, shown after the feed surfaces.
-    var extras: [(String, () -> Void)] = []
+    var extras: [FeedExtra] = []
 
     @State private var items: [FeedItem] = []
     @State private var surface: FeedSurface = FeedSurface.forYou
@@ -102,6 +102,13 @@ struct FeedScreen: View {
     }
 }
 
+/// A marketplace destination opened from the feed's top row.
+struct FeedExtra {
+    let label: String
+    let symbol: String
+    let open: () -> Void
+}
+
 /// The four tabs.
 ///
 /// Horizontally scrollable rather than four equal widths. Four short English
@@ -112,7 +119,7 @@ struct FeedTabsView: View {
     let selected: FeedSurface
     let onSelect: (FeedSurface) -> Void
     /// Marketplace destinations reached from the feed rather than the bottom bar.
-    var extras: [(String, () -> Void)] = []
+    var extras: [FeedExtra] = []
 
     private static let accent = Color(red: 0.706, green: 0.396, blue: 0.165)
 
@@ -127,39 +134,47 @@ struct FeedTabsView: View {
     ]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(Self.surfaces, id: \.self) { surface in
-                    let active = surface == selected
-                    VStack(spacing: 4) {
-                        Text(NSLocalizedString(Self.key(surface), comment: ""))
-                            .font(.system(size: 14, weight: active ? .semibold : .regular))
-                            .foregroundStyle(active ? .white : .white.opacity(0.65))
+        HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(Self.surfaces, id: \.self) { surface in
+                        let active = surface == selected
+                        VStack(spacing: 4) {
+                            Text(NSLocalizedString(Self.key(surface), comment: ""))
+                                .font(.system(size: 14, weight: active ? .semibold : .regular))
+                                .foregroundStyle(active ? .white : .white.opacity(0.65))
 
-                        // A 2pt rule under the active tab rather than a filled
-                        // chip: the row floats over video, and a filled
-                        // background would need a scrim heavy enough to compete
-                        // with the reel underneath it.
-                        Rectangle()
-                            .fill(active ? Self.accent : .clear)
-                            .frame(width: active ? 20 : 0, height: 2)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onSelect(surface) }
-                }
-                ForEach(Array(extras.enumerated()), id: \.offset) { _, extra in
-                    Text(extra.0)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.65))
+                            // A 2pt rule under the active tab rather than a filled
+                            // chip: the row floats over video, and a filled
+                            // background would need a scrim heavy enough to compete
+                            // with the reel underneath it.
+                            Rectangle()
+                                .fill(active ? Self.accent : .clear)
+                                .frame(width: active ? 20 : 0, height: 2)
+                        }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 10)
                         .contentShape(Rectangle())
-                        .onTapGesture { extra.1() }
+                        .onTapGesture { onSelect(surface) }
+                    }
                 }
+                .padding(.leading, 12)
             }
-            .padding(.horizontal, 12)
+            // Destinations, not filters: icon buttons pinned to the end so they
+            // never scroll off-screen behind the filter row.
+            if !extras.isEmpty {
+                Rectangle().fill(.white.opacity(0.25)).frame(width: 1, height: 20).padding(.horizontal, 4)
+                ForEach(Array(extras.enumerated()), id: \.offset) { _, extra in
+                    Button(action: extra.open) {
+                        Image(systemName: extra.symbol)
+                            .font(.system(size: 19))
+                            .foregroundStyle(.white)
+                            .frame(width: Space.touch, height: Space.touch)
+                    }
+                    .accessibilityLabel(Text(extra.label))
+                }
+                Spacer().frame(width: 6)
+            }
         }
     }
 

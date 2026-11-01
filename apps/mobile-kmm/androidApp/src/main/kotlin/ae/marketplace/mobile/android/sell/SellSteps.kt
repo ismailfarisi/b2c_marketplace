@@ -728,11 +728,11 @@ internal fun StepScaffold(
 }
 
 @Composable
-internal fun PrimaryButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun PrimaryButton(label: String, enabled: Boolean, onClick: () -> Unit, fill: Color = Accent) {
     Box(
         Modifier
             .fillMaxWidth()
-            .background(if (enabled) Accent else Accent.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+            .background(if (enabled) fill else fill.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 15.dp),
         contentAlignment = Alignment.Center,

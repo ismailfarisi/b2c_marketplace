@@ -143,7 +143,6 @@ fun MealsTab(
                 viewModel,
                 onKitchen = { viewModel.openKitchen(it); go(Page.Kitchen) },
                 onRotation = { requireAccount { viewModel.startRotation(); go(Page.Rotation) } },
-                onMine = { requireAccount { viewModel.loadMine(); go(Page.Mine) } },
                 place = place,
                 onPlace = { place = it; writePlace(prefs, it) },
             )
@@ -177,7 +176,6 @@ private fun HomePage(
     vm: MealsViewModel,
     onKitchen: (String) -> Unit,
     onRotation: () -> Unit,
-    onMine: () -> Unit,
     place: ChosenPlace?,
     onPlace: (ChosenPlace?) -> Unit,
 ) {
@@ -206,16 +204,6 @@ private fun HomePage(
                         )
                         Text(stringResource(R.string.meals_subtitle), color = M.Muted, fontSize = Type.Secondary)
                     }
-                    Text(
-                        stringResource(R.string.meals_my),
-                        color = M.OnAccent,
-                        fontSize = Type.Secondary,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .clickable(onClick = onMine)
-                            .background(M.Chilli, RoundedCornerShape(50))
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                    )
                 }
                 Row(
                     Modifier.padding(top = Space.Large).horizontalScroll(rememberScrollState()),

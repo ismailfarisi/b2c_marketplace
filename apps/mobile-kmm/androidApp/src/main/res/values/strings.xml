@@ -80,7 +80,6 @@
     <string name="nav_saved">Saved</string>
     <string name="nav_me">Me</string>
     <string name="nav_my_meals">My meals</string>
-    <string name="nav_not_built">This screen has not been built yet. The tab is here so the shape of the product is visible.</string>
 
     <!--
         The sell flow.
@@ -462,4 +461,9 @@
     <string name="meals_no_area">No area matches. Try another spelling.</string>
     <string name="meals_office_lunch">Office lunches for your company</string>
     <string name="meals_signin_mine_title">Sign in to see your meals</string>
+    <string name="me_signin_title">Sign in to your account</string>
+    <string name="me_signin_why">Your number keeps your meals, messages and saved videos together on any phone.</string>
+    <string name="saved_signin_title">Sign in to see saved videos</string>
+    <string name="saved_signin_why">Videos you save stay on your account, so they are there on any phone.</string>
+    <string name="feed_more">More from the video marketplace</string>
 </resources>
