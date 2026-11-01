@@ -19,6 +19,9 @@ type Delivery struct {
 	// where only a pre-approved template may go out.
 	ProviderTemplateName string
 	Params               map[string]string
+	// ParamValues are Params in the provider template's positional order, when
+	// the template declares one (notification_templates.provider_params).
+	ParamValues []string
 }
 
 // Provider is a transport. One per channel family; the service picks by
