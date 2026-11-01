@@ -1,11 +1,12 @@
 # Generates the Go server boundary from api/openapi.yaml.
-#   go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+#   make gen-go
 #
 # Only the *boundary* is generated: request/response types, the ServerInterface the
 # handlers implement, and the chi route wiring. Business logic lives in
 # internal/modules/** and never imports this package's HTTP concerns.
 package: openapi
-output: services/api/internal/gen/openapi/openapi.gen.go
+# Relative to services/api: every caller runs `go tool -C services/api` (make gen-go).
+output: internal/gen/openapi/openapi.gen.go
 
 generate:
   chi-server: true
