@@ -23,7 +23,6 @@ export default defineConfig({
       target: "../packages/api-client/src/gen/endpoints",
       schemas: "../packages/api-client/src/gen/models",
       client: "react-query",
-      httpClient: "fetch",
       clean: true,
       prettier: false,
       override: {
@@ -33,8 +32,8 @@ export default defineConfig({
         },
         query: {
           useQuery: true,
-          useInfinite: true,
-          useInfiniteQueryParam: "cursor",
+          // Not every list takes a cursor; infinite hooks for those don't typecheck.
+          useInfinite: false,
         },
       },
     },

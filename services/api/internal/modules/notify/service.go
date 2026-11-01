@@ -96,7 +96,7 @@ func (s *Service) Enqueue(ctx context.Context, tx pgx.Tx, m Message) (uuid.UUID,
 		userID: userID, destination: destinationFor(channel, r),
 		templateID: &tmpl.id, templateKey: m.TemplateKey, channel: channel,
 		locale: tmpl.locale, category: m.Category, body: body,
-		status: "pending", dedupe: m.DedupeKey,
+		status: "pending", dedupe: m.DedupeKey, params: m.Params,
 	})
 }
 
@@ -169,7 +169,7 @@ func (s *Service) EnqueueDirect(ctx context.Context, tx pgx.Tx, m DirectMessage)
 	row := notificationRow{
 		destination: m.Phone, templateID: &tmpl.id, templateKey: m.TemplateKey,
 		channel: ChannelSMS, locale: tmpl.locale, category: m.Category,
-		body: body, status: "pending", dedupe: m.DedupeKey,
+		body: body, status: "pending", dedupe: m.DedupeKey, params: m.Params,
 	}
 	if userID.Valid {
 		row.userID = userID.UUID
@@ -331,6 +331,9 @@ type notificationRow struct {
 	status      string
 	suppressed  string
 	dedupe      string
+	// params are kept for providers that send structured templates (WhatsApp
+	// Cloud API takes the values, not the rendered text).
+	params map[string]string
 }
 
 func (s *Service) insert(ctx context.Context, tx pgx.Tx, n notificationRow) (uuid.UUID, error) {
@@ -338,13 +341,13 @@ func (s *Service) insert(ctx context.Context, tx pgx.Tx, n notificationRow) (uui
 	err := tx.QueryRow(ctx, `
 		INSERT INTO notifications
 		    (user_id, destination, template_id, template_key, channel, locale,
-		     category, rendered_body, status, suppressed_reason, dedupe_key)
+		     category, rendered_body, status, suppressed_reason, dedupe_key, params)
 		VALUES ($1, $2, $3, $4, $5, $6::locale_code, $7, $8, $9,
-		        nullif($10, ''), nullif($11, ''))
+		        nullif($10, ''), nullif($11, ''), $12)
 		ON CONFLICT DO NOTHING
 		RETURNING id`,
 		n.userID, n.destination, n.templateID, n.templateKey, string(n.channel), n.locale,
-		string(n.category), n.body, n.status, n.suppressed, n.dedupe).Scan(&id)
+		string(n.category), n.body, n.status, n.suppressed, n.dedupe, paramsJSON(n.params)).Scan(&id)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		// The dedupe key already exists. Not an error — it is the mechanism
@@ -414,18 +417,21 @@ func (s *Service) dispatchOne(ctx context.Context) (claimed bool, sendErr error)
 		subject      string
 		providerTmpl string
 		attempts     int16
+		params       map[string]string
+		paramOrder   []string
 	)
 	err = tx.QueryRow(ctx, `
 		SELECT n.id, n.created_at, n.channel, n.destination, n.locale::text,
 		       n.rendered_body, coalesce(t.subject, ''), coalesce(t.provider_template_name, ''),
-		       n.attempts
+		       n.attempts, coalesce(n.params, '{}'::jsonb), coalesce(t.provider_params, '{}')
 		  FROM notifications n
 		  LEFT JOIN notification_templates t ON t.id = n.template_id
 		 WHERE n.status = 'pending' AND n.attempts < $1
 		 ORDER BY n.created_at
 		 FOR UPDATE OF n SKIP LOCKED
 		 LIMIT 1`, MaxAttempts).
-		Scan(&id, &createdAt, &channel, &destination, &locale, &body, &subject, &providerTmpl, &attempts)
+		Scan(&id, &createdAt, &channel, &destination, &locale, &body, &subject, &providerTmpl, &attempts,
+			&params, &paramOrder)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -446,6 +452,8 @@ func (s *Service) dispatchOne(ctx context.Context) (claimed bool, sendErr error)
 		Subject:              subject,
 		Body:                 body,
 		ProviderTemplateName: providerTmpl,
+		Params:               params,
+		ParamValues:          orderedParams(paramOrder, params),
 	})
 
 	status := "sent"
@@ -589,4 +597,25 @@ func (s *Service) EnsurePartitions(ctx context.Context, monthsAhead int) error {
 		}
 	}
 	return nil
+}
+
+// paramsJSON stores nil as SQL NULL rather than an empty object.
+func paramsJSON(p map[string]string) any {
+	if len(p) == 0 {
+		return nil
+	}
+	return p
+}
+
+// orderedParams lays params out in a provider template's positional order
+// ({{1}}, {{2}}, ...). A missing value becomes "" so the count still matches.
+func orderedParams(order []string, params map[string]string) []string {
+	if len(order) == 0 {
+		return nil
+	}
+	out := make([]string, len(order))
+	for i, k := range order {
+		out[i] = params[k]
+	}
+	return out
 }

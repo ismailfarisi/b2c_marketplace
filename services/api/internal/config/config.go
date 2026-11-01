@@ -26,7 +26,13 @@ type Config struct {
 	RefreshTokenTTL time.Duration
 
 	OTPDevEcho bool
-	OTPTTL     time.Duration
+
+	// WhatsApp Cloud API (Meta). Both set enables real WhatsApp sends;
+	// both empty keeps the log provider (dev) or refusal (production).
+	WhatsAppAccessToken   string
+	WhatsAppPhoneNumberID string
+	WhatsAppAPIVersion    string
+	OTPTTL                time.Duration
 
 	S3Endpoint string
 	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
@@ -140,7 +146,11 @@ func Load() (Config, error) {
 		RefreshTokenTTL: duration("REFRESH_TOKEN_TTL", "720h"),
 
 		OTPDevEcho: boolean("OTP_DEV_ECHO", false),
-		OTPTTL:     duration("OTP_TTL", "5m"),
+
+		WhatsAppAccessToken:   optional("WHATSAPP_ACCESS_TOKEN", ""),
+		WhatsAppPhoneNumberID: optional("WHATSAPP_PHONE_NUMBER_ID", ""),
+		WhatsAppAPIVersion:    optional("WHATSAPP_API_VERSION", "v21.0"),
+		OTPTTL:                duration("OTP_TTL", "5m"),
 
 		S3Endpoint:       optional("S3_ENDPOINT", ""),
 		S3PublicEndpoint: optional("S3_PUBLIC_ENDPOINT", ""),
@@ -177,6 +187,10 @@ func Load() (Config, error) {
 		ClickHouseUser:     optional("CLICKHOUSE_USER", ""),
 		ClickHousePassword: optional("CLICKHOUSE_PASSWORD", ""),
 		ClickHouseTee:      boolean("CLICKHOUSE_TEE", false),
+	}
+
+	if (cfg.WhatsAppAccessToken == "") != (cfg.WhatsAppPhoneNumberID == "") {
+		problems = append(problems, "WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set together")
 	}
 
 	// Guardrails that only apply once the process is actually deployed.
