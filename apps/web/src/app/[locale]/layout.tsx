@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import {
-  Bricolage_Grotesque,
-  DM_Sans,
-  IBM_Plex_Sans_Arabic,
-} from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 
 import { Providers } from "@/app/providers";
@@ -15,21 +11,38 @@ export const metadata: Metadata = {
     "Subscribe to a home-style kitchen near you: a weekday menu, delivered to your home or office.",
 };
 
-const display = Bricolage_Grotesque({
-  subsets: ["latin"],
-  weight: ["500", "700", "800"],
+// Self-hosted (SIL OFL, see fonts/OFL.txt) so builds never depend on fetching Google Fonts.
+const display = localFont({
+  src: "../fonts/bricolage-grotesque-latin-wght-normal.woff2",
+  weight: "200 800",
   variable: "--font-display",
   display: "swap",
 });
-const body = DM_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const body = localFont({
+  src: "../fonts/dm-sans-latin-wght-normal.woff2",
+  weight: "100 1000",
   variable: "--font-body",
   display: "swap",
 });
-const arabic = IBM_Plex_Sans_Arabic({
-  subsets: ["arabic"],
-  weight: ["400", "500", "600", "700"],
+const arabic = localFont({
+  src: [
+    {
+      path: "../fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2",
+      weight: "400",
+    },
+    {
+      path: "../fonts/ibm-plex-sans-arabic-arabic-500-normal.woff2",
+      weight: "500",
+    },
+    {
+      path: "../fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2",
+      weight: "600",
+    },
+    {
+      path: "../fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2",
+      weight: "700",
+    },
+  ],
   variable: "--font-arabic",
   display: "swap",
 });
