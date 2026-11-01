@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { useCustomerPoint } from "@/components/meals/location";
+import { LocationPicker, placeLabel } from "@/components/meals/location-picker";
 import { logout } from "@/lib/auth-api";
 import { rememberInvite } from "@/lib/customer-api";
 import { tokenStore } from "@/lib/token-store";
@@ -20,6 +22,10 @@ const COPY = {
     businessLong: "Office lunches for your company",
     signIn: "Sign in",
     signOut: "Sign out",
+    deliverTo: "Deliver to",
+    nearYou: "your location",
+    fallbackArea: "Dubai Marina",
+    search: "Search kitchens or dishes",
   },
   ar: {
     brand: "وجبات",
@@ -32,10 +38,17 @@ const COPY = {
     businessLong: "غداء المكاتب لشركتك",
     signIn: "تسجيل الدخول",
     signOut: "تسجيل الخروج",
+    deliverTo: "التوصيل إلى",
+    nearYou: "موقعك",
+    fallbackArea: "دبي مارينا",
+    search: "ابحث عن مطبخ أو طبق",
   },
 };
 
 export type Locale = "en" | "ar";
+
+/** Header search on the home page; the kitchen list listens for it. */
+export const SEARCH_EVENT = "meals-search";
 
 export const STATUS = {
   en: {
@@ -142,12 +155,75 @@ export function CustomerShell({
   const switchHref = path.replace(/^\/(en|ar)(?=\/|$)/, `/${otherLocale}`);
   const here = (href: string) =>
     path === href || path.startsWith(`${href}/`) ? "page" : undefined;
+  const router = useRouter();
+  const { place, precise, choose, locate } = useCustomerPoint();
+  const placeName = place
+    ? placeLabel(place, locale)
+    : precise
+      ? t.nearYou
+      : t.fallbackArea;
+  const onHome = path === `/${locale}`;
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    setQ(new URLSearchParams(window.location.search).get("q") ?? "");
+  }, []);
+  // Home filters live as you type; elsewhere a search opens home with ?q=.
+  const search = (value: string, submit: boolean) => {
+    if (onHome) {
+      window.history.replaceState(
+        null,
+        "",
+        value ? `?q=${encodeURIComponent(value)}` : window.location.pathname,
+      );
+      window.dispatchEvent(new CustomEvent(SEARCH_EVENT, { detail: value }));
+    } else if (submit) {
+      router.push(
+        `/${locale}${value ? `?q=${encodeURIComponent(value)}` : ""}`,
+      );
+    }
+  };
   return (
     <div className="ms">
       <header className="ms-bar">
         <Link href={`/${locale}`} className="ms-brand">
           {t.brand}
         </Link>
+        <div className="ms-bar-find">
+          <LocationPicker
+            className="ms-bar-place"
+            locale={locale}
+            current={place}
+            onChoose={choose}
+            onLocate={locate}
+            label={
+              <>
+                <span className="ms-bar-place-k">{t.deliverTo}</span>{" "}
+                <strong>{placeName}</strong>
+              </>
+            }
+          />
+          <form
+            role="search"
+            className="ms-bar-search"
+            action={`/${locale}`}
+            onSubmit={(e) => {
+              e.preventDefault();
+              search(q, true);
+            }}
+          >
+            <input
+              type="search"
+              name="q"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                search(e.target.value, false);
+              }}
+              placeholder={t.search}
+              aria-label={t.search}
+            />
+          </form>
+        </div>
         <nav className="ms-nav">
           <Link
             href={`/${locale}`}

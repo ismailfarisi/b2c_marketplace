@@ -1,12 +1,12 @@
 "use client";
 
-import { ApiError, formatMoney } from "@marketplace/api-client";
+import { ApiError } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 
 import { KitchenCover } from "@/components/meals/cover";
-import { DishPhoto } from "@/components/meals/food";
+import { DishPhoto, shortMoney } from "@/components/meals/food";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
 import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
@@ -31,8 +31,7 @@ const COPY = {
       "The same dish every week on the same day. Where two dishes are listed you choose one before the cutoff.",
     or: "or",
     choiceShort: "2 dishes",
-    choiceHelp:
-      "Days marked 2 dishes let you pick one of two mains before the cutoff.",
+    choiceHelp: "Days with a dot have two mains; pick one before the cutoff.",
     noMenu: "This kitchen has not published its menu yet.",
     plans: "Plans",
     reviews: "Reviews from subscribers",
@@ -86,7 +85,7 @@ const COPY = {
     or: "أو",
     choiceShort: "طبقان",
     choiceHelp:
-      "في الأيام المعلَّمة بطبقين يمكنك اختيار أحدهما قبل الموعد النهائي.",
+      "الأيام التي عليها نقطة فيها طبقان رئيسيان؛ اختر أحدهما قبل الموعد النهائي.",
     noMenu: "لم ينشر هذا المطبخ قائمته بعد.",
     plans: "الباقات",
     reviews: "تقييمات المشتركين",
@@ -222,7 +221,11 @@ function Menu({
           >
             {t.weekdays[d]}
             {slots.some((slot) => cell(d, slot)?.alternative) && (
-              <small>{t.choiceShort}</small>
+              <span
+                className="ms-day-dot"
+                role="img"
+                aria-label={t.choiceShort}
+              />
             )}
           </button>
         ))}
@@ -233,12 +236,8 @@ function Menu({
           if (!c?.default) return null;
           return (
             <div key={slot} className="ms-mslot">
-              <h3>
-                {t.slot[slot] ?? slot}
-                {c.alternative && (
-                  <small className="ms-choice-tag">{t.choice}</small>
-                )}
-              </h3>
+              <h3>{t.slot[slot] ?? slot}</h3>
+              {c.alternative && <p className="ms-choice-note">{t.choice}</p>}
               <div className="ms-mcards">
                 <DishCard d={c.default} locale={locale} t={t} />
                 {c.alternative && (
@@ -310,7 +309,7 @@ export default function KitchenPage({
   );
 
   const money = (amount: number, currency: string) =>
-    formatMoney({ amount, currency }, locale);
+    shortMoney(amount, currency, locale);
 
   let body;
   if (!point || q.isPending) body = <p className="ms-note">{t.loading}</p>;

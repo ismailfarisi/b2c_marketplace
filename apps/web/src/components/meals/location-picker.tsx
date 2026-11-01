@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { AREAS, CITY_LABEL } from "@/components/meals/areas";
 import type { Place } from "@/components/meals/location";
@@ -40,14 +40,20 @@ export function LocationPicker({
   current,
   onChoose,
   onLocate,
+  label,
+  className,
 }: {
   locale: Locale;
   current: Place | null;
   onChoose: (p: Place) => void;
   onLocate: () => void;
+  /** Trigger text; defaults to "Change". */
+  label?: ReactNode;
+  className?: string;
 }) {
   const t = COPY[locale];
   const [open, setOpen] = useState(false);
+  const panelId = useId();
   const [q, setQ] = useState("");
   const signedIn = useHasSession();
   const addresses = useQuery({
@@ -70,18 +76,18 @@ export function LocationPicker({
     current?.kind === kind && current.id === id;
 
   return (
-    <div className="ms-loc">
+    <div className={className ? `ms-loc ${className}` : "ms-loc"}>
       <button
         type="button"
         className="ms-loc-toggle"
         aria-expanded={open}
-        aria-controls="ms-loc-panel"
+        aria-controls={panelId}
         onClick={() => setOpen(!open)}
       >
-        {t.change}
+        {label ?? t.change}
       </button>
       {open && (
-        <div id="ms-loc-panel" className="ms-loc-panel">
+        <div id={panelId} className="ms-loc-panel">
           <h3>{t.title}</h3>
           <button
             type="button"

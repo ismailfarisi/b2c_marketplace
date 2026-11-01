@@ -77,12 +77,6 @@ components:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.ghee-paper}"
     rounded: "{rounded.pill}"
-  eyebrow:
-    backgroundColor: "{colors.saffron-soft}"
-    textColor: "{colors.saffron-ink}"
-    rounded: "{rounded.pill}"
-    padding: "0.35rem 0.8rem"
-    typography: "{typography.label}"
   input-search:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -124,7 +118,7 @@ A spice-cupboard palette on cream: one hot red, one golden yellow, one fresh gre
 - **Chilli Red** (`chilli-red`): every primary action (Subscribe, See plans, Apply), the offer banner background, selected bottom-nav items on mobile. Hover and pressed deepen to **Chilli Deep** (`chilli-deep`), which also anchors the rotation promo gradient with Char. Chilli Red is tuned to clear 4.5:1 for white text on it and for red text on Cream Paper; do not lighten it.
 
 ### Secondary
-- **Saffron** (`saffron`): small highlight accents and offer moments. Its soft tint **Saffron Soft** (`saffron-soft`) with **Saffron Ink** (`saffron-ink`) text forms the eyebrow pill above headings and the offer tags.
+- **Saffron** (`saffron`): small highlight accents and offer moments. Its soft tint **Saffron Soft** (`saffron-soft`) with **Saffron Ink** (`saffron-ink`) text forms the offer tags.
 
 ### Tertiary
 - **Leaf Green** (`leaf-green`): the food-safety verified badge, confirmations and "delivers to you" states, on **Leaf Soft** (`leaf-soft`) backgrounds.
@@ -160,7 +154,7 @@ On web, `prefers-color-scheme: dark` swaps the canvas to a deep roasted brown wi
 - **Headline** (700, fluid 1.4–1.75rem, tracking −0.02em): section titles such as "On the menu tomorrow" and "Plans".
 - **Title** (800, 1.05rem, display face): card titles, kitchen names, the price in the sticky plans bar.
 - **Body** (400, 1rem): descriptions, menu text, form copy. Metadata steps down to 0.9rem in Muted.
-- **Label** (700, 0.8rem): eyebrows, badges, tags and button text.
+- **Label** (700, 0.8rem): badges, tags and button text.
 
 On mobile, Android uses the system sans (`FontFamily.SansSerif`) and iOS the system font (`.system(size:weight: .bold)`) at Bold/ExtraBold for headings. The web fonts are not bundled in the apps.
 
@@ -192,7 +186,7 @@ Hybrid: surfaces are white cards on a cream canvas, lifted by soft, warm-brown s
 
 ## Shapes
 
-Soft and round. Cards and banners use generous 1.5rem corners (`rounded.lg`), smaller panels 1rem (`rounded.md`), small inner elements 0.5rem. Buttons, chips, search fields, eyebrows and tags are full pills. Cuisine tiles are circles. Photos inside cards bleed to the card edge at 4:3 and are clipped by the card's radius.
+Soft and round. Cards and banners use generous 1.5rem corners (`rounded.lg`), smaller panels 1rem (`rounded.md`), small inner elements 0.5rem. Buttons, chips, search fields and tags are full pills. Cuisine tiles are circles. Photos inside cards bleed to the card edge at 4:3 and are clipped by the card's radius.
 
 On mobile the same language maps to 18dp card corners, 12–16dp for inner panels and fully rounded chips and buttons.
 
@@ -218,11 +212,8 @@ On mobile the same language maps to 18dp card corners, 12–16dp for inner panel
 - **Error:** message in Error red under the field.
 
 ### Navigation
-- **Web header:** sticky, translucent Ghee Paper (90%) bar with the delivery area and search.
+- **Web header:** sticky, translucent Ghee Paper (90%) bar with the delivery area and kitchen search; account links stay quiet text.
 - **Mobile bottom bar:** white while the meals tab is active, with Chilli Red for the selected item and Muted for the rest; it returns to the dark gradient on video tabs.
-
-### Eyebrow
-Saffron Soft pill with Saffron Ink 0.8rem bold label above section headlines ("Tomorrow", "New kitchens").
 
 ### Food Photo with Drawn Fallback
 The signature component. Every kitchen and dish image renders through it: the real upload when present, otherwise a tile in one of the four cover tints with the dish or kitchen initial in the matching ink. It is the same on web (`KitchenCover`), Android and iOS (`FoodPhoto`).
@@ -235,7 +226,7 @@ Phone-width kitchen pages only. White bar fixed to the bottom with the starting 
 ### Do:
 - **Do** lead cards and heroes with the kitchen's real dish photos, falling back to the drawn tile.
 - **Do** show the per-meal price on the photo of every kitchen card.
-- **Do** keep chilli red for actions, saffron for offers and eyebrows, leaf green for trust and success.
+- **Do** keep chilli red for actions, saffron for offers, leaf green for trust and success.
 - **Do** use logical CSS properties and test every screen in Arabic at 320px.
 - **Do** use the Rest shadow at rest and the Lift shadow on hover/focus, and honour reduced motion.
 
