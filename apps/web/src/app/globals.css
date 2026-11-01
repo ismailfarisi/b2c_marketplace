@@ -2173,7 +2173,7 @@ body {
   gap: 0.75rem;
   min-inline-size: 0;
 }
-.ms .ms-bar-place {
+.ms .ms-loc.ms-bar-place {
   display: block;
   position: relative;
   flex: 0 1 auto;
@@ -2205,6 +2205,8 @@ body {
   inset-block-start: calc(100% + 0.5rem);
   inset-inline-start: 0;
   inline-size: min(22rem, calc(100vw - 2rem));
+  max-block-size: calc(100dvh - 10rem);
+  overflow-y: auto;
   z-index: 30;
 }
 .ms-bar-search {
