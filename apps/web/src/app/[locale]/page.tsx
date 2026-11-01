@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Fragment, use, useRef, useState } from "react";
+import { Fragment, use, useEffect, useRef, useState } from "react";
 
 import {
   CuisineCircles,
@@ -22,7 +22,11 @@ import {
   sectionTitle,
   tagLabel,
 } from "@/components/meals/kitchen-card";
-import { CustomerShell, formatDay } from "@/components/meals/shell";
+import {
+  CustomerShell,
+  SEARCH_EVENT,
+  formatDay,
+} from "@/components/meals/shell";
 import {
   getMealKitchens,
   getMealsHome,
@@ -53,6 +57,13 @@ export default function MealsHome({
   const t = COPY[locale];
   const { point, precise, place, choose, locate } = useCustomerPoint();
   const [q, setQ] = useState("");
+  // The search box is in the header; it reports here and in ?q=.
+  useEffect(() => {
+    setQ(new URLSearchParams(window.location.search).get("q") ?? "");
+    const on = (e: Event) => setQ((e as CustomEvent<string>).detail ?? "");
+    window.addEventListener(SEARCH_EVENT, on);
+    return () => window.removeEventListener(SEARCH_EVENT, on);
+  }, []);
   const [slot, setSlot] = useState("");
   const [rotation, setRotation] = useState(false);
 
@@ -175,18 +186,7 @@ export default function MealsHome({
 
   const filters = (
     <div id="all-kitchens" className="ms-all">
-      <form
-        className="ms-filters"
-        role="search"
-        onSubmit={(e) => e.preventDefault()}
-      >
-        <input
-          type="search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t.search}
-          aria-label={t.search}
-        />
+      <form className="ms-filters" onSubmit={(e) => e.preventDefault()}>
         <div className="ms-chips ms-chips-scroll">
           <div role="radiogroup" aria-label={t.any} className="ms-chips">
             {["", ...FILTER_SLOTS].map((s) => (

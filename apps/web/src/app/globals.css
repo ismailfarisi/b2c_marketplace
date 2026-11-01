@@ -223,9 +223,10 @@ button.ghost {
  * Meals storefront. Tokens first; every colour below references one, so a
  * rebrand is this block and nothing else.
  */
+/* Hallmark · design-system: DESIGN.md ("The Hungry Weekday") · customer meals surfaces */
 .ms {
   --ms-paper: #fff8f0;
-  --ms-surface: #ffffff;
+  --ms-surface: #fffcf7;
   --ms-ink: #1e1410;
   --ms-muted: #76675b;
   --ms-line: #f0e2d2;
@@ -629,7 +630,7 @@ a.ms-cta {
 .ms-cta-danger {
   background: var(--ms-bad);
   border-color: var(--ms-bad);
-  color: #fff;
+  color: var(--ms-accent-ink);
 }
 .ms-link {
   background: none;
@@ -1190,8 +1191,10 @@ a.ms-cta {
   font-size: 0.72rem;
   font-weight: 500;
 }
-.ms .ms-choice-tag {
-  color: var(--ms-accent);
+.ms .ms-choice-note {
+  margin: -0.4rem 0 0.75rem;
+  color: var(--ms-muted);
+  font-size: 0.85rem;
 }
 @media (max-width: 36rem) {
   .ms-menu-row {
@@ -1508,7 +1511,14 @@ details.ms-danger[open] > summary {
 }
 @media (prefers-reduced-motion: reduce) {
   .ms-card,
-  .ms-card:hover {
+  .ms-card:hover,
+  .ms .ms-card.ms-kc,
+  .ms .ms-card.ms-kc:hover,
+  .ms .ms-card.ms-kc:focus-visible,
+  .ms .ms-btn,
+  .ms .ms-btn:hover,
+  .ms .ms-cta,
+  .ms .ms-cta:hover {
     transition: none;
     transform: none;
   }
@@ -1992,7 +2002,7 @@ a.ms-offer:focus-visible {
   padding: 1.25rem;
   margin-block: 1rem 1.5rem;
   border-radius: var(--ms-radius);
-  background: linear-gradient(135deg, #fff4ea, #fff);
+  background: linear-gradient(135deg, #fff4ea, var(--ms-surface));
   border: 1px solid var(--ms-line);
   min-inline-size: 0;
 }
@@ -2012,7 +2022,7 @@ a.ms-offer:focus-visible {
   padding: 0.5rem 0.875rem;
   border: 1px dashed var(--ms-line);
   border-radius: var(--ms-radius);
-  background: #fff;
+  background: var(--ms-surface);
 }
 .ms-invite-code strong {
   font-size: 1.25rem;
@@ -2035,7 +2045,7 @@ a.ms-offer:focus-visible {
   gap: 0.75rem;
   align-items: baseline;
   padding: 0.5rem 0.75rem;
-  background: #fff;
+  background: var(--ms-surface);
   border: 1px solid var(--ms-line);
   border-radius: var(--ms-radius);
   overflow-wrap: anywhere;
@@ -2059,7 +2069,7 @@ a.ms-offer:focus-visible {
   border: 1px solid var(--ms-line);
   border-radius: var(--ms-radius);
   padding: 1.25rem;
-  background: #fff;
+  background: var(--ms-surface);
   display: grid;
   gap: 0.75rem;
   align-content: start;
@@ -2147,14 +2157,79 @@ body {
 }
 .ms-nav > a:last-child,
 .ms-nav > button:last-child {
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  background: var(--ms-ink);
-  color: var(--ms-paper);
-  border: 0;
-  font: inherit;
+  color: var(--ms-ink);
   font-weight: 700;
-  cursor: pointer;
+}
+
+/* header: delivery area and search lead; account links stay quiet */
+.ms .ms-bar {
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+.ms-bar-find {
+  flex: 1 1 26rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-inline-size: 0;
+}
+.ms .ms-bar-place {
+  display: block;
+  position: relative;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+.ms .ms-bar-place .ms-loc-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  max-inline-size: 15rem;
+  color: var(--ms-ink);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms .ms-bar-place .ms-loc-toggle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-block-end: 2px solid var(--ms-accent);
+}
+.ms-bar-place-k {
+  color: var(--ms-muted);
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+.ms .ms-bar-place .ms-loc-panel {
+  position: absolute;
+  inset-block-start: calc(100% + 0.5rem);
+  inset-inline-start: 0;
+  inline-size: min(22rem, calc(100vw - 2rem));
+  z-index: 30;
+}
+.ms-bar-search {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+}
+.ms .ms-bar-search input {
+  inline-size: 100%;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--ms-line);
+  border-radius: 999px;
+  background: var(--ms-surface);
+  font: inherit;
+  font-size: 0.92rem;
+}
+@media (max-width: 56rem) {
+  .ms-bar-find {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 30rem) {
+  .ms-bar-place-k {
+    display: none;
+  }
 }
 .ms-main {
   max-inline-size: 78rem;
@@ -2447,10 +2522,10 @@ body {
   border: 3px solid var(--ms-surface);
   box-shadow: var(--ms-shadow);
   margin-block-end: 0.35rem;
-  transition: transform 0.2s;
 }
 .ms-circles button:hover .ms-circle {
-  transform: scale(1.05);
+  outline: 3px solid var(--ms-line);
+  outline-offset: 2px;
 }
 .ms-circles button.on .ms-circle {
   outline: 3px solid var(--ms-accent);
@@ -2484,12 +2559,6 @@ body {
   aspect-ratio: 4 / 3;
   border-radius: 0;
   margin: 0;
-}
-.ms-kc-ph .ms-cover img {
-  transition: transform 0.4s;
-}
-.ms-kc:hover .ms-kc-ph .ms-cover img {
-  transform: scale(1.04);
 }
 .ms-kc-price {
   position: absolute;
@@ -2661,8 +2730,9 @@ body {
   border-radius: var(--ms-radius-lg);
 }
 .ms .ms-banner:not(.ms-banner-img) {
-  background: var(--ms-accent);
-  color: var(--ms-accent-ink);
+  background: var(--ms-surface);
+  color: var(--ms-ink);
+  border: 1px solid var(--ms-line);
 }
 .ms .ms-banner h2 {
   font-weight: 800;
@@ -2801,11 +2871,7 @@ body {
 }
 .ms-kgrid .ms-k-plans {
   position: sticky;
-  inset-block-start: 5.25rem;
-  background: var(--ms-surface);
-  border-radius: var(--ms-radius-lg);
-  box-shadow: var(--ms-shadow);
-  padding: 1.35rem;
+  inset-block-start: 5.5rem;
 }
 .ms-kgrid .ms-k-plans > h2 {
   margin-block-start: 0;
@@ -2873,19 +2939,23 @@ body {
   align-items: center;
   line-height: 1.2;
 }
-.ms-day small {
-  font-weight: 500;
-  font-size: 0.7rem;
-  color: var(--ms-muted);
+.ms .ms-day {
+  flex-direction: row;
+  gap: 0.4rem;
+}
+.ms-day-dot {
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-radius: 50%;
+  background: var(--ms-saffron);
 }
 .ms-day.on {
   background: var(--ms-accent);
   border-color: var(--ms-accent);
   color: var(--ms-accent-ink);
 }
-.ms-day.on small {
-  color: inherit;
-  opacity: 0.8;
+.ms-day.on .ms-day-dot {
+  background: var(--ms-accent-ink);
 }
 .ms-mslot h3 {
   display: flex;
