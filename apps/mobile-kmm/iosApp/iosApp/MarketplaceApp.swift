@@ -123,7 +123,7 @@ struct RootView: View {
 
     private var authorised: Bool { sessionState is SessionStateAuthenticated }
 
-    private var updateRequired: Bool { update?.need == UpdateNeed.required }
+    private var updateRequired: Bool { update?.need.code == "REQUIRED" }
 
     /// Opens the App Store; a required update is shown again on return.
     private func openStore() {
@@ -131,7 +131,7 @@ struct RootView: View {
         if let url = URL(string: current.storeUrl), !current.storeUrl.isEmpty {
             UIApplication.shared.open(url)
         }
-        guard current.need == UpdateNeed.required else { update = nil; return }
+        guard current.need.code == "REQUIRED" else { update = nil; return }
         update = nil
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(400))
@@ -219,7 +219,7 @@ struct RootView: View {
             session = sdk.session
             let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
             if let found = try? await sdk.checkForUpdate(platform: "ios", currentVersion: version),
-               found.need != UpdateNeed.upToDate {
+               found.need.code != "UP_TO_DATE" {
                 update = found
             }
         }

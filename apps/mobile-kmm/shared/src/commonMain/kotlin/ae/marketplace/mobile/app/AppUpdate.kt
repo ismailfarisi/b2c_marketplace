@@ -6,7 +6,12 @@ import io.ktor.client.request.get
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-enum class UpdateNeed { UP_TO_DATE, RECOMMENDED, REQUIRED }
+enum class UpdateNeed {
+    UP_TO_DATE, RECOMMENDED, REQUIRED;
+
+    /** Stable spelling for Swift, where multi-word case names are unreliable. */
+    val code: String get() = name
+}
 
 /** What the launch check found, and where to send the user. */
 data class AppUpdate(val need: UpdateNeed, val storeUrl: String)
