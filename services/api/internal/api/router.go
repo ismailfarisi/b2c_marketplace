@@ -112,6 +112,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// a session requires proving you hold it.
 		r.Post("/auth/logout", h.Logout)
 		r.Delete("/me", h.DeleteMe)
+		r.Put("/me/device", h.RegisterDevice)
 
 		r.Post("/orders", h.CreateOrder)
 		r.Get("/orders/{orderId}", h.GetOrder)

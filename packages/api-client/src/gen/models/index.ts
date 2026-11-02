@@ -522,6 +522,8 @@ export * from './reelUploadUploadHeaders';
 export * from './refreshSessionBody';
 export * from './regionalSpec';
 export * from './registerCompanyInput';
+export * from './registerDeviceBody';
+export * from './registerDeviceBodyPlatform';
 export * from './rendition';
 export * from './renditionLabel';
 export * from './renewSubscription201';

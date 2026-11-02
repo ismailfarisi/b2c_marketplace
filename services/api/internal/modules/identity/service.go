@@ -321,12 +321,12 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string, device Devic
 // remains valid until it expires. The access TTL is therefore the real
 // revocation window, which is why it is 15 minutes and not hours.
 func (s *Service) Logout(ctx context.Context, userID, sessionID uuid.UUID, allDevices bool) error {
-	query := `UPDATE sessions SET revoked_at = now()
+	query := `UPDATE sessions SET revoked_at = now(), push_token = NULL
 	           WHERE user_id = $1 AND id = $2 AND revoked_at IS NULL`
 	args := []any{userID, sessionID}
 
 	if allDevices {
-		query = `UPDATE sessions SET revoked_at = now()
+		query = `UPDATE sessions SET revoked_at = now(), push_token = NULL
 		          WHERE user_id = $1 AND revoked_at IS NULL`
 		args = []any{userID}
 	}
@@ -467,4 +467,40 @@ func normalizePhone(raw string) string {
 		}
 	}
 	return b.String()
+}
+
+// SetPushToken attaches this device's push token to its session. The token is
+// taken off any other session first: when a second person signs in on the same
+// phone, the first person's notifications must stop arriving on it.
+func (s *Service) SetPushToken(ctx context.Context, userID, sessionID uuid.UUID, token, platform string) error {
+	token = strings.TrimSpace(token)
+	if len(token) > 4096 {
+		return field("push_token", "too_long", "push token is too long")
+	}
+	switch platform {
+	case "", "ios", "android":
+	default:
+		return field("platform", "invalid", "platform must be ios or android")
+	}
+	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		if token != "" {
+			if _, err := tx.Exec(ctx, `UPDATE sessions SET push_token = NULL
+			    WHERE push_token = $1 AND id <> $2`, token, sessionID); err != nil {
+				return fmt.Errorf("release push token: %w", err)
+			}
+		}
+		tag, err := tx.Exec(ctx, `
+			UPDATE sessions
+			   SET push_token = nullif($3, ''),
+			       device_platform = coalesce(nullif($4, ''), device_platform)
+			 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+			sessionID, userID, token, platform)
+		if err != nil {
+			return fmt.Errorf("set push token: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return httpx.ErrUnauthorized
+		}
+		return nil
+	})
 }

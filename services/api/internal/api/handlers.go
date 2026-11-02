@@ -261,6 +261,34 @@ func (h *Handlers) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// RegisterDevice attaches the app's push token to the calling session.
+// An empty token unregisters (notifications turned off on the phone).
+func (h *Handlers) RegisterDevice(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	sessionID, ok := httpx.SessionIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	var body struct {
+		PushToken string `json:"push_token"`
+		Platform  string `json:"platform"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if err := h.Identity.SetPushToken(r.Context(), userID, sessionID, body.PushToken, body.Platform); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- orders -----------------------------------------------------------------
 
 type createOrderBody struct {

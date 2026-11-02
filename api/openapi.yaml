@@ -202,6 +202,31 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /me/device:
+    put:
+      tags: [me]
+      operationId: registerDevice
+      summary: Attach this device's push token to the current session
+      description: |
+        Called by the apps after sign-in and whenever FCM/APNs rotate the
+        token. An empty push_token unregisters. The token is removed from any
+        other session first, so a shared phone stops receiving the previous
+        account's notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [push_token]
+              properties:
+                push_token: { type: string, maxLength: 4096 }
+                platform: { type: string, enum: [ios, android] }
+      responses:
+        "204": { description: Registered }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /me/addresses:
     get:
       tags: [me]

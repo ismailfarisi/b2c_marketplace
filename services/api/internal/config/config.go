@@ -32,7 +32,17 @@ type Config struct {
 	WhatsAppAccessToken   string
 	WhatsAppPhoneNumberID string
 	WhatsAppAPIVersion    string
-	OTPTTL                time.Duration
+
+	// Push. FCM (Android) takes a service-account JSON key; APNs (iOS) takes
+	// an Apple .p8 key's PEM text, its key id, the team id and the bundle id.
+	// Either half switches on by itself.
+	FCMCredentialsJSON string
+	APNsKeyP8          string
+	APNsKeyID          string
+	APNsTeamID         string
+	APNsTopic          string
+	APNsSandbox        bool
+	OTPTTL             time.Duration
 
 	S3Endpoint string
 	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
@@ -150,6 +160,12 @@ func Load() (Config, error) {
 		WhatsAppAccessToken:   optional("WHATSAPP_ACCESS_TOKEN", ""),
 		WhatsAppPhoneNumberID: optional("WHATSAPP_PHONE_NUMBER_ID", ""),
 		WhatsAppAPIVersion:    optional("WHATSAPP_API_VERSION", "v21.0"),
+		FCMCredentialsJSON:    optional("FCM_CREDENTIALS_JSON", ""),
+		APNsKeyP8:             optional("APNS_KEY_P8", ""),
+		APNsKeyID:             optional("APNS_KEY_ID", ""),
+		APNsTeamID:            optional("APNS_TEAM_ID", ""),
+		APNsTopic:             optional("APNS_TOPIC", ""),
+		APNsSandbox:           boolean("APNS_SANDBOX", false),
 		OTPTTL:                duration("OTP_TTL", "5m"),
 
 		S3Endpoint:       optional("S3_ENDPOINT", ""),
@@ -191,6 +207,11 @@ func Load() (Config, error) {
 
 	if (cfg.WhatsAppAccessToken == "") != (cfg.WhatsAppPhoneNumberID == "") {
 		problems = append(problems, "WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set together")
+	}
+
+	apns := []string{cfg.APNsKeyP8, cfg.APNsKeyID, cfg.APNsTeamID, cfg.APNsTopic}
+	if set := countSet(apns); set != 0 && set != len(apns) {
+		problems = append(problems, "APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID and APNS_TOPIC must be set together")
 	}
 
 	// Guardrails that only apply once the process is actually deployed.
@@ -287,4 +308,14 @@ func placeholderIn(secret string) string {
 		}
 	}
 	return ""
+}
+
+func countSet(values []string) int {
+	n := 0
+	for _, v := range values {
+		if v != "" {
+			n++
+		}
+	}
+	return n
 }

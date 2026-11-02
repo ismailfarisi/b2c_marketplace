@@ -39,6 +39,7 @@ import type {
   ListAddresses200,
   NotFoundResponse,
   Problem,
+  RegisterDeviceBody,
   UnauthorizedResponse,
   UnprocessableEntityResponse,
   User
@@ -181,6 +182,74 @@ export const useDeleteCurrentUser = <TError = UnauthorizedResponse | Problem,
       > => {
 
       const mutationOptions = getDeleteCurrentUserMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * Called by the apps after sign-in and whenever FCM/APNs rotate the
+token. An empty push_token unregisters. The token is removed from any
+other session first, so a shared phone stops receiving the previous
+account's notifications.
+
+ * @summary Attach this device's push token to the current session
+ */
+export const registerDevice = (
+    registerDeviceBody: RegisterDeviceBody,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me/device`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: registerDeviceBody
+    },
+      );
+    }
+  
+
+
+export const getRegisterDeviceMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerDevice>>, TError,{data: RegisterDeviceBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof registerDevice>>, TError,{data: RegisterDeviceBody}, TContext> => {
+
+const mutationKey = ['registerDevice'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerDevice>>, {data: RegisterDeviceBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerDevice(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof registerDevice>>>
+    export type RegisterDeviceMutationBody = RegisterDeviceBody
+    export type RegisterDeviceMutationError = UnauthorizedResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary Attach this device's push token to the current session
+ */
+export const useRegisterDevice = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerDevice>>, TError,{data: RegisterDeviceBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerDevice>>,
+        TError,
+        {data: RegisterDeviceBody},
+        TContext
+      > => {
+
+      const mutationOptions = getRegisterDeviceMutationOptions(options);
 
       return useMutation(mutationOptions);
     }

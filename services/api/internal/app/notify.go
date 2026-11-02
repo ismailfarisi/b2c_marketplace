@@ -54,6 +54,29 @@ func BuildNotify(cfg config.Config, pool *pgxpool.Pool) *notify.Service {
 		}
 	}
 
+	// Push switches on per platform as soon as its key is configured.
+	push := notify.Push{Pool: pool}
+	if cfg.FCMCredentialsJSON != "" {
+		fcm, err := notify.NewFCM(context.Background(), []byte(cfg.FCMCredentialsJSON))
+		if err != nil {
+			slog.Error("push: FCM disabled", "error", err)
+		} else {
+			push.FCM = fcm
+		}
+	}
+	if cfg.APNsKeyP8 != "" {
+		apns, err := notify.NewAPNs([]byte(cfg.APNsKeyP8), cfg.APNsKeyID, cfg.APNsTeamID,
+			cfg.APNsTopic, cfg.APNsSandbox)
+		if err != nil {
+			slog.Error("push: APNs disabled", "error", err)
+		} else {
+			push.APNs = apns
+		}
+	}
+	if push.FCM != nil || push.APNs != nil {
+		providers[notify.ChannelPush] = push
+	}
+
 	loc, err := time.LoadLocation(cfg.DefaultTimezone)
 	if err != nil {
 		// A missing tzdata is not a reason to refuse to boot, but it is a reason
