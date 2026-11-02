@@ -79,7 +79,7 @@ fun SignInGate(
     @StringRes title: Int = R.string.signin_title,
     @StringRes why: Int = R.string.signin_why,
     /** Cream and Chilli Red, for gates over the light meals tabs. */
-    light: Boolean = false,
+    light: Boolean = true,
 ) {
     val ink = if (light) MealsInk else Color.White
     val accent = if (light) MealsChilli else Accent
@@ -269,7 +269,7 @@ private fun Field(
     imeAction: ImeAction,
     onImeAction: () -> Unit,
     focusRequester: FocusRequester,
-    light: Boolean = false,
+    light: Boolean = true,
 ) {
     val ink = if (light) MealsInk else Color.White
     Box(

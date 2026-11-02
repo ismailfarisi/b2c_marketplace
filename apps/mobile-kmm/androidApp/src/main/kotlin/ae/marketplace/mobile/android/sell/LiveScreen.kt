@@ -80,13 +80,13 @@ fun LiveStep(
                 Column {
                     Text(
                         text = phase.headline,
-                        color = Color.White,
+                        color = Palette.Text,
                         fontSize = 19.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
                         text = phase.detail,
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = Palette.Text.copy(alpha = 0.55f),
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 4.dp),
                     )
@@ -144,7 +144,7 @@ fun LiveStep(
                     // it in two hours from writing a one-star review about a
                     // working system.
                     text = state.reviewNote,
-                    color = Color.White.copy(alpha = 0.35f),
+                    color = Palette.Text.copy(alpha = 0.35f),
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 24.dp),
                 )
@@ -194,7 +194,7 @@ fun LiveStep(
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(stringResource(R.string.sell_done), color = Color.White, fontSize = 15.sp)
+                Text(stringResource(R.string.sell_done), color = Palette.Text, fontSize = 15.sp)
             }
         }
     }
@@ -206,13 +206,13 @@ private fun StatRow(label: String, value: Long?) {
         Modifier.fillMaxWidth().padding(vertical = 7.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+        Text(label, color = Palette.Text.copy(alpha = 0.6f), fontSize = 14.sp)
         Text(
             // A dash, not a zero, before the first status lands. Zero is a
             // measurement; a dash is "not measured yet", and a seller who reads
             // an unfetched zero as a real one concludes their reel died.
             text = value?.toString() ?: "—",
-            color = Color.White,
+            color = Palette.Text,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
         )
@@ -321,19 +321,19 @@ private fun TrustDocumentRow(
             .border(1.dp, Line, RoundedCornerShape(10.dp))
             .padding(horizontal = 14.dp, vertical = 14.dp),
     ) {
-        Text(trust.label, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+        Text(trust.label, color = Palette.Text.copy(alpha = 0.75f), fontSize = 13.sp)
 
         when (state.phase) {
             DocumentPhase.Uploading -> Text(
                 text = stringResource(R.string.trust_uploading),
-                color = Color.White.copy(alpha = 0.45f),
+                color = Palette.Text.copy(alpha = 0.45f),
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 8.dp),
             )
 
             DocumentPhase.Submitted -> Text(
                 text = stringResource(R.string.trust_submitted),
-                color = Color.White.copy(alpha = 0.45f),
+                color = Palette.Text.copy(alpha = 0.45f),
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 8.dp),
             )

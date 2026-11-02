@@ -121,6 +121,7 @@ fun ReelSurface(
         if (!painted) {
             Poster(
                 url = posterUrl.ifEmpty { null },
+                placeholder = ae.marketplace.mobile.android.ui.Video.Surface,
                 lqip = lqip.ifEmpty { null },
                 // Crop, matching RESIZE_MODE_ZOOM. Any other scale makes the
                 // poster jump to a different framing at the moment the first

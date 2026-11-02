@@ -12,23 +12,31 @@ import SwiftUI
 /// The reasoning behind the choices is in
 /// `androidApp/.../ui/Theme.kt` and is not repeated here.
 enum Palette {
+    /// Warm cream page, the same paper as the meals screens and the web.
+    static let ink = Color(red: 1.0, green: 0.973, blue: 0.941)
+    /// Cards and fields: cream-tinted, never pure white.
+    static let surface = Color(red: 1.0, green: 0.988, blue: 0.969)
+    static let line = Color(red: 0.941, green: 0.886, blue: 0.824)
+
+    /// Chilli Red, dark enough for white text (AA).
+    static let accent = Color(red: 0.769, green: 0.231, blue: 0.086)
+
+    static let good = Color(red: 0.153, green: 0.424, blue: 0.267)
+    static let bad = Color(red: 0.749, green: 0.161, blue: 0.129)
+
+    static let text = Color(red: 0.118, green: 0.078, blue: 0.063)
+    static let textMuted = Color(red: 0.463, green: 0.404, blue: 0.357)
+    static let textFaint = Color(red: 0.659, green: 0.596, blue: 0.537)
+    static let textGhost = Color(red: 0.788, green: 0.733, blue: 0.682)
+}
+
+/// The full-bleed video surfaces (feed, reel detail, camera) stay dark: text
+/// there sits over an unknown video frame. Accent is the same Chilli Red.
+enum Video {
     /// Not pure black: an OLED true black makes scroll edges invisible.
     static let ink = Color(red: 0.055, green: 0.055, blue: 0.063)
     static let surface = Color(red: 0.110, green: 0.110, blue: 0.125)
-    static let line = Color(red: 0.165, green: 0.165, blue: 0.180)
-
-    /// Burnt orange rather than blue — it has to survive being drawn over
-    /// arbitrary video, and blue disappears against the sky in roughly half the
-    /// car reels on this platform.
-    static let accent = Color(red: 0.706, green: 0.396, blue: 0.165)
-
-    static let good = Color(red: 0.298, green: 0.686, blue: 0.314)
-    static let bad = Color(red: 0.851, green: 0.325, blue: 0.310)
-
     static let text = Color.white
-    static let textMuted = Color.white.opacity(0.55)
-    static let textFaint = Color.white.opacity(0.38)
-    static let textGhost = Color.white.opacity(0.25)
 }
 
 enum Space {

@@ -96,13 +96,13 @@ fun VerticalStep(
             when {
                 failure != null -> FailureBlock(failure = failure, onRetry = onRetry)
                 !state.verticalsLoaded -> CircularProgressIndicator(
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Palette.Text.copy(alpha = 0.7f),
                     strokeWidth = 2.dp,
                     modifier = Modifier.size(24.dp),
                 )
                 else -> Text(
                     text = stringResource(R.string.sell_nothing_sellable),
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = Palette.Text.copy(alpha = 0.55f),
                     fontSize = 13.sp,
                 )
             }
@@ -159,10 +159,10 @@ private fun VerticalTile(
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
-        Text(glyph(vertical.icon), fontSize = 20.sp, color = if (active) Accent else Color.White)
+        Text(glyph(vertical.icon), fontSize = 20.sp, color = if (active) Accent else Palette.Text)
         Text(
             text = vertical.label,
-            color = Color.White,
+            color = Palette.Text,
             fontSize = 14.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
             modifier = Modifier.padding(top = 22.dp),
@@ -256,7 +256,7 @@ fun DetailsStep(
             ) {
                 Text(
                     text = trust.label,
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = Palette.Text.copy(alpha = 0.75f),
                     fontSize = 13.sp,
                 )
 
@@ -290,7 +290,7 @@ fun DetailsStep(
                 // just filled will assume they wasted their time.
                 Text(
                     text = stringResource(R.string.sell_trust_doc_later),
-                    color = Color.White.copy(alpha = 0.35f),
+                    color = Palette.Text.copy(alpha = 0.35f),
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -315,14 +315,14 @@ private fun FieldInput(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = field.label.uppercase(),
-                color = Color.White.copy(alpha = 0.5f),
+                color = Palette.Text.copy(alpha = 0.5f),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
             )
             if (field.unit.isNotEmpty()) {
                 Text(
                     text = " · ${field.unit}",
-                    color = Color.White.copy(alpha = 0.35f),
+                    color = Palette.Text.copy(alpha = 0.35f),
                     fontSize = 10.sp,
                 )
             }
@@ -355,7 +355,7 @@ private fun FieldInput(
         if (issue == null && field.hint.isNotEmpty()) {
             Text(
                 text = field.hint,
-                color = Color.White.copy(alpha = 0.35f),
+                color = Palette.Text.copy(alpha = 0.35f),
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 5.dp),
             )
@@ -380,13 +380,13 @@ private fun TextRow(field: SellField, value: String, onValue: (String) -> Unit) 
             .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
         if (value.isEmpty() && field.placeholder.isNotEmpty()) {
-            Text(field.placeholder, color = Color.White.copy(alpha = 0.25f), fontSize = 15.sp)
+            Text(field.placeholder, color = Palette.Text.copy(alpha = 0.25f), fontSize = 15.sp)
         }
         BasicTextField(
             value = value,
             onValueChange = onValue,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+            textStyle = TextStyle(color = Palette.Text, fontSize = 15.sp),
             cursorBrush = SolidColor(Accent),
             keyboardOptions = KeyboardOptions(keyboardType = keyboard),
             modifier = Modifier.fillMaxWidth(),
@@ -414,7 +414,7 @@ private fun SelectRow(field: SellField, value: String, onValue: (String) -> Unit
                     ) {
                         Text(
                             option.label,
-                            color = if (active) Color.White else Color.White.copy(alpha = 0.75f),
+                            color = if (active) Color.White else Palette.Text.copy(alpha = 0.75f),
                             fontSize = 12.sp,
                         )
                     }
@@ -454,7 +454,7 @@ private fun LookupRow(
         if (query.isEmpty()) {
             Text(
                 text = chosen.ifEmpty { field.placeholder },
-                color = if (chosen.isEmpty()) Color.White.copy(alpha = 0.25f) else Color.White,
+                color = if (chosen.isEmpty()) Palette.Text.copy(alpha = 0.25f) else Palette.Text,
                 fontSize = 15.sp,
             )
         }
@@ -462,7 +462,7 @@ private fun LookupRow(
             value = query,
             onValueChange = { query = it; onQuery(it) },
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+            textStyle = TextStyle(color = Palette.Text, fontSize = 15.sp),
             cursorBrush = SolidColor(Accent),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -482,7 +482,7 @@ private fun LookupRow(
             items(results) { option ->
                 Text(
                     text = option.label,
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = Palette.Text.copy(alpha = 0.9f),
                     fontSize = 14.sp,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -582,7 +582,7 @@ fun ClockStep(
 
         Text(
             text = stringResource(R.string.sell_emirate_area),
-            color = Color.White.copy(alpha = 0.5f),
+            color = Palette.Text.copy(alpha = 0.5f),
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(top = 22.dp, bottom = 4.dp),
@@ -600,12 +600,12 @@ fun ClockStep(
                 Box(
                     Modifier
                         .padding(start = 2.dp)
-                        .background(if (active) Accent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))
+                        .background(if (active) Accent else Palette.Text.copy(alpha = 0.2f), RoundedCornerShape(50))
                         .padding(4.dp)
                 )
                 Text(
                     text = stringResource(place.labelRes),
-                    color = if (active) Color.White else Color.White.copy(alpha = 0.75f),
+                    color = if (active) Color.White else Palette.Text.copy(alpha = 0.75f),
                     fontSize = 15.sp,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 )
@@ -636,11 +636,11 @@ private fun ClockCard(clock: ClockOption, active: Boolean, onClick: () -> Unit) 
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
-        Text(clock.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(clock.label, color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
         if (clock.detail.isNotEmpty()) {
             Text(
                 clock.detail,
-                color = Color.White.copy(alpha = 0.5f),
+                color = Palette.Text.copy(alpha = 0.5f),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )
@@ -656,18 +656,18 @@ private fun ClockStatement(clock: ClockOption) {
             .background(Accent.copy(alpha = 0.10f), RoundedCornerShape(10.dp))
             .padding(14.dp),
     ) {
-        Text(clock.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(clock.label, color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
         if (clock.detail.isNotEmpty()) {
             Text(
                 clock.detail,
-                color = Color.White.copy(alpha = 0.55f),
+                color = Palette.Text.copy(alpha = 0.55f),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
         Text(
             text = stringResource(R.string.sell_only_term),
-            color = Color.White.copy(alpha = 0.33f),
+            color = Palette.Text.copy(alpha = 0.33f),
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 8.dp),
         )
@@ -697,14 +697,14 @@ internal fun StepScaffold(
         ) {
             Text(
                 text = "‹",
-                color = Color.White,
+                color = Palette.Text,
                 fontSize = 26.sp,
                 modifier = Modifier.clickable(onClick = onBack).padding(end = 14.dp),
             )
             Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(title, color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 if (subtitle.isNotEmpty()) {
-                    Text(subtitle, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                    Text(subtitle, color = Palette.Text.copy(alpha = 0.45f), fontSize = 12.sp)
                 }
             }
         }

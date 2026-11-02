@@ -36,50 +36,52 @@ import androidx.compose.ui.unit.sp
  */
 object Palette {
 
-    /** The page. Not pure black: an OLED true black makes scroll edges invisible. */
-    val Ink = Color(0xFF0E0E10)
+    /** The page: warm cream, the same paper as the meals screens and the web. */
+    val Ink = Color(0xFFFFF8F0)
 
-    /** One step up, for anything sitting on the page — cards, thumbnails, fields. */
-    val Surface = Color(0xFF1C1C20)
+    /** One step up, for anything sitting on the page — cards, thumbnails, fields. Cream-tinted, never pure white. */
+    val Surface = Color(0xFFFFFCF7)
 
     /** Hairlines and field borders. */
-    val Line = Color(0xFF2A2A2E)
+    val Line = Color(0xFFF0E2D2)
 
-    /**
-     * The single accent, used for price, primary actions and focus.
-     *
-     * A burnt orange rather than a blue. It has to survive being drawn over
-     * arbitrary video, and blue disappears against the sky in roughly half the
-     * car reels on this platform.
-     */
-    val Accent = Color(0xFFB4652A)
+    /** Chilli Red: price, primary actions and focus. Dark enough for white text (AA). */
+    val Accent = Color(0xFFC43B16)
 
-    /** Live, approved, in stock. */
-    val Good = Color(0xFF4CAF50)
+    /** Live, approved, in stock (leaf green). */
+    val Good = Color(0xFF276C44)
 
     /** Rejected, failed, expired. Distinct from [Accent], which is not an alarm. */
-    val Bad = Color(0xFFD9534F)
+    val Bad = Color(0xFFBF2921)
 
     /** Text on [Ink]. */
-    val Text = Color.White
+    val Text = Color(0xFF1E1410)
 
     /** The second line of a row: attributes, distances, timestamps. */
-    val TextMuted = Color.White.copy(alpha = 0.55f)
+    val TextMuted = Color(0xFF76675B)
 
     /** Labels, counts, section headers — present but not read unless looked for. */
-    val TextFaint = Color.White.copy(alpha = 0.38f)
+    val TextFaint = Color(0xFFA89889)
 
     /** Placeholder text inside an empty field. */
-    val TextGhost = Color.White.copy(alpha = 0.25f)
+    val TextGhost = Color(0xFFC9BBAE)
 
-    /**
-     * A scrim for content over video.
-     *
-     * Overlay text is illegible over a bright frame without one, and the reel
-     * overlay is the only screen in the product where the background is not
-     * under our control.
-     */
+    /** A scrim for content over a photo or video. */
     val Scrim = Color.Black.copy(alpha = 0.45f)
+}
+
+/**
+ * The full-bleed video surfaces (feed, reel detail, camera) stay dark: text
+ * there sits over an unknown video frame. Accent is the same Chilli Red.
+ */
+object Video {
+    /** Not pure black: an OLED true black makes scroll edges invisible. */
+    val Ink = Color(0xFF0E0E10)
+    val Surface = Color(0xFF1C1C20)
+    val Line = Color(0xFF2A2A2E)
+    val Accent = Palette.Accent
+    val Text = Color.White
+    val TextMuted = Color.White.copy(alpha = 0.55f)
 }
 
 /**

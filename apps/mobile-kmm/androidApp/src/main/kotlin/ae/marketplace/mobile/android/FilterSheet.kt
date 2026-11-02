@@ -1,6 +1,7 @@
 package ae.marketplace.mobile.android
 
 import ae.marketplace.mobile.android.ui.Palette
+import ae.marketplace.mobile.android.ui.Video
 import ae.marketplace.mobile.feed.FeedUiState
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -31,7 +32,7 @@ import androidx.compose.ui.unit.sp
 // Was a private copy of the same hex in four files, two of which had drifted.
 // See ae.marketplace.mobile.android.ui.Palette.
 private val Accent = Palette.Accent
-private val Sheet = Palette.Surface
+private val Sheet = Video.Surface
 
 /**
  * A named point the feed can be served for.

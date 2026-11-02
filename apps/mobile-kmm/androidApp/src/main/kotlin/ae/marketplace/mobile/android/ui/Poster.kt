@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -57,10 +58,11 @@ fun Poster(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     corner: androidx.compose.ui.unit.Dp = Shape.Thumb,
+    placeholder: Color = Palette.Surface,
 ) {
     val shape = RoundedCornerShape(corner)
 
-    Box(modifier.clip(shape).background(Palette.Surface)) {
+    Box(modifier.clip(shape).background(placeholder)) {
         val blur = rememberBlur(lqip)
         if (blur != null) {
             Image(

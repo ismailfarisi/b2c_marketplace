@@ -182,7 +182,7 @@ fun FeedEmptyState(
             // bare TextButton inherits the theme's primary colour and this app
             // never set one. Reusing the component gets the palette, the
             // isRetryable rule and the button style that everything else uses.
-            error != null -> FailureBlock(failure = error, onRetry = onRetry)
+            error != null -> FailureBlock(failure = error, onRetry = onRetry, dark = true)
 
             else -> Text(
                 when (reason) {

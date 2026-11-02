@@ -45,7 +45,7 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -145,7 +145,20 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    primary = Palette.Accent,
+                    onPrimary = androidx.compose.ui.graphics.Color.White,
+                    background = Palette.Ink,
+                    onBackground = Palette.Text,
+                    surface = Palette.Surface,
+                    onSurface = Palette.Text,
+                    surfaceVariant = Palette.Line,
+                    onSurfaceVariant = Palette.TextMuted,
+                    outline = Palette.Line,
+                    error = Palette.Bad,
+                ),
+            ) {
                 var vm by remember { mutableStateOf<FeedViewModel?>(null) }
 
                 LaunchedEffect(Unit) {
@@ -380,7 +393,6 @@ class MainActivity : ComponentActivity() {
                                     Destination.Saved -> R.string.saved_signin_why
                                     else -> R.string.signin_why
                                 },
-                                light = destination == Destination.MyMeals,
                             )
                         } else when (destination) {
                             Destination.Feed -> Unit // drawn above, always composed

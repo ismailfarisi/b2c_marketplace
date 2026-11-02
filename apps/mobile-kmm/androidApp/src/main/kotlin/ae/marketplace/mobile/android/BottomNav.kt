@@ -78,7 +78,7 @@ fun BottomNav(
     onSelect: (Destination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val light = selected == Destination.Meals || selected == Destination.MyMeals
+    val light = selected != Destination.Feed
     Column(
         modifier
             .fillMaxWidth()

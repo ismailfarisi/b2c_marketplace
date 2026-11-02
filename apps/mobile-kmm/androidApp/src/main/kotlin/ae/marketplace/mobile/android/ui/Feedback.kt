@@ -76,6 +76,8 @@ fun FailureBlock(
     failure: Failure,
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    /** Over the dark video surfaces: white text instead of ink. */
+    dark: Boolean = false,
 ) {
     Column(
         modifier
@@ -85,13 +87,13 @@ fun FailureBlock(
     ) {
         Text(
             text = failure.words(),
-            color = Palette.TextMuted,
+            color = if (dark) Video.TextMuted else Palette.TextMuted,
             fontSize = Type.Secondary,
             textAlign = TextAlign.Center,
         )
         if (onRetry != null && failure.isRetryable) {
             Box(Modifier.padding(top = Space.Large)) {
-                SecondaryButton(stringResource(R.string.action_retry), onRetry)
+                SecondaryButton(stringResource(R.string.action_retry), onRetry, dark = dark)
             }
         }
         // The request id, quietly, for a 500 only.
@@ -103,7 +105,7 @@ fun FailureBlock(
         (failure as? Failure.Server)?.requestId?.let {
             Text(
                 text = it,
-                color = Palette.TextFaint,
+                color = if (dark) Video.TextMuted else Palette.TextFaint,
                 fontSize = Type.Caption,
                 modifier = Modifier.padding(top = Space.Medium),
             )
@@ -205,15 +207,15 @@ fun LoadingBlock(modifier: Modifier = Modifier, inline: Boolean = false) {
 }
 
 @Composable
-fun SecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, dark: Boolean = false) {
     Box(
         modifier
-            .border(1.dp, Palette.Line, RoundedCornerShape(Shape.Field))
+            .border(1.dp, if (dark) Video.Line else Palette.Line, RoundedCornerShape(Shape.Field))
             .clickable(onClick = onClick)
             .defaultMinSize(minHeight = Space.Touch)
             .padding(horizontal = Space.XL, vertical = Space.Medium),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Palette.Text, fontSize = Type.Secondary)
+        Text(label, color = if (dark) Video.Text else Palette.Text, fontSize = Type.Secondary)
     }
 }

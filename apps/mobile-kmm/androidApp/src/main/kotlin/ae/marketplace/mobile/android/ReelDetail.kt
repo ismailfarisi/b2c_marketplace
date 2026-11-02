@@ -3,6 +3,7 @@ package ae.marketplace.mobile.android
 import ae.marketplace.mobile.android.ui.FailureBlock
 import ae.marketplace.mobile.android.ui.LoadingBlock
 import ae.marketplace.mobile.android.ui.Palette
+import ae.marketplace.mobile.android.ui.Video
 import ae.marketplace.mobile.android.ui.Space
 import ae.marketplace.mobile.feed.FeedViewModel
 import ae.marketplace.mobile.model.ResolvedAction
@@ -82,7 +83,7 @@ fun ReelDetail(
                 // A saved reel that 404s is the common case here — taken down,
                 // sold, expired — and NotFound is deliberately not retryable, so
                 // this renders without a button that could not help.
-                FailureBlock(focused.error!!, onRetry = viewModel::retryReel)
+                FailureBlock(focused.error!!, onRetry = viewModel::retryReel, dark = true)
             }
 
             item != null -> {
@@ -144,7 +145,7 @@ fun ReelDetail(
         // screen adds has to go on the other side.
         Text(
             text = "✕",
-            color = Palette.Text,
+            color = Video.Text,
             fontSize = 24.sp,
             modifier = Modifier
                 .align(Alignment.TopEnd)

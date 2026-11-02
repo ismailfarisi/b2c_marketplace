@@ -19,7 +19,7 @@ struct SignInGate: View {
     var titleKey = "signin_title"
     var whyKey = "signin_why"
     /// Cream and Chilli Red, for gates over the light meals tabs.
-    var light = false
+    var light = true
 
     private var ink: Color { light ? Warm.ink : Palette.text }
     private var accent: Color { light ? Warm.chilli : Palette.accent }

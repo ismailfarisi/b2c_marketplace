@@ -143,6 +143,7 @@ struct RootView: View {
 
                 if destination != .feed {
                     tab(vm: vm, me: me)
+                        .environment(\.colorScheme, .light)
                 }
 
                 // One reel, over the tabs and under messaging. Under, because
@@ -256,14 +257,14 @@ struct RootView: View {
             // The token store is still being read. Neither the gate nor the
             // account screen is right yet, and picking one shows the wrong
             // screen to a returning viewer for a frame.
-            ProgressView().tint(.white)
+            ProgressView().tint(Palette.accent)
         } else if needsAccount && !authorised, let gate = signInViewModel {
             // Saved and Sell open from the feed, so cancelling returns there.
             SignInGate(viewModel: gate, onCancel: {
                 gate.reset()
                 destinationRaw = (destination == .saved || destination == .sell)
                     ? Destination.feed.rawValue : Destination.meals.rawValue
-            }, titleKey: gateCopy.0, whyKey: gateCopy.1, light: destination == .myMeals)
+            }, titleKey: gateCopy.0, whyKey: gateCopy.1)
         } else {
             switch destination {
             case .meals, .myMeals:

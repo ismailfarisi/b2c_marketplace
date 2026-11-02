@@ -57,7 +57,7 @@ struct BottomNav: View {
     private static let muted = Color(red: 0.463, green: 0.404, blue: 0.357)
     private static let hairline = Color(red: 0.941, green: 0.886, blue: 0.824)
 
-    private var light: Bool { selected == .meals || selected == .myMeals }
+    private var light: Bool { selected != .feed }
 
     var body: some View {
         HStack(spacing: 0) {
