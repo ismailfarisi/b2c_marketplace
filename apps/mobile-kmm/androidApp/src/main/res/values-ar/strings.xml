@@ -406,4 +406,10 @@
     <string name="saved_signin_why">الفيديوهات التي تحفظها تبقى في حسابك، فتجدها على أي هاتف.</string>
     <string name="feed_more">المزيد من سوق الفيديو</string>
     <string name="push_channel_name">تحديثات الوجبات والتوصيل</string>
+    <string name="update_title">يتوفر تحديث</string>
+    <string name="update_body">يتوفر إصدار أحدث من التطبيق.</string>
+    <string name="update_required_title">التحديث مطلوب</string>
+    <string name="update_required_body">لم يعد هذا الإصدار مدعومًا. يرجى التحديث لمتابعة الطلب.</string>
+    <string name="update_action">تحديث</string>
+    <string name="update_later">لاحقًا</string>
 </resources>

@@ -476,4 +476,10 @@
     <string name="saved_signin_why">Videos you save stay on your account, so they are there on any phone.</string>
     <string name="feed_more">More from the video marketplace</string>
     <string name="push_channel_name">Meal and delivery updates</string>
+    <string name="update_title">Update available</string>
+    <string name="update_body">A newer version of the app is available.</string>
+    <string name="update_required_title">Update required</string>
+    <string name="update_required_body">This version is no longer supported. Please update to keep ordering.</string>
+    <string name="update_action">Update</string>
+    <string name="update_later">Later</string>
 </resources>

@@ -169,6 +169,10 @@ func run() error {
 	adminSvc := admin.NewService(pool)
 
 	handlers := &api.Handlers{
+		Apps: api.AppReleases{
+			Android: api.AppRelease{MinVersion: cfg.AppMinVersionAndroid, LatestVersion: cfg.AppLatestVersionAndroid, StoreURL: cfg.AppStoreURLAndroid},
+			IOS:     api.AppRelease{MinVersion: cfg.AppMinVersionIOS, LatestVersion: cfg.AppLatestVersionIOS, StoreURL: cfg.AppStoreURLIOS},
+		},
 		// Audited, for the customer's own account deletion.
 		Identity: identitySvc.WithAuditor(adminSvc),
 		Ordering: orderingSvc,

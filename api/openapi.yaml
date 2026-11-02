@@ -27,6 +27,7 @@ servers:
 
 tags:
   - name: health
+  - name: app
   - name: companies
     description: Office lunch accounts billed to an employer.
   - name: auth
@@ -171,6 +172,23 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   # -------------------------------------------------------------------- me --
+  /app/config:
+    get:
+      tags: [app]
+      operationId: getAppConfig
+      security: []
+      summary: Minimum and latest mobile app versions
+      description: |
+        Read by the apps at launch. Below min_version the app blocks with an
+        update prompt; below latest_version it offers one. Empty values mean
+        no prompt.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppReleases" }
+
   /me:
     get:
       tags: [me]
@@ -4715,6 +4733,19 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+    AppRelease:
+      type: object
+      required: [min_version, latest_version, store_url]
+      properties:
+        min_version: { type: string, example: "1.2.0" }
+        latest_version: { type: string, example: "1.4.0" }
+        store_url: { type: string }
+    AppReleases:
+      type: object
+      required: [android, ios]
+      properties:
+        android: { $ref: "#/components/schemas/AppRelease" }
+        ios: { $ref: "#/components/schemas/AppRelease" }
     CompanyPolicy:
       type: object
       required: [weekdays, slots, meal_cap_minor]

@@ -28,3 +28,18 @@ the manifest's `autoVerify` intent filter uses it.
 
 **iOS:** add the Associated Domains capability with `applinks:<web host>` to the
 app target, alongside the Push Notifications capability from `docs/push.md`.
+
+# Update prompt
+
+`GET /v1/app/config` returns the minimum and latest release per platform. The
+apps check once at launch: below the minimum they show a blocking "Update
+required" dialog, below the latest a dismissible "Update available" one. Any
+failure reads as up to date, so a server outage never locks users out.
+
+| API env | Meaning |
+|---|---|
+| `APP_MIN_VERSION_ANDROID` / `APP_MIN_VERSION_IOS` | Oldest supported `versionName` / `CFBundleShortVersionString` |
+| `APP_LATEST_VERSION_ANDROID` / `APP_LATEST_VERSION_IOS` | Current store release |
+| `APP_STORE_URL_ANDROID` / `APP_STORE_URL_IOS` | Store page (Android defaults to the Play listing for the package) |
+
+All empty means no prompt.

@@ -222,6 +222,14 @@ class MainActivity : ComponentActivity() {
                     else { route = Route.None; destination = Destination.Meals }
                 }
 
+                var update by remember { mutableStateOf<ae.marketplace.mobile.app.AppUpdate?>(null) }
+                LaunchedEffect(Unit) {
+                    val sdk = (application as MarketplaceApp).sdk.await()
+                    update = sdk.checkForUpdate("android", BuildConfig.VERSION_NAME)
+                        .takeIf { it.need != ae.marketplace.mobile.app.UpdateNeed.UP_TO_DATE }
+                }
+                update?.let { u -> UpdatePrompt(u, onLater = { update = null }) }
+
                 LaunchedEffect(Unit) {
                     val sdk = (application as MarketplaceApp).sdk.await()
                     meVm = sdk.createMeViewModel().also {
@@ -668,4 +676,40 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/** Old-version prompt: blocking below the minimum release, dismissible below the latest. */
+@androidx.compose.runtime.Composable
+private fun UpdatePrompt(update: ae.marketplace.mobile.app.AppUpdate, onLater: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val required = update.need == ae.marketplace.mobile.app.UpdateNeed.REQUIRED
+    val res = androidx.compose.ui.res.stringResource(if (required) R.string.update_required_body else R.string.update_body)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!required) onLater() },
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = !required,
+            dismissOnClickOutside = !required,
+        ),
+        title = {
+            androidx.compose.material3.Text(
+                androidx.compose.ui.res.stringResource(if (required) R.string.update_required_title else R.string.update_title),
+            )
+        },
+        text = { androidx.compose.material3.Text(res) },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                val url = update.storeUrl.ifEmpty { "https://play.google.com/store/apps/details?id=${context.packageName}" }
+                runCatching {
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                }
+            }) { androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.update_action)) }
+        },
+        dismissButton = if (required) null else {
+            {
+                androidx.compose.material3.TextButton(onClick = onLater) {
+                    androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.update_later))
+                }
+            }
+        },
+    )
 }

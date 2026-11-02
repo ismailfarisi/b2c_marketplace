@@ -35,6 +35,8 @@ export * from './addressInput';
 export * from './advanceStopBody';
 export * from './advanceStopBodyStatus';
 export * from './allergen';
+export * from './appRelease';
+export * from './appReleases';
 export * from './assignRouteBody';
 export * from './attributedOrders';
 export * from './attributionModel';

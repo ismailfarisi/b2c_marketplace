@@ -99,6 +99,7 @@ struct RootView: View {
 
     @State private var route: Route = .none
     @State private var link: MealsLink?
+    @State private var update: AppUpdate?
     @State private var focusOpen = false
     @State private var focusTitle = ""
 
@@ -121,6 +122,22 @@ struct RootView: View {
     }
 
     private var authorised: Bool { sessionState is SessionStateAuthenticated }
+
+    private var updateRequired: Bool { update?.need == UpdateNeed.required }
+
+    /// Opens the App Store; a required update is shown again on return.
+    private func openStore() {
+        guard let current = update else { return }
+        if let url = URL(string: current.storeUrl), !current.storeUrl.isEmpty {
+            UIApplication.shared.open(url)
+        }
+        guard current.need == UpdateNeed.required else { update = nil; return }
+        update = nil
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            update = current
+        }
+    }
 
     /// Universal Links and push taps: open the matching meals screen.
     private func openLink(_ url: String) {
@@ -200,6 +217,11 @@ struct RootView: View {
             if mealsViewModel == nil { mealsViewModel = sdk.createMealsViewModel() }
             if destination != .feed { feedViewModel?.onAppBackgrounded() }
             session = sdk.session
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+            if let found = try? await sdk.checkForUpdate(platform: "ios", currentVersion: version),
+               found.need != UpdateNeed.upToDate {
+                update = found
+            }
         }
         .task(id: session != nil) {
             guard let session else { return }
@@ -260,6 +282,15 @@ struct RootView: View {
         }
         .onOpenURL { openLink($0.absoluteString) }
         .task { PushDelegate.onLink = { openLink($0) } }
+        .alert(
+            Text(LocalizedStringKey(updateRequired ? "update_required_title" : "update_title")),
+            isPresented: Binding(get: { update != nil }, set: { if !$0 && !updateRequired { update = nil } })
+        ) {
+            Button("update_action") { openStore() }
+            if !updateRequired { Button("update_later", role: .cancel) { update = nil } }
+        } message: {
+            Text(LocalizedStringKey(updateRequired ? "update_required_body" : "update_body"))
+        }
     }
 
     // ── the tabs ─────────────────────────────────────────────────────────────

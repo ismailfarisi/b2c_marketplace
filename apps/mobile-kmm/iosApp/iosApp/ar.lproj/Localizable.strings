@@ -303,3 +303,10 @@
 "feed_more" = "المزيد من سوق الفيديو";
 
 "action_back" = "رجوع";
+
+"update_title" = "يتوفر تحديث";
+"update_body" = "يتوفر إصدار أحدث من التطبيق.";
+"update_required_title" = "التحديث مطلوب";
+"update_required_body" = "لم يعد هذا الإصدار مدعومًا. يرجى التحديث لمتابعة الطلب.";
+"update_action" = "تحديث";
+"update_later" = "لاحقًا";

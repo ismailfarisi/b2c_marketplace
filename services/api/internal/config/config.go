@@ -43,15 +43,24 @@ type Config struct {
 	SMSProvider string
 
 	// SentryDSN turns on crash reporting (panics and fatal errors) to Sentry.
-	SentryDSN   string
-	SMSRegion   string
-	SMSSenderID string
-	APNsKeyP8   string
-	APNsKeyID   string
-	APNsTeamID  string
-	APNsTopic   string
-	APNsSandbox bool
-	OTPTTL      time.Duration
+	SentryDSN string
+
+	// Mobile release thresholds for the update prompt (GET /v1/app/config).
+	// Empty means no prompt.
+	AppMinVersionAndroid    string
+	AppLatestVersionAndroid string
+	AppStoreURLAndroid      string
+	AppMinVersionIOS        string
+	AppLatestVersionIOS     string
+	AppStoreURLIOS          string
+	SMSRegion               string
+	SMSSenderID             string
+	APNsKeyP8               string
+	APNsKeyID               string
+	APNsTeamID              string
+	APNsTopic               string
+	APNsSandbox             bool
+	OTPTTL                  time.Duration
 
 	S3Endpoint string
 	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
@@ -166,20 +175,26 @@ func Load() (Config, error) {
 
 		OTPDevEcho: boolean("OTP_DEV_ECHO", false),
 
-		WhatsAppAccessToken:   optional("WHATSAPP_ACCESS_TOKEN", ""),
-		WhatsAppPhoneNumberID: optional("WHATSAPP_PHONE_NUMBER_ID", ""),
-		WhatsAppAPIVersion:    optional("WHATSAPP_API_VERSION", "v21.0"),
-		FCMCredentialsJSON:    optional("FCM_CREDENTIALS_JSON", ""),
-		SMSProvider:           optional("SMS_PROVIDER", ""),
-		SentryDSN:             optional("SENTRY_DSN", ""),
-		SMSRegion:             optional("SMS_REGION", ""),
-		SMSSenderID:           optional("SMS_SENDER_ID", ""),
-		APNsKeyP8:             optional("APNS_KEY_P8", ""),
-		APNsKeyID:             optional("APNS_KEY_ID", ""),
-		APNsTeamID:            optional("APNS_TEAM_ID", ""),
-		APNsTopic:             optional("APNS_TOPIC", ""),
-		APNsSandbox:           boolean("APNS_SANDBOX", false),
-		OTPTTL:                duration("OTP_TTL", "5m"),
+		WhatsAppAccessToken:     optional("WHATSAPP_ACCESS_TOKEN", ""),
+		WhatsAppPhoneNumberID:   optional("WHATSAPP_PHONE_NUMBER_ID", ""),
+		WhatsAppAPIVersion:      optional("WHATSAPP_API_VERSION", "v21.0"),
+		FCMCredentialsJSON:      optional("FCM_CREDENTIALS_JSON", ""),
+		SMSProvider:             optional("SMS_PROVIDER", ""),
+		SentryDSN:               optional("SENTRY_DSN", ""),
+		AppMinVersionAndroid:    optional("APP_MIN_VERSION_ANDROID", ""),
+		AppLatestVersionAndroid: optional("APP_LATEST_VERSION_ANDROID", ""),
+		AppStoreURLAndroid:      optional("APP_STORE_URL_ANDROID", ""),
+		AppMinVersionIOS:        optional("APP_MIN_VERSION_IOS", ""),
+		AppLatestVersionIOS:     optional("APP_LATEST_VERSION_IOS", ""),
+		AppStoreURLIOS:          optional("APP_STORE_URL_IOS", ""),
+		SMSRegion:               optional("SMS_REGION", ""),
+		SMSSenderID:             optional("SMS_SENDER_ID", ""),
+		APNsKeyP8:               optional("APNS_KEY_P8", ""),
+		APNsKeyID:               optional("APNS_KEY_ID", ""),
+		APNsTeamID:              optional("APNS_TEAM_ID", ""),
+		APNsTopic:               optional("APNS_TOPIC", ""),
+		APNsSandbox:             boolean("APNS_SANDBOX", false),
+		OTPTTL:                  duration("OTP_TTL", "5m"),
 
 		S3Endpoint:       optional("S3_ENDPOINT", ""),
 		S3PublicEndpoint: optional("S3_PUBLIC_ENDPOINT", ""),

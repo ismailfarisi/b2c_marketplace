@@ -18,6 +18,8 @@ import ae.marketplace.mobile.network.ApiClientFactory
 import ae.marketplace.mobile.network.TokenStore
 import ae.marketplace.mobile.network.tokenStore
 import ae.marketplace.mobile.playback.PlaybackCoordinator
+import ae.marketplace.mobile.app.AppConfigApi
+import ae.marketplace.mobile.app.AppUpdate
 import ae.marketplace.mobile.push.PushRegistry
 import ae.marketplace.mobile.playback.ReelPlayerPool
 import ae.marketplace.mobile.playback.createReelPlayer
@@ -68,6 +70,7 @@ class MarketplaceSdk private constructor(
     private val scope: CoroutineScope,
     private val network: NetworkStatus,
     private val push: PushRegistry,
+    private val app: AppConfigApi,
 ) {
     companion object {
         suspend fun create(
@@ -111,6 +114,7 @@ class MarketplaceSdk private constructor(
                 scope = scope,
                 network = networkStatus(context),
                 push = push,
+                app = AppConfigApi(client),
             ).also { it.sessionId = sessionId }
         }
     }
@@ -178,6 +182,14 @@ class MarketplaceSdk private constructor(
 
     /** The phone's push token from FCM ("android") or APNs ("ios"). */
     fun registerPushToken(token: String, platform: String) = push.update(token, platform)
+
+    /**
+     * Compares this build ([currentVersion]) with the server's minimum and
+     * latest release for [platform] ("android" or "ios"). Never fails: an
+     * unreachable server reads as up to date rather than locking anyone out.
+     */
+    suspend fun checkForUpdate(platform: String, currentVersion: String): AppUpdate =
+        app.check(platform, currentVersion)
 
     /** The meals tab: storefront, checkout and the customer's subscriptions. */
     fun createMealsViewModel(): MealsViewModel = MealsViewModel(meals)

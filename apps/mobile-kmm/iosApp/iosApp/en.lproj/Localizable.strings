@@ -305,3 +305,10 @@
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */
 "action_back" = "Back";
+
+"update_title" = "Update available";
+"update_body" = "A newer version of the app is available.";
+"update_required_title" = "Update required";
+"update_required_body" = "This version is no longer supported. Please update to keep ordering.";
+"update_action" = "Update";
+"update_later" = "Later";

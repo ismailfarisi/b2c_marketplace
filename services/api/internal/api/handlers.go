@@ -96,6 +96,9 @@ type Handlers struct {
 	// console — different audience, different authorisation model, and the two
 	// would be confused for each other at exactly the wrong moment.
 	AdminConsole *AdminHandlers
+
+	// Apps is the minimum and latest mobile release, for the update prompt.
+	Apps AppReleases
 }
 
 // --- auth -------------------------------------------------------------------

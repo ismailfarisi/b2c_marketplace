@@ -28,6 +28,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Optional(issuer))
 
+		r.Get("/app/config", h.AppConfig)
 		r.Get("/branches/{branchId}/offerings", h.Catalog.ListOfferings)
 		r.Get("/branches/{branchId}/availability", h.Catalog.GetAvailability)
 
