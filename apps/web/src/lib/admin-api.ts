@@ -2052,3 +2052,6 @@ export const replySupportTicket = (id: string, body: string) =>
 
 export const setSupportStatus = (id: string, status: "open" | "answered" | "closed") =>
   apiFetch<void>({ url: `/admin/support/tickets/${id}/status`, method: "POST", data: { status } });
+
+export const getInvoiceDocument = (id: string) =>
+  apiFetch<import("./customer-api").InvoiceDocument>({ url: `/admin/invoices/${id}`, method: "GET" });

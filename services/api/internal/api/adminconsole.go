@@ -14,6 +14,7 @@ import (
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/admin"
 	"github.com/marketplace/api/internal/modules/adminview"
+	"github.com/marketplace/api/internal/modules/invoicing"
 	"github.com/marketplace/api/internal/modules/kitchen"
 	"github.com/marketplace/api/internal/modules/merch"
 	"github.com/marketplace/api/internal/modules/ordering"
@@ -36,6 +37,8 @@ import (
 // which is what stops a serializer that forgets a check from leaking a phone
 // number.
 type AdminHandlers struct {
+	// InvoiceDocs renders one invoice for printing. Nil: not found.
+	InvoiceDocs *invoicing.Service
 	// Support answers customer tickets. Nil: the support queue is not mounted.
 	Support *support.Service
 	View    *adminview.Service

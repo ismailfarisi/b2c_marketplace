@@ -1,0 +1,136 @@
+.inv {
+  max-width: 52rem;
+  margin: 2rem auto;
+  padding: 2.5rem;
+  background: #fff;
+  color: #1d1a16;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.inv h1 {
+  font-size: 1.6rem;
+  margin: 0 0 0.75rem;
+}
+.inv h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.35rem;
+  opacity: 0.7;
+}
+.inv p {
+  margin: 0.1rem 0;
+}
+.inv dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+}
+.inv dt {
+  opacity: 0.7;
+}
+.inv dd {
+  margin: 0;
+}
+.inv-num {
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+.inv-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+.inv-actions button {
+  font: inherit;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #c43b16;
+  background: #c43b16;
+  color: #fff;
+  cursor: pointer;
+}
+.inv-void {
+  color: #b3261e;
+  font-weight: 700;
+}
+.inv-head {
+  margin-bottom: 1.75rem;
+}
+.inv-parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+.inv-scroll {
+  overflow-x: auto;
+  margin-bottom: 1.25rem;
+}
+.inv-lines {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.25rem;
+}
+.inv-lines th,
+.inv-lines td {
+  padding: 0.5rem 0.4rem;
+  border-bottom: 1px solid #e6e0d6;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.inv-lines th:first-child,
+.inv-lines td:first-child {
+  text-align: start;
+}
+.inv-lines th {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  font-weight: 600;
+}
+.inv .inv-totals {
+  margin-inline-start: auto;
+  max-width: 22rem;
+}
+.inv-totals dd {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.inv-grand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  opacity: 1 !important;
+}
+@media (max-width: 640px) {
+  .inv {
+    padding: 1.25rem;
+    margin: 0;
+  }
+  .inv-parties {
+    grid-template-columns: 1fr;
+  }
+  .inv-lines {
+    font-size: 0.85rem;
+  }
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .inv,
+  .inv * {
+    visibility: visible;
+  }
+  .inv {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    max-width: none;
+  }
+  .inv-actions {
+    display: none;
+  }
+}

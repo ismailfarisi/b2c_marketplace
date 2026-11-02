@@ -579,3 +579,26 @@ func (h *AdminHandlers) PayStatement(w http.ResponseWriter, r *http.Request) {
 		"note":   "the ledger has been posted. The transfer itself happens in the bank.",
 	})
 }
+
+// Invoice is one invoice in full, for the printable copy. money.read, same as
+// the list.
+func (h *AdminHandlers) Invoice(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.caller(w, r, admin.PermMoneyRead); !ok {
+		return
+	}
+	if h.InvoiceDocs == nil {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
+	if err != nil {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	inv, err := h.InvoiceDocs.Get(r.Context(), id, nil)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", inv)
+}

@@ -159,7 +159,9 @@ export default function RefundsPage({ params }: { params: Promise<{ locale: stri
               {invoices.data!.items.map((i) => (
                 <tr key={i.id}>
                   <td className="mono">
-                    {i.number}
+                    <a href={`/en/admin/invoices/${i.id}`} target="_blank" rel="noreferrer">
+                      {i.number}
+                    </a>
                     {/* A credit note that does not name what it corrects is not
                         a credit note — it is a second invoice with a negative
                         total. So the link is shown, always. */}

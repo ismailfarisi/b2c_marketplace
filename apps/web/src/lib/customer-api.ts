@@ -622,3 +622,49 @@ export const replyToTicket = (id: string, body: string) =>
     method: "POST",
     data: { body },
   });
+
+// --- invoices ---------------------------------------------------------------
+
+export type InvoiceSummary = {
+  id: string;
+  number: string;
+  kind: "tax_invoice" | "simplified" | "credit_note";
+  total: { amount: number; currency: string };
+  tax: { amount: number; currency: string };
+  supply_date: string;
+  issued_at: string;
+  status: "issued" | "cancelled" | "superseded";
+};
+
+export type InvoiceDocument = {
+  id: string;
+  number: string;
+  kind: "tax_invoice" | "simplified" | "credit_note";
+  status: "issued" | "cancelled" | "superseded";
+  country: string;
+  currency: string;
+  supplier: { name: string; trn: string; address: string };
+  buyer: { name: string; trn: string; address: string };
+  supply_date: string;
+  issued_at: string;
+  corrects_number: string | null;
+  net_minor: number;
+  tax_minor: number;
+  gross_minor: number;
+  lines: Array<{
+    description: string;
+    description_ar: string;
+    quantity: number;
+    unit_net_minor: number;
+    net_minor: number;
+    tax_rate_bp: number;
+    tax_minor: number;
+    gross_minor: number;
+  }>;
+};
+
+export const listMyInvoices = () =>
+  apiFetch<{ items: InvoiceSummary[] }>({ url: "/me/invoices", method: "GET" });
+
+export const getMyInvoice = (id: string) =>
+  apiFetch<InvoiceDocument>({ url: `/me/invoices/${id}`, method: "GET" });

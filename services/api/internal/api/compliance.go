@@ -558,3 +558,23 @@ func dateOrNil(t *time.Time) any {
 	}
 	return t.Format("2006-01-02")
 }
+
+// MyInvoice is one of the caller's invoices in full, for the printable copy.
+func (h *ComplianceHandlers) MyInvoice(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
+	if err != nil {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	inv, err := h.Invoices.Get(r.Context(), id, &userID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", inv)
+}

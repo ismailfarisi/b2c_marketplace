@@ -23,6 +23,7 @@ import {
 const COPY = {
   en: {
     title: "My subscriptions",
+    invoices: "Invoices",
     empty: "You have no meal subscriptions yet.",
     browse: "Find a kitchen",
     cycle: (n: number, end: string | null) =>
@@ -38,6 +39,7 @@ const COPY = {
   },
   ar: {
     title: "اشتراكاتي",
+    invoices: "الفواتير",
     empty: "لا توجد لديك اشتراكات وجبات بعد.",
     browse: "ابحث عن مطبخ",
     cycle: (n: number, end: string | null) =>
@@ -82,6 +84,9 @@ export default function MySubscriptionsPage({
   return (
     <CustomerShell locale={locale}>
       <h1>{t.title}</h1>
+      <p>
+        <Link href={`/${locale}/invoices`}>{t.invoices}</Link>
+      </p>
       <InviteCard locale={locale} />
       {rotations.length > 0 && (
         <section>

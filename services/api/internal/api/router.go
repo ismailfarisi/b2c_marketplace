@@ -339,6 +339,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Put("/me/notification-preferences", h.Compliance.SetPreference)
 
 			r.Get("/me/invoices", h.Compliance.MyInvoices)
+			r.Get("/me/invoices/{invoiceId}", h.Compliance.MyInvoice)
 			// An author's own record. Self-scoped: there is no path here that
 			// takes someone else's id.
 			r.Get("/me/standing", h.Compliance.Standing)
@@ -449,6 +450,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 				r.Get("/admin/cod/drivers", h.AdminConsole.DriverCash)
 				r.Get("/admin/cod/remittances", h.AdminConsole.Remittances)
 				r.Get("/admin/invoices", h.AdminConsole.Invoices)
+				r.Get("/admin/invoices/{invoiceId}", h.AdminConsole.Invoice)
 
 				// Supply (§4.4). The media endpoint is separate from the detail
 				// page on purpose: opening a reel and watching it are different

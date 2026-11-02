@@ -30,7 +30,10 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
-  ListMyInvoices200
+  InvoiceDocument,
+  ListMyInvoices200,
+  NotFoundResponse,
+  UnauthorizedResponse
 } from '../../models';
 
 import { apiFetch } from '../../../http-client';
@@ -95,6 +98,77 @@ export function useListMyInvoices<TData = Awaited<ReturnType<typeof listMyInvoic
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListMyInvoicesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * The stored snapshot (supplier, buyer, lines, totals), never re-derived
+from live rows. Someone else's invoice is 404.
+
+ * @summary One of the caller's invoices in full, for the printable copy
+ */
+export const getMyInvoice = (
+    invoiceId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<InvoiceDocument>(
+      {url: `/me/invoices/${invoiceId}`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetMyInvoiceQueryKey = (invoiceId?: string,) => {
+    return [
+    `/me/invoices/${invoiceId}`
+    ] as const;
+    }
+
+    
+export const getGetMyInvoiceQueryOptions = <TData = Awaited<ReturnType<typeof getMyInvoice>>, TError = UnauthorizedResponse | NotFoundResponse>(invoiceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyInvoice>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyInvoiceQueryKey(invoiceId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyInvoice>>> = ({ signal }) => getMyInvoice(invoiceId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(invoiceId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyInvoice>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyInvoiceQueryResult = NonNullable<Awaited<ReturnType<typeof getMyInvoice>>>
+export type GetMyInvoiceQueryError = UnauthorizedResponse | NotFoundResponse
+
+
+/**
+ * @summary One of the caller's invoices in full, for the printable copy
+ */
+
+export function useGetMyInvoice<TData = Awaited<ReturnType<typeof getMyInvoice>>, TError = UnauthorizedResponse | NotFoundResponse>(
+ invoiceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyInvoice>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyInvoiceQueryOptions(invoiceId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

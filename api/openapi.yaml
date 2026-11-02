@@ -3958,6 +3958,25 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/InvoiceSummary" }
 
+  /me/invoices/{invoiceId}:
+    get:
+      tags: [invoices]
+      operationId: getMyInvoice
+      summary: One of the caller's invoices in full, for the printable copy
+      description: |
+        The stored snapshot (supplier, buyer, lines, totals), never re-derived
+        from live rows. Someone else's invoice is 404.
+      parameters:
+        - { name: invoiceId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvoiceDocument" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /me/standing:
     get:
       tags: [moderation]
@@ -5138,6 +5157,47 @@ components:
         supply_date: { type: string, format: date }
         issued_at: { type: string, format: date-time }
         status: { type: string, enum: [issued, cancelled, superseded] }
+
+    InvoiceParty:
+      type: object
+      required: [name, trn, address]
+      properties:
+        name: { type: string }
+        trn: { type: string }
+        address: { type: string }
+    InvoiceDocument:
+      type: object
+      required: [id, number, kind, status, country, currency, supplier, buyer, supply_date,
+                 issued_at, corrects_number, net_minor, tax_minor, gross_minor, lines]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        kind: { type: string, enum: [tax_invoice, simplified, credit_note] }
+        status: { type: string, enum: [issued, cancelled, superseded] }
+        country: { type: string }
+        currency: { type: string }
+        supplier: { $ref: "#/components/schemas/InvoiceParty" }
+        buyer: { $ref: "#/components/schemas/InvoiceParty" }
+        supply_date: { type: string, format: date }
+        issued_at: { type: string, format: date-time }
+        corrects_number: { type: [string, "null"] }
+        net_minor: { type: integer, format: int64 }
+        tax_minor: { type: integer, format: int64 }
+        gross_minor: { type: integer, format: int64 }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [description, description_ar, quantity, unit_net_minor, net_minor, tax_rate_bp, tax_minor, gross_minor]
+            properties:
+              description: { type: string }
+              description_ar: { type: string }
+              quantity: { type: number }
+              unit_net_minor: { type: integer, format: int64 }
+              net_minor: { type: integer, format: int64 }
+              tax_rate_bp: { type: integer }
+              tax_minor: { type: integer, format: int64 }
+              gross_minor: { type: integer, format: int64 }
 
     OverdueAppeal:
       type: object
