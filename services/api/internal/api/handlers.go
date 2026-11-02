@@ -237,6 +237,30 @@ func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// DeleteMe is the customer's own account deletion: running meal plans are
+// cancelled (unearned money is credited as on any cancel), then the account is
+// erased and every session revoked. Invoices and ledger entries stay, attached
+// to a subject that no longer resolves to a person.
+func (h *Handlers) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	if h.Subscriptions != nil {
+		if err := h.Subscriptions.Service.CancelAllForUser(r.Context(), userID,
+			"account deleted"); err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+	}
+	if err := h.Identity.DeleteOwnAccount(r.Context(), userID); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- orders -----------------------------------------------------------------
 
 type createOrderBody struct {

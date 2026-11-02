@@ -593,3 +593,40 @@ func (s *Service) CancelRotation(ctx context.Context, userID, id uuid.UUID, reas
 	}
 	return nil
 }
+
+// CancelAllForUser cancels every rotation and subscription the customer still
+// has running, for an account that is being deleted. Each one unwinds exactly
+// as a customer cancel does, so unearned money is credited the same way.
+func (s *Service) CancelAllForUser(ctx context.Context, userID uuid.UUID, reason string) error {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id FROM meal_rotations WHERE user_id = $1 AND status <> 'cancelled'`, userID)
+	if err != nil {
+		return fmt.Errorf("subscriptions: list rotations to cancel: %w", err)
+	}
+	rotations, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return fmt.Errorf("subscriptions: list rotations to cancel: %w", err)
+	}
+	for _, id := range rotations {
+		if err := s.CancelRotation(ctx, userID, id, reason); err != nil {
+			return err
+		}
+	}
+	rows, err = s.pool.Query(ctx, `
+		SELECT id FROM subscriptions
+		 WHERE user_id = $1 AND status NOT IN ('cancelled', 'completed')`, userID)
+	if err != nil {
+		return fmt.Errorf("subscriptions: list subscriptions to cancel: %w", err)
+	}
+	subs, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return fmt.Errorf("subscriptions: list subscriptions to cancel: %w", err)
+	}
+	for _, id := range subs {
+		if err := s.cancel(ctx, id, uuid.NullUUID{UUID: userID, Valid: true},
+			"customer", userID, reason); err != nil {
+			return err
+		}
+	}
+	return nil
+}

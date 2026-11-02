@@ -111,6 +111,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// Authenticated, unlike the three /auth routes above, because revoking
 		// a session requires proving you hold it.
 		r.Post("/auth/logout", h.Logout)
+		r.Delete("/me", h.DeleteMe)
 
 		r.Post("/orders", h.CreateOrder)
 		r.Get("/orders/{orderId}", h.GetOrder)

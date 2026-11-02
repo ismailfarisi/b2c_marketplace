@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney } from "@marketplace/api-client";
+import { ApiError, formatMoney } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
@@ -12,7 +12,9 @@ import {
   formatDay,
   formatRange,
 } from "@/components/meals/shell";
+import { tokenStore } from "@/lib/token-store";
 import {
+  deleteAccount,
   getMyReferrals,
   listMyRotations,
   listMySubscriptions,
@@ -186,7 +188,73 @@ export default function MySubscriptionsPage({
           </ul>
         </section>
       ) : null}
+      <DeleteAccount locale={locale} />
     </CustomerShell>
+  );
+}
+
+const DELETE = {
+  en: {
+    title: "Delete account",
+    body: "Your meal plans are cancelled and unused days are credited back. Your name, phone and addresses are removed and you are signed out on every device. Invoices are kept, as the law requires. This cannot be undone.",
+    start: "Delete my account",
+    confirm: "Yes, delete my account",
+    keep: "Keep my account",
+    busy: "Deleting…",
+    failed: "Your account could not be deleted. Try again.",
+  },
+  ar: {
+    title: "حذف الحساب",
+    body: "سيتم إلغاء خطط وجباتك وإرجاع قيمة الأيام غير المستخدمة. سيُحذف اسمك ورقم هاتفك وعناوينك، وسيتم تسجيل خروجك من كل الأجهزة. نحتفظ بالفواتير كما يتطلب القانون. لا يمكن التراجع عن ذلك.",
+    start: "احذف حسابي",
+    confirm: "نعم، احذف حسابي",
+    keep: "الإبقاء على حسابي",
+    busy: "جارٍ الحذف…",
+    failed: "تعذّر حذف حسابك. حاول مرة أخرى.",
+  },
+};
+
+function DeleteAccount({ locale }: { locale: "en" | "ar" }) {
+  const t = DELETE[locale];
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAccount();
+      await tokenStore.clear();
+      window.location.href = `/${locale}`;
+    } catch (e) {
+      setError(e instanceof ApiError && e.problem?.detail ? e.problem.detail : t.failed);
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="ms-delete" aria-labelledby="ms-delete-title">
+      <h2 id="ms-delete-title">{t.title}</h2>
+      <p className="ms-sub">{t.body}</p>
+      {error && (
+        <p className="ms-error" role="alert">
+          {error}
+        </p>
+      )}
+      {confirming ? (
+        <div className="ms-delete-row">
+          <button type="button" className="ms-cta ms-cta-danger" disabled={busy} onClick={remove}>
+            {busy ? t.busy : t.confirm}
+          </button>
+          <button type="button" className="ms-cta ms-cta-quiet" disabled={busy} onClick={() => setConfirming(false)}>
+            {t.keep}
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="ms-link-danger" onClick={() => setConfirming(true)}>
+          {t.start}
+        </button>
+      )}
+    </section>
   );
 }
 

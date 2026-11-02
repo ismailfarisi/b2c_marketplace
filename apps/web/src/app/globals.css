@@ -1996,6 +1996,38 @@ a.ms-offer:focus-visible {
 
 /* ---- Invite friends ------------------------------------------------------ */
 
+.ms-delete {
+  margin-block-start: 48px;
+  padding-block-start: 24px;
+  border-block-start: 1px solid var(--ms-line);
+  max-inline-size: 60ch;
+}
+.ms-delete h2 {
+  font-size: 1.125rem;
+}
+.ms-delete-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block-start: 12px;
+}
+.ms-link-danger {
+  margin-block-start: 8px;
+  padding: 10px 0;
+  min-block-size: 44px;
+  background: none;
+  border: 0;
+  color: var(--ms-bad);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ms-delete .ms-error {
+  color: var(--ms-bad);
+  font-weight: 600;
+}
 .ms-invite {
   display: grid;
   gap: 0.75rem;

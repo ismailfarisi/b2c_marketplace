@@ -282,6 +282,12 @@
     <string name="me_no_listings">You have not listed anything yet.</string>
     <string name="me_no_listings_hint">Open Sell to film one. It takes about a minute.</string>
     <string name="me_sign_out">Sign out</string>
+    <string name="me_delete_account">Delete account</string>
+    <string name="me_deleting">Deleting account…</string>
+    <string name="me_delete_title">Delete your account?</string>
+    <string name="me_delete_body">Your meal plans are cancelled and unused days are credited back. Your name, phone, addresses and listings are removed and you are signed out on every device. Invoices are kept, as the law requires. This cannot be undone.</string>
+    <string name="me_delete_yes">Delete account</string>
+    <string name="me_delete_keep">Keep account</string>
 
     <!-- Listing states, as a seller reads them. -->
     <string name="status_active">Live</string>

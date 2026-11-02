@@ -156,8 +156,11 @@ func run() error {
 	promoSvc := promo.NewService(pool)
 	reviewsSvc := reviews.NewService(pool)
 
+	adminSvc := admin.NewService(pool)
+
 	handlers := &api.Handlers{
-		Identity: identitySvc,
+		// Audited, for the customer's own account deletion.
+		Identity: identitySvc.WithAuditor(adminSvc),
 		Ordering: orderingSvc,
 		Payments: paymentsSvc,
 		// The same commission numbers the order path uses. A subscription meal
@@ -200,7 +203,6 @@ func run() error {
 	// transfer without passing through the check.
 	kycSvc := kyc.NewService(pool)
 	payoutsSvc := payouts.NewService(pool, nil, app.PayoutGate{KYC: kycSvc})
-	adminSvc := admin.NewService(pool)
 
 	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc, Reviews: reviewsSvc}
 	merchSvc := merch.NewService(pool, handlers.Kitchen.Kitchen)

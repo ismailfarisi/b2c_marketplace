@@ -9,6 +9,7 @@ import ae.marketplace.mobile.model.SearchPage
 import ae.marketplace.mobile.model.Thread
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -26,6 +27,11 @@ import kotlinx.serialization.Serializable
  * files of six lines each and a constructor graph to match.
  */
 class MeApi(private val client: HttpClient) {
+
+    /** Deletes the signed-in account. The server revokes every session. */
+    suspend fun deleteAccount() {
+        client.delete("me")
+    }
 
     /** The Saved tab. */
     suspend fun saves(limit: Int = 50): SavedPage =

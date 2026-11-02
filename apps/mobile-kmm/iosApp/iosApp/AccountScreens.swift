@@ -351,6 +351,8 @@ struct MeScreen: View {
     @State private var current: MyListingsUiState?
     private var state: MyListingsUiState { current ?? viewModel.listings.value }
     @State private var unread: Int = 0
+    @State private var deletion: DeletionUiState?
+    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -407,11 +409,41 @@ struct MeScreen: View {
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.line, lineWidth: 1))
                 }
                 .listRowBackground(Palette.ink)
+
+                if let error = deletion?.error {
+                    Text(error.words)
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(Palette.bad)
+                        .listRowBackground(Palette.ink)
+                }
+                Button { confirmingDelete = true } label: {
+                    Text(deletion?.busy == true ? "me_deleting" : "me_delete_account")
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(Palette.bad)
+                        .frame(maxWidth: .infinity, minHeight: Space.touch)
+                }
+                .disabled(deletion?.busy == true)
+                .listRowBackground(Palette.ink)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
         }
         .background(Palette.ink)
+        .alert(Text("me_delete_title"), isPresented: $confirmingDelete) {
+            Button(role: .destructive) { viewModel.deleteAccount() } label: { Text("me_delete_yes") }
+            Button(role: .cancel) {} label: { Text("me_delete_keep") }
+        } message: {
+            Text("me_delete_body")
+        }
+        .task {
+            for await d in viewModel.deletion {
+                deletion = d
+                if d.done {
+                    viewModel.clearDeletion()
+                    onSignOut()
+                }
+            }
+        }
         .task {
             viewModel.loadMyListings(force: false)
             // The unread count is the only reason to open the inbox, so it has

@@ -84,6 +84,12 @@ data class ThreadUiState(
  * pull-to-refresh calls the loader again explicitly, which is the only thing
  * that should.
  */
+data class DeletionUiState(
+    val busy: Boolean = false,
+    val done: Boolean = false,
+    val error: Failure? = null,
+)
+
 class MeViewModel(private val api: MeApi) : ViewModel() {
 
     private val _saved = MutableStateFlow(SavedUiState())
@@ -100,6 +106,9 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
 
     private val _thread = MutableStateFlow(ThreadUiState())
     val thread: StateFlow<ThreadUiState> = _thread.asStateFlow()
+
+    private val _deletion = MutableStateFlow(DeletionUiState())
+    val deletion: StateFlow<DeletionUiState> = _deletion.asStateFlow()
 
     private var searchJob: Job? = null
     private var lat: Double? = null
@@ -144,6 +153,23 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         // Search survives. It is the one surface here that is public — no
         // account is needed to run it — so clearing a query someone is midway
         // through typing would be destroying work for no reason.
+    }
+
+    // ── Account deletion ─────────────────────────────────────────────────────
+
+    /** Deletes the account; the shell signs out when [DeletionUiState.done] flips. */
+    fun deleteAccount() {
+        if (_deletion.value.busy) return
+        _deletion.value = DeletionUiState(busy = true)
+        viewModelScope.launch {
+            runCatching { api.deleteAccount() }
+                .onSuccess { _deletion.value = DeletionUiState(done = true) }
+                .onFailure { e -> _deletion.value = DeletionUiState(error = e.toFailure()) }
+        }
+    }
+
+    fun clearDeletion() {
+        _deletion.value = DeletionUiState()
     }
 
     // ── Saved ────────────────────────────────────────────────────────────────

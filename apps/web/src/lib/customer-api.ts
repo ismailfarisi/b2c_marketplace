@@ -46,6 +46,10 @@ export interface AddressInput {
 export const describeAddress = (a: Address) =>
   [a.flat, a.building, a.street, a.area, a.city].filter(Boolean).join(", ");
 
+/** Deletes the signed-in account; the caller clears the local session after. */
+export const deleteAccount = () =>
+  apiFetch<void>({ url: "/me", method: "DELETE" });
+
 export const listAddresses = () =>
   apiFetch<{ items: Address[] }>({ url: "/me/addresses", method: "GET" });
 

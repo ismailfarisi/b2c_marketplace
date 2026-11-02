@@ -183,6 +183,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [me]
+      operationId: deleteCurrentUser
+      summary: Delete the authenticated user's account
+      description: |
+        Cancels running meal plans (unearned money is credited as on any
+        cancel), erases name, email, phone, addresses and device tokens, and
+        revokes every session. Invoices and ledger entries are retained as the
+        law requires. Refused with 409 while an order is still in progress or
+        the user owns a business on the marketplace.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: An order is still in progress, or the user owns a business
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
 
   /me/addresses:
     get:

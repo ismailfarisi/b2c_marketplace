@@ -38,6 +38,7 @@ import type {
   AddressInput,
   ListAddresses200,
   NotFoundResponse,
+  Problem,
   UnauthorizedResponse,
   UnprocessableEntityResponse,
   User
@@ -117,6 +118,73 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
 
 
 /**
+ * Cancels running meal plans (unearned money is credited as on any
+cancel), erases name, email, phone, addresses and device tokens, and
+revokes every session. Invoices and ledger entries are retained as the
+law requires. Refused with 409 while an order is still in progress or
+the user owns a business on the marketplace.
+
+ * @summary Delete the authenticated user's account
+ */
+export const deleteCurrentUser = (
+    
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me`, method: 'DELETE'
+    },
+      );
+    }
+  
+
+
+export const getDeleteCurrentUserMutationOptions = <TError = UnauthorizedResponse | Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCurrentUser>>, TError,void, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCurrentUser>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteCurrentUser'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCurrentUser>>, void> = () => {
+          
+
+          return  deleteCurrentUser()
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCurrentUserMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCurrentUser>>>
+    
+    export type DeleteCurrentUserMutationError = UnauthorizedResponse | Problem
+
+    /**
+ * @summary Delete the authenticated user's account
+ */
+export const useDeleteCurrentUser = <TError = UnauthorizedResponse | Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCurrentUser>>, TError,void, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCurrentUser>>,
+        TError,
+        void,
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteCurrentUserMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
  * @summary The user's saved addresses
  */
 export const listAddresses = (

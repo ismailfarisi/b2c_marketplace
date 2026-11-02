@@ -11,6 +11,8 @@ import ae.marketplace.mobile.android.ui.Poster
 import ae.marketplace.mobile.android.ui.Shape
 import ae.marketplace.mobile.android.ui.Space
 import ae.marketplace.mobile.android.ui.Type
+import ae.marketplace.mobile.android.ui.words
+import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.me.MeViewModel
 import ae.marketplace.mobile.model.MyListing
 import ae.marketplace.mobile.model.SavedItem
@@ -40,12 +42,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -477,6 +483,32 @@ fun MeScreen(
 ) {
     val state by viewModel.listings.collectAsState()
     val inbox by viewModel.inbox.collectAsState()
+    val deletion by viewModel.deletion.collectAsState()
+    var confirmingDelete by remember { mutableStateOf(false) }
+    LaunchedEffect(deletion.done) {
+        if (deletion.done) {
+            viewModel.clearDeletion()
+            onSignOut()
+        }
+    }
+    if (confirmingDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmingDelete = false },
+            containerColor = Palette.Surface,
+            title = { Text(stringResource(R.string.me_delete_title), color = Palette.Text) },
+            text = { Text(stringResource(R.string.me_delete_body), color = Palette.TextMuted, fontSize = Type.Body) },
+            confirmButton = {
+                TextButton(onClick = { confirmingDelete = false; viewModel.deleteAccount() }) {
+                    Text(stringResource(R.string.me_delete_yes), color = Palette.Bad)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingDelete = false }) {
+                    Text(stringResource(R.string.me_delete_keep), color = Palette.Text)
+                }
+            },
+        )
+    }
     LaunchedEffect(Unit) {
         viewModel.loadMyListings()
         // The unread count is the only reason to open the inbox, so it has to be
@@ -549,6 +581,24 @@ fun MeScreen(
                         fontSize = Type.Secondary,
                     )
                 }
+                deletion.error?.let { err ->
+                    Text(
+                        (err as? Failure.Rejected)?.detail ?: err.words(),
+                        color = Palette.Bad,
+                        fontSize = Type.Secondary,
+                        modifier = Modifier.padding(horizontal = Space.Edge),
+                    )
+                }
+                Text(
+                    stringResource(if (deletion.busy) R.string.me_deleting else R.string.me_delete_account),
+                    color = Palette.Bad,
+                    fontSize = Type.Secondary,
+                    modifier = Modifier
+                        .padding(horizontal = Space.Edge)
+                        .clickable(enabled = !deletion.busy) { confirmingDelete = true }
+                        .defaultMinSize(minHeight = Space.Touch)
+                        .padding(vertical = 13.dp),
+                )
             }
         }
     }

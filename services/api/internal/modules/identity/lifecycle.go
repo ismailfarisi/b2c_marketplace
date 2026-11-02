@@ -362,10 +362,16 @@ func (s *Service) Erase(ctx context.Context, in EraseInput) error {
 			return nil // idempotent
 		}
 
+		// A paid meal-plan cycle stays `confirmed` for good, so its billing
+		// order only counts while the subscription behind it is still running.
 		var openOrders int
 		if err := tx.QueryRow(ctx, `
-			SELECT count(*) FROM orders
-			 WHERE user_id = $1 AND status NOT IN ('completed', 'cancelled')`,
+			SELECT count(*) FROM orders o
+			 WHERE o.user_id = $1 AND o.status NOT IN ('completed', 'cancelled')
+			   AND NOT EXISTS (
+			       SELECT 1 FROM subscription_cycles c
+			         JOIN subscriptions sub ON sub.id = c.subscription_id
+			        WHERE c.order_id = o.id AND sub.status IN ('cancelled', 'completed'))`,
 			in.UserID).Scan(&openOrders); err != nil {
 			return fmt.Errorf("count open orders: %w", err)
 		}
@@ -409,8 +415,25 @@ func (s *Service) Erase(ctx context.Context, in EraseInput) error {
 			return fmt.Errorf("erase user: %w", err)
 		}
 
+		// Past deliveries and plans still point at their addresses, so those
+		// rows are scrubbed to the area (pin rounded to ~1km) and kept; the
+		// rest are deleted outright.
 		for _, stmt := range []string{
-			`DELETE FROM addresses WHERE user_id = $1`,
+			`UPDATE addresses
+			    SET label = 'deleted', recipient_name = NULL, recipient_phone = NULL,
+			        building = NULL, flat = NULL, street = NULL, landmark = NULL,
+			        notes = NULL, is_default = false,
+			        point = ST_SetSRID(ST_MakePoint(
+			            round(ST_X(point::geometry)::numeric, 2),
+			            round(ST_Y(point::geometry)::numeric, 2)), 4326)::geography,
+			        deleted_at = coalesce(deleted_at, now()), updated_at = now()
+			  WHERE user_id = $1`,
+			`DELETE FROM addresses a WHERE a.user_id = $1
+			    AND NOT EXISTS (SELECT 1 FROM fulfillments f WHERE f.address_id = a.id)
+			    AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.address_id = a.id)
+			    AND NOT EXISTS (SELECT 1 FROM subscription_schedule_rules r WHERE r.address_id = a.id)
+			    AND NOT EXISTS (SELECT 1 FROM meal_rotations m WHERE m.address_id = a.id)`,
+			`DELETE FROM vendor_users WHERE user_id = $1 AND role <> 'owner'`,
 			`DELETE FROM saved_searches WHERE user_id = $1`,
 			`DELETE FROM listing_favorites WHERE user_id = $1`,
 			`DELETE FROM viewer_interests WHERE user_id = $1`,
@@ -428,6 +451,28 @@ func (s *Service) Erase(ctx context.Context, in EraseInput) error {
 			// operation — the record is that it happened, by whom, and why.
 			map[string]any{"redacted": true},
 			map[string]any{"erased": true, "financial_records": "retained"})
+	})
+}
+
+// DeleteOwnAccount is the customer's own "delete my account".
+//
+// The same erasure staff perform under a data request, with the customer as
+// the actor. A kitchen owner is refused: erasing them would leave a vendor
+// that nobody can sign in to, so ownership moves first, through support.
+func (s *Service) DeleteOwnAccount(ctx context.Context, userID uuid.UUID) error {
+	var owns int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM vendor_users WHERE user_id = $1 AND role = 'owner'`,
+		userID).Scan(&owns); err != nil {
+		return fmt.Errorf("count owned vendors: %w", err)
+	}
+	if owns > 0 {
+		return httpx.Coded(httpx.ErrConflict, "owns_vendor",
+			"You own a business on the marketplace. Contact support to hand it over before deleting your account.")
+	}
+	return s.Erase(ctx, EraseInput{
+		UserID: userID, ActorID: userID,
+		Reason: "customer deleted their own account",
 	})
 }
 
