@@ -97,6 +97,9 @@ type Handlers struct {
 	// would be confused for each other at exactly the wrong moment.
 	AdminConsole *AdminHandlers
 
+	// Support is customer help tickets. Nil: routes not mounted.
+	Support *SupportHandlers
+
 	// Apps is the minimum and latest mobile release, for the update prompt.
 	Apps AppReleases
 }

@@ -114,6 +114,12 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		r.Post("/auth/logout", h.Logout)
 		r.Delete("/me", h.DeleteMe)
 		r.Put("/me/device", h.RegisterDevice)
+		if h.Support != nil {
+			r.Get("/me/support/tickets", h.Support.ListMine)
+			r.Post("/me/support/tickets", h.Support.Open)
+			r.Get("/me/support/tickets/{ticketId}", h.Support.Get)
+			r.Post("/me/support/tickets/{ticketId}/messages", h.Support.Reply)
+		}
 
 		r.Post("/orders", h.CreateOrder)
 		r.Get("/orders/{orderId}", h.GetOrder)
@@ -390,6 +396,12 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 				r.Get("/admin/orders/{orderId}/timeline", h.AdminConsole.OrderTimeline)
 				r.Get("/admin/users/{userId}", h.AdminConsole.Customer)
 				r.Get("/admin/users/{userId}/timeline", h.AdminConsole.CustomerTimeline)
+				if h.AdminConsole.Support != nil {
+					r.Get("/admin/support/tickets", h.AdminConsole.SupportQueue)
+					r.Get("/admin/support/tickets/{ticketId}", h.AdminConsole.SupportTicket)
+					r.Post("/admin/support/tickets/{ticketId}/messages", h.AdminConsole.SupportReply)
+					r.Post("/admin/support/tickets/{ticketId}/status", h.AdminConsole.SupportStatus)
+				}
 
 				// Account lifecycle. identity.review, never in a default role with
 				// money.write: changing the number on an account and moving money out

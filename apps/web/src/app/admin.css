@@ -1904,3 +1904,29 @@ table.menu-grid td {
   background: var(--a-warn-soft);
   color: var(--a-text);
 }
+
+/* Support ticket thread */
+.console-thread {
+  display: grid;
+  gap: 0.6rem;
+}
+.console-thread .console-msg {
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: var(--console-surface, #f4f5f7);
+}
+.console-thread .console-msg.is-staff {
+  background: #e8f1ff;
+}
+.console-thread .console-msg p {
+  margin: 0.2rem 0 0;
+  white-space: pre-wrap;
+}
+.console-thread form {
+  display: grid;
+  gap: 0.5rem;
+}
+.console-thread textarea {
+  font: inherit;
+  padding: 0.5rem;
+}

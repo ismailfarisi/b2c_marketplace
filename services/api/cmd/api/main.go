@@ -56,6 +56,7 @@ import (
 	"github.com/marketplace/api/internal/modules/property"
 	"github.com/marketplace/api/internal/modules/reviews"
 	"github.com/marketplace/api/internal/modules/subscriptions"
+	"github.com/marketplace/api/internal/modules/support"
 	"github.com/marketplace/api/internal/modules/tax"
 	"github.com/marketplace/api/internal/modules/timesignal"
 	"github.com/marketplace/api/internal/modules/trust"
@@ -168,7 +169,9 @@ func run() error {
 
 	adminSvc := admin.NewService(pool)
 
+	supportSvc := support.NewService(pool, notifySvc)
 	handlers := &api.Handlers{
+		Support: &api.SupportHandlers{Service: supportSvc},
 		Apps: api.AppReleases{
 			Android: api.AppRelease{MinVersion: cfg.AppMinVersionAndroid, LatestVersion: cfg.AppLatestVersionAndroid, StoreURL: cfg.AppStoreURLAndroid},
 			IOS:     api.AppRelease{MinVersion: cfg.AppMinVersionIOS, LatestVersion: cfg.AppLatestVersionIOS, StoreURL: cfg.AppStoreURLIOS},
@@ -249,6 +252,7 @@ func run() error {
 	// The admin console. `adminview` composes; it owns no tables and cannot
 	// write — see its package comment.
 	handlers.AdminConsole = &api.AdminHandlers{
+		Support:       supportSvc,
 		View:          adminview.NewService(pool),
 		Admin:         adminSvc,
 		Issuer:        issuer,

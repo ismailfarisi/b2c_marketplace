@@ -586,3 +586,39 @@ export const startLunch = (companyId: string, data: LunchInput) =>
     method: "POST",
     data,
   });
+
+// --- support ----------------------------------------------------------------
+
+export type SupportTicket = {
+  id: string;
+  subject: string;
+  status: "open" | "answered" | "closed";
+  subscription_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupportMessage = {
+  id: string;
+  from_staff: boolean;
+  body: string;
+  created_at: string;
+};
+
+export type SupportThread = SupportTicket & { messages: SupportMessage[] };
+
+export const listMyTickets = () =>
+  apiFetch<{ items: SupportTicket[] }>({ url: "/me/support/tickets", method: "GET" });
+
+export const openTicket = (body: { subject: string; body: string; subscription_id?: string }) =>
+  apiFetch<SupportThread>({ url: "/me/support/tickets", method: "POST", data: body });
+
+export const getMyTicket = (id: string) =>
+  apiFetch<SupportThread>({ url: `/me/support/tickets/${id}`, method: "GET" });
+
+export const replyToTicket = (id: string, body: string) =>
+  apiFetch<SupportThread>({
+    url: `/me/support/tickets/${id}/messages`,
+    method: "POST",
+    data: { body },
+  });

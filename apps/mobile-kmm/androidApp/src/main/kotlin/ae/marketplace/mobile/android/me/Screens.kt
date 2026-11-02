@@ -603,6 +603,7 @@ fun MeScreen(
                 LegalLinks(
                     color = Palette.Text.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = Space.Edge),
+                    showHelp = true,
                 )
             }
         }

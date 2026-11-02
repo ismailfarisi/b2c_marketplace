@@ -2016,3 +2016,39 @@ export const markCompanyStatementPaid = (id: string, statementId: string, refere
     method: "POST",
     data: { reference },
   });
+
+// --- support tickets --------------------------------------------------------
+
+export type AdminSupportTicket = {
+  id: string;
+  subject: string;
+  status: "open" | "answered" | "closed";
+  subscription_id: string | null;
+  user_id: string;
+  phone: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminSupportThread = AdminSupportTicket & {
+  messages: Array<{ id: string; from_staff: boolean; body: string; created_at: string }>;
+};
+
+export const getSupportQueue = (status = "") =>
+  apiFetch<{ items: AdminSupportTicket[] }>({
+    url: `/admin/support/tickets${status ? `?status=${status}` : ""}`,
+    method: "GET",
+  });
+
+export const getSupportTicket = (id: string) =>
+  apiFetch<AdminSupportThread>({ url: `/admin/support/tickets/${id}`, method: "GET" });
+
+export const replySupportTicket = (id: string, body: string) =>
+  apiFetch<AdminSupportThread>({
+    url: `/admin/support/tickets/${id}/messages`,
+    method: "POST",
+    data: { body },
+  });
+
+export const setSupportStatus = (id: string, status: "open" | "answered" | "closed") =>
+  apiFetch<void>({ url: `/admin/support/tickets/${id}/status`, method: "POST", data: { status } });

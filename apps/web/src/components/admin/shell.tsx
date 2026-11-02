@@ -83,6 +83,7 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
       { href: "/payouts", label: "Payouts", queues: [] },
       { href: "/cash", label: "Cash", queues: [] },
       { href: "/refunds", label: "Refunds", queues: [] },
+      { href: "/support", label: "Support tickets", queues: [] },
     ],
   },
   {
@@ -117,6 +118,7 @@ export const TITLES: Record<string, string> = {
   "/payouts": "Payout runs",
   "/cash": "Cash reconciliation",
   "/refunds": "Refunds & invoices",
+  "/support": "Support tickets",
   "/meals/kitchens": "Meal kitchens",
   "/meals/subscriptions": "Meal subscriptions",
   "/meals/layout": "Storefront home layout",

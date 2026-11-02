@@ -412,4 +412,5 @@
     <string name="update_required_body">لم يعد هذا الإصدار مدعومًا. يرجى التحديث لمتابعة الطلب.</string>
     <string name="update_action">تحديث</string>
     <string name="update_later">لاحقًا</string>
+    <string name="legal_help">المساعدة</string>
 </resources>

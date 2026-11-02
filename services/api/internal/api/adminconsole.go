@@ -22,6 +22,7 @@ import (
 	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/modules/reviews"
 	"github.com/marketplace/api/internal/modules/subscriptions"
+	"github.com/marketplace/api/internal/modules/support"
 )
 
 // AdminHandlers is the admin console's read surface.
@@ -35,9 +36,11 @@ import (
 // which is what stops a serializer that forgets a check from leaking a phone
 // number.
 type AdminHandlers struct {
-	View  *adminview.Service
-	Admin *admin.Service
-	Act   Actions
+	// Support answers customer tickets. Nil: the support queue is not mounted.
+	Support *support.Service
+	View    *adminview.Service
+	Admin   *admin.Service
+	Act     Actions
 	// Media signs short-lived playback URLs for content that is not public.
 	// Nil disables the media endpoint rather than failing it at request time —
 	// an environment without an object store should refuse to offer playback,

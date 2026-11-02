@@ -3,9 +3,11 @@ import SwiftUI
 /// Terms and Privacy policy, opened on the web in the app's language.
 struct LegalLinks: View {
     var tint: Color
+    var showHelp = false
 
     var body: some View {
         HStack(spacing: 20) {
+            if showHelp { link("legal_help", page: "support") }
             link("legal_terms", page: "terms")
             link("legal_privacy", page: "privacy")
         }

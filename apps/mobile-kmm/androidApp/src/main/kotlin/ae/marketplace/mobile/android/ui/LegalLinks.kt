@@ -18,16 +18,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 
-/** Terms and Privacy policy, opened on the web in the app's language. */
+/** Terms and Privacy policy (and Help, on Me), opened on the web in the app's language. */
 @Composable
-fun LegalLinks(color: Color, modifier: Modifier = Modifier) {
+fun LegalLinks(color: Color, modifier: Modifier = Modifier, showHelp: Boolean = false) {
     val context = LocalContext.current
     val lang = if (context.resources.configuration.locales[0].language == "ar") "ar" else "en"
     fun open(page: String) = context.startActivity(
         Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.WEB_BASE_URL}/$lang/$page")),
     )
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        for ((label, page) in listOf(R.string.legal_terms to "terms", R.string.legal_privacy to "privacy")) {
+        val pages = listOfNotNull(
+            if (showHelp) R.string.legal_help to "support" else null,
+            R.string.legal_terms to "terms",
+            R.string.legal_privacy to "privacy",
+        )
+        for ((label, page) in pages) {
             Text(
                 stringResource(label),
                 color = color,

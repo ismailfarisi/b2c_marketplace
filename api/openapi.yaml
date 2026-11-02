@@ -28,6 +28,7 @@ servers:
 tags:
   - name: health
   - name: app
+  - name: support
   - name: companies
     description: Office lunch accounts billed to an employer.
   - name: auth
@@ -188,6 +189,88 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AppReleases" }
+
+  /me/support/tickets:
+    get:
+      tags: [support]
+      operationId: listMySupportTickets
+      summary: The customer's help tickets, most recent activity first
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/SupportTicket" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [support]
+      operationId: openSupportTicket
+      summary: Open a help ticket with its first message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, body]
+              properties:
+                subject: { type: string, maxLength: 200 }
+                body: { type: string, maxLength: 4000 }
+                subscription_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Opened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportThread" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /me/support/tickets/{ticketId}:
+    get:
+      tags: [support]
+      operationId: getMySupportTicket
+      summary: One of the customer's tickets with its messages
+      parameters:
+        - { name: ticketId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportThread" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/support/tickets/{ticketId}/messages:
+    post:
+      tags: [support]
+      operationId: replyToMySupportTicket
+      summary: Reply on the customer's own ticket (reopens it)
+      parameters:
+        - { name: ticketId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, maxLength: 4000 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportThread" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /me:
     get:
@@ -4733,6 +4816,31 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+    SupportTicket:
+      type: object
+      required: [id, subject, status, subscription_id, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        subject: { type: string }
+        status: { type: string, enum: [open, answered, closed] }
+        subscription_id: { type: [string, "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SupportMessage:
+      type: object
+      required: [id, from_staff, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        from_staff: { type: boolean }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+    SupportThread:
+      allOf:
+        - { $ref: "#/components/schemas/SupportTicket" }
+        - type: object
+          required: [messages]
+          properties:
+            messages: { type: array, items: { $ref: "#/components/schemas/SupportMessage" } }
     AppRelease:
       type: object
       required: [min_version, latest_version, store_url]

@@ -22,6 +22,7 @@ const COPY = {
     businessLong: "Office lunches for your company",
     privacy: "Privacy",
     terms: "Terms",
+    help: "Help",
     signIn: "Sign in",
     signOut: "Sign out",
     deliverTo: "Deliver to",
@@ -40,6 +41,7 @@ const COPY = {
     businessLong: "غداء المكاتب لشركتك",
     privacy: "الخصوصية",
     terms: "الشروط",
+    help: "المساعدة",
     signIn: "تسجيل الدخول",
     signOut: "تسجيل الخروج",
     deliverTo: "التوصيل إلى",
@@ -284,6 +286,7 @@ export function CustomerShell({
       <footer className="ms-foot">
         <Link href={`/${locale}/business`}>{t.businessLong}</Link>
         <Link href={`/${locale}/feed`}>{t.feed}</Link>
+        <Link href={`/${locale}/support`}>{t.help}</Link>
         <Link href={`/${locale}/privacy`}>{t.privacy}</Link>
         <Link href={`/${locale}/terms`}>{t.terms}</Link>
       </footer>

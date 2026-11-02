@@ -424,7 +424,7 @@ struct MeScreen: View {
                 }
                 .disabled(deletion?.busy == true)
                 .listRowBackground(Palette.ink)
-                LegalLinks(tint: Palette.text.opacity(0.7))
+                LegalLinks(tint: Palette.text.opacity(0.7), showHelp: true)
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Palette.ink)
             }
