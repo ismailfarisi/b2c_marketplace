@@ -2,6 +2,7 @@ package ae.marketplace.mobile.android
 
 import ae.marketplace.mobile.MarketplaceSdk
 import ae.marketplace.mobile.PlatformContext
+import ae.marketplace.mobile.android.push.Push
 import android.app.Application
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +48,9 @@ class MarketplaceApp : Application() {
                     sessionId = sessionId,
                 )
             )
+            if (Push.start(this@MarketplaceApp)) {
+                Push.token { sdk.await().registerPushToken(it, "android") }
+            }
         }
     }
 }

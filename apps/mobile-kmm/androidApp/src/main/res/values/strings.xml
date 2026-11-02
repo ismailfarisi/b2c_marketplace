@@ -472,4 +472,5 @@
     <string name="saved_signin_title">Sign in to see saved videos</string>
     <string name="saved_signin_why">Videos you save stay on your account, so they are there on any phone.</string>
     <string name="feed_more">More from the video marketplace</string>
+    <string name="push_channel_name">Meal and delivery updates</string>
 </resources>

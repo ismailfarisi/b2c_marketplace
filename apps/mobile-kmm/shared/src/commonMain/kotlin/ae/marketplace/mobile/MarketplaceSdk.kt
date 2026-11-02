@@ -18,6 +18,7 @@ import ae.marketplace.mobile.network.ApiClientFactory
 import ae.marketplace.mobile.network.TokenStore
 import ae.marketplace.mobile.network.tokenStore
 import ae.marketplace.mobile.playback.PlaybackCoordinator
+import ae.marketplace.mobile.push.PushRegistry
 import ae.marketplace.mobile.playback.ReelPlayerPool
 import ae.marketplace.mobile.playback.createReelPlayer
 import ae.marketplace.mobile.sell.SellApi
@@ -66,6 +67,7 @@ class MarketplaceSdk private constructor(
     private val meals: MealsApi,
     private val scope: CoroutineScope,
     private val network: NetworkStatus,
+    private val push: PushRegistry,
 ) {
     companion object {
         suspend fun create(
@@ -89,6 +91,8 @@ class MarketplaceSdk private constructor(
             // knows. Doing it lazily would put the shell back where it was: a
             // frame of the sign-in gate in front of a viewer who is signed in.
             session.restore()
+            val push = PushRegistry(client, session, scope)
+            session.beforeSignOut = push::logout
 
             return MarketplaceSdk(
                 identity = identity,
@@ -106,6 +110,7 @@ class MarketplaceSdk private constructor(
                 meals = MealsApi(client),
                 scope = scope,
                 network = networkStatus(context),
+                push = push,
             ).also { it.sessionId = sessionId }
         }
     }
@@ -170,6 +175,9 @@ class MarketplaceSdk private constructor(
      * its whole design is that flicking between those tabs does not re-fetch.
      */
     fun createMeViewModel(): MeViewModel = MeViewModel(me)
+
+    /** The phone's push token from FCM ("android") or APNs ("ios"). */
+    fun registerPushToken(token: String, platform: String) = push.update(token, platform)
 
     /** The meals tab: storefront, checkout and the customer's subscriptions. */
     fun createMealsViewModel(): MealsViewModel = MealsViewModel(meals)

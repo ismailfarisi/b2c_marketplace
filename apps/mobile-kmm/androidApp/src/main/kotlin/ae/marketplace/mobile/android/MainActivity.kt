@@ -28,7 +28,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -221,6 +224,18 @@ class MainActivity : ComponentActivity() {
                     MutableStateFlow<SessionState>(SessionState.Unknown)
                 }).collectAsState()
                 val authorised = sessionState.isAuthenticated
+                val context = LocalContext.current
+                val notificationPrompt = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) {}
+                LaunchedEffect(authorised) {
+                    if (authorised && Build.VERSION.SDK_INT >= 33 &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPrompt.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
 
                 // A session that ends underneath the viewer takes its screens
                 // with it. Without the `forget`, the next person to sign in on

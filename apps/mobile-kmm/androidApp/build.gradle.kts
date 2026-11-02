@@ -20,6 +20,11 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/v1\"")
         // The web app, for pages the app links out to (office lunch sign-up).
         buildConfigField("String", "WEB_BASE_URL", "\"http://10.0.2.2:3000\"")
+        // Firebase project for push (-PFIREBASE_APP_ID=... or gradle.properties).
+        // Left empty, the app runs without push.
+        for (key in listOf("FIREBASE_APP_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID")) {
+            buildConfigField("String", key, "\"${(project.findProperty(key) as String?) ?: ""}\"")
+        }
     }
 
     buildFeatures {
@@ -51,6 +56,7 @@ android {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(libs.firebase.messaging)
 
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

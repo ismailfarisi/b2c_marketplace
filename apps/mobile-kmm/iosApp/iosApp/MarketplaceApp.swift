@@ -28,6 +28,9 @@ final class AppEnvironment: ObservableObject {
                 locale: Locale.current.language.languageCode?.identifier ?? "en",
                 sessionId: sessionId
             )
+            if let sdk {
+                PushDelegate.onToken = { token in sdk.registerPushToken(token: token, platform: "ios") }
+            }
         } catch {
             // Nothing to retry against yet — the failure is a disk read, and a
             // second attempt in the same second will fail the same way.
@@ -45,6 +48,7 @@ enum Config {
 
 @main
 struct MarketplaceApp: App {
+    @UIApplicationDelegateAdaptor(PushDelegate.self) private var pushDelegate
     @StateObject private var env = AppEnvironment()
 
     var body: some Scene {
@@ -186,7 +190,10 @@ struct RootView: View {
         }
         .task(id: session != nil) {
             guard let session else { return }
-            for await state in session.state { sessionState = state }
+            for await state in session.state {
+                sessionState = state
+                if state is SessionStateAuthenticated { PushDelegate.requestPermission() }
+            }
         }
         .task(id: session != nil) {
             guard let session, let me = meViewModel else { return }

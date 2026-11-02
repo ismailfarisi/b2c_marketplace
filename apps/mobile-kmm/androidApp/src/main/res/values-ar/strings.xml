@@ -402,4 +402,5 @@
     <string name="saved_signin_title">سجّل الدخول لعرض الفيديوهات المحفوظة</string>
     <string name="saved_signin_why">الفيديوهات التي تحفظها تبقى في حسابك، فتجدها على أي هاتف.</string>
     <string name="feed_more">المزيد من سوق الفيديو</string>
+    <string name="push_channel_name">تحديثات الوجبات والتوصيل</string>
 </resources>

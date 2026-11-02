@@ -99,7 +99,11 @@ class Session(private val tokens: TokenStore) {
      * other order produces a sign-out that loads the previous account's inbox
      * one last time.
      */
+    /** Runs before local tokens are dropped, while the server session is still usable. */
+    var beforeSignOut: (suspend () -> Unit)? = null
+
     suspend fun signOut() {
+        if (_state.value.isAuthenticated) runCatching { beforeSignOut?.invoke() }
         runCatching { tokens.clear() }
         _ended.value = SessionEnded.ByViewer
         _state.value = SessionState.Anonymous
