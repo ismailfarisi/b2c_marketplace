@@ -41,6 +41,9 @@ type Config struct {
 	// SMS (sign-in codes). "sns" sends through Amazon SNS with the default AWS
 	// credential chain; empty keeps the log provider in development.
 	SMSProvider string
+
+	// SentryDSN turns on crash reporting (panics and fatal errors) to Sentry.
+	SentryDSN   string
 	SMSRegion   string
 	SMSSenderID string
 	APNsKeyP8   string
@@ -168,6 +171,7 @@ func Load() (Config, error) {
 		WhatsAppAPIVersion:    optional("WHATSAPP_API_VERSION", "v21.0"),
 		FCMCredentialsJSON:    optional("FCM_CREDENTIALS_JSON", ""),
 		SMSProvider:           optional("SMS_PROVIDER", ""),
+		SentryDSN:             optional("SENTRY_DSN", ""),
 		SMSRegion:             optional("SMS_REGION", ""),
 		SMSSenderID:           optional("SMS_SENDER_ID", ""),
 		APNsKeyP8:             optional("APNS_KEY_P8", ""),

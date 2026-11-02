@@ -48,6 +48,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Started from MarketplaceApp only when a DSN is built in. -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+
         <service
             android:name=".push.PushService"
             android:exported="false">

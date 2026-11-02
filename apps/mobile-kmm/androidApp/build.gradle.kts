@@ -22,6 +22,8 @@ android {
         buildConfigField("String", "WEB_BASE_URL", "\"http://10.0.2.2:3000\"")
         // Firebase project for push (-PFIREBASE_APP_ID=... or gradle.properties).
         // Left empty, the app runs without push.
+        // Sentry crash reporting (-PSENTRY_DSN=...). Empty leaves it off.
+        buildConfigField("String", "SENTRY_DSN", "\"${(project.findProperty("SENTRY_DSN") as String?) ?: ""}\"")
         for (key in listOf("FIREBASE_APP_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID")) {
             buildConfigField("String", key, "\"${(project.findProperty(key) as String?) ?: ""}\"")
         }
@@ -57,6 +59,7 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.firebase.messaging)
+    implementation(libs.sentry.android)
 
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

@@ -37,6 +37,7 @@ coil = "3.3.0"
 # Push (Android). Initialised from build properties, not google-services.json,
 # so builds without a Firebase project still work and simply skip push.
 firebaseMessaging = "24.1.2"
+sentryAndroid = "7.22.6"
 
 # SKIE generates the Swift half of the interop the iOS code was already written
 # against: a Kotlin StateFlow becomes a real AsyncSequence, and a sealed
@@ -84,6 +85,7 @@ camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 
+sentry-android = { module = "io.sentry:sentry-android", version.ref = "sentryAndroid" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 
 [plugins]

@@ -14,6 +14,7 @@
 package main
 
 import (
+	"github.com/marketplace/api/internal/platform/crash"
 	// Embedded tzdata, so Asia/Dubai resolves in a scratch container with no
 	// system zoneinfo. Without it every wall-clock rendering in the product
 	// silently falls back to UTC — four hours wrong, and wrong by a whole day
@@ -64,9 +65,15 @@ const (
 func main() {
 	if err := run(); err != nil {
 		slog.Error("fatal", "error", err)
+		crash.Error(err)
+		crashFlush()
 		os.Exit(1)
 	}
+	crashFlush()
 }
+
+// crashFlush is replaced once crash reporting starts in run.
+var crashFlush = func() {}
 
 func run() error {
 	cfg, err := config.Load()
@@ -76,6 +83,7 @@ func run() error {
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)).
 		With("service", "worker", "version", version))
+	crashFlush = crash.Init(cfg.SentryDSN, cfg.Env, "worker", version)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

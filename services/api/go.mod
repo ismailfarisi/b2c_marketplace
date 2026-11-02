@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sns v1.47.7
 	github.com/aws/smithy-go v1.28.7
 	github.com/getkin/kin-openapi v0.142.0
+	github.com/getsentry/sentry-go v0.35.3
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/cors v1.2.1
 	github.com/golang-jwt/jwt/v5 v5.2.1

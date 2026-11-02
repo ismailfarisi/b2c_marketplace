@@ -4,6 +4,7 @@ import ae.marketplace.mobile.MarketplaceSdk
 import ae.marketplace.mobile.PlatformContext
 import ae.marketplace.mobile.android.push.Push
 import android.app.Application
+import io.sentry.android.core.SentryAndroid
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,15 @@ class MarketplaceApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // First, so a crash during start-up is reported too.
+        if (BuildConfig.SENTRY_DSN.isNotEmpty()) {
+            SentryAndroid.init(this) {
+                it.dsn = BuildConfig.SENTRY_DSN
+                it.release = "ae.marketplace.mobile@${BuildConfig.VERSION_NAME}"
+                it.environment = if (BuildConfig.DEBUG) "development" else "production"
+                it.isSendDefaultPii = false
+            }
+        }
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             sdk.complete(
                 MarketplaceSdk.create(

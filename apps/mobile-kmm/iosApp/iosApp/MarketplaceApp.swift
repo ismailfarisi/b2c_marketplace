@@ -51,6 +51,10 @@ struct MarketplaceApp: App {
     @UIApplicationDelegateAdaptor(PushDelegate.self) private var pushDelegate
     @StateObject private var env = AppEnvironment()
 
+    init() {
+        Crash.start()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView(env: env)

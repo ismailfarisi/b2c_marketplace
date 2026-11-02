@@ -8,6 +8,7 @@ package main
 
 import (
 	"github.com/marketplace/api/internal/modules/company"
+	"github.com/marketplace/api/internal/platform/crash"
 	// Embedded tzdata — see the note in cmd/worker.
 	_ "time/tzdata"
 
@@ -82,9 +83,15 @@ const (
 func main() {
 	if err := run(); err != nil {
 		slog.Error("fatal", "error", err)
+		crash.Error(err)
+		crashFlush()
 		os.Exit(1)
 	}
+	crashFlush()
 }
+
+// crashFlush is replaced once crash reporting starts in run.
+var crashFlush = func() {}
 
 func run() error {
 	cfg, err := config.Load()
@@ -93,6 +100,7 @@ func run() error {
 	}
 
 	setupLogging(cfg)
+	crashFlush = crash.Init(cfg.SentryDSN, cfg.Env, "api", version)
 
 	// Signal handling wraps everything so that a Ctrl-C during startup is as
 	// clean as one during serving.

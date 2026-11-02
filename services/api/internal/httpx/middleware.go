@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"github.com/marketplace/api/internal/platform/crash"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -164,6 +165,7 @@ func Recover(next http.Handler) http.Handler {
 					"stack", string(debug.Stack()),
 					"request_id", RequestIDFromContext(r.Context()),
 				)
+				crash.Panic(rec, RequestIDFromContext(r.Context()))
 				WriteJSON(w, http.StatusInternalServerError, "application/problem+json", Problem{
 					Type:      "about:blank",
 					Title:     "Internal server error",
