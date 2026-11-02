@@ -37,12 +37,18 @@ type Config struct {
 	// an Apple .p8 key's PEM text, its key id, the team id and the bundle id.
 	// Either half switches on by itself.
 	FCMCredentialsJSON string
-	APNsKeyP8          string
-	APNsKeyID          string
-	APNsTeamID         string
-	APNsTopic          string
-	APNsSandbox        bool
-	OTPTTL             time.Duration
+
+	// SMS (sign-in codes). "sns" sends through Amazon SNS with the default AWS
+	// credential chain; empty keeps the log provider in development.
+	SMSProvider string
+	SMSRegion   string
+	SMSSenderID string
+	APNsKeyP8   string
+	APNsKeyID   string
+	APNsTeamID  string
+	APNsTopic   string
+	APNsSandbox bool
+	OTPTTL      time.Duration
 
 	S3Endpoint string
 	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
@@ -161,6 +167,9 @@ func Load() (Config, error) {
 		WhatsAppPhoneNumberID: optional("WHATSAPP_PHONE_NUMBER_ID", ""),
 		WhatsAppAPIVersion:    optional("WHATSAPP_API_VERSION", "v21.0"),
 		FCMCredentialsJSON:    optional("FCM_CREDENTIALS_JSON", ""),
+		SMSProvider:           optional("SMS_PROVIDER", ""),
+		SMSRegion:             optional("SMS_REGION", ""),
+		SMSSenderID:           optional("SMS_SENDER_ID", ""),
 		APNsKeyP8:             optional("APNS_KEY_P8", ""),
 		APNsKeyID:             optional("APNS_KEY_ID", ""),
 		APNsTeamID:            optional("APNS_TEAM_ID", ""),
@@ -215,7 +224,16 @@ func Load() (Config, error) {
 	}
 
 	// Guardrails that only apply once the process is actually deployed.
+	switch cfg.SMSProvider {
+	case "", "sns":
+	default:
+		problems = append(problems, fmt.Sprintf("SMS_PROVIDER %q is not supported (use sns)", cfg.SMSProvider))
+	}
+
 	if cfg.IsProduction() {
+		if cfg.SMSProvider == "" {
+			problems = append(problems, "SMS_PROVIDER is required in production — sign-in codes go by SMS")
+		}
 		if cfg.OTPDevEcho {
 			problems = append(problems, "OTP_DEV_ECHO must be false in production")
 		}

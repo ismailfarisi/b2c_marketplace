@@ -22,6 +22,7 @@ func prodEnv() map[string]string {
 		"DATABASE_URL":       "postgres://u:p@db:5432/marketplace?sslmode=require",
 		"JWT_SIGNING_KEY":    "AZ7kQm2vX9pL4tR8wN3sB6yH1jF5dG0cV2nM8qW4eT7uY9iO",
 		"S3_BUCKET":          "marketplace-media",
+		"SMS_PROVIDER":       "sns",
 		"S3_PUBLIC_ENDPOINT": "https://media.example.ae",
 		"MEDIA_CDN_BASE_URL": "https://cdn.example.ae",
 		// Passes config.Load and would still be refused by

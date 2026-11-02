@@ -3,7 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,6 +54,19 @@ func BuildNotify(cfg config.Config, pool *pgxpool.Pool) *notify.Service {
 			AccessToken:   cfg.WhatsAppAccessToken,
 			PhoneNumberID: cfg.WhatsAppPhoneNumberID,
 			APIVersion:    cfg.WhatsAppAPIVersion,
+		}
+	}
+
+	if cfg.SMSProvider == "sns" {
+		region := cfg.SMSRegion
+		if region == "" {
+			region = cfg.S3Region
+		}
+		awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(), awsconfig.WithRegion(region))
+		if err != nil {
+			slog.Error("sms: SNS disabled", "error", err)
+		} else {
+			providers[notify.ChannelSMS] = notify.SNSSMS{API: sns.NewFromConfig(awsCfg), SenderID: cfg.SMSSenderID}
 		}
 	}
 
@@ -158,6 +174,27 @@ func (n MealNotifier) Notify(ctx context.Context, tx pgx.Tx, userID uuid.UUID, t
 	_, err := n.Svc.Enqueue(ctx, tx, notify.Message{
 		UserID: userID.String(), TemplateKey: templateKey, Category: cat,
 		Params: params, DedupeKey: dedupeKey,
+	})
+	return err
+}
+
+// LoginCodeNotifier adapts notify.Service to identity.OTPSender.
+type LoginCodeNotifier struct {
+	Notify *notify.Service
+	TTL    time.Duration
+}
+
+func (n LoginCodeNotifier) SendOTP(
+	ctx context.Context, tx pgx.Tx, challengeID uuid.UUID, phone, code string,
+) error {
+	_, err := n.Notify.EnqueueDirect(ctx, tx, notify.DirectMessage{
+		Phone:       phone,
+		TemplateKey: "auth.otp",
+		Category:    notify.CategoryAccount,
+		Params: map[string]string{
+			"code": code, "minutes": strconv.Itoa(int(n.TTL.Minutes())),
+		},
+		DedupeKey: "auth-otp:" + challengeID.String(),
 	})
 	return err
 }

@@ -151,7 +151,9 @@ func run() error {
 	orderingSvc := ordering.NewService(pool, registries.Verticals, attributionSvc)
 	paymentsSvc := payments.NewService(pool, provider, commissionBP, platformVATBP)
 
+	notifySvc := app.BuildNotify(cfg, pool)
 	identitySvc := identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho)
+	identitySvc.SetOTPSender(app.LoginCodeNotifier{Notify: notifySvc, TTL: cfg.OTPTTL})
 
 	promoSvc := promo.NewService(pool)
 	reviewsSvc := reviews.NewService(pool)
@@ -172,7 +174,7 @@ func run() error {
 				PlatformVATBP:   platformVATBP,
 				ReserveCapacity: true,
 				Promos:          promoSvc,
-				Notifier:        app.MealNotifier{Svc: app.BuildNotify(cfg, pool)},
+				Notifier:        app.MealNotifier{Svc: notifySvc},
 			}),
 			Reviews: reviewsSvc,
 		},
@@ -190,8 +192,6 @@ func run() error {
 	// implementation for. Handed in as an interface: `driver` still knows one
 	// sentence about notifications, and it is the constructor signature that
 	// says so.
-	notifySvc := app.BuildNotify(cfg, pool)
-
 	driverSvc := driver.NewService(pool, driver.Config{
 		CommissionBP:  commissionBP,
 		PlatformVATBP: platformVATBP,

@@ -35,7 +35,20 @@ type Service struct {
 	// audit is set only by WithAuditor. Nil on the sign-in path, which has no
 	// actor and must not be able to perform staff actions on accounts.
 	audit Auditor
+	// otp delivers sign-in codes. Nil in tests and in development without an
+	// SMS provider, where devEcho is the only way to read a code.
+	otp OTPSender
 }
+
+// OTPSender queues a sign-in code for delivery inside the transaction that
+// stores it, so a code is never sent without being stored or stored and lost.
+type OTPSender interface {
+	SendOTP(ctx context.Context, tx pgx.Tx, challengeID uuid.UUID, phone, code string) error
+}
+
+// SetOTPSender wires code delivery. Called once at boot, before the service is
+// copied by WithAuditor.
+func (s *Service) SetOTPSender(o OTPSender) { s.otp = o }
 
 func NewService(pool *pgxpool.Pool, issuer *auth.Issuer, otpTTL time.Duration, devEcho bool) *Service {
 	return &Service{pool: pool, issuer: issuer, otpTTL: otpTTL, devEcho: devEcho}
@@ -78,7 +91,12 @@ func (s *Service) RequestOTP(ctx context.Context, phone, purpose, requestIP stri
 	}
 
 	ch := &Challenge{ExpiresAt: time.Now().Add(s.otpTTL), ResendAfterSeconds: 60}
-	err = s.pool.QueryRow(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
+	err = tx.QueryRow(ctx, `
 		INSERT INTO otp_codes (phone, purpose, code_hash, request_ip, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id`,
@@ -87,13 +105,19 @@ func (s *Service) RequestOTP(ctx context.Context, phone, purpose, requestIP stri
 	if err != nil {
 		return nil, fmt.Errorf("insert otp: %w", err)
 	}
+	if s.otp != nil {
+		if err := s.otp.SendOTP(ctx, tx, ch.ID, phone, code); err != nil {
+			return nil, fmt.Errorf("queue otp: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
 
 	if s.devEcho {
 		slog.WarnContext(ctx, "OTP issued (dev echo — never enabled in production)",
 			"phone", phone, "code", code, "challenge_id", ch.ID)
 	}
-	// Real dispatch goes through the SMS provider here, enqueued via the outbox
-	// so a provider outage retries rather than dropping the login.
 
 	return ch, nil
 }
