@@ -10,6 +10,12 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     }
     @MainActor private static var pending: String?
 
+    /// Where a tapped notification points (its `link`), for the meals tab.
+    @MainActor static var onLink: ((String) -> Void)? {
+        didSet { if let link = pendingLink, let onLink { pendingLink = nil; onLink(link) } }
+    }
+    @MainActor private static var pendingLink: String?
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -36,6 +42,19 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .list])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if let link = response.notification.request.content.userInfo["link"] as? String {
+            Task { @MainActor in
+                if let onLink = Self.onLink { onLink(link) } else { Self.pendingLink = link }
+            }
+        }
+        completionHandler()
     }
 
     /// Asked after sign-in, not at launch.

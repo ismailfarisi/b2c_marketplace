@@ -98,6 +98,7 @@ struct RootView: View {
     @State private var sellViewModel: SellViewModel?
 
     @State private var route: Route = .none
+    @State private var link: MealsLink?
     @State private var focusOpen = false
     @State private var focusTitle = ""
 
@@ -120,6 +121,14 @@ struct RootView: View {
     }
 
     private var authorised: Bool { sessionState is SessionStateAuthenticated }
+
+    /// Universal Links and push taps: open the matching meals screen.
+    private func openLink(_ url: String) {
+        guard let target = MealsLinks.shared.parse(url: url) else { return }
+        route = .none
+        destinationRaw = Destination.meals.rawValue
+        link = target
+    }
     private var settled: Bool { !(sessionState is SessionStateUnknown) }
 
     /// Three of the five need an account. Search does not — it is the
@@ -249,6 +258,8 @@ struct RootView: View {
             guard let vm = feedViewModel else { return }
             if new == .feed { vm.onAppForegrounded() } else { vm.onAppBackgrounded() }
         }
+        .onOpenURL { openLink($0.absoluteString) }
+        .task { PushDelegate.onLink = { openLink($0) } }
     }
 
     // ── the tabs ─────────────────────────────────────────────────────────────
@@ -288,7 +299,9 @@ struct RootView: View {
                             requireAccount: { run in
                                 if authorised { run() } else { pendingMeals = run }
                             },
-                            startOnMine: destination == .myMeals
+                            startOnMine: destination == .myMeals,
+                            link: link,
+                            onLinkHandled: { link = nil }
                         )
                         .id(destination)
                         if pendingMeals != nil && !authorised, let gate = signInViewModel {

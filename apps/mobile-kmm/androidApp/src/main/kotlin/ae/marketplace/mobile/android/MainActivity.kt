@@ -79,6 +79,17 @@ class MainActivity : ComponentActivity() {
 
     private var viewModel: FeedViewModel? = null
 
+    /** A push `link` or App Link URL waiting for the meals tab to open it. */
+    private val pendingLink = mutableStateOf<String?>(null)
+
+    private fun linkOf(intent: android.content.Intent?): String? =
+        intent?.getStringExtra(ae.marketplace.mobile.android.push.Push.EXTRA_LINK) ?: intent?.dataString
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        linkOf(intent)?.let { pendingLink.value = it }
+    }
+
     /**
      * Dubai Marina.
      *
@@ -146,6 +157,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null) pendingLink.value = linkOf(intent)
 
         setContent {
             MaterialTheme(
@@ -203,6 +215,12 @@ class MainActivity : ComponentActivity() {
                 // second one a context switch out of the feed the viewer is
                 // still watching.
                 var route by remember { mutableStateOf(Route.None) }
+                val linkTarget = pendingLink.value?.let { ae.marketplace.mobile.meals.MealsLinks.parse(it) }
+                LaunchedEffect(pendingLink.value) {
+                    if (pendingLink.value == null) return@LaunchedEffect
+                    if (linkTarget == null) pendingLink.value = null
+                    else { route = Route.None; destination = Destination.Meals }
+                }
 
                 LaunchedEffect(Unit) {
                     val sdk = (application as MarketplaceApp).sdk.await()
@@ -429,6 +447,8 @@ class MainActivity : ComponentActivity() {
                                         location = here,
                                         startOnMine = destination == Destination.MyMeals,
                                         requireAccount = { run -> if (authorised) run() else pendingMeals = run },
+                                        link = linkTarget,
+                                        onLinkHandled = { pendingLink.value = null },
                                     )
                                     if (pendingMeals != null && !authorised && gate != null) {
                                         // Composed after MealsTab, so Back closes the gate

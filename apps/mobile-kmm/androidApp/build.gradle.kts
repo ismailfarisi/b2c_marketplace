@@ -20,6 +20,8 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/v1\"")
         // The web app, for pages the app links out to (office lunch sign-up).
         buildConfigField("String", "WEB_BASE_URL", "\"http://10.0.2.2:3000\"")
+        // The production web host App Links verify against (assetlinks.json).
+        manifestPlaceholders["webHost"] = (project.findProperty("WEB_HOST") as String?) ?: "localhost"
         // Firebase project for push (-PFIREBASE_APP_ID=... or gradle.properties).
         // Left empty, the app runs without push.
         // Sentry crash reporting (-PSENTRY_DSN=...). Empty leaves it off.

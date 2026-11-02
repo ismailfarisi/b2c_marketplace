@@ -151,6 +151,9 @@ struct MealsScreen: View {
     let requireAccount: (@escaping () -> Void) -> Void
     /// The My meals tab: same flow, opened on the customer's subscriptions.
     var startOnMine = false
+    /// A deep link or push tap to open, then report handled.
+    var link: MealsLink? = nil
+    var onLinkHandled: () -> Void = {}
 
     @State private var stack: [MealsPage] = [.home]
     @AppStorage("meals.place") private var placeRaw = ""
@@ -159,6 +162,21 @@ struct MealsScreen: View {
     @Environment(\.openURL) private var openURL
 
     private func go(_ p: MealsPage) { stack.append(p) }
+
+    private func follow(_ l: MealsLink) {
+        switch l.page {
+        case .kitchen:
+            if let id = l.id { viewModel.openKitchen(branchId: id); stack = [.home, .kitchen] }
+        case .subscription:
+            if let id = l.id { requireAccount { viewModel.openSubscription(id: id); stack = [.home, .subscription] } }
+        case .mine:
+            requireAccount { viewModel.loadMine(force: false); stack = [.home, .mine] }
+        case .rotation:
+            requireAccount { viewModel.startRotation(); stack = [.home, .rotation] }
+        default:
+            stack = [.home]
+        }
+    }
     private func back() { if stack.count > 1 { stack.removeLast() } }
 
     private func openPayment(_ url: String) {
@@ -216,6 +234,9 @@ struct MealsScreen: View {
                 viewModel.loadMine(force: false)
                 stack = [.home, .mine]
             }
+        }
+        .task(id: link.map { "\($0.page.name):\($0.id ?? "")" }) {
+            if let l = link { follow(l); onLinkHandled() }
         }
     }
 }

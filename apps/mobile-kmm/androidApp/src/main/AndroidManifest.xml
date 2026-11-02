@@ -41,11 +41,25 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:theme="@style/Theme.Marketplace">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- App Links: meals pages on the web open the same screen here. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${webHost}" />
+                <data android:pathPrefix="/en/kitchens/" />
+                <data android:pathPrefix="/ar/kitchens/" />
+                <data android:pathPrefix="/en/subscriptions" />
+                <data android:pathPrefix="/ar/subscriptions" />
+                <data android:pathPrefix="/en/rotation" />
+                <data android:pathPrefix="/ar/rotation" />
             </intent-filter>
         </activity>
         <!-- Started from MarketplaceApp only when a DSN is built in. -->

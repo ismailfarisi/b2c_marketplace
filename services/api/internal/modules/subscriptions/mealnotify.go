@@ -100,7 +100,7 @@ func (s *Service) notifyRenewalDue(ctx context.Context, tx pgx.Tx, subID, userID
 	dEn, dAr := dayLabels(cycle.Starts)
 	return s.notifier.Notify(ctx, tx, userID, "meals.renewal_due", true, map[string]string{
 		"kitchen": en, "kitchen_ar": ar, "date": dEn, "date_ar": dAr,
-		"amount": formatAmount(amount, plan.Currency),
+		"amount": formatAmount(amount, plan.Currency), "link": subscriptionLink(subID),
 	}, fmt.Sprintf("meals-renewal:%s:%d", subID, cycle.No))
 }
 
@@ -178,6 +178,7 @@ func (s *Service) remindOne(ctx context.Context, tx pgx.Tx, subID uuid.UUID, now
 				"kitchen": kEn, "kitchen_ar": kAr, "day": dEn, "day_ar": dAr,
 				"slot": m.Slot, "slot_ar": slotAr, "options": en, "options_ar": ar,
 				"cutoff": m.CutoffAt.In(live.Location).Format("15:04"),
+				"link":   subscriptionLink(subID),
 			}, fmt.Sprintf("meals-choose:%s:%s:%s", subID, m.Date, m.Slot)); err != nil {
 				return err
 			}
@@ -189,6 +190,7 @@ func (s *Service) remindOne(ctx context.Context, tx pgx.Tx, subID uuid.UUID, now
 		return s.notifier.Notify(ctx, tx, live.UserID, "meals.tomorrow", false, map[string]string{
 			"kitchen": kEn, "kitchen_ar": kAr, "day": dEn, "day_ar": dAr,
 			"menu": strings.Join(menuEn, "; "), "menu_ar": strings.Join(menuAr, "؛ "),
+			"link": subscriptionLink(subID),
 		}, fmt.Sprintf("meals-tomorrow:%s:%s", subID, tomorrow))
 	}
 	return nil
@@ -201,7 +203,7 @@ func (s *Service) NotifyDeliveries(ctx context.Context, batch int) (int, error) 
 		return 0, nil
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT f.id, f.status::text, s.user_id, s.branch_id
+		SELECT f.id, f.status::text, s.user_id, s.branch_id, s.id
 		  FROM fulfillments f
 		  JOIN subscriptions s ON s.id = f.subscription_id
 		 WHERE f.status IN ('dispatched', 'en_route', 'completed', 'failed')
@@ -212,13 +214,13 @@ func (s *Service) NotifyDeliveries(ctx context.Context, batch int) (int, error) 
 		return 0, fmt.Errorf("subscriptions: delivery updates: %w", err)
 	}
 	type update struct {
-		id, user, branch uuid.UUID
-		status           string
+		id, user, branch, sub uuid.UUID
+		status                string
 	}
 	var list []update
 	for rows.Next() {
 		var u update
-		if err := rows.Scan(&u.id, &u.status, &u.user, &u.branch); err != nil {
+		if err := rows.Scan(&u.id, &u.status, &u.user, &u.branch, &u.sub); err != nil {
 			rows.Close()
 			return 0, fmt.Errorf("subscriptions: delivery updates: %w", err)
 		}
@@ -236,7 +238,7 @@ func (s *Service) NotifyDeliveries(ctx context.Context, batch int) (int, error) 
 				return err
 			}
 			return s.notifier.Notify(ctx, tx, u.user, key, false,
-				map[string]string{"kitchen": en, "kitchen_ar": ar},
+				map[string]string{"kitchen": en, "kitchen_ar": ar, "link": subscriptionLink(u.sub)},
 				fmt.Sprintf("meals-delivery:%s:%s", u.id, key))
 		}); err != nil {
 			slog.ErrorContext(ctx, "delivery update failed", "fulfillment_id", u.id, "error", err)
@@ -244,3 +246,7 @@ func (s *Service) NotifyDeliveries(ctx context.Context, batch int) (int, error) 
 	}
 	return len(list), nil
 }
+
+// subscriptionLink is the web path a push tap or shared link opens; the apps
+// map it to the same screen (see MealsLinks in the KMM shared module).
+func subscriptionLink(id uuid.UUID) string { return "/en/subscriptions/" + id.String() }

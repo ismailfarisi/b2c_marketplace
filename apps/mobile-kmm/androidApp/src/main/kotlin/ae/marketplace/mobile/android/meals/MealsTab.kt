@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.meals
 
+import ae.marketplace.mobile.meals.MealsLinkPage
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.semantics.selected
 import ae.marketplace.mobile.model.MealTags
@@ -108,6 +109,9 @@ fun MealsTab(
     modifier: Modifier = Modifier,
     /** The My meals tab: same flow, opened on the customer's subscriptions. */
     startOnMine: Boolean = false,
+    /** A deep link or push tap to open, then report handled. */
+    link: ae.marketplace.mobile.meals.MealsLink? = null,
+    onLinkHandled: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("meals", android.content.Context.MODE_PRIVATE) }
@@ -125,6 +129,18 @@ fun MealsTab(
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
     fun home(then: Page? = null) { stack.clear(); stack.add(Page.Home); then?.let { stack.add(it) } }
 
+    LaunchedEffect(link) {
+        val l = link ?: return@LaunchedEffect
+        val id = l.id
+        when (l.page) {
+            MealsLinkPage.KITCHEN -> if (id != null) { viewModel.openKitchen(id); home(Page.Kitchen) }
+            MealsLinkPage.SUBSCRIPTION -> if (id != null) requireAccount { viewModel.openSubscription(id); home(Page.Subscription) }
+            MealsLinkPage.MINE -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
+            MealsLinkPage.ROTATION -> requireAccount { viewModel.startRotation(); home(Page.Rotation) }
+            MealsLinkPage.HOME -> home()
+        }
+        onLinkHandled()
+    }
     BackHandler(enabled = stack.size > 1) { back() }
 
     val context = LocalContext.current
