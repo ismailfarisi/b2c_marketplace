@@ -164,6 +164,13 @@ fun SignInGate(
                     fill = accent,
                 )
             }
+            androidx.compose.material3.Text(
+                stringResource(R.string.legal_agree),
+                color = androidx.compose.ui.graphics.Color.Gray,
+                fontSize = ae.marketplace.mobile.android.ui.Type.Secondary,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            ae.marketplace.mobile.android.ui.LegalLinks(color = accent)
         } else {
             Field(
                 value = state.code,

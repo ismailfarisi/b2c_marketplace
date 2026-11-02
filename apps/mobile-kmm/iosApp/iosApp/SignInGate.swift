@@ -104,6 +104,10 @@ struct SignInGate: View {
                               enabled: !phone.trimmingCharacters(in: .whitespaces).isEmpty && !state.busy) {
                     viewModel.sendCode(nowMillis: Self.millis())
                 }
+                Text("legal_agree")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                LegalLinks(tint: accent)
             }
 
             if let problem = state.error {

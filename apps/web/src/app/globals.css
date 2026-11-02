@@ -3238,6 +3238,20 @@ body {
   color: var(--ms-ink);
 }
 
+.ms .ms-legal {
+  max-inline-size: 42rem;
+  margin-inline: auto;
+  padding: 1.5rem 1rem 0;
+}
+.ms .ms-legal h2 {
+  margin-block: 1.75rem 0.5rem;
+  font-size: 1.15rem;
+}
+.ms .ms-legal p {
+  margin-block: 0 0.75rem;
+  line-height: 1.6;
+}
+
 .ms .ms-promo .ms-cta {
   box-shadow: none;
 }

@@ -5,6 +5,7 @@ import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.android.ui.EmptyBlock
 import ae.marketplace.mobile.android.ui.FailureBlock
 import ae.marketplace.mobile.android.ui.FailureStrip
+import ae.marketplace.mobile.android.ui.LegalLinks
 import ae.marketplace.mobile.android.ui.LoadingBlock
 import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.ui.Poster
@@ -598,6 +599,10 @@ fun MeScreen(
                         .clickable(enabled = !deletion.busy) { confirmingDelete = true }
                         .defaultMinSize(minHeight = Space.Touch)
                         .padding(vertical = 13.dp),
+                )
+                LegalLinks(
+                    color = Palette.Text.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(horizontal = Space.Edge),
                 )
             }
         }

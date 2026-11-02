@@ -214,6 +214,9 @@
     <string name="me_no_listings_hint">افتح «بيع» لتصوير واحد. يستغرق نحو دقيقة.</string>
     <string name="me_sign_out">تسجيل الخروج</string>
     <string name="me_delete_account">حذف الحساب</string>
+    <string name="legal_terms">شروط الاستخدام</string>
+    <string name="legal_privacy">سياسة الخصوصية</string>
+    <string name="legal_agree">بالمتابعة فإنك توافق على شروط الاستخدام وسياسة الخصوصية.</string>
     <string name="me_deleting">جارٍ حذف الحساب…</string>
     <string name="me_delete_title">هل تريد حذف حسابك؟</string>
     <string name="me_delete_body">سيتم إلغاء خطط وجباتك وإرجاع قيمة الأيام غير المستخدمة. ستُحذف بياناتك من الاسم ورقم الهاتف والعناوين والإعلانات، وسيتم تسجيل خروجك من كل الأجهزة. نحتفظ بالفواتير كما يتطلب القانون. لا يمكن التراجع عن ذلك.</string>

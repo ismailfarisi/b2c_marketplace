@@ -1,6 +1,7 @@
 "use client";
 
 import { ApiError } from "@marketplace/api-client";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useState, type FormEvent } from "react";
 
@@ -18,6 +19,7 @@ const COPY = {
   en: {
     title: "Sign in",
     intro: "We'll text you a six-digit code. No password.",
+    agree: ["By continuing you agree to our ", "Terms", " and ", "Privacy policy", "."],
     phone: "Mobile number",
     send: "Send code",
     sending: "Sending…",
@@ -36,6 +38,7 @@ const COPY = {
   ar: {
     title: "تسجيل الدخول",
     intro: "سنرسل لك رمزًا من ستة أرقام. بدون كلمة مرور.",
+    agree: ["بالمتابعة فإنك توافق على ", "الشروط", " و", "سياسة الخصوصية", "."],
     phone: "رقم الجوال",
     send: "أرسل الرمز",
     sending: "جارٍ الإرسال…",
@@ -190,6 +193,13 @@ function Form({ locale }: { locale: Locale }) {
           >
             {busy ? t.sending : t.send}
           </button>
+          <small className="ms-sub">
+            {t.agree[0]}
+            <Link href={`/${locale}/terms`}>{t.agree[1]}</Link>
+            {t.agree[2]}
+            <Link href={`/${locale}/privacy`}>{t.agree[3]}</Link>
+            {t.agree[4]}
+          </small>
         </form>
       )}
     </section>

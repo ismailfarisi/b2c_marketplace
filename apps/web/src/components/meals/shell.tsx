@@ -20,6 +20,8 @@ const COPY = {
     mineShort: "My meals",
     business: "Office lunches",
     businessLong: "Office lunches for your company",
+    privacy: "Privacy",
+    terms: "Terms",
     signIn: "Sign in",
     signOut: "Sign out",
     deliverTo: "Deliver to",
@@ -36,6 +38,8 @@ const COPY = {
     mineShort: "اشتراكاتي",
     business: "غداء المكاتب",
     businessLong: "غداء المكاتب لشركتك",
+    privacy: "الخصوصية",
+    terms: "الشروط",
     signIn: "تسجيل الدخول",
     signOut: "تسجيل الخروج",
     deliverTo: "التوصيل إلى",
@@ -280,6 +284,8 @@ export function CustomerShell({
       <footer className="ms-foot">
         <Link href={`/${locale}/business`}>{t.businessLong}</Link>
         <Link href={`/${locale}/feed`}>{t.feed}</Link>
+        <Link href={`/${locale}/privacy`}>{t.privacy}</Link>
+        <Link href={`/${locale}/terms`}>{t.terms}</Link>
       </footer>
     </div>
   );

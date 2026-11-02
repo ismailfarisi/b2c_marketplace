@@ -283,6 +283,9 @@
     <string name="me_no_listings_hint">Open Sell to film one. It takes about a minute.</string>
     <string name="me_sign_out">Sign out</string>
     <string name="me_delete_account">Delete account</string>
+    <string name="legal_terms">Terms of use</string>
+    <string name="legal_privacy">Privacy policy</string>
+    <string name="legal_agree">By continuing you agree to the Terms of use and Privacy policy.</string>
     <string name="me_deleting">Deleting account…</string>
     <string name="me_delete_title">Delete your account?</string>
     <string name="me_delete_body">Your meal plans are cancelled and unused days are credited back. Your name, phone, addresses and listings are removed and you are signed out on every device. Invoices are kept, as the law requires. This cannot be undone.</string>
