@@ -162,6 +162,7 @@ func run() error {
 
 	notifySvc := app.BuildNotify(cfg, pool)
 	identitySvc := identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho)
+	identitySvc.SetReviewAccount(cfg.OTPReviewPhone, cfg.OTPReviewCode)
 	identitySvc.SetOTPSender(app.LoginCodeNotifier{Notify: notifySvc, TTL: cfg.OTPTTL})
 
 	promoSvc := promo.NewService(pool)

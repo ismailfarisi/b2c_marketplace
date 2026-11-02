@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+fun prop(key: String, default: String): String =
+    (project.findProperty(key) as String?) ?: System.getenv(key) ?: default
+
 android {
     namespace = "ae.marketplace.mobile.android"
     compileSdk = 36
@@ -12,14 +15,16 @@ android {
         applicationId = "ae.marketplace.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Store builds pass -PVERSION_CODE (monotonic, per upload) and -PVERSION_NAME.
+        versionCode = (project.findProperty("VERSION_CODE") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("VERSION_NAME") as String?) ?: "0.1.0"
 
         // Pointed at the Go API. 10.0.2.2 is the emulator's route to the host,
         // which is where `make dev` runs cmd/api.
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/v1\"")
+        // Release builds must pass -PAPI_BASE_URL and -PWEB_BASE_URL (https).
+        buildConfigField("String", "API_BASE_URL", "\"${prop("API_BASE_URL", "http://10.0.2.2:8080/v1")}\"")
         // The web app, for pages the app links out to (office lunch sign-up).
-        buildConfigField("String", "WEB_BASE_URL", "\"http://10.0.2.2:3000\"")
+        buildConfigField("String", "WEB_BASE_URL", "\"${prop("WEB_BASE_URL", "http://10.0.2.2:3000")}\"")
         // The production web host App Links verify against (assetlinks.json).
         manifestPlaceholders["webHost"] = (project.findProperty("WEB_HOST") as String?) ?: "localhost"
         // Firebase project for push (-PFIREBASE_APP_ID=... or gradle.properties).
@@ -28,6 +33,20 @@ android {
         buildConfigField("String", "SENTRY_DSN", "\"${(project.findProperty("SENTRY_DSN") as String?) ?: ""}\"")
         for (key in listOf("FIREBASE_APP_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID")) {
             buildConfigField("String", key, "\"${(project.findProperty(key) as String?) ?: ""}\"")
+        }
+    }
+
+    // Upload key from Gradle properties or env (never committed). Without
+    // RELEASE_STORE_FILE the release build is unsigned, as before.
+    val releaseStore = prop("RELEASE_STORE_FILE", "")
+    signingConfigs {
+        if (releaseStore.isNotEmpty()) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = prop("RELEASE_STORE_PASSWORD", "")
+                keyAlias = prop("RELEASE_KEY_ALIAS", "")
+                keyPassword = prop("RELEASE_KEY_PASSWORD", "")
+            }
         }
     }
 
@@ -45,6 +64,7 @@ android {
             isMinifyEnabled = false
         }
         release {
+            if (releaseStore.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

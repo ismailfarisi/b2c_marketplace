@@ -8,6 +8,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,10 @@ type Config struct {
 	RefreshTokenTTL time.Duration
 
 	OTPDevEcho bool
+	// OTPReviewPhone always signs in with OTPReviewCode and is never texted:
+	// the account given to Apple/Google app review. Both or neither.
+	OTPReviewPhone string
+	OTPReviewCode  string
 
 	// WhatsApp Cloud API (Meta). Both set enables real WhatsApp sends;
 	// both empty keeps the log provider (dev) or refusal (production).
@@ -173,7 +178,9 @@ func Load() (Config, error) {
 		AccessTokenTTL:  duration("ACCESS_TOKEN_TTL", "15m"),
 		RefreshTokenTTL: duration("REFRESH_TOKEN_TTL", "720h"),
 
-		OTPDevEcho: boolean("OTP_DEV_ECHO", false),
+		OTPDevEcho:     boolean("OTP_DEV_ECHO", false),
+		OTPReviewPhone: optional("OTP_REVIEW_PHONE", ""),
+		OTPReviewCode:  optional("OTP_REVIEW_CODE", ""),
 
 		WhatsAppAccessToken:     optional("WHATSAPP_ACCESS_TOKEN", ""),
 		WhatsAppPhoneNumberID:   optional("WHATSAPP_PHONE_NUMBER_ID", ""),
@@ -247,6 +254,12 @@ func Load() (Config, error) {
 	case "", "sns":
 	default:
 		problems = append(problems, fmt.Sprintf("SMS_PROVIDER %q is not supported (use sns)", cfg.SMSProvider))
+	}
+
+	if (cfg.OTPReviewPhone == "") != (cfg.OTPReviewCode == "") {
+		problems = append(problems, "OTP_REVIEW_PHONE and OTP_REVIEW_CODE must be set together")
+	} else if cfg.OTPReviewCode != "" && !reviewCode.MatchString(cfg.OTPReviewCode) {
+		problems = append(problems, "OTP_REVIEW_CODE must be 6 digits")
 	}
 
 	if cfg.IsProduction() {
@@ -356,3 +369,5 @@ func countSet(values []string) int {
 	}
 	return n
 }
+
+var reviewCode = regexp.MustCompile(`^[0-9]{6}$`)

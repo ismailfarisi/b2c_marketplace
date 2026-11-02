@@ -1,14 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Black, not a light surface.
-
-      The app is a full-bleed video feed. A white window background flashes on
-      every cold start and behind every not-yet-decoded frame, which on a feed
-      of vertical video is the single most visible piece of jank there is.
+      Ghee paper, the meals canvas. Meals is the first tab, so a cream window
+      background is what a cold start should show; the video feed paints its own
+      black surface when it opens.
     -->
-    <style name="Theme.Marketplace" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
+    <style name="Theme.Marketplace" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ghee_paper</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>

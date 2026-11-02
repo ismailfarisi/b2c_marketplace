@@ -38,6 +38,16 @@ type Service struct {
 	// otp delivers sign-in codes. Nil in tests and in development without an
 	// SMS provider, where devEcho is the only way to read a code.
 	otp OTPSender
+	// reviewPhone/reviewCode are the app-store review account: that one number
+	// always takes reviewCode and is never texted. Empty disables it.
+	reviewPhone string
+	reviewCode  string
+}
+
+// SetReviewAccount enables a fixed code for one phone number, for Apple and
+// Google reviewers who cannot receive our SMS. Called once at boot.
+func (s *Service) SetReviewAccount(phone, code string) {
+	s.reviewPhone, s.reviewCode = normalizePhone(phone), code
 }
 
 // OTPSender queues a sign-in code for delivery inside the transaction that
@@ -84,6 +94,10 @@ func (s *Service) RequestOTP(ctx context.Context, phone, purpose, requestIP stri
 	if err != nil {
 		return nil, err
 	}
+	review := s.reviewCode != "" && phone == s.reviewPhone
+	if review {
+		code = s.reviewCode
+	}
 
 	var ip *net.IP
 	if parsed := net.ParseIP(requestIP); parsed != nil {
@@ -105,7 +119,7 @@ func (s *Service) RequestOTP(ctx context.Context, phone, purpose, requestIP stri
 	if err != nil {
 		return nil, fmt.Errorf("insert otp: %w", err)
 	}
-	if s.otp != nil {
+	if s.otp != nil && !review {
 		if err := s.otp.SendOTP(ctx, tx, ch.ID, phone, code); err != nil {
 			return nil, fmt.Errorf("queue otp: %w", err)
 		}
