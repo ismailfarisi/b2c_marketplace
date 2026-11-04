@@ -23,6 +23,7 @@ import {
   listMyRotations,
   listMySubscriptions,
 } from "@/lib/customer-api";
+import { LoadError } from "@/components/load-error";
 
 const COPY = {
   en: {

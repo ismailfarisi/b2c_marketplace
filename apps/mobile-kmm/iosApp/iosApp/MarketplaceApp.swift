@@ -114,6 +114,9 @@ struct RootView: View {
     @State private var route: Route = .none
     @State private var link: MealsLink?
     @State private var update: AppUpdate?
+    /// "Later" on a recommended update holds for the rest of the process.
+    @State private var laterChosen = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var focusOpen = false
     @State private var focusTitle = ""
 
@@ -141,23 +144,39 @@ struct RootView: View {
 
     private var updateRequired: Bool { update?.need.code == "REQUIRED" }
 
-    /// Opens the App Store; a required update is shown again on return.
+    /// Opens the App Store. A required update keeps its full-screen gate up,
+    /// so returning without updating lands on the gate again.
     private func openStore() {
         guard let current = update else { return }
         if let url = URL(string: current.storeUrl), !current.storeUrl.isEmpty {
             UIApplication.shared.open(url)
         }
-        guard current.need.code == "REQUIRED" else { update = nil; return }
-        update = nil
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(400))
-            update = current
+        if current.need.code != "REQUIRED" { update = nil }
+    }
+
+    /// Launch and every return to the foreground: an app left in the
+    /// background for days must still see a raised minimum, and a check that
+    /// failed offline gets another go. The SDK keeps the answer for 300s.
+    @MainActor
+    private func checkForUpdate() async {
+        guard let sdk = env.sdk else { return }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        guard let found = try? await sdk.checkForUpdate(platform: "ios", currentVersion: version) else { return }
+        switch found.need.code {
+        case "REQUIRED": update = found
+        case "RECOMMENDED": update = laterChosen ? nil : found
+        default: update = nil
         }
     }
 
-    /// Universal Links and push taps: open the matching meals screen.
-    private func openLink(_ url: String) {
-        guard let target = MealsLinks.shared.parse(url: url) else { return }
+    /// Universal Links and push taps: open the matching meals screen. A push
+    /// link the app has no screen for opens on the web instead of being
+    /// dropped; a Universal Link is never sent back out (it would loop).
+    private func openLink(_ url: String, fromPush: Bool = false) {
+        guard let target = MealsLinks.shared.parse(url: url) else {
+            if fromPush { openOnWeb(url) }
+            return
+        }
         if target.page == .support {
             // Help is native: open the ticket on the app's own session.
             destinationRaw = Destination.me.rawValue
@@ -172,6 +191,13 @@ struct RootView: View {
         route = .none
         destinationRaw = Destination.meals.rawValue
         link = target
+    }
+
+    private func openOnWeb(_ target: String) {
+        let full = target.hasPrefix("/") ? Config.webBaseUrl + target : target
+        guard full.hasPrefix("https://") || full.hasPrefix("http://"),
+              let url = URL(string: full) else { return }
+        UIApplication.shared.open(url)
     }
     private var settled: Bool { !(sessionState is SessionStateUnknown) }
 
@@ -245,11 +271,10 @@ struct RootView: View {
             if supportViewModel == nil { supportViewModel = sdk.createSupportViewModel() }
             if destination != .feed { feedViewModel?.onAppBackgrounded() }
             session = sdk.session
-            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-            if let found = try? await sdk.checkForUpdate(platform: "ios", currentVersion: version),
-               found.need.code != "UP_TO_DATE" {
-                update = found
-            }
+            await checkForUpdate()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await checkForUpdate() } }
         }
         .task(id: session != nil) {
             guard let session else { return }
@@ -332,15 +357,22 @@ struct RootView: View {
         } message: {
             Text("push_rationale_body")
         }
-        .task { PushDelegate.onLink = { openLink($0) } }
+        .task { PushDelegate.onLink = { openLink($0, fromPush: true) } }
+        // Recommended only: dismissible, so an alert is right. A required
+        // update is the full-screen gate below, which no tap can clear.
         .alert(
-            Text(LocalizedStringKey(updateRequired ? "update_required_title" : "update_title")),
-            isPresented: Binding(get: { update != nil }, set: { if !$0 && !updateRequired { update = nil } })
+            Text("update_title"),
+            isPresented: Binding(get: { update != nil && !updateRequired }, set: { if !$0 { update = nil } })
         ) {
             Button("update_action") { openStore() }
-            if !updateRequired { Button("update_later", role: .cancel) { update = nil } }
+            Button("update_later", role: .cancel) { laterChosen = true; update = nil }
         } message: {
-            Text(LocalizedStringKey(updateRequired ? "update_required_body" : "update_body"))
+            Text("update_body")
+        }
+        .overlay {
+            if updateRequired {
+                UpdateRequiredGate(onUpdate: openStore)
+            }
         }
     }
 
@@ -536,5 +568,38 @@ struct RootView: View {
         default:
             break
         }
+    }
+}
+
+/// Blocks the app below the minimum supported version. A view rather than an
+/// alert: SwiftUI dismisses an alert on any button tap, so a "required" alert
+/// can't be relied on to come back after a trip to the App Store.
+private struct UpdateRequiredGate: View {
+    let onUpdate: () -> Void
+
+    var body: some View {
+        VStack(spacing: Space.large) {
+            Spacer()
+            Text("update_required_title")
+                .font(.system(size: TypeScale.title, weight: .semibold))
+                .foregroundStyle(Palette.text)
+                .multilineTextAlignment(.center)
+            Text("update_required_body")
+                .font(.system(size: TypeScale.body))
+                .foregroundStyle(Palette.textMuted)
+                .multilineTextAlignment(.center)
+            Button(action: onUpdate) {
+                Text("update_action")
+                    .font(.system(size: TypeScale.body, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: Space.touch)
+                    .background(Palette.accent, in: RoundedRectangle(cornerRadius: 12))
+            }
+            Spacer()
+        }
+        .padding(.horizontal, Space.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.ink.ignoresSafeArea())
+        .contentShape(Rectangle())
     }
 }

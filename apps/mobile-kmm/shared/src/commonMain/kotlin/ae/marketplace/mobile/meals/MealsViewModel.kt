@@ -195,6 +195,8 @@ data class MyMealsUiState(
 )
 
 data class SubscriptionUiState(
+    /** The subscription being shown, kept so a failed open can be retried. */
+    val id: String? = null,
     val subscription: MySubscription? = null,
     val loading: Boolean = false,
     val busy: Boolean = false,
@@ -772,7 +774,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     fun openSubscription(id: String) {
         openedId = id
-        _sub.value = SubscriptionUiState(loading = true)
+        _sub.value = SubscriptionUiState(id = id, loading = true)
         lastAction = null
         reloadSubscription(id)
         loadReview(id)

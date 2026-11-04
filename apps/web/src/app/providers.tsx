@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureApiClient, ApiError } from "@marketplace/api-client";
 import { useState, type ReactNode } from "react";
 
+import { OfflineBanner } from "@/components/offline-banner";
 import { tokenStore } from "@/lib/token-store";
 
 configureApiClient({
@@ -95,6 +96,7 @@ export function Providers({
 
   return (
     <QueryClientProvider client={client}>
+      <OfflineBanner locale={locale} />
       <div data-locale={locale}>{children}</div>
     </QueryClientProvider>
   );
