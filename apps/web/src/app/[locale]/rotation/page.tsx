@@ -1,6 +1,6 @@
 "use client";
 
-import { ApiError, formatMoney } from "@marketplace/api-client";
+import { formatMoney } from "@marketplace/api-client";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState, type FormEvent } from "react";
@@ -27,6 +27,9 @@ import { offerLabel } from "@/components/meals/offers";
 import { getMealKitchen, getMealKitchens } from "@/lib/meals-api";
 import type { Plan } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
+import { LoadError } from "@/components/load-error";
+import { rotationProblem } from "@/lib/rotation-problem";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
 const COPY = {
   en: {
@@ -38,6 +41,8 @@ const COPY = {
     noAddress: "Add an address to see the kitchens that deliver there.",
     kitchens: (n: number) => `Kitchens (${n} of 4 chosen)`,
     none: "No kitchens in the rotation deliver to this address yet.",
+    few: (n: number) =>
+      `Only ${n} ${n === 1 ? "kitchen delivers" : "kitchens deliver"} here, and a rotation needs 4. Choose or add another address above.`,
     perWeek: "a week",
     days: (n: number) => `Delivery days (choose ${n})`,
     slots: (n: number) => `Meals (choose ${n})`,
@@ -78,6 +83,8 @@ const COPY = {
     noAddress: "أضف عنوانًا لعرض المطابخ التي توصل إليه.",
     kitchens: (n: number) => `المطابخ (تم اختيار ${n} من ٤)`,
     none: "لا توجد مطابخ ضمن التناوب توصل إلى هذا العنوان بعد.",
+    few: (n: number) =>
+      `${n === 1 ? "مطبخ واحد فقط يوصل" : n === 2 ? "مطبخان فقط يوصلان" : `${n} مطابخ فقط توصل`} إلى هنا، والتناوب يحتاج إلى ٤. اختر عنوانًا آخر أو أضفه في الأعلى.`,
     perWeek: "أسبوعيًا",
     days: (n: number) => `أيام التوصيل (اختر ${n})`,
     slots: (n: number) => `الوجبات (اختر ${n})`,
@@ -278,6 +285,13 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
         }
       : null;
 
+  // One key per draft: pressing pay again after a timeout re-sends the same
+  // create instead of making a second rotation. A changed draft is a new one.
+  const idem = useIdempotencyKey();
+  const draft = input ? JSON.stringify(input) : "";
+  const resetKey = idem.reset;
+  useEffect(() => resetKey(), [draft, resetKey]);
+
   const preview = useQuery({
     queryKey: ["rotation-preview", input],
     queryFn: () => previewRotation(input!),
@@ -286,17 +300,19 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   });
 
   if (addresses.isPending) return <p className="ms-note">{t.loading}</p>;
-  if (addresses.isError) return <p className="ms-empty">{t.failed}</p>;
+  if (addresses.isError)
+    return (
+      <LoadError
+        error={addresses.error}
+        onRetry={() => void addresses.refetch()}
+        locale={locale}
+      />
+    );
 
   const currency = plans[0]?.currency ?? kitchens.data?.items[0]?.currency;
   const money = (n: number) =>
     formatMoney({ amount: n, currency: currency ?? "AED" }, locale);
-  const problem = (err: unknown) =>
-    err instanceof ApiError && err.problem?.errors?.[0]?.message
-      ? err.problem.errors[0].message
-      : err instanceof ApiError && err.problem?.detail
-        ? err.problem.detail
-        : t.failed;
+  const problem = (err: unknown) => rotationProblem(err, locale, t.failed);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -304,8 +320,10 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
     setBusy(true);
     setError(null);
     try {
-      const rot = await createRotation(input);
+      const rot = await createRotation(input, { headers: idem.headers() });
+      idem.reset();
       // An unpaid rotation stays on its page with a pay button; it is not lost.
+      let paid = true;
       try {
         const intent = await payRotation(rot.id);
         if (intent.redirect_url) {
@@ -313,9 +331,11 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
           return;
         }
       } catch {
-        /* surfaced on the rotation page */
+        paid = false;
       }
-      router.replace(`/${locale}/rotations/${rot.id}`);
+      router.replace(
+        `/${locale}/rotations/${rot.id}${paid ? "" : "?pay=failed"}`,
+      );
     } catch (err) {
       setError(problem(err));
       setBusy(false);
@@ -371,10 +391,20 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
             {kitchens.isPending ? (
               <p className="ms-note">{t.loading}</p>
             ) : kitchens.isError ? (
-              <p className="ms-bad">{t.failed}</p>
+              <LoadError
+                error={kitchens.error}
+                onRetry={() => void kitchens.refetch()}
+                locale={locale}
+              />
             ) : list.length === 0 ? (
               <p className="ms-sub">{t.none}</p>
             ) : (
+              <>
+              {list.length < 4 && (
+                <p className="ms-note" role="status">
+                  {t.few(list.length)}
+                </p>
+              )}
               <div className="ms-addresses">
                 {list.map((k) => {
                   const on = picked.includes(k.branch_id);
@@ -408,6 +438,7 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                   );
                 })}
               </div>
+              </>
             )}
           </fieldset>
         )}

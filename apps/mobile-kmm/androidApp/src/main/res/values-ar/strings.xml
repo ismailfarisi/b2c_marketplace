@@ -377,6 +377,9 @@
     <string name="meals_renew">جدّد مع هذا المطبخ</string>
     <string name="meals_cancel">إلغاء الاشتراك</string>
     <string name="meals_cancel_rotation">إلغاء التناوب</string>
+    <string name="meals_renew_rotation">جدّد التناوب</string>
+    <string name="meals_rotation_few">المطابخ التي توصل إلى هنا: %1$d من أصل ٤ يحتاجها التناوب. غيّر موقعك من صفحة الوجبات لرؤية المزيد.</string>
+    <string name="meals_change_location">غيّر الموقع</string>
     <string name="meals_paid">تم الدفع. وجباتك مجدولة.</string>
     <string name="meals_view_subs">عرض وجباتي</string>
     <string name="meals_status_active">نشط</string>

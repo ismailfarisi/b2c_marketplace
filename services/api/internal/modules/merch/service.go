@@ -587,6 +587,18 @@ func (s *Service) resolve(ctx context.Context, override *[]Section, lat, lng *fl
 			if len(hs.Banners) == 0 {
 				continue
 			}
+		case SectionRotation:
+			// Without a location every kitchen is a candidate; with one, the
+			// promo only shows where a rotation can actually be built.
+			if lat != nil && lng != nil {
+				ks, err := kitchens()
+				if err != nil {
+					return h, err
+				}
+				if !enoughForRotation(ks) {
+					continue
+				}
+			}
 		case SectionCuisines:
 			ks, err := kitchens()
 			if err != nil {
@@ -600,6 +612,20 @@ func (s *Service) resolve(ctx context.Context, override *[]Section, lat, lng *fl
 		h.Sections = append(h.Sections, hs)
 	}
 	return h, nil
+}
+
+// rotationKitchens mirrors subscriptions.RotationKitchens: a rotation needs
+// this many different kitchens that deliver to the address.
+const rotationKitchens = 4
+
+func enoughForRotation(ks []kitchen.PublicKitchen) bool {
+	n := 0
+	for _, k := range ks {
+		if k.RotationWeekPriceMinor != nil {
+			n++
+		}
+	}
+	return n >= rotationKitchens
 }
 
 // countCuisines tallies kitchens per cuisine. Each cuisine's photo is the one

@@ -414,7 +414,16 @@ data class Rotation(
     val currency: String = "AED",
     @SerialName("auto_renew") val autoRenew: Boolean = false,
     @SerialName("renewed_by_id") val renewedById: String? = null,
-)
+) {
+    /** Created, not paid yet: the card offers to pay. */
+    val awaitingPayment: Boolean get() = status == "pending_payment" || status == "pending"
+
+    /** Running or awaiting payment: renewal can change and it can be cancelled. */
+    val live: Boolean get() = status == "active" || awaitingPayment
+
+    /** Paid and ran (or running), not renewed yet: what POST rotations/{id}/renew accepts. */
+    val renewable: Boolean get() = renewedById == null && (status == "active" || status == "completed")
+}
 
 @Serializable
 data class RotationPage(val items: List<Rotation> = emptyList())

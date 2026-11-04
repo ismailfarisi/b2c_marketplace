@@ -31,3 +31,17 @@ func TestCanRenew(t *testing.T) {
 		}
 	}
 }
+
+func TestRotationRenewable(t *testing.T) {
+	for status, want := range map[string]bool{
+		"active":          true,
+		"completed":       true,
+		"cancelled":       false,
+		"pending_payment": false,
+		"":                false,
+	} {
+		if got := rotationRenewable(status); got != want {
+			t.Errorf("rotationRenewable(%q) = %v, want %v", status, got, want)
+		}
+	}
+}

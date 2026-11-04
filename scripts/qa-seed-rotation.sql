@@ -1,5 +1,6 @@
 -- Three more rotation kitchens cloned from the QA Spice Route branch, so a
--- four-kitchen rotation can be bought locally. Run after scripts/qa-seed.sql.
+-- four-kitchen rotation can be bought locally. Run after scripts/qa-seed.sql
+-- and scripts/demo-meals-seed.sql.
 -- Idempotent: fixed ids, ON CONFLICT DO NOTHING.
 DO $$
 DECLARE
@@ -36,3 +37,16 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+-- The QA customer's Home (JLT, 25.08 N 55.14 E) is otherwise inside only one
+-- rotation kitchen's area (Teta's), so the builder could never reach four
+-- picks there. Stretch three demo rotation kitchens (scripts/demo-meals-seed.sql)
+-- to also cover 5 km around it. Idempotent: ST_Union with a disc already
+-- covered leaves the area as it is.
+UPDATE vendor_branches
+   SET service_area = ST_Union(service_area::geometry,
+           ST_Buffer(ST_SetSRID(ST_MakePoint(55.14, 25.08), 4326)::geography, 5000)::geometry)::geography
+ WHERE id IN ('de010001-0000-4000-8000-000000000001',   -- Amma's Kerala Kitchen
+              'de010006-0000-4000-8000-000000000001',   -- Lola's Lutong Bahay
+              'de010007-0000-4000-8000-000000000001')   -- Udupi Veg Thali
+   AND service_area IS NOT NULL;

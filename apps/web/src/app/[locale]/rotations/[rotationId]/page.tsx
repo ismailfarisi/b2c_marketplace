@@ -1,9 +1,12 @@
 "use client";
 
 import { ApiError, formatMoney } from "@marketplace/api-client";
+
+import { LoadError } from "@/components/load-error";
+import { rotationProblem } from "@/lib/rotation-problem";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 
 import {
@@ -56,6 +59,7 @@ const COPY = {
     nextOn: "Your next rotation is booked.",
     viewNext: "View next rotation",
     renewFailed: "Could not renew. Try again.",
+    toggleFailed: "Could not change automatic renewal. Try again.",
     loading: "Loading…",
     notFound: "Rotation not found.",
     failed: "Could not load this rotation.",
@@ -90,6 +94,7 @@ const COPY = {
     nextOn: "تم حجز تناوبك التالي.",
     viewNext: "عرض التناوب التالي",
     renewFailed: "تعذر التجديد. حاول مرة أخرى.",
+    toggleFailed: "تعذر تغيير التجديد التلقائي. حاول مرة أخرى.",
     loading: "جارٍ التحميل…",
     notFound: "التناوب غير موجود.",
     failed: "تعذر تحميل هذا التناوب.",
@@ -141,6 +146,9 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
       qc.invalidateQueries({ queryKey: ["me", "rotations"] }),
       qc.invalidateQueries({ queryKey: ["me", "subscriptions"] }),
     ]);
+  // The builder lands here with ?pay=failed when the rotation was created but
+  // the payment did not go through, so the first view says why.
+  const payFailedOnArrival = useSearchParams().get("pay") === "failed";
   const pay = useMutation({
     mutationFn: () => payRotation(r.id),
     onSuccess: refresh,
@@ -179,10 +187,10 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
       {r.status === "pending_payment" && (
         <section className="ms-callout">
           <p>{t.payNote}</p>
-          {pay.isError && (
+          {(pay.isError || (payFailedOnArrival && pay.isIdle)) && (
             <p className="ms-bad" role="alert">
-              {pay.error instanceof ApiError
-                ? problemMessage(pay.error, locale)
+              {pay.isError
+                ? rotationProblem(pay.error, locale, t.payFailed)
                 : t.payFailed}
             </p>
           )}
@@ -245,9 +253,7 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
           </label>
           {cancel.isError && (
             <p className="ms-bad" role="alert">
-              {cancel.error instanceof ApiError
-                ? problemMessage(cancel.error, locale)
-                : t.cancelFailed}
+              {rotationProblem(cancel.error, locale, t.cancelFailed)}
             </p>
           )}
           <button
@@ -302,7 +308,8 @@ function Renewal({
     },
   });
   const running = r.status === "active" || r.status === "pending_payment";
-  const canRenew = !r.renewed_by_id && r.status !== "pending_payment";
+  const canRenew =
+    !r.renewed_by_id && (r.status === "active" || r.status === "completed");
   if (!running && !canRenew && !r.renewed_by_id) return null;
 
   return (
@@ -351,14 +358,12 @@ function Renewal({
       )}
       {toggle.isError && (
         <p className="ms-bad" role="alert">
-          {problemMessage(toggle.error, locale)}
+          {rotationProblem(toggle.error, locale, t.toggleFailed)}
         </p>
       )}
       {renew.isError && (
         <p className="ms-bad" role="alert">
-          {renew.error instanceof ApiError
-            ? problemMessage(renew.error, locale)
-            : t.renewFailed}
+          {rotationProblem(renew.error, locale, t.renewFailed)}
         </p>
       )}
     </section>

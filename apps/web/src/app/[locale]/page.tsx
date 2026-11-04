@@ -190,8 +190,16 @@ export default function MealsHome({
   );
 
   const filtering = query !== "" || slot !== "" || rotation || cuisine !== "";
+  // Without merchandising, only promote a rotation where one can be built:
+  // four rotation kitchens that deliver to the chosen place.
+  const rotationReady =
+    !place ||
+    !list.data ||
+    list.data.items.filter((k) => k.rotation_week_price_minor != null).length >= 4;
   const showPromo =
-    sections == null || sections.some((s) => s.type === "rotation_promo");
+    sections == null
+      ? rotationReady
+      : sections.some((s) => s.type === "rotation_promo");
   // Promo follows the first two rows of kitchens (or the whole list when
   // shorter) so the choice comes first and no kitchen is left stranded.
   const promoAfter = Math.min(list.data?.items.length ?? 0, 6);

@@ -238,7 +238,7 @@ struct MealsScreen: View {
                     stack = [.home, .mine]
                 }
             case .mine:
-                MinePage(vm: viewModel, onBack: back) { id in
+                MinePage(vm: viewModel, onBack: back, openPayment: openPayment) { id in
                     viewModel.openSubscription(id: id)
                     go(.subscription)
                 }
@@ -592,7 +592,7 @@ private struct MealsHomePage: View {
                         }
                     }
                     ForEach(Array(s.kitchens.prefix(3)), id: \.branchId) { k in kitchenButton(k) }
-                    if !s.filtering { rotationPromo }
+                    if !s.filtering && s.rotationAvailable { rotationPromo }
                     ForEach(Array(s.kitchens.dropFirst(3)), id: \.branchId) { k in kitchenButton(k) }
                     if !s.filtering {
                         ForEach(s.sections.filter { $0.type == "banner_carousel" }, id: \.id) { section in sectionView(section) }
@@ -1815,6 +1815,15 @@ private struct RotationPage: View {
                             selected: s.picked.contains(k.branchId)
                         ) { vm.togglePick(branchId: k.branchId) }
                     }
+                    if s.tooFewKitchens {
+                        Text(tr("meals_rotation_few", s.candidates.count))
+                            .font(.system(size: TypeScale.secondary))
+                            .foregroundStyle(MP.textMuted)
+                            .padding(.horizontal, Space.edge)
+                            .padding(.vertical, Space.small)
+                        SecondaryButton(label: NSLocalizedString("meals_change_location", comment: ""), action: onBack)
+                            .padding(.horizontal, Space.edge)
+                    }
                     if let q = s.quote {
                         CardBox {
                             WeekBars()
@@ -1829,7 +1838,14 @@ private struct RotationPage: View {
                         }
                         .padding(.top, Space.medium)
                     }
-                    if let failure = s.error { FailureStrip(failure: failure) }
+                    // Before the kitchens load, retry loads them; after, the pay button is the retry.
+                    if let failure = s.error {
+                        if s.candidatesLoaded {
+                            FailureStrip(failure: failure)
+                        } else {
+                            FailureStrip(failure: failure, onRetry: { vm.startRotation() })
+                        }
+                    }
                 }
             }
             PrimaryButton(
@@ -1843,7 +1859,7 @@ private struct RotationPage: View {
             for await state in vm.rotation {
                 current = state
                 if let url = state.paymentUrl { openPayment(url) }
-                if state.rotationId != nil { onPaid() }
+                if state.paid { onPaid() }
             }
         }
     }
@@ -1872,6 +1888,7 @@ private struct PaidPage: View {
 private struct MinePage: View {
     let vm: MealsViewModel
     let onBack: () -> Void
+    let openPayment: (String) -> Void
     let onOpen: (String) -> Void
 
     @State private var current: MyMealsUiState?
@@ -1890,6 +1907,7 @@ private struct MinePage: View {
                 EmptyBlock(message: NSLocalizedString("meals_no_subs", comment: ""))
                 Spacer()
             } else {
+                if let failure = s.actionError { FailureStrip(failure: failure) }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         if let failure = s.error {
@@ -1898,7 +1916,7 @@ private struct MinePage: View {
                         if !s.rotations.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_rotations", comment: ""))
                             ForEach(s.rotations, id: \.id) { r in
-                                RotationCard(r: r, vm: vm, onOpen: onOpen, busy: s.busyRotation != nil)
+                                RotationCard(r: r, vm: vm, busy: s.busy.contains(r.id), onOpen: onOpen)
                             }
                         }
                         if !s.subscriptions.isEmpty {
@@ -1914,7 +1932,10 @@ private struct MinePage: View {
         }
         .task {
             vm.loadMine(force: false)
-            for await state in vm.mine { current = state }
+            for await state in vm.mine {
+                current = state
+                if let url = state.paymentUrl { openPayment(url) }
+            }
         }
     }
 }
@@ -1922,8 +1943,8 @@ private struct MinePage: View {
 private struct RotationCard: View {
     let r: Rotation
     let vm: MealsViewModel
+    let busy: Bool
     let onOpen: (String) -> Void
-    var busy: Bool = false
     @State private var confirming = false
 
     var body: some View {
@@ -1948,13 +1969,25 @@ private struct RotationCard: View {
                 }
                 .disabled(w.subscriptionId == nil)
             }
-            if r.status == "active" || r.status == "pending" {
-                RenewToggle(on: r.autoRenew, enabled: !busy) { vm.setRotationRenewal(id: r.id, auto: $0) }
+            if r.awaitingPayment {
+                PrimaryButton(label: NSLocalizedString("meals_pay_due", comment: ""), enabled: !busy) {
+                    vm.payPendingRotation(id: r.id)
+                }
+                .padding(.top, Space.small)
+            }
+            if r.live {
+                RenewToggle(on: r.autoRenew) { vm.setRotationRenewal(id: r.id, auto: $0) }
+                    .disabled(busy)
                 Button { confirming = true } label: {
                     Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(busy ? MP.textFaint : MP.bad)
                 }
                 .disabled(busy)
                 .padding(.vertical, Space.small)
+            }
+            if r.renewable {
+                SecondaryButton(label: NSLocalizedString("meals_renew_rotation", comment: "")) { vm.renewRotation(id: r.id) }
+                    .disabled(busy)
+                    .padding(.top, Space.small)
             }
         }
         .modifier(ConfirmCancel(shown: $confirming) { vm.cancelRotation(id: r.id) })

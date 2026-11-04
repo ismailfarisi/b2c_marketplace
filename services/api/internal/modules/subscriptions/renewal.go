@@ -394,6 +394,13 @@ func (s *Service) SettleRenewals(ctx context.Context) error {
 
 // --- rotations ----------------------------------------------------------------
 
+// rotationRenewable reports whether a rotation in this status can be renewed:
+// one that was paid for and ran (or is running). A cancelled rotation, paid or
+// not, cannot come back by renewing it.
+func rotationRenewable(status string) bool {
+	return status == "active" || status == "completed"
+}
+
 // RenewRotation starts the next rotation with the same four kitchens, address,
 // days and meals. It begins the day after this one ends (or tomorrow), and when
 // the two run back to back the kitchen that cooked the last week does not cook
@@ -409,7 +416,7 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 	if r.Status == "pending_payment" {
 		return Rotation{}, httpx.Coded(httpx.ErrConflict, "not_paid", "Pay for this rotation before renewing it.")
 	}
-	if len(r.Weeks) != RotationKitchens {
+	if !rotationRenewable(r.Status) || len(r.Weeks) != RotationKitchens {
 		return Rotation{}, httpx.Coded(httpx.ErrConflict, "not_renewable", "This rotation cannot be renewed.")
 	}
 	var addressID uuid.UUID
