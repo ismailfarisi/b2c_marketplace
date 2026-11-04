@@ -2,7 +2,10 @@
 
 import { ApiError } from "@marketplace/api-client";
 import { useQueryClient } from "@tanstack/react-query";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+
+import { problemMessage } from "@/lib/problem";
 
 import {
   createAddress,
@@ -81,6 +84,7 @@ export function NewAddress({
   onSaved: (a: Address) => void;
 }) {
   const qc = useQueryClient();
+  const locale = useParams<{ locale?: string }>()?.locale === "ar" ? "ar" : "en";
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
     label: "",
@@ -132,11 +136,7 @@ export function NewAddress({
       onSaved(a);
       setOpen(false);
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.problem?.errors?.[0]?.message
-          ? err.problem.errors[0].message
-          : t.failed,
-      );
+      setError(err instanceof ApiError ? problemMessage(err, locale) : t.failed);
     } finally {
       setBusy(false);
     }

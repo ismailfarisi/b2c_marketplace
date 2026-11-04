@@ -208,6 +208,21 @@ func CanModify(serviceDate time.Time, cutoffHours int, loc *time.Location, now t
 	return now.In(loc).Before(deadline)
 }
 
+// EarliestStart is the first day whose cutoff is still ahead of now, in the
+// branch's timezone. A subscription starting before it would open with a meal
+// that is already locked, so checkout refuses it and every client offers it as
+// the minimum start date.
+func EarliestStart(cutoffHours int, loc *time.Location, now time.Time) time.Time {
+	if loc == nil {
+		loc = time.UTC
+	}
+	day := dayIn(now, loc)
+	for i := 0; i < 400 && !CanModify(day, cutoffHours, loc, now); i++ {
+		day = day.AddDate(0, 0, 1)
+	}
+	return day
+}
+
 // PausedDays counts the delivery days a pause actually suppresses.
 //
 // Not the calendar length of the pause. A customer on a Sunday-to-Thursday plan

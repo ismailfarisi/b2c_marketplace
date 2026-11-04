@@ -5,6 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState, type FormEvent } from "react";
 
+import { LoadError } from "@/components/load-error";
+import {
+  checkoutProblem,
+  isPromoProblem,
+} from "@/components/meals/checkout-errors";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell, asLocale, type Locale } from "@/components/meals/shell";
 import { NewAddress } from "@/components/meals/new-address";
@@ -23,22 +28,9 @@ import {
   forgetInvite,
   rememberedInvite,
 } from "@/lib/customer-api";
+import { earliestStart } from "@/lib/earliest-start";
 import { getMealKitchen } from "@/lib/meals-api";
-
-const LUNCH_ERRORS_AR: Record<string, string> = {
-  over_meal_cap: "تكلفة الوجبة في هذه الخطة أعلى مما تغطيه شركتك.",
-  over_credit_limit: "بلغت شركتك حد رصيد الغداء. تواصل مع مسؤول الغداء.",
-  company_not_active: "حساب غداء شركتك غير مفعّل حاليًا.",
-  not_member: "لم تعد ضمن موظفي هذه الشركة.",
-};
-
-function problemReason(err: unknown, locale: string): string | null {
-  if (!(err instanceof ApiError)) return null;
-  const code = (err.problem as { code?: string } | null)?.code;
-  if (locale === "ar" && code && LUNCH_ERRORS_AR[code])
-    return LUNCH_ERRORS_AR[code];
-  return err.problem?.errors?.[0]?.message ?? err.problem?.detail ?? null;
-}
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
 const COPY = {
   en: {
@@ -167,15 +159,6 @@ const COPY = {
 };
 type Copy = (typeof COPY)["en"];
 
-const isoDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-/** The first day whose cutoff has not already passed. */
-function earliestStart(cutoffHours: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + 1 + Math.floor(cutoffHours / 24));
-  return isoDate(d);
-}
 
 function toggle<T>(list: T[], v: T, max: number): T[] {
   if (list.includes(v)) return list.filter((x) => x !== v);
@@ -326,6 +309,11 @@ function Checkout({
           schedule: input.schedule,
         }
       : null;
+  // One key per draft: pressing Pay again after a timeout or failure is the
+  // same request to the server, so it cannot open a second subscription.
+  const idem = useIdempotencyKey();
+  const draftKey = JSON.stringify(input);
+  useEffect(() => idem.reset(), [draftKey, idem]);
   const preview = useQuery({
     queryKey: ["subscription-preview", company ? lunch : input, companyId],
     queryFn: () =>
@@ -335,23 +323,32 @@ function Checkout({
     enabled: company ? lunch != null : input != null,
     retry: false,
   });
-  const previewProblem = problemReason(preview.error, locale);
-  const promoRejected =
-    preview.error instanceof ApiError &&
-    preview.error.fieldErrors["promo_code"] != null;
+  const previewProblem = preview.isError
+    ? checkoutProblem(preview.error, locale)
+    : null;
+  const promoRejected = isPromoProblem(preview.error);
 
   if (kitchen.isPending || addresses.isPending)
     return <p className="ms-note">{t.loading}</p>;
-  if (kitchen.isError || !plan) {
+  if (kitchen.isError && !(kitchen.error instanceof ApiError && kitchen.error.status === 404)) {
     return (
-      <p className="ms-empty">
-        {kitchen.error instanceof ApiError && kitchen.error.status !== 404
-          ? t.failed
-          : t.notFound}
-      </p>
+      <LoadError
+        error={kitchen.error}
+        locale={locale}
+        onRetry={() => void kitchen.refetch()}
+      />
     );
   }
-  if (addresses.isError) return <p className="ms-empty">{t.failed}</p>;
+  if (kitchen.isError || !plan) return <p className="ms-empty">{t.notFound}</p>;
+  if (addresses.isError) {
+    return (
+      <LoadError
+        error={addresses.error}
+        locale={locale}
+        onRetry={() => void addresses.refetch()}
+      />
+    );
+  }
   const k = kitchen.data;
   const money = (n: number) =>
     formatMoney({ amount: n, currency: plan.currency }, locale);
@@ -368,23 +365,26 @@ function Checkout({
         router.replace(`/${locale}/subscriptions/${started.id}`);
         return;
       }
-      const sub = await subscribe(input!);
+      const sub = await subscribe(input!, { headers: idem.headers() });
       // A failed payment still leaves a subscription awaiting payment, which
-      // its page offers to pay again; it is not lost.
+      // its page offers to pay again; it is not lost. The page is told how
+      // the payment went so it can say so.
+      let outcome = "payment=failed";
       try {
         const intent = await payOrder(sub.order_id);
         if (intent.redirect_url) {
           window.location.href = intent.redirect_url;
           return;
         }
+        if (intent.status === "authorized") outcome = "paid=1";
+        else if (intent.status === "requires_action") outcome = "payment=pending";
       } catch {
-        /* surfaced on the subscription page */
+        /* outcome stays failed */
       }
-      router.replace(`/${locale}/subscriptions/${sub.id}`);
+      idem.reset();
+      router.replace(`/${locale}/subscriptions/${sub.id}?${outcome}`);
     } catch (err) {
-      if (err instanceof ApiError && err.fieldErrors["address_id"])
-        setError(t.outside);
-      else setError(problemReason(err, locale) ?? t.failed);
+      setError(checkoutProblem(err, locale));
       setBusy(false);
     }
   }
@@ -480,6 +480,7 @@ function Checkout({
               type="date"
               value={start}
               min={earliestStart(plan.cutoff_hours)}
+              dir="ltr"
               onChange={(e) => setStart(e.target.value)}
               required
             />
@@ -700,9 +701,12 @@ function Checkout({
 const sameRange = (a: string, b: string) =>
   a.replace(/[\s\u2013\u2014-]/g, "") === b.replace(/[\s\u2013\u2014-]/g, "");
 
+// <option> text cannot hold <bdi>, so the range is wrapped in Unicode
+// left-to-right isolates (LRI…PDI): in Arabic it would otherwise read 14:00–12:00.
 function windowLabel(w: { label: string; starts_at: string; ends_at: string }) {
-  const range = `${w.starts_at}–${w.ends_at}`;
-  return w.label && !sameRange(w.label, range)
+  const plain = `${w.starts_at}–${w.ends_at}`;
+  const range = `\u2066${plain}\u2069`;
+  return w.label && !sameRange(w.label, plain)
     ? `${w.label} (${range})`
     : range;
 }

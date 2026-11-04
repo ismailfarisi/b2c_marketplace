@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/promo"
 )
 
 type Repository struct{}
@@ -480,4 +481,106 @@ func isUniqueViolation(err error, constraint string) bool {
 		return false
 	}
 	return pgErr.Code == "23505" && pgErr.ConstraintName == constraint
+}
+
+// PendingTwin is an unpaid subscription identical to a checkout being retried.
+type PendingTwin struct {
+	ID             uuid.UUID
+	SubscriptionNo string
+	OrderID        uuid.UUID
+}
+
+// pendingTwinWindow bounds how old an unpaid checkout may be and still count as
+// the same attempt. Past it the customer is starting over.
+const pendingTwinWindow = 30 * time.Minute
+
+// FindPendingTwin returns the customer's recent unpaid subscription with the
+// same plan, tier, address, start date, schedule, renewal mode, promo and
+// first-cycle total, or nil. It first takes a per-customer, per-plan advisory
+// lock so two concurrent submits of one checkout cannot both miss each other.
+func (r *Repository) FindPendingTwin(ctx context.Context, tx pgx.Tx, in SubscribeInput,
+	start time.Time, p *promo.Promo, totalMinor int64) (*PendingTwin, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('subscribe:' || $1::text || ':' || $2::text, 0))`,
+		in.UserID, in.PlanID); err != nil {
+		return nil, fmt.Errorf("subscriptions: twin lock: %w", err)
+	}
+	var tierID, promoID any
+	if in.TierID.Valid {
+		tierID = in.TierID.UUID
+	}
+	if p != nil {
+		promoID = p.ID
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT s.id, s.subscription_no, o.id
+		  FROM subscriptions s
+		  JOIN orders o ON o.source_subscription_id = s.id AND o.status = 'pending_payment'
+		 WHERE s.user_id = $1 AND s.plan_id = $2 AND s.tier_id IS NOT DISTINCT FROM $3
+		   AND s.address_id = $4 AND s.start_date = $5 AND s.renewal_mode = $6
+		   AND s.status = 'pending_payment'
+		   AND s.renewed_from_id IS NULL AND s.rotation_id IS NULL AND s.company_id IS NULL
+		   AND s.created_at > now() - make_interval(secs => $7)
+		   AND EXISTS (SELECT 1 FROM price_quotes q WHERE q.order_id = o.id AND q.total_minor = $8)
+		   AND CASE WHEN $9::uuid IS NULL
+		            THEN NOT EXISTS (SELECT 1 FROM promo_redemptions pr
+		                              WHERE pr.subscription_id = s.id AND pr.status <> 'released')
+		            ELSE EXISTS (SELECT 1 FROM promo_redemptions pr
+		                          WHERE pr.subscription_id = s.id AND pr.promo_id = $9 AND pr.status = 'pending')
+		       END
+		 ORDER BY s.created_at DESC
+		 LIMIT 5`,
+		in.UserID, in.PlanID, tierID, in.AddressID, start, in.RenewalMode,
+		pendingTwinWindow.Seconds(), totalMinor, promoID)
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: find twin: %w", err)
+	}
+	var candidates []PendingTwin
+	for rows.Next() {
+		var t PendingTwin
+		if err := rows.Scan(&t.ID, &t.SubscriptionNo, &t.OrderID); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("subscriptions: scan twin: %w", err)
+		}
+		candidates = append(candidates, t)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, c := range candidates {
+		rules, err := r.LoadRules(ctx, tx, c.ID)
+		if err != nil {
+			return nil, err
+		}
+		if SameRules(rules, in.Rules) {
+			return &c, nil
+		}
+	}
+	return nil, nil
+}
+
+// SameRules reports whether two schedules deliver the same meals, ignoring
+// order.
+func SameRules(a, b []Rule) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	type key struct {
+		day    Weekday
+		slot   string
+		window uuid.UUID
+		addr   uuid.NullUUID
+	}
+	seen := make(map[key]int, len(a))
+	for _, r := range a {
+		seen[key{r.Weekday, r.Slot, r.WindowID, r.AddressID}]++
+	}
+	for _, r := range b {
+		k := key{r.Weekday, r.Slot, r.WindowID, r.AddressID}
+		if seen[k] == 0 {
+			return false
+		}
+		seen[k]--
+	}
+	return true
 }
