@@ -46,7 +46,7 @@ There is no Xcode project in the repo yet (CI only typechecks Swift). To ship:
 
 ## Listing copy
 
-**Name:** the app shows `Marketplace` / `السوق` today (`app_name`). Pick the store name before submitting.
+**Name:** Switeaz (`app_name`, kept in Latin letters in Arabic too). On iOS also set `CFBundleDisplayName` = `Switeaz` in the app target. Domain: switeaz.com — today it (with `www.`, `app.` and `api.`) serves Kerf from the ai-crm repo, so pick free subdomains or move Kerf before using it for `API_BASE_URL`, `WEB_BASE_URL`, App Links and Universal Links.
 
 **Short description (80 chars)**
 - EN: Home-style lunch subscriptions from local kitchens, delivered every weekday.

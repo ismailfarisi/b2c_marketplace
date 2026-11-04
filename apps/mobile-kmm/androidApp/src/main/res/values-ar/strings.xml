@@ -26,7 +26,7 @@
     fix is an icon rather than a string.
 -->
 <resources>
-    <string name="app_name">السوق</string>
+    <string name="app_name">Switeaz</string>
 
     <!-- District names, display only. See the English file for why these are
          separate from the canonical Place.label the server is sent. -->
