@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import Shared
+import CoreLocation
 
 /// The iOS feed.
 ///
@@ -13,7 +14,11 @@ struct FeedScreen: View {
     let viewModel: FeedViewModel
     /// Search, Saved and Sell, shown after the feed surfaces.
     var extras: [FeedExtra] = []
+    /// Runs the closure once there is an account; like and save need one.
+    var requireAccount: (@escaping () -> Void) -> Void = { $0() }
 
+    @StateObject private var locator = FeedLocator()
+    @State private var usingFallback = false
     @State private var items: [FeedItem] = []
     @State private var surface: FeedSurface = FeedSurface.forYou
     @State private var emptyReason: FeedEmptyReason?
@@ -44,7 +49,8 @@ struct FeedScreen: View {
                                     ReelPage(
                                         item: item,
                                         skewMillis: clockSkewMillis,
-                                        viewModel: viewModel
+                                        viewModel: viewModel,
+                                        requireAccount: requireAccount
                                     )
                                     .frame(width: geo.size.width, height: geo.size.height)
                                     .id(index)
@@ -77,16 +83,33 @@ struct FeedScreen: View {
                     }
                 }
 
-                FeedTabsView(selected: surface, onSelect: { viewModel.onSurfaceSelected(surface: $0) }, extras: extras)
+                VStack(spacing: 0) {
+                    FeedTabsView(selected: surface, onSelect: { viewModel.onSurfaceSelected(surface: $0) }, extras: extras)
+                    if usingFallback {
+                        // Said out loud, as web's banner and Android do: a
+                        // viewer elsewhere is looking at Dubai Marina's supply.
+                        Text("filter_location_denied")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.55)))
+                            .padding(.top, 6)
+                    }
+                }
             }
             .ignoresSafeArea(edges: .bottom)
         }
         .task {
-            // Dubai Marina, hard-coded until the location permission flow lands.
             // The API requires lat/lng — "a feed without a location is a
-            // different product" — so a fixed point is more honest than a silent
-            // nationwide feed.
-            viewModel.start(lat: 25.0805, lng: 55.1403, categoryId: nil, locationLabel: "")
+            // different product". When-in-use location first; Dubai Marina, with
+            // a notice, only when it is declined or unavailable.
+            if let here = await locator.locate() {
+                viewModel.start(lat: here.latitude, lng: here.longitude, categoryId: nil, locationLabel: "")
+            } else {
+                usingFallback = true
+                viewModel.start(lat: 25.0805, lng: 55.1403, categoryId: nil,
+                                locationLabel: String(localized: "place_dubai_marina"))
+            }
 
             // The same StateFlow Compose collects. Nothing about paging, error
             // handling, the exhausted state or clock skew is reimplemented here.
@@ -245,6 +268,7 @@ struct ReelPage: View {
     let item: FeedItem
     let skewMillis: Int64
     let viewModel: FeedViewModel
+    var requireAccount: (@escaping () -> Void) -> Void = { $0() }
 
     var body: some View {
         ZStack {
@@ -260,15 +284,89 @@ struct ReelPage: View {
 
             HStack {
                 Spacer()
-                Button { viewModel.toggleSave(reelId: item.id) } label: {
-                    Image(systemName: item.viewer.saved ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 22))
+                VStack(spacing: 8) {
+                    Button {
+                        let id = item.id
+                        requireAccount { viewModel.toggleLike(reelId: id) }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: item.viewer.liked ? "heart.fill" : "heart")
+                                .font(.system(size: 22))
+                            Text(verbatim: "\(item.counters.likes)")
+                                .font(.system(size: 12))
+                        }
                         .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
+                        .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel(Text(item.viewer.liked ? "feed_unlike" : "feed_like"))
+
+                    Button {
+                        let id = item.id
+                        requireAccount { viewModel.toggleSave(reelId: id) }
+                    } label: {
+                        Image(systemName: item.viewer.saved ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel(Text(item.viewer.saved ? "feed_unsave" : "feed_save"))
                 }
-                .accessibilityLabel(Text(item.viewer.saved ? "feed_unsave" : "feed_save"))
             }
             .padding(.trailing, 12)
         }
+    }
+}
+
+/// One when-in-use fix for the feed, or nil when declined, restricted, failed
+/// or not answered within a few seconds (the caller then falls back).
+@MainActor
+final class FeedLocator: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    private var continuation: CheckedContinuation<CLLocationCoordinate2D?, Never>?
+
+    func locate() async -> CLLocationCoordinate2D? {
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        let status = manager.authorizationStatus
+        if status == .denied || status == .restricted { return nil }
+        return await withCheckedContinuation { c in
+            continuation = c
+            if status == .notDetermined {
+                manager.requestWhenInUseAuthorization()
+            } else {
+                manager.requestLocation()
+            }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                self?.finish(nil)
+            }
+        }
+    }
+
+    private func finish(_ coordinate: CLLocationCoordinate2D?) {
+        continuation?.resume(returning: coordinate)
+        continuation = nil
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ m: CLLocationManager) {
+        let status = m.authorizationStatus
+        Task { @MainActor in
+            guard continuation != nil else { return }
+            switch status {
+            case .authorizedWhenInUse, .authorizedAlways: manager.requestLocation()
+            case .denied, .restricted: finish(nil)
+            default: break
+            }
+        }
+    }
+
+    nonisolated func locationManager(_ m: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let c = locations.last?.coordinate else { return }
+        let lat = c.latitude, lng = c.longitude
+        Task { @MainActor in finish(CLLocationCoordinate2D(latitude: lat, longitude: lng)) }
+    }
+
+    nonisolated func locationManager(_ m: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in finish(nil) }
     }
 }

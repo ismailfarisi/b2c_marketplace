@@ -261,6 +261,15 @@ class MainActivity : ComponentActivity() {
                 var mealsVm by remember { mutableStateOf<MealsViewModel?>(null) }
                 // A meals action waiting on sign-in: checkout, rotation, My meals.
                 var pendingMeals by remember { mutableStateOf<(() -> Unit)?>(null) }
+                // A feed action waiting on sign-in: like, save, or an inquiry
+                // from a CTA or a search result. Replayed once the session is
+                // authorised, so the viewer lands on what they asked for
+                // instead of their profile.
+                var pendingFeed by remember { mutableStateOf<(() -> Unit)?>(null) }
+                // Hoisted out of the Sell branch: switching tab mid-flow must
+                // not throw away a recorded clip and every answer (and orphan an
+                // in-flight upload). Released when the flow is left or finished.
+                var sellVm by remember { mutableStateOf<SellViewModel?>(null) }
                 var signInVm by remember { mutableStateOf<SignInViewModel?>(null) }
                 var session by remember { mutableStateOf<Session?>(null) }
 
@@ -313,6 +322,12 @@ class MainActivity : ComponentActivity() {
                     MutableStateFlow<SessionState>(SessionState.Unknown)
                 }).collectAsState()
                 val authorised = sessionState.isAuthenticated
+                val requireAccount: (() -> Unit) -> Unit = { run ->
+                    if (authorised) run() else { pendingFeed = run; destination = Destination.Me }
+                }
+                LaunchedEffect(authorised) {
+                    if (authorised) pendingFeed?.let { run -> pendingFeed = null; destination = Destination.Feed; run() }
+                }
                 val context = LocalContext.current
                 ae.marketplace.mobile.android.push.PushPrompt(authorised)
 
@@ -330,6 +345,8 @@ class MainActivity : ComponentActivity() {
                     meVm?.forget()
                     mealsVm?.forget()
                     supportVm?.forget()
+                    sellVm = null
+                    pendingFeed = null
                     if (why == SessionEnded.Expired) {
                         // Only for the involuntary case. Telling someone who
                         // just tapped Sign out that they have been signed out is
@@ -366,6 +383,7 @@ class MainActivity : ComponentActivity() {
                             ReelFeed(
                                 viewModel = current,
                                 onOpenFilters = { filtersOpen = true },
+                                requireAccount = requireAccount,
                                 extras = listOf(
                                     FeedExtra(stringResource(R.string.nav_search), Icons.Rounded.Search) { destination = Destination.Search },
                                     FeedExtra(stringResource(R.string.nav_saved), Icons.Rounded.BookmarkBorder) { destination = Destination.Saved },
@@ -390,24 +408,22 @@ class MainActivity : ComponentActivity() {
                                         "inquire_listing" -> {
                                             val listingId = action.targetId
                                             if (listingId == null) return@ReelFeed
-                                            if (!authorised) {
-                                                // A message needs an account,
-                                                // and this is the first moment
-                                                // it genuinely does. Asking here
-                                                // rather than at launch is the
-                                                // same call the Sell tab makes.
-                                                destination = Destination.Me
-                                                return@ReelFeed
+                                            // A message needs an account,
+                                            // and this is the first moment it
+                                            // genuinely does. The inquiry is
+                                            // kept and replayed after sign-in.
+                                            val title = current.state.value.items
+                                                .firstOrNull { it.id == reelId }
+                                                ?.summary?.title.orEmpty()
+                                            requireAccount {
+                                                meVm?.inquire(
+                                                    listingId = listingId,
+                                                    title = title,
+                                                    reelId = reelId,
+                                                    actionId = action.id,
+                                                )
+                                                route = Route.Thread
                                             }
-                                            meVm?.inquire(
-                                                listingId = listingId,
-                                                title = current.state.value.items
-                                                    .firstOrNull { it.id == reelId }
-                                                    ?.summary?.title.orEmpty(),
-                                                reelId = reelId,
-                                                actionId = action.id,
-                                            )
-                                            route = Route.Thread
                                         }
                                     }
                                 },
@@ -463,6 +479,7 @@ class MainActivity : ComponentActivity() {
                             // Saved and Sell open from the feed, so cancelling returns there.
                             val closeGate = {
                                 gate.reset()
+                                pendingFeed = null
                                 destination = if (destination == Destination.Saved || destination == Destination.Sell) {
                                     Destination.Feed
                                 } else {
@@ -561,8 +578,7 @@ class MainActivity : ComponentActivity() {
                                         val reel = result.reelId
                                         when {
                                             reel != null -> current.openReel(reel)
-                                            !authorised -> destination = Destination.Me
-                                            else -> {
+                                            else -> requireAccount {
                                                 it.inquire(result.id, result.title, null, null)
                                                 route = Route.Thread
                                             }
@@ -606,15 +622,17 @@ class MainActivity : ComponentActivity() {
                             // its state holder is created on entry and released
                             // on exit rather than living for the process.
                             Destination.Sell -> {
-                                var sellVm by remember { mutableStateOf<SellViewModel?>(null) }
                                 LaunchedEffect(Unit) {
-                                    sellVm = (application as MarketplaceApp).sdk.await().createSellViewModel()
+                                    if (sellVm == null) {
+                                        sellVm = (application as MarketplaceApp).sdk.await().createSellViewModel()
+                                    }
                                 }
                                 sellVm?.let { vm ->
                                     SellFlow(
                                         viewModel = vm,
-                                        onLeave = { destination = Destination.Feed },
+                                        onLeave = { sellVm = null; destination = Destination.Feed },
                                         onSeeFeed = {
+                                            sellVm = null
                                             destination = Destination.Feed
                                             // The seller's own reel is new supply
                                             // at this location, and the feed they
@@ -643,17 +661,16 @@ class MainActivity : ComponentActivity() {
                             onActionPressed = { action, reelId ->
                                 if (action.kind == "inquire_listing" || action.kind == "enquire_property") {
                                     val targetId = action.targetId ?: return@ReelDetail
-                                    if (!authorised) {
-                                        destination = Destination.Me
-                                        return@ReelDetail
+                                    val title = current.focused.value.item?.summary?.title.orEmpty()
+                                    requireAccount {
+                                        meVm?.inquire(
+                                            listingId = targetId,
+                                            title = title,
+                                            reelId = reelId,
+                                            actionId = action.id,
+                                        )
+                                        route = Route.Thread
                                     }
-                                    meVm?.inquire(
-                                        listingId = targetId,
-                                        title = current.focused.value.item?.summary?.title.orEmpty(),
-                                        reelId = reelId,
-                                        actionId = action.id,
-                                    )
-                                    route = Route.Thread
                                 }
                             },
                             onClose = {},

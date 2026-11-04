@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { ApiError } from "@marketplace/api-client";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
 import { clickAction, getFeed, type FeedAction, type FeedItem } from "@/lib/feed-api";
+import { LoadError } from "@/components/load-error";
 import { problemMessage } from "@/lib/problem";
 
 /**
@@ -36,6 +38,11 @@ const COPY = {
       "Nothing is available at this location yet. This feed is finite by design: it shows what can actually reach you, so a thin result means thin local supply rather than a filter to loosen.",
     exhausted: "That is everything available near you.",
     failed: "Could not load the feed.",
+    badLocation: "We couldn't use that location. Showing nearby results needs a valid place — try again or allow location.",
+    loadingFeed: "Loading the feed…",
+    more: "Load more",
+    moreLoading: "Loading…",
+    moreFailed: "Couldn't load more. Try again.",
     sponsored: "Sponsored",
     unavailable: "This isn't available right now.",
     seconds: "s",
@@ -49,6 +56,11 @@ const COPY = {
       "لا يوجد شيء متاح في هذا الموقع بعد. هذه الخلاصة محدودة بطبيعتها: تعرض ما يمكن أن يصلك فعلًا، لذا فإن قلّة النتائج تعني قلّة المعروض المحلي وليست فلترًا يمكن تخفيفه.",
     exhausted: "هذا كل ما هو متاح بالقرب منك.",
     failed: "تعذّر تحميل الخلاصة.",
+    badLocation: "تعذّر استخدام هذا الموقع. عرض النتائج القريبة يحتاج إلى مكان صالح — حاول مرة أخرى أو فعّل الموقع.",
+    loadingFeed: "جارٍ تحميل الخلاصة…",
+    more: "عرض المزيد",
+    moreLoading: "جارٍ التحميل…",
+    moreFailed: "تعذّر تحميل المزيد. حاول مرة أخرى.",
     sponsored: "مموّل",
     unavailable: "هذا غير متاح حاليًا.",
     seconds: "ث",
@@ -183,6 +195,37 @@ function Card({ item, t, locale }: { item: FeedItem; t: Copy; locale: "en" | "ar
   );
 }
 
+/** Placeholder cards while the first page is in flight, so the page reads as loading rather than stuck. */
+function FeedSkeleton({ label }: { label: string }) {
+  const bar = (width: string) => (
+    <span
+      aria-hidden
+      style={{
+        display: "block",
+        height: "0.9em",
+        width,
+        borderRadius: 4,
+        background: "currentColor",
+        opacity: 0.12,
+        marginBlock: "0.4em",
+      }}
+    />
+  );
+  return (
+    <div role="status" aria-busy="true" aria-label={label}>
+      <ul className="stack">
+        {[0, 1, 2].map((i) => (
+          <li key={i} className="card reel" aria-hidden>
+            {bar("40%")}
+            {bar("90%")}
+            {bar("70%")}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function FeedPage({
   params,
 }: {
@@ -192,17 +235,38 @@ export default function FeedPage({
   const t = COPY[locale === "ar" ? "ar" : "en"];
   const { point, precise } = useViewerLocation();
 
-  const { data, isPending, error } = useQuery({
+  const loc = locale === "ar" ? "ar" : "en";
+  const {
+    data,
+    isPending,
+    error,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useInfiniteQuery({
     queryKey: ["feed", point?.lat, point?.lng, locale],
-    queryFn: () => getFeed({ lat: point!.lat, lng: point!.lng, locale }),
+    queryFn: ({ pageParam }) =>
+      getFeed({ lat: point!.lat, lng: point!.lng, locale, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     // Not fetched until a location exists. Firing with a default and
     // re-fetching when the real one arrives would show a viewer content from
     // somewhere else first, which is the one impression this product cannot
     // afford to make.
     enabled: point !== null,
+    // One retry, not react-query's three: a dead API otherwise leaves the page
+    // looking stuck for several seconds before it admits the failure.
+    retry: 1,
   });
 
-  const items = data?.items ?? [];
+  const items = data?.pages.flatMap((p) => p.items) ?? [];
+  // A 422 means the API refused the coordinates — retrying the same request
+  // will not help the way it does for a 5xx, so it gets its own words.
+  const badLocation = error instanceof ApiError && error.status === 422;
+  const firstPageFailed = error && !data;
 
   return (
     <main className="page">
@@ -211,8 +275,25 @@ export default function FeedPage({
 
       {point && !precise && <p className="warn">{t.fallback}</p>}
 
-      {(!point || isPending) && <p className="muted">{t.locating}</p>}
-      {error && <p className="bad">{t.failed}</p>}
+      {!point && <p className="muted" role="status">{t.locating}</p>}
+      {point && isPending && !error && <FeedSkeleton label={t.loadingFeed} />}
+
+      {firstPageFailed &&
+        (badLocation ? (
+          <div className="ms-empty" role="alert">
+            <p>{t.badLocation}</p>
+            <button
+              type="button"
+              className="ms-btn"
+              disabled={isRefetching}
+              onClick={() => void refetch()}
+            >
+              {loc === "ar" ? "حاول مرة أخرى" : "Try again"}
+            </button>
+          </div>
+        ) : (
+          <LoadError error={error} onRetry={() => void refetch()} locale={loc} />
+        ))}
 
       {point && !isPending && !error && items.length === 0 && (
         <p className="muted">{t.empty}</p>
@@ -220,14 +301,32 @@ export default function FeedPage({
 
       <ul className="stack">
         {items.map((it) => (
-          <Card key={it.id} item={it} t={t} locale={locale === "ar" ? "ar" : "en"} />
+          <Card key={it.id} item={it} t={t} locale={loc} />
         ))}
       </ul>
+
+      {items.length > 0 && hasNextPage && (
+        <div className="row">
+          <button
+            type="button"
+            className="ms-btn"
+            disabled={isFetchingNextPage}
+            onClick={() => void fetchNextPage()}
+          >
+            {isFetchingNextPage ? t.moreLoading : t.more}
+          </button>
+          {isFetchNextPageError && (
+            <span className="bad" role="status">
+              {t.moreFailed}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* A feed that *can* be exhausted is the product promise, not a failure
           state — finite and locally relevant beats infinite and irrelevant. So
           the end of the list says so rather than spinning. */}
-      {items.length > 0 && !data?.next_cursor && (
+      {items.length > 0 && !hasNextPage && !firstPageFailed && (
         <p className="muted">{t.exhausted}</p>
       )}
     </main>

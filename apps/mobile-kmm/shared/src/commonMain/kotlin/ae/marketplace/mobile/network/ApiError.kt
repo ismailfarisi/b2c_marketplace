@@ -44,9 +44,14 @@ class ApiException(
     /** The server's reason code, when it gave one. */
     val code: String? get() = problem?.code
 
-    /** Field-level detail, keyed by field name, for form binding. */
+    /**
+     * Field-level reason codes, keyed by field name, for form binding. Codes,
+     * not the server's English `message`: the UI words them from its own
+     * string table, so an Arabic reader never sees an English sentence. The
+     * message is only a fallback for an error that came without a code.
+     */
     val fieldErrors: Map<String, String>
-        get() = problem?.errors.orEmpty().associate { it.field to (it.message ?: it.code) }
+        get() = problem?.errors.orEmpty().associate { it.field to it.code.ifEmpty { it.message.orEmpty() } }
 
     /**
      * A stale or unparseable feed cursor.

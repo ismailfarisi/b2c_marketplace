@@ -59,6 +59,7 @@
 "sell_field_required" = "Needed before you can publish.";
 "sell_field_number" = "Digits only.";
 "sell_field_option" = "Pick one of the options.";
+"sell_field_invalid" = "Check this answer.";
 "sell_field_min" = "At least %@ %@.";
 "sell_field_max" = "At most %@ %@.";
 "signin_title" = "Sign in to list";
@@ -181,10 +182,17 @@
 "inbox_empty" = "No messages yet.";
 "inbox_empty_hint" = "They start when a buyer taps the button on one of your reels.";
 "inbox_untitled" = "Conversation";
+"search_distance_m" = "%@ m away";
+"search_distance_km" = "%@ km away";
+"search_mileage_km" = "%@ km";
+"inbox_state_closed" = "Closed";
+"inbox_state_blocked" = "Blocked";
 "thread_empty" = "Say hello.";
 "thread_empty_hint" = "Keep it here — we can only help if something goes wrong on the platform.";
 "thread_hint" = "Message";
 "thread_send" = "Send";
+"feed_like" = "Like";
+"feed_unlike" = "Unlike";
 "msg_held" = "Being reviewed — not delivered yet.";
 "msg_redacted" = "Contact details were removed.";
 "msg_blocked" = "Not delivered.";

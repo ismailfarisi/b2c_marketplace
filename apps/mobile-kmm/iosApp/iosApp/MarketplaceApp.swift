@@ -107,6 +107,9 @@ struct RootView: View {
     @State private var pendingMeals: (() -> Void)?
     @State private var session: Session?
     @State private var sellViewModel: SellViewModel?
+    /// A feed action (like, save, inquiry) waiting on sign-in; replayed once
+    /// the session is authorised instead of dropping the viewer on their profile.
+    @State private var pendingFeed: (() -> Void)?
 
     @State private var route: Route = .none
     @State private var link: MealsLink?
@@ -196,7 +199,7 @@ struct RootView: View {
                     FeedExtra(label: NSLocalizedString("nav_search", comment: ""), symbol: "magnifyingglass") { destinationRaw = Destination.search.rawValue },
                     FeedExtra(label: NSLocalizedString("nav_saved", comment: ""), symbol: "bookmark") { destinationRaw = Destination.saved.rawValue },
                     FeedExtra(label: NSLocalizedString("nav_sell", comment: ""), symbol: "plus.circle") { destinationRaw = Destination.sell.rawValue },
-                ])
+                ], requireAccount: requireAccount)
                     .opacity(destination == .feed ? 1 : 0)
 
                 if destination != .feed {
@@ -271,6 +274,8 @@ struct RootView: View {
                 me.forget()
                 mealsViewModel?.forget()
                 supportViewModel?.forget()
+                sellViewModel = nil
+                pendingFeed = nil
                 if ended == .expired && destination != .feed && destination != .search {
                     destinationRaw = Destination.feed.rawValue
                 }
@@ -294,14 +299,20 @@ struct RootView: View {
             }
         }
         .onChange(of: authorised) { _, ok in
-            guard ok, let run = pendingMeals else { return }
+            guard ok else { return }
+            if let run = pendingFeed {
+                pendingFeed = nil
+                destinationRaw = Destination.feed.rawValue
+                run()
+            }
+            guard let run = pendingMeals else { return }
             pendingMeals = nil
             run()
         }
         .onChange(of: destination) { _, new in
-            // The sell flow's state holder goes when the tab does, taking the
-            // recorded clip with it.
-            if new != .sell { sellViewModel = nil }
+            // The sell flow's state holder is kept across a tab change (a deep
+            // link, a push tap) so a recorded clip and its answers survive; it
+            // is released when the flow is left or finished.
 
             // Video stops when the viewer leaves the feed. Without this the reel
             // keeps decoding — and keeps its audio — under a screen that is not
@@ -355,6 +366,7 @@ struct RootView: View {
             // Saved and Sell open from the feed, so cancelling returns there.
             SignInGate(viewModel: gate, onCancel: {
                 gate.reset()
+                pendingFeed = nil
                 destinationRaw = (destination == .saved || destination == .sell)
                     ? Destination.feed.rawValue : Destination.meals.rawValue
             }, titleKey: gateCopy.0, whyKey: gateCopy.1)
@@ -391,13 +403,11 @@ struct RootView: View {
                         focusOpen = true
                     },
                     onInquire: { result in
-                        guard authorised else {
-                            destinationRaw = Destination.me.rawValue
-                            return
+                        requireAccount {
+                            me.inquire(listingId: result.id, title: result.title,
+                                       reelId: nil, actionId: nil)
+                            route = .thread
                         }
-                        me.inquire(listingId: result.id, title: result.title,
-                                   reelId: nil, actionId: nil)
-                        route = .thread
                     }
                 )
             case .saved:
@@ -429,8 +439,12 @@ struct RootView: View {
                 // class least able to spare it.
                 SellFlow(
                     viewModel: sellViewModel ?? makeSellViewModel(),
-                    onLeave: { destinationRaw = Destination.feed.rawValue },
+                    onLeave: {
+                        sellViewModel = nil
+                        destinationRaw = Destination.feed.rawValue
+                    },
                     onSeeFeed: {
+                        sellViewModel = nil
                         destinationRaw = Destination.feed.rawValue
                         // The seller's reel is new supply at this location and
                         // the feed they are returning to was built before it
@@ -496,6 +510,15 @@ struct RootView: View {
         return created
     }
 
+    /// Runs `run` now when signed in; otherwise keeps it and sends the viewer
+    /// to sign in, replaying it from `onChange(of: authorised)`.
+    private func requireAccount(_ run: @escaping () -> Void) {
+        if authorised { run() } else {
+            pendingFeed = run
+            destinationRaw = Destination.me.rawValue
+        }
+    }
+
     private func handle(action: ResolvedAction, reelId: String, me: MeViewModel, title: String) {
         // The branch is on `kind`, never on `target_type`. That distinction is
         // the whole action seam: a vertical adding a new *target* costs nothing
@@ -506,12 +529,10 @@ struct RootView: View {
         switch action.kind {
         case "inquire_listing", "enquire_property":
             guard let targetId = action.targetId else { return }
-            guard authorised else {
-                destinationRaw = Destination.me.rawValue
-                return
+            requireAccount {
+                me.inquire(listingId: targetId, title: title, reelId: reelId, actionId: action.id)
+                route = .thread
             }
-            me.inquire(listingId: targetId, title: title, reelId: reelId, actionId: action.id)
-            route = .thread
         default:
             break
         }

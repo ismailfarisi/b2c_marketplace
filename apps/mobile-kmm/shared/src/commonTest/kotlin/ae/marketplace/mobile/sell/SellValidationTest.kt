@@ -172,4 +172,26 @@ class SellValidationTest {
         // car at eighteen dirhams ninety.
         assertNull(SellValidation.parseNumber("1890.50"))
     }
+
+    @Test
+    fun server_field_codes_become_issues_without_the_server_sentence() {
+        val f = form(
+            SellField(key = "price", label = "Price", kind = "money", required = true),
+            SellField(
+                key = "spec", label = "Spec", kind = "select",
+                options = listOf(SellOption(value = "gcc", label = "GCC")),
+            ),
+            SellField(key = "vin", label = "VIN", kind = "text"),
+        )
+        val issues = SellValidation.fromServer(
+            f,
+            mapOf("price" to "required", "spec" to "invalid", "vin" to "too_long", "region" to "required"),
+        ).associateBy { it.key }
+
+        assertEquals(FieldProblem.Required, issues["price"]?.problem)
+        assertEquals(FieldProblem.NotAnOption, issues["spec"]?.problem)
+        assertEquals(FieldProblem.Invalid, issues["vin"]?.problem)
+        // Not on this form: left for the form-level failure, not dropped under a box.
+        assertNull(issues["region"])
+    }
 }

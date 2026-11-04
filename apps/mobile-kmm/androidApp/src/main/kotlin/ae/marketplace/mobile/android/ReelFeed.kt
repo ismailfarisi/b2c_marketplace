@@ -55,6 +55,12 @@ fun ReelFeed(
     onActionPressed: (ResolvedAction, String) -> Unit = { _, _ -> },
     /** Search, Saved and Sell, shown after the feed surfaces. */
     extras: List<FeedExtra> = emptyList(),
+    /**
+     * Runs [run] once there is an account. Like and save need one; the host
+     * sends a signed-out viewer to sign in and replays the tap afterwards
+     * instead of flipping the heart and quietly reverting it on the 401.
+     */
+    requireAccount: (run: () -> Unit) -> Unit = { it() },
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -108,8 +114,8 @@ fun ReelFeed(
                     isActive = page == pagerState.settledPage,
                     skewMillis = state.clockSkewMillis,
                     viewModel = viewModel,
-                    onLike = { viewModel.toggleLike(state.items[page].id) },
-                    onSave = { viewModel.toggleSave(state.items[page].id) },
+                    onLike = { val id = state.items[page].id; requireAccount { viewModel.toggleLike(id) } },
+                    onSave = { val id = state.items[page].id; requireAccount { viewModel.toggleSave(id) } },
                     onAction = { action ->
                         // Recorded first, always — including when the target
                         // turns out to be unavailable. Phase 3 built the funnel
@@ -231,10 +237,13 @@ private fun ReelPage(
             Modifier.align(Alignment.CenterEnd).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            val likeLabel = stringResource(if (item.viewer.liked) R.string.feed_unlike else R.string.feed_like)
             Text(
                 text = if (item.viewer.liked) "♥ ${item.counters.likes}" else "♡ ${item.counters.likes}",
                 color = Color.White,
-                modifier = Modifier.clickable(onClick = onLike),
+                modifier = Modifier
+                    .semantics { contentDescription = likeLabel }
+                    .clickable(onClick = onLike),
             )
             val saveLabel = stringResource(if (item.viewer.saved) R.string.feed_unsave else R.string.feed_save)
             Text(

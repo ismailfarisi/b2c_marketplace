@@ -215,7 +215,9 @@ fun DetailsStep(
     // anything that is not about a field (or a network/server failure) above
     // the button instead of nowhere.
     val rejected = state.error as? Failure.Rejected
-    val serverFields = rejected?.fields.orEmpty()
+    // Codes, not the server's English sentences: SellViewModel turns them into
+    // `issues`, which are worded from the string table under each box.
+    val serverFields = rejected?.fieldCodes.orEmpty()
     val formError = state.error?.takeIf { rejected == null || serverFields.keys.none { k -> form.fields.any { it.key == k } } }
 
     StepScaffold(
@@ -238,7 +240,6 @@ fun DetailsStep(
                 value = state.values[field.key].orEmpty(),
                 display = state.lookupLabels[field.key],
                 issue = issues[field.key],
-                serverError = serverFields[field.key],
                 lookupOpen = state.lookupFor == field.key,
                 lookupResults = state.lookupResults,
                 onValue = { onValue(field.key, it) },
@@ -525,6 +526,7 @@ private fun issueText(field: SellField, issue: FieldIssue): String = when (issue
     FieldProblem.Required -> stringResource(R.string.sell_field_required)
     FieldProblem.NotANumber -> stringResource(R.string.sell_field_number)
     FieldProblem.NotAnOption -> stringResource(R.string.sell_field_option)
+    FieldProblem.Invalid -> stringResource(R.string.sell_field_invalid)
     // Money is minor units on the wire. Dividing here rather than in shared code
     // for the same reason the sentence lives here: it is a presentation decision,
     // and the field already told us which kind it is.

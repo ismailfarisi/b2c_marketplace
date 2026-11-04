@@ -386,9 +386,14 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                 // Back to the form. A validation failure the client did not catch
                 // names a field, and the seller cannot fix it from the live
                 // screen.
+                val failure = e.toFailure()
+                val serverIssues = (failure as? Failure.Rejected)?.let { r ->
+                    _state.value.form?.let { SellValidation.fromServer(it, r.fieldCodes) }
+                }.orEmpty()
                 _state.value = _state.value.copy(
                     busy = false, step = SellStep.Details,
-                    upload = UploadPhase.Idle, error = e.toFailure(),
+                    upload = UploadPhase.Idle, error = failure,
+                    issues = serverIssues,
                 )
                 return@launch
             }

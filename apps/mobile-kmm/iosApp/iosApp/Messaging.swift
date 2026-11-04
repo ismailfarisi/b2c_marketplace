@@ -39,7 +39,7 @@ struct InboxScreen: View {
                             // typing into a thread the seller closed and getting
                             // silence is worse than being told.
                             if c.state != "open" && !c.state.isEmpty {
-                                Text(c.state)
+                                Text(Self.stateLabel(c.state))
                                     .font(.system(size: TypeScale.caption))
                                     .foregroundStyle(Palette.textFaint)
                             }
@@ -66,6 +66,15 @@ struct InboxScreen: View {
         .task {
             viewModel.loadInbox()
             for await s in viewModel.inbox { current = s }
+        }
+    }
+
+    /// The conversation state in the reader's language; an unknown one as sent.
+    static func stateLabel(_ state: String) -> String {
+        switch state {
+        case "closed": return String(localized: "inbox_state_closed")
+        case "blocked": return String(localized: "inbox_state_blocked")
+        default: return state
         }
     }
 }
@@ -105,7 +114,15 @@ struct ThreadScreen: View {
                 // A thread that failed to load is not an empty thread. Showing
                 // "Say hello" over a request that 500'd invites the viewer to
                 // type their question into a conversation that already has it.
-                Spacer(); FailureBlock(failure: failure); Spacer()
+                // Retry re-runs the open or inquire that failed; a send
+                // failure is retried from the strip below instead.
+                Spacer()
+                if state.loadFailed {
+                    FailureBlock(failure: failure) { viewModel.retryThread() }
+                } else {
+                    FailureBlock(failure: failure)
+                }
+                Spacer()
             } else if state.messages.isEmpty {
                 Spacer()
                 EmptyBlock(message: String(localized: "thread_empty"),
@@ -131,6 +148,8 @@ struct ThreadScreen: View {
                 FailureStrip(failure: failure) { viewModel.sendDraft() }
             }
 
+            // No composer over a thread that never opened.
+            if !state.loadFailed {
             HStack(alignment: .bottom, spacing: Space.small) {
                 TextField("", text: $draft, prompt:
                     Text("thread_hint").foregroundStyle(Palette.textGhost), axis: .vertical)
@@ -156,6 +175,7 @@ struct ThreadScreen: View {
             }
             .padding(.horizontal, Space.medium)
             .padding(.vertical, 10)
+            }
         }
         .background(Palette.ink)
         .task {
