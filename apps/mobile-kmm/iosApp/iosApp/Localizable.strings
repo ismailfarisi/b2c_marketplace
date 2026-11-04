@@ -381,6 +381,10 @@
 "update_action" = "Update";
 "update_later" = "Later";
 "legal_help" = "Help";
+"meals_company_paid_by" = "Paid by %@";
+"meals_company_unpaid" = "%@ couldn't cover this payment. You don't need to pay: ask your company's lunch admin.";
+"meals_company_covers" = "%@ covers your office lunches. For now, book them on the web and choose "Paid by" your company.";
+"meals_company_book_web" = "Book an office lunch on the web";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

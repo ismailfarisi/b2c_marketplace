@@ -146,11 +146,11 @@ func (s *Service) IssueStatement(ctx context.Context, actorID, companyID uuid.UU
 			Scan(&total, &n); err != nil {
 			return err
 		}
-		if n == 0 {
-			return httpx.Coded(httpx.ErrConflict, "nothing_to_bill", "There is nothing unbilled up to that date.")
-		}
-		if total < 0 {
-			total = 0
+		// Credits that cancel out the charges (or more) are not a bill: leave
+		// them unbilled so they carry forward against the next charges, rather
+		// than closing a zero statement that swallows them.
+		if !billable(n, total) {
+			return httpx.Coded(httpx.ErrConflict, "nothing_to_bill", "There is nothing to bill up to that date.")
 		}
 		for attempt := 0; ; attempt++ {
 			err := tx.QueryRow(ctx, `
@@ -192,4 +192,10 @@ func (s *Service) MarkStatementPaid(ctx context.Context, actorID, companyID, sta
 		return httpx.Coded(httpx.ErrConflict, "not_payable", "Only an issued statement can be marked paid.")
 	}
 	return nil
+}
+
+// billable reports whether unbilled lines make a statement worth issuing: a net
+// of zero or less (credits covering the charges) is carried forward instead.
+func billable(lines int, netMinor int64) bool {
+	return lines > 0 && netMinor > 0
 }

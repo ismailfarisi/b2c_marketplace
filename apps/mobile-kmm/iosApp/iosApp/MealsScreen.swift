@@ -1893,6 +1893,28 @@ private struct MinePage: View {
 
     @State private var current: MyMealsUiState?
     private var s: MyMealsUiState { current ?? vm.mine.value }
+    @Environment(\.openURL) private var openURL
+
+    private func companyCard(_ name: String) -> some View {
+        VStack(alignment: .leading, spacing: Space.small) {
+            Text(String(format: NSLocalizedString("meals_company_covers", comment: ""), name))
+                .font(.system(size: TypeScale.body))
+                .foregroundStyle(Warm.ink)
+            Button {
+                if let u = URL(string: Config.webBaseUrl + (isArabicLocale ? "/ar" : "/en") + "/business") { openURL(u) }
+            } label: {
+                Text(NSLocalizedString("meals_company_book_web", comment: ""))
+                    .font(.system(size: TypeScale.body, weight: .semibold))
+                    .foregroundStyle(Warm.chilli)
+                    .frame(minHeight: Space.touch)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Space.medium)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Warm.chilli, lineWidth: 1))
+        .padding(.horizontal, Space.edge)
+        .padding(.vertical, Space.medium)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1903,7 +1925,7 @@ private struct MinePage: View {
             } else if !s.loaded {
                 LoadingBlock()
                 Spacer()
-            } else if s.subscriptions.isEmpty && s.rotations.isEmpty {
+            } else if s.subscriptions.isEmpty && s.rotations.isEmpty && s.companies.isEmpty {
                 EmptyBlock(message: NSLocalizedString("meals_no_subs", comment: ""))
                 Spacer()
             } else {
@@ -1913,6 +1935,7 @@ private struct MinePage: View {
                         if let failure = s.error {
                             FailureStrip(failure: failure, onRetry: { vm.loadMine(force: true) }, onDismiss: { vm.dismissMineError() })
                         }
+                        ForEach(s.companies, id: \.companyId) { c in companyCard(c.name) }
                         if !s.rotations.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_rotations", comment: ""))
                             ForEach(s.rotations, id: \.id) { r in
@@ -2078,7 +2101,14 @@ private struct SubscriptionPage: View {
                     if sub.rotationId == nil && (sub.status == "active" || sub.status == "paused") {
                         RenewToggle(on: sub.renewalMode == "auto", enabled: !s.busy) { vm.setAutoRenew(auto: $0) }
                     }
-                    if sub.pendingOrderId != nil {
+                    if let company = sub.companyName {
+                        Text(String(format: NSLocalizedString("meals_company_paid_by", comment: ""), company))
+                            .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                    }
+                    if sub.pendingOrderId != nil, let company = sub.companyName {
+                        Text(String(format: NSLocalizedString("meals_company_unpaid", comment: ""), company))
+                            .font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
+                    } else if sub.pendingOrderId != nil {
                         PrimaryButton(label: NSLocalizedString("meals_pay_due", comment: ""), enabled: !s.busy) { vm.payPending() }
                     }
                     if sub.canRenew {

@@ -551,6 +551,7 @@ export interface CompanyLunch {
   plan: string;
   status: string;
   start_date: string;
+  renewal_unpaid?: boolean;
 }
 
 export interface CompanyDashboard {
@@ -619,11 +620,12 @@ export const previewLunch = (companyId: string, data: LunchInput) =>
     method: "POST",
     data,
   });
-export const startLunch = (companyId: string, data: LunchInput) =>
+export const startLunch = (companyId: string, data: LunchInput, opts?: CallOptions) =>
   apiFetch<{ id: string; subscription_no: string; status: string }>({
     url: `/companies/${companyId}/lunches`,
     method: "POST",
     data,
+    headers: opts?.headers,
   });
 
 // --- support ----------------------------------------------------------------

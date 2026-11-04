@@ -302,6 +302,8 @@ data class MySubscription(
     @SerialName("amount_minor") val amountMinor: Long = 0,
     val currency: String = "AED",
     @SerialName("pending_order_id") val pendingOrderId: String? = null,
+    /** Set when a company pays for this office lunch; never the employee's to pay. */
+    @SerialName("company_name") val companyName: String? = null,
     @SerialName("rotation_id") val rotationId: String? = null,
     @SerialName("rotation_week") val rotationWeek: Int? = null,
     @SerialName("renewal_mode") val renewalMode: String = "manual",

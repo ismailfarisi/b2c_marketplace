@@ -381,5 +381,9 @@
 "update_action" = "تحديث";
 "update_later" = "لاحقًا";
 "legal_help" = "المساعدة";
+"meals_company_paid_by" = "على حساب %@";
+"meals_company_unpaid" = "لم تتمكن %@ من تغطية هذه الدفعة. لا داعي للدفع: تواصل مع مسؤول الغداء في شركتك.";
+"meals_company_covers" = "تغطي %@ غداء مكتبك. احجزه حاليًا عبر الموقع واختر الدفع على حساب شركتك.";
+"meals_company_book_web" = "احجز غداء المكتب عبر الموقع";
 
 "action_back" = "رجوع";

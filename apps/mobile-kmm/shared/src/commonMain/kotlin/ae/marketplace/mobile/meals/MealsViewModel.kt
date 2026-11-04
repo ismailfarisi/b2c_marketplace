@@ -182,6 +182,8 @@ private fun newIdempotencyKey(): String = Uuid.random().toString()
 data class MyMealsUiState(
     val subscriptions: List<MySubscription> = emptyList(),
     val rotations: List<Rotation> = emptyList(),
+    /** Active companies covering this person's office lunches. */
+    val companies: List<ae.marketplace.mobile.model.CompanyBenefit> = emptyList(),
     val loading: Boolean = false,
     val loaded: Boolean = false,
     val error: Failure? = null,
@@ -739,8 +741,12 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     private suspend fun fetchMine() {
         val subs = api.subscriptions().items
         val rotations = api.rotations().items
+        // The office-lunch card is extra: its failure must not hide the list.
+        val companies = runCatching { api.myCompanies().items }.getOrDefault(emptyList())
+            .filter { c -> c.status == "active" }
         _mine.update {
             it.copy(
+                companies = companies,
                 // Rotation weeks show under their rotation, not as four more rows.
                 subscriptions = subs.filter { s -> s.rotationId == null },
                 rotations = rotations,

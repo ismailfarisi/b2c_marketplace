@@ -96,6 +96,8 @@ class MealsApi(private val client: HttpClient) {
 
     suspend fun subscriptions(): SubscriptionPage = client.get("me/subscriptions").body()
 
+    suspend fun myCompanies(): ae.marketplace.mobile.model.CompanyPage = client.get("me/companies").body()
+
     suspend fun subscription(id: String): MySubscription = client.get("me/subscriptions/$id").body()
 
     suspend fun choose(id: String, date: String, slot: String, dishId: String) {

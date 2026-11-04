@@ -147,11 +147,52 @@ func overCap(c Company) error {
 // Subscribe starts an office lunch: an ordinary subscription to the office
 // address, with its billing order authorized on the company's account.
 func (s *Service) Subscribe(ctx context.Context, in LunchInput) (*subscriptions.Result, error) {
-	if _, _, err := s.Preview(ctx, in); err != nil {
+	// One start at a time per employee and company, so a retried or doubled
+	// request sees the first one's lunch instead of racing it into a twin.
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("company: acquire: %w", err)
+	}
+	defer conn.Release()
+	lockKey := "company-lunch:" + in.CompanyID.String() + ":" + in.Sub.UserID.String()
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock(hashtext($1))`, lockKey); err != nil {
+		return nil, fmt.Errorf("company: lock lunch: %w", err)
+	}
+	defer func() {
+		if _, err := conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(hashtext($1))`, lockKey); err != nil {
+			slog.ErrorContext(ctx, "company: unlock lunch failed", "error", err)
+		}
+	}()
+
+	p, _, err := s.Preview(ctx, in)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := s.checkLunch(ctx, &in); err != nil {
+	c, err := s.checkLunch(ctx, &in)
+	if err != nil {
 		return nil, err
+	}
+	var dup bool
+	if err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM subscriptions
+		 WHERE company_id = $1 AND user_id = $2 AND plan_id = $3 AND start_date = $4
+		   AND status IN ('active', 'paused', 'pending_payment'))`,
+		in.CompanyID, in.Sub.UserID, in.Sub.PlanID, in.Sub.StartDate).Scan(&dup); err != nil {
+		return nil, fmt.Errorf("company: duplicate lunch: %w", err)
+	}
+	if dup {
+		return nil, httpx.Coded(httpx.ErrConflict, "duplicate_lunch",
+			"You already have this office lunch starting on that day.")
+	}
+	// Refuse an over-limit lunch before it exists, so the employee is not left
+	// with a cancelled subscription. settle re-checks under the company lock.
+	cr, err := credit(ctx, s.pool, in.CompanyID, c.CreditLimitMinor)
+	if err != nil {
+		return nil, err
+	}
+	if p.TotalMinor > cr.AvailableMinor {
+		return nil, httpx.Coded(httpx.ErrConflict, "over_credit_limit",
+			"Your company has reached its lunch credit limit. Ask your lunch admin.")
 	}
 	res, err := s.subs.Subscribe(ctx, in.Sub)
 	if err != nil {

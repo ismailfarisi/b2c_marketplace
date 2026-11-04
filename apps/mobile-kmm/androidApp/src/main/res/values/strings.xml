@@ -556,4 +556,8 @@
     <string name="update_action">Update</string>
     <string name="update_later">Later</string>
     <string name="legal_help">Help</string>
+    <string name="meals_company_paid_by">Paid by %1$s</string>
+    <string name="meals_company_unpaid">%1$s couldn\'t cover this payment. You don\'t need to pay: ask your company\'s lunch admin.</string>
+    <string name="meals_company_covers">%1$s covers your office lunches. For now, book them on the web and choose \"Paid by\" your company.</string>
+    <string name="meals_company_book_web">Book an office lunch on the web</string>
 </resources>

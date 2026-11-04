@@ -426,6 +426,34 @@ private fun PickRow(title: String, detail: String?, selected: Boolean, onClick: 
 }
 
 @Composable
+private fun CompanyCoversCard(company: String, arabic: Boolean) {
+    val context = LocalContext.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.Edge, vertical = Space.Medium)
+            .border(1.dp, M.Chilli, RoundedCornerShape(12.dp))
+            .padding(12.dp),
+    ) {
+        Text(stringResource(R.string.meals_company_covers, company), color = M.Ink, fontSize = Type.Body)
+        Text(
+            stringResource(R.string.meals_company_book_web),
+            color = M.Chilli,
+            fontSize = Type.Body,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .semantics { role = Role.Button }
+                .clickable {
+                    val url = ae.marketplace.mobile.android.BuildConfig.WEB_BASE_URL + (if (arabic) "/ar" else "/en") + "/business"
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }
+                .padding(vertical = 12.dp),
+        )
+    }
+}
+
+@Composable
 private fun OfficeLink(arabic: Boolean) {
     val context = LocalContext.current
     Text(
@@ -1215,11 +1243,12 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
         when {
             failure != null && !s.loaded -> FailureBlock(failure, onRetry = { vm.loadMine(force = true) })
             !s.loaded -> LoadingBlock()
-            s.subscriptions.isEmpty() && s.rotations.isEmpty() -> EmptyBlock(stringResource(R.string.meals_no_subs))
+            s.subscriptions.isEmpty() && s.rotations.isEmpty() && s.companies.isEmpty() -> EmptyBlock(stringResource(R.string.meals_no_subs))
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 failure?.let { f ->
                     item { FailureStrip(f, onRetry = { vm.loadMine(force = true) }, onDismiss = vm::dismissMineError) }
                 }
+                items(s.companies, key = { "company-" + it.companyId }) { c -> CompanyCoversCard(c.name, arabic) }
                 if (s.rotations.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_rotations)) }
                     items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, busy = r.id in s.busy) }
@@ -1356,7 +1385,11 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                                 RenewSwitch(sub.renewalMode == "auto", enabled = !s.busy) { vm.setAutoRenew(it) }
                             }
                         }
-                        if (sub.pendingOrderId != null) PrimaryButton(stringResource(R.string.meals_pay_due), vm::payPending, enabled = !s.busy)
+                        sub.companyName?.let { Text(stringResource(R.string.meals_company_paid_by, it), color = M.Muted, fontSize = Type.Secondary) }
+                        // A company lunch is never the employee's to pay.
+                        if (sub.pendingOrderId != null && sub.companyName != null) {
+                            Text(stringResource(R.string.meals_company_unpaid, sub.companyName.orEmpty()), color = M.Ink, fontSize = Type.Body)
+                        } else if (sub.pendingOrderId != null) PrimaryButton(stringResource(R.string.meals_pay_due), vm::payPending, enabled = !s.busy)
                         if (sub.canRenew) PrimaryButton(stringResource(R.string.meals_renew), vm::renew, enabled = !s.busy)
                     }
                     s.error?.let { FailureStrip(it, onRetry = vm::retry, onDismiss = vm::dismissError) }

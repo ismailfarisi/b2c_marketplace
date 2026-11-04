@@ -84,6 +84,10 @@ const LUNCH: Record<string, Pair> = {
     en: "You are no longer listed as an employee of this company.",
     ar: "لم تعد ضمن موظفي هذه الشركة.",
   },
+  duplicate_lunch: {
+    en: "You already have this office lunch starting on that day.",
+    ar: "لديك بالفعل غداء المكتب هذا يبدأ في ذلك اليوم.",
+  },
 };
 
 const OFFLINE: Pair = {
