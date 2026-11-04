@@ -481,6 +481,8 @@ fun MeScreen(
     onOpenInbox: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenHelp: (() -> Unit)? = null,
+    onOpenInvoices: (() -> Unit)? = null,
 ) {
     val state by viewModel.listings.collectAsState()
     val inbox by viewModel.inbox.collectAsState()
@@ -529,6 +531,8 @@ fun MeScreen(
                     badge = inbox.items.sumOf { it.unread }.takeIf { it > 0 },
                     onClick = onOpenInbox,
                 )
+                onOpenHelp?.let { RowLink(stringResource(R.string.me_help), null, it) }
+                onOpenInvoices?.let { RowLink(stringResource(R.string.me_invoices), null, it) }
                 Text(
                     text = stringResource(R.string.me_your_listings),
                     color = Palette.Text.copy(alpha = 0.45f),
@@ -603,7 +607,7 @@ fun MeScreen(
                 LegalLinks(
                     color = Palette.Text.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = Space.Edge),
-                    showHelp = true,
+                    showHelp = onOpenHelp == null,
                 )
             }
         }

@@ -311,6 +311,30 @@
 "update_action" = "Update";
 "update_later" = "Later";
 "legal_help" = "Help";
+"me_help" = "Help";
+"me_invoices" = "Invoices";
+"help_lede" = "Something wrong with a delivery, a payment or your account? Write to us and we'll reply here.";
+"help_new" = "New request";
+"help_subject" = "Subject";
+"help_message" = "What happened?";
+"help_send" = "Send";
+"help_sending" = "Sending…";
+"help_mine" = "Your requests";
+"help_empty" = "No requests yet.";
+"help_need_subject" = "Write a subject.";
+"help_need_message" = "Write a message.";
+"help_older" = "Show older";
+"help_status_open" = "Waiting for support";
+"help_status_answered" = "Support replied";
+"help_status_closed" = "Closed";
+"help_you" = "You";
+"help_staff" = "Support";
+"help_reply_hint" = "Reply";
+"help_not_found" = "This request was not found.";
+"help_kept" = "Your message is kept; try again.";
+"invoices_empty" = "No invoices yet. An invoice is issued once a paid order is delivered.";
+"invoices_credit" = "Credit note";
+"invoices_print_hint" = "Tap an invoice to open the printable copy on the web.";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

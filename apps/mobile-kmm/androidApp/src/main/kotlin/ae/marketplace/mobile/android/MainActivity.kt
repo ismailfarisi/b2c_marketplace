@@ -7,6 +7,11 @@ import ae.marketplace.mobile.android.me.MeScreen
 import ae.marketplace.mobile.android.me.SavedScreen
 import ae.marketplace.mobile.android.me.SearchScreen
 import ae.marketplace.mobile.android.me.ThreadScreen
+import ae.marketplace.mobile.android.support.HelpScreen
+import ae.marketplace.mobile.android.support.HelpTicketScreen
+import ae.marketplace.mobile.android.support.InvoicesScreen
+import ae.marketplace.mobile.meals.MealsLinkPage
+import ae.marketplace.mobile.support.SupportViewModel
 import ae.marketplace.mobile.android.sell.SellFlow
 import ae.marketplace.mobile.android.sell.SignInGate
 import ae.marketplace.mobile.android.meals.MealsTab
@@ -73,7 +78,7 @@ import kotlinx.coroutines.launch
  * CTA press three swipes into the feed, and making it a sixth tab would turn
  * the second one into a context switch out of the reel the viewer is watching.
  */
-private enum class Route { None, Inbox, Thread }
+private enum class Route { None, Inbox, Thread, Help, HelpTicket, Invoices }
 
 class MainActivity : ComponentActivity() {
 
@@ -209,6 +214,7 @@ class MainActivity : ComponentActivity() {
                 // its whole design is that flicking between those tabs does not
                 // re-fetch.
                 var meVm by remember { mutableStateOf<MeViewModel?>(null) }
+                var supportVm by remember { mutableStateOf<SupportViewModel?>(null) }
                 var mealsVm by remember { mutableStateOf<MealsViewModel?>(null) }
                 // A meals action waiting on sign-in: checkout, rotation, My meals.
                 var pendingMeals by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -225,6 +231,13 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(pendingLink.value) {
                     if (pendingLink.value == null) return@LaunchedEffect
                     if (linkTarget == null) pendingLink.value = null
+                    else if (linkTarget.page == MealsLinkPage.SUPPORT) {
+                        // Help is native: open the ticket on the app's own session.
+                        val id = linkTarget.id
+                        pendingLink.value = null
+                        destination = Destination.Me
+                        route = if (id != null) { supportVm?.openTicket(id); Route.HelpTicket } else Route.Help
+                    }
                     else { route = Route.None; destination = Destination.Meals }
                 }
 
@@ -242,6 +255,7 @@ class MainActivity : ComponentActivity() {
                         it.setLocation(fallback.lat, fallback.lng)
                     }
                     mealsVm = sdk.createMealsViewModel()
+                    supportVm = sdk.createSupportViewModel()
                     signInVm = sdk.createSignInViewModel()
                     session = sdk.session
                 }
@@ -282,6 +296,7 @@ class MainActivity : ComponentActivity() {
                     val why = ended ?: return@LaunchedEffect
                     meVm?.forget()
                     mealsVm?.forget()
+                    supportVm?.forget()
                     if (why == SessionEnded.Expired) {
                         // Only for the involuntary case. Telling someone who
                         // just tapped Sign out that they have been signed out is
@@ -539,6 +554,8 @@ class MainActivity : ComponentActivity() {
                                 MeScreen(
                                     viewModel = it,
                                     onOpenInbox = { route = Route.Inbox },
+                                    onOpenHelp = { route = Route.Help },
+                                    onOpenInvoices = { route = Route.Invoices },
                                     onSignOut = {
                                         // Clears the token store, which the old
                                         // flag-flip did not — the credential
@@ -632,6 +649,19 @@ class MainActivity : ComponentActivity() {
                                         route = Route.Inbox
                                     },
                                 )
+                                Route.Help -> supportVm?.let { vm ->
+                                    HelpScreen(
+                                        viewModel = vm,
+                                        onBack = { route = Route.None },
+                                        onOpenTicket = { id -> vm.openTicket(id); route = Route.HelpTicket },
+                                    )
+                                }
+                                Route.HelpTicket -> supportVm?.let { vm ->
+                                    HelpTicketScreen(viewModel = vm, onBack = { route = Route.Help })
+                                }
+                                Route.Invoices -> supportVm?.let { vm ->
+                                    InvoicesScreen(viewModel = vm, onBack = { route = Route.None })
+                                }
                                 Route.None -> Unit
                             }
                         }

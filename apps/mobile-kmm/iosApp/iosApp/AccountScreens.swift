@@ -347,6 +347,8 @@ struct MeScreen: View {
     let viewModel: MeViewModel
     let onOpenInbox: () -> Void
     let onSignOut: () -> Void
+    var onOpenHelp: (() -> Void)?
+    var onOpenInvoices: (() -> Void)?
 
     @State private var current: MyListingsUiState?
     private var state: MyListingsUiState { current ?? viewModel.listings.value }
@@ -379,6 +381,9 @@ struct MeScreen: View {
                     .frame(minHeight: Space.touch)
                 }
                 .listRowBackground(Palette.ink)
+
+                if let onOpenHelp { meRow("me_help", action: onOpenHelp) }
+                if let onOpenInvoices { meRow("me_invoices", action: onOpenInvoices) }
 
                 Section {
                     if state.loading && state.items.isEmpty {
@@ -424,7 +429,7 @@ struct MeScreen: View {
                 }
                 .disabled(deletion?.busy == true)
                 .listRowBackground(Palette.ink)
-                LegalLinks(tint: Palette.text.opacity(0.7), showHelp: true)
+                LegalLinks(tint: Palette.text.opacity(0.7), showHelp: onOpenHelp == nil)
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Palette.ink)
             }
@@ -459,6 +464,24 @@ struct MeScreen: View {
                 unread = inbox.items.reduce(0) { $0 + Int($1.unread) }
             }
         }
+    }
+}
+
+extension MeScreen {
+    fileprivate func meRow(_ label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label)
+                    .font(.system(size: TypeScale.body))
+                    .foregroundStyle(Palette.text)
+                Spacer()
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: TypeScale.secondary))
+                    .foregroundStyle(Palette.textFaint)
+            }
+            .frame(minHeight: Space.touch)
+        }
+        .listRowBackground(Palette.ink)
     }
 }
 
