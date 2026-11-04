@@ -29,4 +29,6 @@ export type CompanyDashboardLunchesItem = {
   plan?: string;
   status?: string;
   start_date?: string;
+  /** A renewal cycle the company account could not cover; the lunch stops unless someone acts. */
+  renewal_unpaid?: boolean;
 };

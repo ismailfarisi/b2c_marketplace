@@ -97,6 +97,9 @@ type Lunch struct {
 	Plan           string    `json:"plan"`
 	Status         string    `json:"status"`
 	StartDate      string    `json:"start_date"`
+	// RenewalUnpaid is a renewal cycle the company account could not cover
+	// (over the limit, suspended): the lunch stops unless someone acts.
+	RenewalUnpaid bool `json:"renewal_unpaid"`
 }
 
 // Credit is the company's position against its limit.
@@ -176,6 +179,36 @@ func NormalizePhone(raw string) string {
 	return b.String()
 }
 
+// InvitePhone turns an employee's number as an office manager types it into
+// the E.164 form sign-in stores, so the invite matches the account. UAE local
+// (05x, 5x) and 00-prefixed numbers are rewritten; anything else without a
+// country code is refused rather than stored as a number nobody can sign in
+// with.
+func InvitePhone(raw string) (string, bool) {
+	p := NormalizePhone(raw)
+	switch {
+	case strings.HasPrefix(p, "+"):
+	case strings.HasPrefix(p, "00"):
+		p = "+" + p[2:]
+	case strings.HasPrefix(p, "971") && len(p) == 12:
+		p = "+" + p
+	case strings.HasPrefix(p, "05") && len(p) == 10:
+		p = "+971" + p[1:]
+	case strings.HasPrefix(p, "5") && len(p) == 9:
+		p = "+971" + p
+	default:
+		return p, false
+	}
+	if strings.HasPrefix(p, "+9710") {
+		p = "+971" + p[5:]
+	}
+	digits := p[1:]
+	if len(digits) < 8 || len(digits) > 15 || digits[0] == '0' {
+		return p, false
+	}
+	return p, true
+}
+
 func (in RegisterInput) validate() error {
 	var f []httpx.FieldError
 	if strings.TrimSpace(in.Name) == "" {
@@ -188,7 +221,7 @@ func (in RegisterInput) validate() error {
 		f = append(f, httpx.FieldError{Field: "billing_email", Code: "invalid", Message: "a billing email is required"})
 	}
 	if t := strings.TrimSpace(in.TRN); t != "" && (len(t) != 15 || strings.Trim(t, "0123456789") != "") {
-		f = append(f, httpx.FieldError{Field: "trn", Code: "invalid", Message: "a TRN is 15 digits"})
+		f = append(f, httpx.FieldError{Field: "trn", Code: "invalid_trn", Message: "a TRN is 15 digits"})
 	}
 	if err := in.Office.validate(); err != nil {
 		var ve *httpx.ValidationError
@@ -212,7 +245,7 @@ func (o OfficeInput) validate() error {
 		f = append(f, httpx.FieldError{Field: "office.city", Code: "required", Message: "city is required"})
 	}
 	if o.Lat < -90 || o.Lat > 90 || o.Lng < -180 || o.Lng > 180 || (o.Lat == 0 && o.Lng == 0) {
-		f = append(f, httpx.FieldError{Field: "office.location", Code: "invalid", Message: "pick the office location"})
+		f = append(f, httpx.FieldError{Field: "office.location", Code: "invalid_point", Message: "pick the office location"})
 	}
 	if len(f) > 0 {
 		return &httpx.ValidationError{Fields: f}

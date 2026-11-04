@@ -71,6 +71,10 @@ const COPY = {
       `${c} pays for your next cycle, which starts after ${d}. Your meals continue automatically.`,
     companyOff: (c: string, d: string) =>
       `This office lunch paid by ${c} ends after ${d}. Turn on automatic renewal to keep it going.`,
+    companyUnpaid: (c: string) =>
+      `${c} couldn't cover this renewal (the company's lunch credit or policy doesn't allow it). You don't need to pay: ask your company's lunch admin.`,
+    companyFirstUnpaid: (c: string) =>
+      `${c} hasn't covered this office lunch yet. Ask your company's lunch admin.`,
     renew: "Renew with this kitchen",
     continueTrial: "Continue with this kitchen",
     renewNote:
@@ -134,6 +138,10 @@ const COPY = {
       `تدفع ${c} دورتك التالية التي تبدأ بعد ${d}. تستمر وجباتك تلقائيًا.`,
     companyOff: (c: string, d: string) =>
       `ينتهي غداء المكتب المدفوع من ${c} بعد ${d}. فعّل التجديد التلقائي ليستمر.`,
+    companyUnpaid: (c: string) =>
+      `لم تتمكن ${c} من تغطية هذا التجديد (رصيد الغداء أو سياسة الشركة لا يسمح بذلك). لا داعي للدفع: تواصل مع مسؤول الغداء في شركتك.`,
+    companyFirstUnpaid: (c: string) =>
+      `لم تغطِّ ${c} غداء المكتب هذا بعد. تواصل مع مسؤول الغداء في شركتك.`,
     renew: "جدّد مع هذا المطبخ",
     continueTrial: "استمر مع هذا المطبخ",
     renewNote: "نفس الخطة والعنوان وأيام التوصيل، بالسعر الحالي للخطة.",
@@ -273,7 +281,17 @@ function Detail({
         </section>
       )}
 
-      {s.pending_order_id && !s.rotation_id && (
+      {s.pending_order_id && s.company_name && (
+        <section className="ms-callout" role="status">
+          <p>
+            {s.cycle_no > 1
+              ? t.companyUnpaid(s.company_name)
+              : t.companyFirstUnpaid(s.company_name)}
+          </p>
+        </section>
+      )}
+
+      {s.pending_order_id && !s.rotation_id && !s.company_name && (
         <section className="ms-callout">
           <p>
             {s.cycle_no > 1 && cycle

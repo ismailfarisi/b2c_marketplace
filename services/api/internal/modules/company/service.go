@@ -118,6 +118,23 @@ func (s *Service) Register(ctx context.Context, userID uuid.UUID, in RegisterInp
 		if err != nil {
 			return err
 		}
+		// One application per company: a second press of "Send for approval"
+		// (or the form shown again after a failed load) must not open a twin.
+		var dup bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM companies c
+			  JOIN company_members m ON m.company_id = c.id AND m.user_id = $1
+			                        AND m.role = 'admin' AND m.status = 'active'
+			 WHERE c.status IN ('pending', 'active', 'suspended')
+			   AND (lower(trim(c.legal_name)) = lower(trim($2))
+			        OR (NULLIF(trim($3), '') IS NOT NULL AND c.trn = trim($3))))`,
+			userID, in.LegalName, in.TRN).Scan(&dup); err != nil {
+			return fmt.Errorf("company: duplicate check: %w", err)
+		}
+		if dup {
+			return httpx.Coded(httpx.ErrConflict, "company_exists",
+				"You already have an account for this company.")
+		}
 		var id uuid.UUID
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO companies (name, legal_name, trn, billing_email, billing_phone, created_by)
@@ -228,12 +245,12 @@ func credit(ctx context.Context, q querier, companyID uuid.UUID, limit int64) (C
 	var c Credit
 	err := q.QueryRow(ctx, `
 		SELECT coalesce(sum(ch.amount_minor) FILTER (WHERE ch.statement_id IS NULL), 0),
-		       coalesce(sum(ch.amount_minor) FILTER (WHERE st.status = 'issued'), 0),
+		       (SELECT coalesce(sum(total_minor), 0) FROM company_statements
+		         WHERE company_id = $1 AND status = 'issued'),
 		       coalesce(sum(ch.amount_minor) FILTER (WHERE ch.created_at >= date_trunc('month', now())), 0),
 		       (SELECT count(*) FROM company_statements
 		         WHERE company_id = $1 AND status = 'issued' AND due_on < CURRENT_DATE)
 		  FROM company_charges ch
-		  LEFT JOIN company_statements st ON st.id = ch.statement_id
 		 WHERE ch.company_id = $1`, companyID).
 		Scan(&c.UnbilledMinor, &c.OutstandingMinor, &c.MonthSpendMinor, &c.OverdueStatements)
 	if err != nil {
@@ -317,7 +334,11 @@ func (s *Service) members(ctx context.Context, companyID uuid.UUID) ([]Member, e
 func (s *Service) lunches(ctx context.Context, companyID uuid.UUID) ([]Lunch, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT s.id, s.subscription_no, coalesce(m.name, u.display_name, ''), u.phone,
-		       b.name, p.name, s.status, to_char(s.start_date, 'YYYY-MM-DD')
+		       b.name, p.name, s.status, to_char(s.start_date, 'YYYY-MM-DD'),
+		       EXISTS (SELECT 1 FROM subscription_cycles c
+		                WHERE c.subscription_id = s.id AND c.status IN ('pending', 'past_due')
+		                  AND c.order_id IS NOT NULL AND c.cycle_no > 1
+		                  AND NOT EXISTS (SELECT 1 FROM company_charges ch WHERE ch.order_id = c.order_id))
 		  FROM subscriptions s
 		  JOIN users u ON u.id = s.user_id
 		  JOIN vendor_branches b ON b.id = s.branch_id
@@ -333,7 +354,7 @@ func (s *Service) lunches(ctx context.Context, companyID uuid.UUID) ([]Lunch, er
 	for rows.Next() {
 		var l Lunch
 		if err := rows.Scan(&l.SubscriptionID, &l.SubscriptionNo, &l.Employee, &l.Phone,
-			&l.Kitchen, &l.Plan, &l.Status, &l.StartDate); err != nil {
+			&l.Kitchen, &l.Plan, &l.Status, &l.StartDate, &l.RenewalUnpaid); err != nil {
 			return nil, err
 		}
 		out = append(out, l)
@@ -414,9 +435,9 @@ func (s *Service) AddMember(ctx context.Context, userID, companyID uuid.UUID, ph
 	if err := s.requireAdmin(ctx, s.pool, userID, companyID); err != nil {
 		return err
 	}
-	phone = NormalizePhone(phone)
-	if len(strings.TrimPrefix(phone, "+")) < 8 {
-		return invalid("phone", "invalid", "enter the employee's mobile number")
+	phone, ok := InvitePhone(phone)
+	if !ok {
+		return invalid("phone", "invalid_phone", "enter the employee's mobile number with its country code")
 	}
 	if role == "" {
 		role = "employee"

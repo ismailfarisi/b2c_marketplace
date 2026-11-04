@@ -24,12 +24,15 @@ import {
   rememberedInvite,
 } from "@/lib/customer-api";
 import { getMealKitchen } from "@/lib/meals-api";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
+import { companyMessage } from "@/lib/company-problem";
 
 const LUNCH_ERRORS_AR: Record<string, string> = {
   over_meal_cap: "تكلفة الوجبة في هذه الخطة أعلى مما تغطيه شركتك.",
   over_credit_limit: "بلغت شركتك حد رصيد الغداء. تواصل مع مسؤول الغداء.",
   company_not_active: "حساب غداء شركتك غير مفعّل حاليًا.",
   not_member: "لم تعد ضمن موظفي هذه الشركة.",
+  duplicate_lunch: "لديك بالفعل غداء المكتب هذا يبدأ في ذلك اليوم.",
 };
 
 function problemReason(err: unknown, locale: string): string | null {
@@ -37,7 +40,7 @@ function problemReason(err: unknown, locale: string): string | null {
   const code = (err.problem as { code?: string } | null)?.code;
   if (locale === "ar" && code && LUNCH_ERRORS_AR[code])
     return LUNCH_ERRORS_AR[code];
-  return err.problem?.errors?.[0]?.message ?? err.problem?.detail ?? null;
+  return companyMessage(err, locale === "ar" ? "ar" : "en");
 }
 
 const COPY = {
@@ -58,6 +61,8 @@ const COPY = {
     companyNote: (cap: string) =>
       `Your company covers its lunch days, up to ${cap} a meal. You pay nothing.`,
     companyPending: "Your company's lunch account is waiting for approval.",
+    companyFailed: "Couldn't load your company lunch benefit. You can retry, or pay yourself.",
+    retry: "Try again",
     startLunch: "Start office lunch",
     noAddress: "Add an address to continue.",
     addAddress: "Add a new address",
@@ -116,6 +121,8 @@ const COPY = {
     companyNote: (cap: string) =>
       `تغطي شركتك أيام الغداء حتى ${cap} للوجبة. لا تدفع شيئًا.`,
     companyPending: "حساب الغداء لشركتك بانتظار الموافقة.",
+    companyFailed: "تعذر تحميل ميزة غداء شركتك. يمكنك إعادة المحاولة أو الدفع بنفسك.",
+    retry: "حاول مرة أخرى",
     startLunch: "ابدأ غداء المكتب",
     noAddress: "أضف عنوانًا للمتابعة.",
     addAddress: "إضافة عنوان جديد",
@@ -233,6 +240,7 @@ function Checkout({
   const company = (companies.data?.items ?? []).find(
     (c) => c.company_id === companyId,
   );
+  const lunchKey = useIdempotencyKey();
 
   const plan = kitchen.data?.plan_list.find((pl) => pl.id === planId);
   const tiers = plan?.tiers.filter((x) => x.is_active) ?? [];
@@ -326,6 +334,11 @@ function Checkout({
           schedule: input.schedule,
         }
       : null;
+  // A changed draft is a different request: a new key, so it isn't refused
+  // as a replay with another body.
+  const lunchDraft = JSON.stringify([companyId, lunch]);
+  const resetLunchKey = lunchKey.reset;
+  useEffect(() => resetLunchKey(), [lunchDraft, resetLunchKey]);
   const preview = useQuery({
     queryKey: ["subscription-preview", company ? lunch : input, companyId],
     queryFn: () =>
@@ -364,7 +377,10 @@ function Checkout({
     setError(null);
     try {
       if (company && lunch) {
-        const started = await startLunch(company.company_id, lunch);
+        const started = await startLunch(company.company_id, lunch, {
+          headers: lunchKey.headers(),
+        });
+        lunchKey.reset();
         router.replace(`/${locale}/subscriptions/${started.id}`);
         return;
       }
@@ -486,6 +502,19 @@ function Checkout({
           </label>
         </div>
 
+        {companies.isError && (
+          <p className="ms-note" role="alert">
+            {t.companyFailed}{" "}
+            <button
+              type="button"
+              className="ms-link"
+              disabled={companies.isFetching}
+              onClick={() => companies.refetch()}
+            >
+              {t.retry}
+            </button>
+          </p>
+        )}
         {(companies.data?.items ?? []).length > 0 && (
           <fieldset className="ms-field">
             <legend>{t.payer}</legend>

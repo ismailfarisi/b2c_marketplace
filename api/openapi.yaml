@@ -5002,6 +5002,9 @@ components:
               plan: { type: string }
               status: { type: string }
               start_date: { type: string, format: date }
+              renewal_unpaid:
+                type: boolean
+                description: A renewal cycle the company account could not cover; the lunch stops unless someone acts.
         statements: { type: array, nullable: true, items: { $ref: "#/components/schemas/CompanyStatement" } }
         unbilled: { type: array, nullable: true, items: { $ref: "#/components/schemas/CompanyCharge" } }
     LunchInput:

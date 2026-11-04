@@ -19,8 +19,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const problem = (err: unknown) =>
   err instanceof ApiError
-    ? (err.problem?.errors?.[0]?.message ?? err.problem?.detail ?? "That could not be done.")
-    : "That could not be done.";
+    ? (err.problem?.errors?.map((e) => e.message).join("; ") || err.problem?.detail || "That could not be done.")
+    : "Couldn't reach the server.";
 
 /** Office lunch accounts: approve companies, set credit, bill and record payment. */
 export default function CompaniesPage() {
@@ -44,7 +44,12 @@ export default function CompaniesPage() {
         </select>
         <input placeholder="Name or TRN" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      {list.error && <p className="danger">{problem(list.error)}</p>}
+      {list.error && (
+        <p className="danger" role="alert">
+          {problem(list.error)}{" "}
+          <button className="btn link" disabled={list.isFetching} onClick={() => list.refetch()}>Retry</button>
+        </p>
+      )}
       <table className="money-table">
         <thead>
           <tr>
@@ -83,12 +88,21 @@ function Detail({ id }: { id: string }) {
   const [ref, setRef] = useState<Record<string, string>>({});
   const [openSt, setOpenSt] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const st = useQuery({
     queryKey: ["admin", "company", id, "statement", openSt],
     queryFn: () => getAdminCompanyStatement(id, openSt!),
     enabled: openSt != null,
   });
-  if (!d.data) return d.error ? <p className="danger">{problem(d.error)}</p> : null;
+  if (!d.data)
+    return d.error ? (
+      <p className="danger" role="alert">
+        {problem(d.error)}{" "}
+        <button className="btn link" disabled={d.isFetching} onClick={() => d.refetch()}>Retry</button>
+      </p>
+    ) : (
+      <p className="muted" role="status">Loading…</p>
+    );
   const c = d.data.company;
   const money = (n: number) => aed(n, c.currency);
   const refresh = () => {
@@ -96,6 +110,8 @@ function Detail({ id }: { id: string }) {
     qc.invalidateQueries({ queryKey: ["admin", "companies"] });
   };
   async function act(fn: () => Promise<unknown>, done: string) {
+    if (busy) return;
+    setBusy(true);
     setMsg(null);
     try {
       await fn();
@@ -103,6 +119,8 @@ function Detail({ id }: { id: string }) {
       refresh();
     } catch (err) {
       setMsg(problem(err));
+    } finally {
+      setBusy(false);
     }
   }
   const review = (status?: "active" | "rejected" | "suspended") =>
@@ -137,17 +155,17 @@ function Detail({ id }: { id: string }) {
           <label>Note <input value={note} onChange={(e) => setNote(e.target.value)} /></label>
         </div>
         <div className="merch-actions">
-          {c.status !== "active" && <button className="btn primary" onClick={() => review("active")}>Approve</button>}
-          {c.status === "pending" && <button className="btn" onClick={() => review("rejected")}>Reject</button>}
-          {c.status === "active" && <button className="btn" onClick={() => review("suspended")}>Suspend</button>}
-          <button className="btn" onClick={() => review()}>Save terms</button>
+          {c.status !== "active" && <button className="btn primary" disabled={busy} onClick={() => review("active")}>Approve</button>}
+          {c.status === "pending" && <button className="btn" disabled={busy} onClick={() => review("rejected")}>Reject</button>}
+          {c.status === "active" && <button className="btn" disabled={busy} onClick={() => review("suspended")}>Suspend</button>}
+          <button className="btn" disabled={busy} onClick={() => review()}>Save terms</button>
         </div>
         {msg && <p className="muted" role="status">{msg}</p>}
       </Panel>
       <Panel title="Statements" note={`${(d.data.unbilled ?? []).length} unbilled lines`}>
         <div className="merch-actions">
           <label>Bill everything up to <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} /></label>
-          <button className="btn primary" onClick={() => act(() => issueCompanyStatement(id, periodEnd), "Statement issued.")}>Issue statement</button>
+          <button className="btn primary" disabled={busy} onClick={() => act(() => issueCompanyStatement(id, periodEnd), "Statement issued.")}>Issue statement</button>
         </div>
         <table className="money-table">
           <thead><tr><th>No.</th><th>Period end</th><th>Total</th><th>Due</th><th>Status</th><th /></tr></thead>
@@ -164,7 +182,7 @@ function Detail({ id }: { id: string }) {
                   {s.status === "issued" && (
                     <span className="merch-actions">
                       <input placeholder="Transfer reference" value={ref[s.id] ?? ""} onChange={(e) => setRef({ ...ref, [s.id]: e.target.value })} />
-                      <button className="btn" onClick={() => act(() => markCompanyStatementPaid(id, s.id, ref[s.id] ?? ""), "Marked paid.")}>Mark paid</button>
+                      <button className="btn" disabled={busy || !(ref[s.id] ?? "").trim()} onClick={() => act(() => markCompanyStatementPaid(id, s.id, (ref[s.id] ?? "").trim()), "Marked paid.")}>Mark paid</button>
                     </span>
                   )}
                 </td>
@@ -172,6 +190,12 @@ function Detail({ id }: { id: string }) {
             ))}
           </tbody>
         </table>
+        {st.error && (
+          <p className="danger" role="alert">
+            {problem(st.error)}{" "}
+            <button className="btn link" disabled={st.isFetching} onClick={() => st.refetch()}>Retry</button>
+          </p>
+        )}
         {st.data && (
           <table className="money-table">
             <thead><tr><th colSpan={4}>{st.data.statement_no} lines</th></tr></thead>
@@ -188,7 +212,7 @@ function Detail({ id }: { id: string }) {
           <thead><tr><th>Employee</th><th>Kitchen</th><th>Plan</th><th>Status</th><th>Starts</th></tr></thead>
           <tbody>
             {(d.data.lunches ?? []).map((l) => (
-              <tr key={l.subscription_id}><td>{l.employee || l.phone}</td><td>{l.kitchen}</td><td>{l.plan}</td><td>{l.status}</td><td>{l.start_date}</td></tr>
+              <tr key={l.subscription_id}><td>{l.employee || l.phone}</td><td>{l.kitchen}</td><td>{l.plan}</td><td>{l.status}{l.renewal_unpaid ? " · renewal not covered" : ""}</td><td>{l.start_date}</td></tr>
             ))}
           </tbody>
         </table>
