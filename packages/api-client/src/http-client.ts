@@ -127,6 +127,9 @@ async function refreshTokens(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/** How long a request may take before it fails as a network error. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
 export const apiFetch = async <T>(
   { url, method, params, data, headers, signal }: {
     url: string;
@@ -174,9 +177,24 @@ export const apiFetch = async <T>(
     // console arrived.
     const init: RequestInit = { method, headers: requestHeaders };
     if (data !== undefined) init.body = JSON.stringify(data);
-    if (signal) init.signal = signal;
+    // A hung API must end in an error the caller can retry, not an endless
+    // spinner. The timeout rejects as a TypeError, like any request that never
+    // got a response, so error UIs treat it as a connection problem.
+    const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    init.signal =
+      signal && typeof AbortSignal.any === "function"
+        ? AbortSignal.any([signal, timeout])
+        : (signal ?? timeout);
 
-    const res = await fetch(`${config.baseUrl}${url}${query}`, init);
+    let res: Response;
+    try {
+      res = await fetch(`${config.baseUrl}${url}${query}`, init);
+    } catch (err) {
+      if (timeout.aborted && !signal?.aborted) {
+        throw new TypeError("Request timed out");
+      }
+      throw err;
+    }
 
     if (res.status === 401 && retryOn401 && (await refreshTokens())) {
       return send(false);

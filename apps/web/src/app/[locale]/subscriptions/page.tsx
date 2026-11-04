@@ -12,6 +12,7 @@ import {
   formatDay,
   formatRange,
 } from "@/components/meals/shell";
+import { LoadError } from "@/components/load-error";
 import { tokenStore } from "@/lib/token-store";
 import {
   deleteAccount,
@@ -147,8 +148,15 @@ export default function MySubscriptionsPage({
       )}
       {q.isPending ? (
         <p className="ms-note">{t.loading}</p>
-      ) : q.isError ? (
-        <p className="ms-empty">{t.failed}</p>
+      ) : q.isError || rq.isError ? (
+        <LoadError
+          error={q.error ?? rq.error}
+          onRetry={() => {
+            if (q.isError) void q.refetch();
+            if (rq.isError) void rq.refetch();
+          }}
+          locale={locale}
+        />
       ) : items.length === 0 && rotations.length === 0 ? (
         <div className="ms-empty">
           <p>{t.empty}</p>

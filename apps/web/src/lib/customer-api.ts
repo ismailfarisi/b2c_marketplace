@@ -182,6 +182,15 @@ export interface UpcomingMeal {
   chosen_by: string;
   cutoff_at: string;
   locked: boolean;
+  delivery_status?: string | null;
+  skipped?: boolean;
+}
+
+export interface MyDelivery {
+  date: string;
+  meal_slot: string;
+  status: string;
+  at: string | null;
 }
 
 export interface MySubscriptionDetail extends MySubscription {
@@ -189,6 +198,8 @@ export interface MySubscriptionDetail extends MySubscription {
   pause_allowance_days: number;
   pause_days_used: number;
   upcoming: UpcomingMeal[];
+  skipped?: UpcomingMeal[];
+  recent?: MyDelivery[];
   cycles: Array<{
     cycle_no: number;
     starts_on: string;
@@ -238,11 +249,27 @@ export const pauseSubscription = (id: string, from: string, to: string) =>
     data: { from_date: from, to_date: to },
   });
 
-export const cancelSubscription = (id: string, reason: string) =>
+export const unskipMeal = (id: string, date: string, slot: string) =>
+  apiFetch<unknown>({
+    url: `/subscriptions/${id}/unskip`,
+    method: "POST",
+    data: { date, meal_slot: slot },
+  });
+
+export const resumeSubscription = (id: string, opts?: CallOptions) =>
+  apiFetch<{ resumes_on: string; days_returned: number }>({
+    url: `/subscriptions/${id}/resume`,
+    method: "POST",
+    data: {},
+    headers: opts?.headers,
+  });
+
+export const cancelSubscription = (id: string, reason: string, opts?: CallOptions) =>
   apiFetch<unknown>({
     url: `/subscriptions/${id}/cancel`,
     method: "POST",
     data: { reason },
+    headers: opts?.headers,
   });
 
 /** Automatic renewal on or off; off ends with the last paid cycle. */
@@ -254,11 +281,12 @@ export const setRenewal = (id: string, auto: boolean) =>
   });
 
 /** A new subscription like this one, pending payment of its order_id. */
-export const renewSubscription = (id: string) =>
+export const renewSubscription = (id: string, opts?: CallOptions) =>
   apiFetch<Subscribed>({
     url: `/subscriptions/${id}/renew`,
     method: "POST",
     data: {},
+    headers: opts?.headers,
   });
 
 export interface RotationInput {
@@ -330,11 +358,12 @@ export const listMyRotations = () =>
 export const getMyRotation = (id: string) =>
   apiFetch<Rotation>({ url: `/me/rotations/${id}`, method: "GET" });
 
-export const cancelRotation = (id: string, reason: string) =>
+export const cancelRotation = (id: string, reason: string, opts?: CallOptions) =>
   apiFetch<void>({
     url: `/rotations/${id}/cancel`,
     method: "POST",
     data: { reason },
+    headers: opts?.headers,
   });
 
 export interface MyReview {
@@ -367,11 +396,12 @@ export const setRotationRenewal = (id: string, auto: boolean) =>
   });
 
 /** The next rotation with the same four kitchens, pending payment. */
-export const renewRotation = (id: string) =>
+export const renewRotation = (id: string, opts?: CallOptions) =>
   apiFetch<Rotation>({
     url: `/rotations/${id}/renew`,
     method: "POST",
     data: {},
+    headers: opts?.headers,
   });
 
 // ---- referrals ------------------------------------------------------------
