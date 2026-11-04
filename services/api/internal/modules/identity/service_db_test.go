@@ -112,3 +112,43 @@ func TestRefreshReuseRevokesFamily(t *testing.T) {
 		t.Fatalf("newest token after replay: want 401, got %v", err)
 	}
 }
+
+func TestRequestOTPRateLimitIs429WithRetryAfter(t *testing.T) {
+	svc, _ := testService(t)
+	ctx := context.Background()
+	phone := testPhone()
+
+	for i := 0; i < otpPerPhone; i++ {
+		if _, err := svc.RequestOTP(ctx, phone, "login", ""); err != nil {
+			t.Fatalf("request %d: %v", i+1, err)
+		}
+	}
+	_, err := svc.RequestOTP(ctx, phone, "login", "")
+	if !errors.Is(err, httpx.ErrRateLimited) {
+		t.Fatalf("6th request: want ErrRateLimited, got %v", err)
+	}
+	if got := problemCode(err); got != CodeRateLimited {
+		t.Fatalf("code = %q, want %s", got, CodeRateLimited)
+	}
+	var ra *httpx.RetryAfter
+	if !errors.As(err, &ra) || ra.After <= 0 || ra.After > otpWindow {
+		t.Fatalf("want a Retry-After within the window, got %+v", ra)
+	}
+}
+
+func TestRequestOTPAcceptsUAENationalFormat(t *testing.T) {
+	svc, pool := testService(t)
+	ctx := context.Background()
+	national := fmt.Sprintf("058%07d", rand.IntN(10_000_000))
+	ch, err := svc.RequestOTP(ctx, national, "login", "")
+	if err != nil {
+		t.Fatalf("RequestOTP(%s): %v", national, err)
+	}
+	var stored string
+	if err := pool.QueryRow(ctx, `SELECT phone FROM otp_codes WHERE id = $1`, ch.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != "+971"+national[1:] {
+		t.Fatalf("stored phone = %q", stored)
+	}
+}

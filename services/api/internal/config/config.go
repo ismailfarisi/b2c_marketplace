@@ -67,6 +67,11 @@ type Config struct {
 	APNsSandbox             bool
 	OTPTTL                  time.Duration
 
+	// TrustedProxies (TRUSTED_PROXIES) is a comma-separated list of IPs/CIDRs
+	// of the load balancers in front of the API. X-Forwarded-For is honoured
+	// only from these; empty means the socket address is the client.
+	TrustedProxies string
+
 	S3Endpoint string
 	// S3PublicEndpoint is the host presigned URLs name, when clients reach the
 	// object store somewhere this process does not. Empty means the same host.
@@ -202,6 +207,7 @@ func Load() (Config, error) {
 		APNsTopic:               optional("APNS_TOPIC", ""),
 		APNsSandbox:             boolean("APNS_SANDBOX", false),
 		OTPTTL:                  duration("OTP_TTL", "5m"),
+		TrustedProxies:          optional("TRUSTED_PROXIES", ""),
 
 		S3Endpoint:       optional("S3_ENDPOINT", ""),
 		S3PublicEndpoint: optional("S3_PUBLIC_ENDPOINT", ""),

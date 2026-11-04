@@ -109,7 +109,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OtpChallenge" }
-        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "429":
+          description: >-
+            Too many codes for this number (5/hour) or address (20/hour).
+            Problem `code` is `otp_rate_limited`; `Retry-After` gives the seconds
+            until the oldest request leaves the window.
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /auth/otp/verify:
@@ -130,6 +139,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TokenPair" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The account is suspended or blocked
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /auth/refresh:
@@ -5267,8 +5281,10 @@ components:
       properties:
         phone:
           type: string
-          description: E.164, including country code.
-          pattern: '^\+[1-9]\d{7,14}$'
+          description: >-
+            E.164 with country code, or a UAE national number (0501234567) or
+            00-prefixed international number, which the server normalises to
+            E.164 before validating.
           examples: ["+971501234567"]
         purpose: { type: string, enum: [login, verify_phone], default: login }
         locale: { $ref: "#/components/schemas/Locale" }

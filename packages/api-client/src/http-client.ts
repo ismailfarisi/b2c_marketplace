@@ -178,7 +178,15 @@ export const apiFetch = async <T>(
 
     const res = await fetch(`${config.baseUrl}${url}${query}`, init);
 
-    if (res.status === 401 && retryOn401 && (await refreshTokens())) {
+    // Auth endpoints answer 401 for a wrong code or a dead refresh token, not
+    // for an expired access token. Refreshing and replaying a wrong OTP would
+    // rotate the session for nothing and spend a second attempt on the code.
+    if (
+      res.status === 401 &&
+      retryOn401 &&
+      !url.startsWith("/auth/") &&
+      (await refreshTokens())
+    ) {
       return send(false);
     }
 

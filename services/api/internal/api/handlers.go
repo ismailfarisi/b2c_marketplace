@@ -10,8 +10,10 @@
 package api
 
 import (
+	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -500,19 +502,70 @@ func nullable(s string) any {
 	return s
 }
 
-// clientIP prefers X-Forwarded-For's first entry.
-//
-// Only trustworthy behind a proxy that overwrites the header — which is the
-// deployment assumption. A directly-exposed server must not trust it, because
-// a client can then forge any address it likes and defeat the OTP IP limit.
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		first, _, _ := strings.Cut(xff, ",")
-		return strings.TrimSpace(first)
+// trustedProxies are the load balancers whose X-Forwarded-For we believe. Set
+// once at boot from TRUSTED_PROXIES; empty means XFF is ignored entirely.
+var trustedProxies []netip.Prefix
+
+// SetTrustedProxies parses a comma-separated list of IPs or CIDRs.
+func SetTrustedProxies(list string) error {
+	var out []netip.Prefix
+	for _, raw := range strings.Split(list, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(raw); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(raw)
+		if err != nil {
+			return fmt.Errorf("TRUSTED_PROXIES: %q is not an IP or CIDR", raw)
+		}
+		out = append(out, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
 	}
+	trustedProxies = out
+	return nil
+}
+
+func trusted(a netip.Addr) bool {
+	a = a.Unmap()
+	for _, p := range trustedProxies {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// clientIP is the address the OTP IP limit and session records use.
+//
+// X-Forwarded-For is honoured only when the connection comes from a configured
+// trusted proxy, and then the right-most hop that is not itself a trusted proxy
+// wins: everything left of it was written by the client and can be forged.
+// Trusting the first entry from anyone let a caller pick any address it liked
+// and walk past the per-IP OTP limit.
+func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	remote, err := netip.ParseAddr(host)
 	if err != nil {
 		return ""
 	}
-	return host
+	if !trusted(remote) {
+		return remote.Unmap().String()
+	}
+	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	for i := len(hops) - 1; i >= 0; i-- {
+		a, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
+		if err != nil {
+			break
+		}
+		if !trusted(a) {
+			return a.Unmap().String()
+		}
+	}
+	return remote.Unmap().String()
 }

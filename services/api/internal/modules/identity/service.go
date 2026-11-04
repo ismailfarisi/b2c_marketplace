@@ -431,36 +431,68 @@ func (s *Service) issueSession(ctx context.Context, tx pgx.Tx, user User, device
 	}, nil
 }
 
+// CodeRateLimited is carried on the 429 from RequestOTP. Wire contract like
+// the Code* reasons above.
+const CodeRateLimited = "otp_rate_limited"
+
+// otpWindow (the SQL says 1 hour too) and the limits bound how many codes are issued.
+const (
+	otpWindow     = time.Hour
+	otpPerPhone   = 5
+	otpPerAddress = 20
+)
+
 // checkRateLimit throttles by phone AND by IP.
 //
 // Phone alone lets one host walk the number space; IP alone is defeated by a
 // carrier NAT, which in the GCC can put a whole city behind a handful of
 // addresses. Both, or neither works.
+//
+// A refusal is a 429 with code otp_rate_limited and a Retry-After of when the
+// oldest code in the window ages out. It used to be a bare 409, which the apps
+// read as "that number does not look right".
 func (s *Service) checkRateLimit(ctx context.Context, phone, requestIP string) error {
-	var byPhone int
+	var (
+		byPhone int
+		oldest  *time.Time
+	)
 	if err := s.pool.QueryRow(ctx, `
-		SELECT count(*) FROM otp_codes
+		SELECT count(*), min(created_at) FROM otp_codes
 		 WHERE phone = $1 AND created_at > now() - interval '1 hour'`, phone,
-	).Scan(&byPhone); err != nil {
+	).Scan(&byPhone, &oldest); err != nil {
 		return fmt.Errorf("rate limit check: %w", err)
 	}
-	if byPhone >= 5 {
-		return fmt.Errorf("%w: too many codes requested for this number", httpx.ErrConflict)
+	if byPhone >= otpPerPhone {
+		return rateLimited(oldest, "Too many codes requested for this number. Try again later.")
 	}
 
 	if ip := net.ParseIP(requestIP); ip != nil {
 		var byIP int
 		if err := s.pool.QueryRow(ctx, `
-			SELECT count(*) FROM otp_codes
+			SELECT count(*), min(created_at) FROM otp_codes
 			 WHERE request_ip = $1 AND created_at > now() - interval '1 hour'`, ip,
-		).Scan(&byIP); err != nil {
+		).Scan(&byIP, &oldest); err != nil {
 			return fmt.Errorf("rate limit check: %w", err)
 		}
-		if byIP >= 20 {
-			return fmt.Errorf("%w: too many codes requested from this address", httpx.ErrConflict)
+		if byIP >= otpPerAddress {
+			return rateLimited(oldest, "Too many codes requested from this network. Try again later.")
 		}
 	}
 	return nil
+}
+
+func rateLimited(oldest *time.Time, detail string) error {
+	after := otpWindow
+	if oldest != nil {
+		after = time.Until(oldest.Add(otpWindow))
+	}
+	if after < time.Second {
+		after = time.Second
+	}
+	return &httpx.RetryAfter{
+		Err:   httpx.Coded(httpx.ErrRateLimited, CodeRateLimited, detail),
+		After: after,
+	}
 }
 
 func upsertUser(ctx context.Context, tx pgx.Tx, phone string) (User, error) {
@@ -512,16 +544,27 @@ func generateCode() (string, error) {
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
+// normalizePhone strips formatting and accepts the two ways UAE numbers are
+// usually typed besides E.164: the national form (0501234567, leading 0 and nine
+// digits) and the 00 international prefix (00971501234567). The result is still
+// checked against e164 by the caller.
 func normalizePhone(raw string) string {
 	var b strings.Builder
-	for i, r := range raw {
-		if r == '+' && i == 0 {
+	for _, r := range strings.TrimSpace(raw) {
+		if r == '+' && b.Len() == 0 {
 			b.WriteRune(r)
 		} else if r >= '0' && r <= '9' {
 			b.WriteRune(r)
 		}
 	}
-	return b.String()
+	out := b.String()
+	switch {
+	case strings.HasPrefix(out, "00"):
+		return "+" + out[2:]
+	case len(out) == 10 && out[0] == '0' && out[1] != '0':
+		return "+971" + out[1:]
+	}
+	return out
 }
 
 // SetPushToken attaches this device's push token to its session. The token is

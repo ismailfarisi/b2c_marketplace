@@ -15,6 +15,7 @@ import ae.marketplace.mobile.identity.SignInViewModel
 import ae.marketplace.mobile.identity.ViewerIdentity
 import ae.marketplace.mobile.identity.deviceIdProvider
 import ae.marketplace.mobile.network.ApiClientFactory
+import ae.marketplace.mobile.network.forgetCachedBearer
 import ae.marketplace.mobile.network.TokenStore
 import ae.marketplace.mobile.network.tokenStore
 import ae.marketplace.mobile.playback.PlaybackCoordinator
@@ -96,6 +97,7 @@ class MarketplaceSdk private constructor(
             session.restore()
             val push = PushRegistry(client, session, scope)
             session.beforeSignOut = push::logout
+            session.forgetCachedCredential = client::forgetCachedBearer
 
             return MarketplaceSdk(
                 identity = identity,

@@ -66,14 +66,18 @@ export const requestOtp = (phone: string, locale: string) =>
  * refresh and then silently signs the user out, which is a bug nobody
  * reproduces on their own machine.
  */
-export const verifyOtp = async (challengeId: string, code: string): Promise<TokenPair> => {
+export const verifyOtp = async (
+  challengeId: string,
+  code: string,
+  deviceName = "Ops console",
+): Promise<TokenPair> => {
   const pair = await apiFetch<TokenPair>({
     url: "/auth/otp/verify",
     method: "POST",
     data: {
       challenge_id: challengeId,
       code,
-      device: { platform: "web", name: "Ops console" },
+      device: { platform: "web", name: deviceName },
     },
   });
   await tokenStore.setTokens(pair.access_token, pair.refresh_token);

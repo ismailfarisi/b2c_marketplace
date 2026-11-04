@@ -77,6 +77,11 @@
 "signin_err_too_many" = "Too many attempts. Wait a minute, then try again.";
 "signin_err_offline" = "No connection. Check your network and try again.";
 "signin_err_unknown" = "Sign-in is not working right now. Try again shortly.";
+"signin_err_blocked" = "This account can't sign in right now. Contact support for help.";
+"signin_err_resend_failed" = "Couldn't send a new code. Your previous code still works until it expires.";
+"signin_err_resend_too_many" = "Too many codes requested. Wait a while; your previous code still works until it expires.";
+"signin_sending" = "Sending…";
+"signin_checking" = "Checking…";
 "session_expired" = "You have been signed out. Sign in again to continue.";
 "err_offline" = "No connection. Check your network and try again.";
 "err_timeout" = "That took too long. Try again.";

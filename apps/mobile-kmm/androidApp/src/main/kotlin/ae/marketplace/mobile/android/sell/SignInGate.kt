@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -157,8 +158,10 @@ fun SignInGate(
                 light = light,
             )
             Box(Modifier.padding(top = 16.dp)) {
-                PrimaryButton(
+                BusyButton(
                     label = stringResource(R.string.signin_send_code),
+                    busyLabel = stringResource(R.string.signin_sending),
+                    busy = state.busy,
                     enabled = state.phone.isNotBlank() && !state.busy,
                     onClick = { viewModel.sendCode(currentMillis()) },
                     fill = accent,
@@ -198,8 +201,10 @@ fun SignInGate(
             }
 
             Box(Modifier.padding(top = 16.dp)) {
-                PrimaryButton(
+                BusyButton(
                     label = stringResource(R.string.signin_verify),
+                    busyLabel = stringResource(R.string.signin_checking),
+                    busy = state.busy,
                     enabled = state.code.length == CODE_LENGTH && !state.busy,
                     onClick = viewModel::verify,
                     fill = accent,
@@ -243,6 +248,50 @@ fun SignInGate(
 
 private const val CODE_LENGTH = 6
 
+/**
+ * The primary button with a spinner and a "Sending…"/"Checking…" label while a
+ * request is out. Dimming alone looked frozen on a slow connection, where the
+ * request can take the full ten-second timeout.
+ */
+@Composable
+private fun BusyButton(
+    label: String,
+    busyLabel: String,
+    busy: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    fill: Color,
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                if (enabled || busy) fill else fill.copy(alpha = 0.3f),
+                androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 15.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (busy) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp),
+                )
+                Box(Modifier.width(10.dp))
+            }
+            Text(
+                if (busy) busyLabel else label,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
 private val MealsPaper = Color(0xFFFFF8F0)
 private val MealsInk = Color(0xFF1E1410)
 private val MealsMuted = Color(0xFF76675B)
@@ -262,6 +311,9 @@ private fun SignInProblem.stringRes(): Int = when (this) {
     SignInProblem.NeedsNewCode -> R.string.signin_err_stale
     SignInProblem.TooMany -> R.string.signin_err_too_many
     SignInProblem.Offline -> R.string.signin_err_offline
+    SignInProblem.AccountBlocked -> R.string.signin_err_blocked
+    SignInProblem.ResendFailed -> R.string.signin_err_resend_failed
+    SignInProblem.ResendTooMany -> R.string.signin_err_resend_too_many
     SignInProblem.Unknown -> R.string.signin_err_unknown
 }
 
