@@ -202,7 +202,7 @@ fun MealsTab(
             )
             Page.Checkout -> CheckoutPage(viewModel, location, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Rotation -> RotationPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
-            Page.Paid -> PaidPage(redirected, onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
+            Page.Paid -> PaidPage(redirected, viewModel.checkout.value.paymentPending, onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
             Page.Mine -> MinePage(viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) })
             Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
         }
@@ -972,8 +972,8 @@ private fun CheckoutPage(
             s.addresses.forEach { a ->
                 Choice(a.label, a.line, a.id == s.addressId) { vm.selectAddress(a.id) }
             }
-            AddressForm(s.addresses.isEmpty(), s.busy) { label, building, area, city ->
-                vm.addAddress(label, building, area, city, location)
+            AddressForm(s.addresses.isEmpty(), s.busy, s.addressSaves) { label, building, area, city, pin ->
+                vm.addAddress(label, building, area, city, pin)
             }
             Label(stringResource(R.string.meals_days, plan.daysPerWeek))
             FlowRow(Modifier.padding(horizontal = Space.Edge), horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalArrangement = Arrangement.spacedBy(Space.Small)) {
@@ -991,7 +991,11 @@ private fun CheckoutPage(
                 }
             }
             Label(stringResource(R.string.meals_start))
-            Field(s.startDate, vm::setStartDate, Modifier.padding(horizontal = Space.Edge))
+            StartDateField(s.startDate, s.earliestStart, arabic, vm::setStartDate, Modifier.padding(horizontal = Space.Edge))
+            val startCode = (s.error as? Failure.Rejected)?.fieldCodes?.get("start_date")
+            startReason(startCode)?.let {
+                Text(stringResource(it), color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp))
+            }
             Label(stringResource(R.string.meals_promo))
             Row(Modifier.padding(horizontal = Space.Edge), verticalAlignment = Alignment.CenterVertically) {
                 Field(s.promoCode, vm::setPromo, Modifier.weight(1f))
@@ -1017,7 +1021,10 @@ private fun CheckoutPage(
                     Line(stringResource(R.string.meals_total), money(p.totalMinor, p.currency), strong = true)
                 }
             }
-            if (promoCode == null) s.error?.let { FailureStrip(it, onRetry = null) }
+            if (s.paymentFailed) {
+                Text(stringResource(R.string.meals_pay_failed), color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp))
+            }
+            if (promoCode == null && startCode == null) s.error?.let { FailureStrip(it, onRetry = vm::retryCheckout) }
             Spacer(Modifier.height(Space.XL))
         }
         Box(Modifier.padding(Space.Edge)) {
@@ -1032,12 +1039,21 @@ private fun CheckoutPage(
 }
 
 @Composable
-private fun AddressForm(startOpen: Boolean, busy: Boolean, onSave: (String, String, String, String) -> Unit) {
+private fun AddressForm(startOpen: Boolean, busy: Boolean, saves: Int, onSave: (String, String, String, String, LatLng) -> Unit) {
     var open by rememberSaveable { mutableStateOf(startOpen) }
     var label by rememberSaveable { mutableStateOf("") }
     var building by rememberSaveable { mutableStateOf("") }
     var area by rememberSaveable { mutableStateOf("") }
     var city by rememberSaveable { mutableStateOf("Dubai") }
+    var pin by remember { mutableStateOf<LatLng?>(null) }
+    // Collapse only once the address is saved; a failed save keeps what was typed.
+    val seen = rememberSaveable { mutableStateOf(saves) }
+    LaunchedEffect(saves) {
+        if (saves != seen.value) {
+            seen.value = saves
+            open = false; label = ""; building = ""; area = ""; pin = null
+        }
+    }
     if (!open && !startOpen) {
         Text(
             "+ " + stringResource(R.string.meals_add_address),
@@ -1053,7 +1069,8 @@ private fun AddressForm(startOpen: Boolean, busy: Boolean, onSave: (String, Stri
         Field(building, { building = it }, placeholder = stringResource(R.string.meals_building))
         Field(area, { area = it }, placeholder = stringResource(R.string.meals_area))
         Field(city, { city = it }, placeholder = stringResource(R.string.meals_city))
-        PrimaryButton(stringResource(R.string.meals_save_address), { onSave(label, building, area, city); open = false }, enabled = !busy)
+        PinRow(pin) { pin = it }
+        PrimaryButton(stringResource(R.string.meals_save_address), { pin?.let { onSave(label, building, area, city, it) } }, enabled = !busy && pin != null)
     }
 }
 
@@ -1159,14 +1176,14 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
 }
 
 @Composable
-private fun PaidPage(redirected: Boolean, onMine: () -> Unit) {
+private fun PaidPage(redirected: Boolean, pending: Boolean, onMine: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(Space.XL),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("✓", color = M.Leaf, fontSize = Type.Title * 2.5f)
-        Text(stringResource(if (redirected) R.string.meals_paying else R.string.meals_paid), textAlign = TextAlign.Center, color = M.Ink, fontSize = Type.Heading, modifier = Modifier.padding(vertical = Space.Large))
+        Text(if (pending && !redirected) "…" else "✓", color = M.Leaf, fontSize = Type.Title * 2.5f)
+        Text(stringResource(if (redirected) R.string.meals_paying else if (pending) R.string.meals_pay_pending else R.string.meals_paid), textAlign = TextAlign.Center, color = M.Ink, fontSize = Type.Heading, modifier = Modifier.padding(vertical = Space.Large))
         PrimaryButton(stringResource(R.string.meals_view_subs), onMine)
     }
 }

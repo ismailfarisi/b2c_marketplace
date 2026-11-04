@@ -153,11 +153,8 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 		}
 
 		start := dayIn(in.StartDate, loc)
-		if start.Before(dayIn(time.Now(), loc)) {
-			return &httpx.ValidationError{Fields: []httpx.FieldError{{
-				Field: "start_date", Code: "in_the_past",
-				Message: "a subscription cannot start before today",
-			}}}
+		if err := checkStart(start, plan, loc, in.renewedFrom.Valid); err != nil {
+			return err
 		}
 
 		pr, err := s.priceFirstCycle(ctx, tx, plan, in, start, loc)
@@ -168,6 +165,30 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 			in.RenewalMode = "none"
 		}
 		quote, cycle := pr.Quote, pr.Cycle
+
+		// A customer who presses Pay again after a timeout, a 5xx or a failed
+		// payment is asking for the same subscription, not a second one. Reuse
+		// the unpaid twin of this exact checkout instead of opening another
+		// pending subscription and billing order. Renewals and office lunches
+		// have their own uniqueness and are left alone.
+		if !in.renewedFrom.Valid && !in.CompanyID.Valid {
+			twin, err := s.repo.FindPendingTwin(ctx, tx, in, start, pr.Promo, quote.TotalMinor)
+			if err != nil {
+				return err
+			}
+			if twin != nil {
+				out = &Result{
+					ID: twin.ID, SubscriptionNo: twin.SubscriptionNo, Status: "pending_payment",
+					StartDate: start, FirstCycle: cycle, OrderID: twin.OrderID,
+					AmountMinor: quote.TotalMinor, DiscountMinor: pr.Discount, Currency: plan.Currency,
+				}
+				out.FirstCycle.No = 1
+				if pr.Promo != nil {
+					out.TrialDays = pr.Promo.TrialDays
+				}
+				return nil
+			}
+		}
 		subID := uuid.New()
 
 		var endDate time.Time
@@ -239,6 +260,30 @@ func (s *Service) Subscribe(ctx context.Context, in SubscribeInput) (*Result, er
 		return nil, err
 	}
 	return out, nil
+}
+
+// checkStart refuses a start date before today and, for a new signup, one
+// whose first delivery's cutoff has already passed. A renewal starts the day
+// after the previous cycle ends, whatever the cutoff, so it is exempt.
+func checkStart(start time.Time, plan PlanTemplate, loc *time.Location, renewal bool) error {
+	now := time.Now()
+	if start.Before(dayIn(now, loc)) {
+		return &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "start_date", Code: "in_the_past",
+			Message: "a subscription cannot start before today",
+		}}}
+	}
+	if renewal {
+		return nil
+	}
+	if earliest := EarliestStart(plan.CutoffHours, loc, now); start.Before(earliest) {
+		return &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "start_date", Code: "too_soon",
+			Message: "the first delivery must be on or after " + earliest.Format("2006-01-02") +
+				", the kitchen's cutoff for earlier days has passed",
+		}}}
+	}
+	return nil
 }
 
 // firstCyclePrice is the priced first cycle, with any promo applied.
@@ -371,9 +416,8 @@ func (s *Service) PreviewSubscription(ctx context.Context, in SubscribeInput) (S
 			return err
 		}
 		start := dayIn(in.StartDate, loc)
-		if start.Before(dayIn(time.Now(), loc)) {
-			return &httpx.ValidationError{Fields: []httpx.FieldError{{
-				Field: "start_date", Code: "in_the_past", Message: "a subscription cannot start before today"}}}
+		if err := checkStart(start, plan, loc, in.renewedFrom.Valid); err != nil {
+			return err
 		}
 		pr, err := s.priceFirstCycle(ctx, tx, plan, in, start, loc)
 		if err != nil {

@@ -39,6 +39,8 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 data class StorefrontUiState(
     val at: LatLng? = null,
@@ -120,10 +122,28 @@ data class CheckoutUiState(
     val paymentUrl: String? = null,
     /** Set once paid (or once paying is handed to the browser); the screen moves on. */
     val subscriptionId: String? = null,
+    /** The first start date whose cutoff is still ahead (YYYY-MM-DD, Asia/Dubai). */
+    val earliestStart: String = "",
+    /** The subscription created by this checkout and still unpaid; Pay retries only the payment. */
+    val createdId: String? = null,
+    /** The last payment attempt came back declined or did not reach the provider. */
+    val paymentFailed: Boolean = false,
+    /** The provider has not confirmed yet (requires_action with no page to open). */
+    val paymentPending: Boolean = false,
+    /** Bumped each time an address is saved, so the add form closes only on success. */
+    val addressSaves: Int = 0,
 ) {
     val ready: Boolean
         get() = plan != null && addressId != null && windowId != null &&
-            weekdays.size == plan.daysPerWeek && slots.size == plan.mealsPerDay
+            weekdays.size == plan.daysPerWeek && slots.size == plan.mealsPerDay &&
+            validStart(startDate, earliestStart)
+}
+
+/** A YYYY-MM-DD date on or after [earliest]. */
+internal fun validStart(date: String, earliest: String): Boolean {
+    val d = runCatching { LocalDate.parse(date) }.getOrNull() ?: return false
+    val e = runCatching { LocalDate.parse(earliest) }.getOrNull() ?: return true
+    return d >= e
 }
 
 data class RotationUiState(
@@ -161,7 +181,7 @@ data class SubscriptionUiState(
  * subscriptions. One holder for the tab, like MeViewModel, so going from a
  * kitchen to checkout and back keeps what was loaded.
  */
-@OptIn(ExperimentalTime::class)
+@OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
 class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     private val _store = MutableStateFlow(StorefrontUiState())
@@ -187,6 +207,12 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     private var storeJob: Job? = null
     private var previewJob: Job? = null
+
+    // One Idempotency-Key per checkout draft: a retry of the same draft is the
+    // same request to the server; any change to the draft gets a new key.
+    private var draft: SubscribeInput? = null
+    private var draftKey: String = ""
+    private var createdOrderId: String? = null
 
     // ── Storefront ──────────────────────────────────────────────────────────
 
@@ -369,15 +395,24 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     fun startCheckout(plan: MealPlan) {
         val k = _kitchen.value.kitchen ?: return
+        val earliest = earliestStart(plan.cutoffHours).toString()
+        draft = null
+        createdOrderId = null
         _checkout.value = CheckoutUiState(
+            earliestStart = earliest,
             kitchen = k,
             plan = plan,
             weekdays = plan.deliveryWeekdays.take(plan.daysPerWeek).toSet(),
             slots = plan.mealSlots.take(plan.mealsPerDay).toSet(),
             windowId = k.deliveryWindows.firstOrNull()?.id,
-            startDate = earliestStart(plan.cutoffHours).toString(),
+            startDate = earliest,
         )
         loadAddresses()
+    }
+
+    /** Retry after a failed address load or preview. */
+    fun retryCheckout() {
+        if (_checkout.value.addresses.isEmpty()) loadAddresses() else refreshPreview()
     }
 
     private fun loadAddresses() {
@@ -416,7 +451,9 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                         isDefault = _checkout.value.addresses.isEmpty(),
                     ),
                 )
-                _checkout.update { it.copy(addresses = it.addresses + a, addressId = a.id, busy = false) }
+                _checkout.update {
+                    it.copy(addresses = it.addresses + a, addressId = a.id, busy = false, addressSaves = it.addressSaves + 1)
+                }
                 _rotation.update { it.copy(addresses = it.addresses + a, addressId = a.id) }
                 refreshPreview()
             } catch (e: Throwable) {
@@ -483,20 +520,59 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         }
     }
 
-    /** Creates the subscription and pays its first order. */
+    /**
+     * Creates the subscription and pays its first order.
+     *
+     * Two steps that fail separately. Creating is keyed per draft, so pressing
+     * Pay again after a timeout returns the same subscription. Once it exists,
+     * a failed payment only retries the payment, never the signup.
+     */
     fun subscribe() {
         val input = subscribeInput(_checkout.value) ?: return
+        if (input != draft) {
+            draft = input
+            draftKey = Uuid.random().toString()
+            createdOrderId = null
+            _checkout.update { it.copy(createdId = null) }
+        }
+        val key = draftKey
         viewModelScope.launch {
-            _checkout.update { it.copy(busy = true, error = null) }
+            _checkout.update { it.copy(busy = true, error = null, paymentFailed = false, paymentPending = false) }
+            val subId: String
+            val orderId: String
             try {
-                val created = api.subscribe(input)
-                val intent = api.payOrder(created.orderId)
+                val existing = createdOrderId
+                if (existing != null && _checkout.value.createdId != null) {
+                    subId = _checkout.value.createdId!!
+                    orderId = existing
+                } else {
+                    val created = api.subscribe(input, key)
+                    subId = created.id
+                    orderId = created.orderId
+                    createdOrderId = orderId
+                    _checkout.update { it.copy(createdId = subId) }
+                    _mine.update { it.copy(loaded = false) }
+                }
+            } catch (e: Throwable) {
+                _checkout.update { it.copy(busy = false, error = e.toFailure()) }
+                return@launch
+            }
+            try {
+                val intent = api.payOrder(orderId)
                 _checkout.update {
-                    it.copy(busy = false, paymentUrl = intent.redirectUrl, subscriptionId = created.id)
+                    when {
+                        intent.redirectUrl != null ->
+                            it.copy(busy = false, paymentUrl = intent.redirectUrl, subscriptionId = subId)
+                        intent.status == "authorized" ->
+                            it.copy(busy = false, subscriptionId = subId)
+                        intent.status == "requires_action" ->
+                            it.copy(busy = false, paymentPending = true, subscriptionId = subId)
+                        else -> it.copy(busy = false, paymentFailed = true)
+                    }
                 }
                 _mine.update { it.copy(loaded = false) }
             } catch (e: Throwable) {
-                _checkout.update { it.copy(busy = false, error = e.toFailure()) }
+                _checkout.update { it.copy(busy = false, paymentFailed = true, error = e.toFailure()) }
             }
         }
     }
@@ -675,12 +751,20 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _checkout.update { it.copy(addresses = emptyList(), addressId = null) }
     }
 
-    private fun earliestStart(cutoffHours: Int): LocalDate {
-        val today = Clock.System.now().toLocalDateTime(DUBAI).date
-        return today.plus(DatePeriod(days = 1 + (cutoffHours + 23) / 24))
-    }
+    private fun earliestStart(cutoffHours: Int): LocalDate =
+        earliestStartAt(cutoffHours, Clock.System.now().toLocalDateTime(DUBAI))
 
     companion object {
+        /**
+         * The first day still open at [now]: a day closes at its midnight minus
+         * the cutoff. Same rule as the API's subscriptions.EarliestStart and the
+         * web's earliestStart.
+         */
+        internal fun earliestStartAt(cutoffHours: Int, now: kotlinx.datetime.LocalDateTime): LocalDate {
+            val minutes = now.hour * 60 + now.minute
+            return now.date.plus(DatePeriod(days = (cutoffHours * 60 + minutes) / 1440 + 1))
+        }
+
         const val ROTATION_KITCHENS = 4
         private val DUBAI = TimeZone.of("Asia/Dubai")
     }

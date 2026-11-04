@@ -4,3 +4,6 @@
 // Unset, the app falls back to localhost (the simulator).
 API_BASE_URL = http:/$()/localhost:8080/v1
 WEB_BASE_URL = http:/$()/localhost:3000
+
+// Checkout pins a new delivery address at the device's current fix.
+INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = Pins your delivery address at the door so the kitchen's driver can find you.

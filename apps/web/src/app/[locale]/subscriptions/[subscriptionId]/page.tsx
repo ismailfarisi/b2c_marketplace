@@ -4,7 +4,7 @@ import { ApiError, formatMoney } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useState, type FormEvent } from "react";
+import { use, useEffect, useState, type FormEvent } from "react";
 
 import { RateKitchen } from "@/components/meals/rate-kitchen";
 import {
@@ -35,6 +35,12 @@ const COPY = {
     paying: "Processing…",
     payNote: "Deliveries are scheduled once payment goes through.",
     payFailed: "The payment did not go through. Try again.",
+    paidBanner: (d: string | null) =>
+      d
+        ? `Payment received. Your first delivery is on ${d}.`
+        : "Payment received. Your meals are scheduled.",
+    payPending:
+      "Your payment is being confirmed. This page updates once it goes through.",
     cycle: (n: number, s: string, e: string) => `Cycle ${n}: ${s} – ${e}`,
     upcoming: "Next two weeks",
     noUpcoming: "No deliveries in the next two weeks.",
@@ -98,6 +104,11 @@ const COPY = {
     paying: "جارٍ المعالجة…",
     payNote: "تُجدول التوصيلات بعد إتمام الدفع.",
     payFailed: "لم يتم الدفع. حاول مرة أخرى.",
+    paidBanner: (d: string | null) =>
+      d
+        ? `تم استلام الدفع. أول توصيل لك يوم ${d}.`
+        : "تم استلام الدفع. تمت جدولة وجباتك.",
+    payPending: "جارٍ تأكيد الدفع. ستتحدث هذه الصفحة عند إتمامه.",
     cycle: (n: number, s: string, e: string) => `الدورة ${n}: ${s} – ${e}`,
     upcoming: "الأسبوعان القادمان",
     noUpcoming: "لا توجد توصيلات خلال الأسبوعين القادمين.",
@@ -224,6 +235,17 @@ function Detail({
     mutationFn: () => payOrder(s.pending_order_id!),
     onSuccess: refresh,
   });
+  // Checkout lands here with ?paid=1 or ?payment=failed|pending.
+  const [outcome, setOutcome] = useState<"paid" | "failed" | "pending" | null>(
+    null,
+  );
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("paid") === "1") setOutcome("paid");
+    else if (q.get("payment") === "failed") setOutcome("failed");
+    else if (q.get("payment") === "pending") setOutcome("pending");
+  }, []);
+  const firstDelivery = s.upcoming[0]?.date ?? null;
   const money = (n: number) =>
     formatMoney({ amount: n, currency: s.currency }, locale);
   const live =
@@ -264,6 +286,14 @@ function Detail({
         </p>
       </header>
 
+      {outcome === "paid" && !s.pending_order_id && (
+        <p className="ms-callout ms-ok" role="status">
+          {t.paidBanner(
+            firstDelivery ? formatDay(locale, firstDelivery) : null,
+          )}
+        </p>
+      )}
+
       {s.rotation_id && s.rotation_week != null && (
         <section className="ms-callout">
           <p>{t.rotation(s.rotation_week)}</p>
@@ -280,7 +310,16 @@ function Detail({
               ? t.renewalDue(formatDay(locale, cycle.starts_on))
               : t.payNote}
           </p>
-          {pay.isError && <p className="ms-bad">{t.payFailed}</p>}
+          {(pay.isError || (outcome === "failed" && !pay.isSuccess)) && (
+            <p className="ms-bad" role="alert">
+              {t.payFailed}
+            </p>
+          )}
+          {outcome === "pending" && !pay.isError && !pay.isSuccess && (
+            <p className="ms-note" role="status">
+              {t.payPending}
+            </p>
+          )}
           <button
             type="button"
             className="ms-cta"

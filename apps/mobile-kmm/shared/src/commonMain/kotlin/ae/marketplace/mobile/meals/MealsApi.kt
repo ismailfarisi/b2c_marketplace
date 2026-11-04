@@ -78,8 +78,12 @@ class MealsApi(private val client: HttpClient) {
     suspend fun preview(input: SubscribeInput): SubscriptionPreview =
         client.post("subscriptions/preview") { json(input) }.body()
 
-    suspend fun subscribe(input: SubscribeInput): Subscribed =
-        client.post("subscriptions") { json(input) }.body()
+    /** [idempotencyKey] is one UUID per checkout draft, so a retried Pay returns the same subscription. */
+    suspend fun subscribe(input: SubscribeInput, idempotencyKey: String? = null): Subscribed =
+        client.post("subscriptions") {
+            idempotencyKey?.let { header("Idempotency-Key", it) }
+            json(input)
+        }.body()
 
     /** Keyed on the order, so a retry re-reads the same authorization instead of charging twice. */
     suspend fun payOrder(orderId: String): PaymentIntent =
