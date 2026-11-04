@@ -7,6 +7,7 @@ import { use, useState } from "react";
 import { messageOf } from "@/components/admin/detail";
 import { InvoiceView } from "@/components/invoice/invoice-document";
 import "@/components/invoice/invoice.css";
+import { DetailError } from "@/components/admin/errors";
 import { getInvoiceDocument } from "@/lib/admin-api";
 
 /**
@@ -16,15 +17,15 @@ import { getInvoiceDocument } from "@/lib/admin-api";
 export default function AdminInvoicePage({
   params,
 }: {
-  params: Promise<{ invoiceId: string }>;
+  params: Promise<{ locale: string; invoiceId: string }>;
 }) {
-  const { invoiceId } = use(params);
+  const { locale, invoiceId } = use(params);
   const [lang, setLang] = useState<"en" | "ar">("en");
   const q = useQuery({
     queryKey: ["admin", "invoice", invoiceId],
     queryFn: () => getInvoiceDocument(invoiceId),
   });
-  const back = { href: "/en/admin/refunds", label: "Refunds & invoices" };
+  const back = { href: `/${locale}/admin/refunds`, label: "Refunds & invoices" };
   if (q.data)
     return (
       <InvoiceView
@@ -41,33 +42,15 @@ export default function AdminInvoicePage({
         }
       />
     );
-  const status = q.error instanceof ApiError ? q.error.status : 0;
-  return (
-    <div className="console-lede">
-      {q.isPending ? (
-        <p>Loading…</p>
-      ) : (
-        <div className="state error" role="alert">
-          <div className="headline">
-            {status === 404
-              ? "No invoice with this id."
-              : status === 403
-                ? "This account cannot read invoices (needs money.read)."
-                : "Could not load this invoice."}
-          </div>
-          {status !== 404 && status !== 403 ? (
-            <>
-              {messageOf(q.error)}{" "}
-              <button type="button" onClick={() => void q.refetch()}>
-                Retry
-              </button>
-            </>
-          ) : null}
-        </div>
-      )}
-      <p>
-        <a href={back.href}>← {back.label}</a>
-      </p>
-    </div>
-  );
+  if (q.isError)
+    return (
+      <DetailError
+        error={q.error}
+        what="this invoice"
+        perm="money.read"
+        onRetry={() => void q.refetch()}
+        back={{ href: back.href, label: "Back to refunds & invoices" }}
+      />
+    );
+  return <p className="console-lede">Loading…</p>;
 }

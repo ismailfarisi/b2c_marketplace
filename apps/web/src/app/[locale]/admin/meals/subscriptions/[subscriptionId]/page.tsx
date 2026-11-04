@@ -5,6 +5,7 @@ import Link from "next/link";
 import { use } from "react";
 
 import { Action, Detail, Facts, Panel, Ref, plural } from "@/components/admin/detail";
+import { DetailError } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
 import { cancelMealSubscription, getMealSubscription, statusTone } from "@/lib/admin-api";
 
@@ -24,9 +25,18 @@ export default function MealSubscriptionPage({
   const { locale, subscriptionId } = use(params);
   const qc = useQueryClient();
   const key = ["admin", "meals", "subscription", subscriptionId];
-  const { data, isLoading, error } = useQuery({ queryKey: key, queryFn: () => getMealSubscription(subscriptionId) });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: key, queryFn: () => getMealSubscription(subscriptionId) });
 
-  if (error) return <p className="danger">This subscription could not be loaded.</p>;
+  if (error)
+    return (
+      <DetailError
+        error={error}
+        what="this subscription"
+        perm="commerce.read"
+        onRetry={() => void refetch()}
+        back={{ href: `/${locale}/admin/meals/subscriptions`, label: "Back to subscriptions" }}
+      />
+    );
   if (isLoading || !data) return <p className="muted">Loading subscription…</p>;
 
   const closed = data.status === "cancelled" || data.status === "completed";

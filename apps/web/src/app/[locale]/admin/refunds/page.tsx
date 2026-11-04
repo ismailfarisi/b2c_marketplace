@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
 
 import { Panel, Ref, plural } from "@/components/admin/detail";
+import { ConsoleError } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
 import { getInvoices, getRefunds } from "@/lib/admin-api";
 
@@ -45,10 +46,9 @@ export default function RefundsPage({ params }: { params: Promise<{ locale: stri
 
   if (refunds.error) {
     return (
-      <p className="danger">
-        Refunds could not be loaded. If this reads &ldquo;forbidden&rdquo;, the account is missing
-        <span className="mono"> money.read</span>.
-      </p>
+      <div className="panel">
+        <ConsoleError error={refunds.error} what="refunds" perm="money.read" onRetry={() => void refunds.refetch()} />
+      </div>
     );
   }
 
@@ -142,7 +142,9 @@ export default function RefundsPage({ params }: { params: Promise<{ locale: stri
           />
         }
       >
-        {invoices.isLoading ? (
+        {invoices.isError ? (
+          <ConsoleError error={invoices.error} what="invoices" perm="money.read" onRetry={() => void invoices.refetch()} />
+        ) : invoices.isLoading ? (
           <p className="muted">Loading…</p>
         ) : (invoices.data?.items ?? []).length === 0 ? (
           <p className="muted">
@@ -165,7 +167,7 @@ export default function RefundsPage({ params }: { params: Promise<{ locale: stri
               {invoices.data!.items.map((i) => (
                 <tr key={i.id}>
                   <td className="mono">
-                    <a href={`/en/admin/invoices/${i.id}`} target="_blank" rel="noreferrer">
+                    <a href={`/${locale}/admin/invoices/${i.id}`} target="_blank" rel="noreferrer">
                       {i.number}
                     </a>
                     {/* A credit note that does not name what it corrects is not

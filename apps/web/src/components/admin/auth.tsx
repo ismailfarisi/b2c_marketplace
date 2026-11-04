@@ -38,7 +38,7 @@ function Waiting({ children }: { children: ReactNode }) {
 function Gate({ locale, children }: { locale: string; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { data, error, isPending } = useWhoami();
+  const { data, error, isPending, refetch, isFetching } = useWhoami();
 
   // A 401 means no usable session: either nothing was ever stored, or the
   // refresh token was rejected. Anything else — a 500, a dead API — is a
@@ -59,10 +59,12 @@ function Gate({ locale, children }: { locale: string; children: ReactNode }) {
     return <Waiting>Taking you to sign in…</Waiting>;
   }
 
-  if (error) {
+  // Only when there is nothing cached. A failed background refetch of whoami
+  // must not unmount a page holding a half-typed reply or action reason.
+  if (error && !data) {
     return (
       <Waiting>
-        <div className="state error">
+        <div className="state error" role="alert">
           <div className="headline">The console could not reach the API.</div>
           {error instanceof ApiError && error.requestId ? (
             <p className="muted mono">request {error.requestId}</p>
@@ -71,6 +73,14 @@ function Gate({ locale, children }: { locale: string; children: ReactNode }) {
             This is not a sign-in problem — the request failed before anything
             could be decided about you.
           </p>
+        </div>
+        <div className="console-gate-actions">
+          <button type="button" className="btn primary" onClick={() => void refetch()} disabled={isFetching}>
+            {isFetching ? "Retrying…" : "Retry"}
+          </button>
+          <a className="btn" href={`/${locale}/admin/login?next=${encodeURIComponent(pathname)}`}>
+            Sign in again
+          </a>
         </div>
       </Waiting>
     );

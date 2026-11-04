@@ -139,6 +139,9 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrForbidden):
 		p.Status = http.StatusForbidden
 		p.Title = "Forbidden"
+		// The sentence names the permission that was missing ("this needs
+		// identity.review; you hold …"), so the console can say what to ask for.
+		p.Detail = sentenceFor(err, ErrForbidden)
 
 	case errors.Is(err, ErrCapacityTaken):
 		p.Status = http.StatusConflict

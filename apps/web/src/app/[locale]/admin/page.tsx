@@ -5,6 +5,7 @@ import Link from "next/link";
 import { use } from "react";
 
 import { getQueues } from "@/lib/admin-api";
+import { ConsoleError } from "@/components/admin/errors";
 import { POLL_MS } from "@/components/admin/shell";
 import { waited } from "@/components/admin/table";
 
@@ -58,7 +59,7 @@ export default function AdminOverview({
 }) {
   const { locale } = use(params);
 
-  const { data, isPending, error } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ["admin", "queues"],
     queryFn: getQueues,
     refetchInterval: POLL_MS,
@@ -68,12 +69,7 @@ export default function AdminOverview({
   if (error) {
     return (
       <div className="panel">
-        <div className="state error">
-          <div className="headline">Could not load the queues.</div>
-          This account needs a <code>platform_admins</code> row. Staff access is
-          checked on the server on every call, never carried in a token claim —
-          so granting it takes effect immediately, and so does revoking it.
-        </div>
+        <ConsoleError error={error} what="the queue counts" onRetry={() => void refetch()} />
       </div>
     );
   }

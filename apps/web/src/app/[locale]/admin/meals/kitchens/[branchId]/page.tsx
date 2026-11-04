@@ -5,6 +5,7 @@ import Link from "next/link";
 import { use } from "react";
 
 import { Action, Detail, Facts, Panel, Ref, plural } from "@/components/admin/detail";
+import { DetailError } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
 import { getMealKitchen, setMealPlanActive } from "@/lib/admin-api";
 import { SLOTS, WEEKDAYS } from "@/lib/vendor-api";
@@ -24,9 +25,18 @@ export default function MealKitchenPage({
   const { locale, branchId } = use(params);
   const qc = useQueryClient();
   const key = ["admin", "meals", "kitchen", branchId];
-  const { data, isLoading, error } = useQuery({ queryKey: key, queryFn: () => getMealKitchen(branchId) });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: key, queryFn: () => getMealKitchen(branchId) });
 
-  if (error) return <p className="danger">This kitchen could not be loaded.</p>;
+  if (error)
+    return (
+      <DetailError
+        error={error}
+        what="this kitchen"
+        perm="commerce.read"
+        onRetry={() => void refetch()}
+        back={{ href: `/${locale}/admin/meals/kitchens`, label: "Back to kitchens" }}
+      />
+    );
   if (isLoading || !data) return <p className="muted">Loading kitchen…</p>;
 
   const { profile, overview, menu, plans, dishes } = data;

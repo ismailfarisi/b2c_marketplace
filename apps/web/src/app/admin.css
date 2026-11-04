@@ -1930,3 +1930,8 @@ table.menu-grid td {
   font: inherit;
   padding: 0.5rem;
 }
+
+/* Nav item the signed-in account lacks the permission for: still reachable, visibly not theirs. */
+.console-link.locked {
+  opacity: 0.45;
+}

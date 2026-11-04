@@ -56,6 +56,7 @@ export default function SupportQueue() {
         rows={rows}
         isPending={isPending}
         error={error}
+        perm="commerce.contact"
         onRetry={() => void refetch()}
         empty={filter ? "No closed tickets." : "No open tickets."}
         rowKey={(t) => t.id}
@@ -172,12 +173,12 @@ function Ticket({
         />
         {reply.error ? (
           <p className="console-error" role="alert">
-            {messageOf(reply.error)}
+            Not sent — try again. {messageOf(reply.error)}
           </p>
         ) : null}
         {status.error ? (
           <p className="console-error" role="alert">
-            Could not {closed ? "reopen" : "close"} the ticket: {messageOf(status.error)}
+            Ticket not {closed ? "reopened" : "closed"} — try again. {messageOf(status.error)}
           </p>
         ) : null}
         <button type="submit" disabled={reply.isPending || !body.trim()}>

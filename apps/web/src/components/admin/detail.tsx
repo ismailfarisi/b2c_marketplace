@@ -227,7 +227,7 @@ export function Action({
   danger?: boolean;
   hint?: ReactNode;
   /** Optional inputs above the reason, e.g. a partial refund amount. */
-  extra?: (busy: boolean) => ReactNode;
+  extra?: (busy: boolean, fieldErrors: Record<string, string>) => ReactNode;
   onConfirm: (reason: string) => Promise<unknown>;
   disabled?: boolean;
   disabledReason?: string;
@@ -236,6 +236,7 @@ export function Action({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [done, setDone] = useState<string | null>(null);
 
   if (done) return <span className="action-done">{done}</span>;
@@ -261,6 +262,7 @@ export function Action({
         event.preventDefault();
         setBusy(true);
         setError(null);
+        setFieldErrors({});
         try {
           await onConfirm(reason.trim());
           setDone(`${label} done`);
@@ -269,6 +271,7 @@ export function Action({
           // things like "void the authorization instead" — which is the whole
           // answer, and hiding it behind "something went wrong" wastes it.
           setError(messageOf(err));
+          setFieldErrors(fieldErrorsOf(err));
         } finally {
           setBusy(false);
         }
@@ -276,7 +279,7 @@ export function Action({
     >
       <div className="action-title">{label}</div>
       {hint ? <p className="muted">{hint}</p> : null}
-      {extra ? extra(busy) : null}
+      {extra ? extra(busy, fieldErrors) : null}
       <label className="field">
         <span>Reason</span>
         <textarea
@@ -308,8 +311,34 @@ export function Action({
   );
 }
 
+type ProblemBody = {
+  status?: number;
+  detail?: string;
+  errors?: Array<{ message?: string; field?: string; code?: string }>;
+  title?: string;
+};
+
+/** Field → the server's sentence, for rendering under the matching input. */
+export function fieldErrorsOf(err: unknown): Record<string, string> {
+  const body = (err as { problem?: ProblemBody | null })?.problem;
+  const out: Record<string, string> = {};
+  for (const e of body?.errors ?? []) {
+    if (e.field) out[e.field] = e.message || e.code || "invalid";
+  }
+  return out;
+}
+
 /** Pulls the sentence out of an RFC 7807 problem, falling back sensibly. */
 export function messageOf(err: unknown): string {
+  const status = (err as { status?: number })?.status;
+  if (status === 403) {
+    // The server's sentence names the permission ("this needs identity.review;
+    // you hold …"); without it, say what kind of refusal this is.
+    const detail = (err as { problem?: ProblemBody | null })?.problem?.detail;
+    return detail
+      ? `Not allowed: ${detail}. Ask someone holding staff.admin for it.`
+      : "Not allowed: this account lacks the permission this needs. Ask someone holding staff.admin.";
+  }
   // ApiError carries the RFC 7807 body as `problem`; there is no `body`.
   const body = (err as { problem?: { detail?: string; errors?: Array<{ message?: string; field?: string; code?: string }>; title?: string } | null })
     ?.problem;
