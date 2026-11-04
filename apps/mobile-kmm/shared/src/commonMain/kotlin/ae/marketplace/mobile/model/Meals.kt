@@ -299,6 +299,47 @@ data class MySubscription(
     @SerialName("pause_allowance_days") val pauseAllowanceDays: Int = 0,
     @SerialName("pause_days_used") val pauseDaysUsed: Int = 0,
     val upcoming: List<UpcomingMeal> = emptyList(),
+    /** Skipped meals in the same window; they can be put back before the cutoff. */
+    val skipped: List<UpcomingMeal> = emptyList(),
+    /** The last two weeks' deliveries, newest first. */
+    val recent: List<MyDelivery> = emptyList(),
+    /** Current and upcoming pauses. */
+    val pauses: List<MyPause> = emptyList(),
+)
+
+@Serializable
+data class MyPause(
+    @SerialName("from_date") val fromDate: String,
+    @SerialName("to_date") val toDate: String,
+)
+
+@Serializable
+data class MyDelivery(
+    val date: String,
+    @SerialName("meal_slot") val mealSlot: String = "",
+    val status: String,
+    val at: String? = null,
+)
+
+@Serializable
+data class Resumed(
+    @SerialName("resumes_on") val resumesOn: String,
+    @SerialName("days_returned") val daysReturned: Int = 0,
+)
+
+@Serializable
+data class MyReview(
+    @SerialName("can_review") val canReview: Boolean = false,
+    val reason: String? = null,
+    val review: SubscriptionReview? = null,
+)
+
+@Serializable
+data class SubscriptionReview(
+    val id: String = "",
+    val rating: Int,
+    val comment: String = "",
+    val status: String = "",
 )
 
 @Serializable
@@ -323,6 +364,9 @@ data class UpcomingMeal(
     @SerialName("chosen_dish_id") val chosenDishId: String? = null,
     @SerialName("cutoff_at") val cutoffAt: String = "",
     val locked: Boolean = false,
+    /** scheduled, dispatched, en_route, arrived, completed or failed, once a delivery exists. */
+    @SerialName("delivery_status") val deliveryStatus: String? = null,
+    val skipped: Boolean = false,
 )
 
 @Serializable

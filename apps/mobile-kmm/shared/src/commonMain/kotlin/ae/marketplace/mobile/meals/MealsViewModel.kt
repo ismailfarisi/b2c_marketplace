@@ -9,6 +9,7 @@ import ae.marketplace.mobile.model.KitchenDetail
 import ae.marketplace.mobile.model.KitchenReview
 import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealPlan
+import ae.marketplace.mobile.model.MyReview
 import ae.marketplace.mobile.model.MySubscription
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationInput
@@ -97,6 +98,8 @@ data class MyMealsUiState(
     val loading: Boolean = false,
     val loaded: Boolean = false,
     val error: Failure? = null,
+    /** The rotation whose cancel or renewal call is in flight. */
+    val busyRotation: String? = null,
 )
 
 data class SubscriptionUiState(
@@ -105,6 +108,17 @@ data class SubscriptionUiState(
     val busy: Boolean = false,
     val error: Failure? = null,
     val paymentUrl: String? = null,
+    /** Set after a resume: the day deliveries restart. */
+    val resumesOn: String? = null,
+    val review: ReviewUiState = ReviewUiState(),
+)
+
+data class ReviewUiState(
+    val data: MyReview? = null,
+    val loading: Boolean = false,
+    val saving: Boolean = false,
+    val saved: Boolean = false,
+    val error: Failure? = null,
 )
 
 /**
@@ -417,45 +431,65 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         viewModelScope.launch {
             _mine.update { it.copy(loading = true, error = null) }
             try {
-                val subs = api.subscriptions().items
-                val rotations = api.rotations().items
-                _mine.update {
-                    it.copy(
-                        // Rotation weeks show under their rotation, not as four more rows.
-                        subscriptions = subs.filter { s -> s.rotationId == null },
-                        rotations = rotations,
-                        loading = false,
-                        loaded = true,
-                    )
-                }
+                fetchMine()
             } catch (e: Throwable) {
                 _mine.update { it.copy(loading = false, error = e.toFailure()) }
             }
         }
     }
 
+    private suspend fun fetchMine() {
+        val subs = api.subscriptions().items
+        val rotations = api.rotations().items
+        _mine.update {
+            it.copy(
+                // Rotation weeks show under their rotation, not as four more rows.
+                subscriptions = subs.filter { s -> s.rotationId == null },
+                rotations = rotations,
+                loading = false,
+                loaded = true,
+            )
+        }
+    }
+
+    private var openedId: String? = null
+
+    /** Loads the subscription that failed to open again. */
+    fun retryOpen() {
+        openedId?.let(::openSubscription)
+    }
+
     fun openSubscription(id: String) {
+        openedId = id
         _sub.value = SubscriptionUiState(loading = true)
+        lastAction = null
         reloadSubscription(id)
+        loadReview(id)
     }
 
     private fun reloadSubscription(id: String) {
         viewModelScope.launch {
             try {
                 val s = api.subscription(id)
-                _sub.update { it.copy(subscription = s, loading = false, busy = false) }
+                _sub.update { it.copy(subscription = s, loading = false, busy = false, error = null) }
             } catch (e: Throwable) {
                 _sub.update { it.copy(loading = false, busy = false, error = e.toFailure()) }
             }
         }
     }
 
+    private var lastAction: (suspend (String) -> Unit)? = null
+
     private fun act(block: suspend (String) -> Unit) {
         val id = _sub.value.subscription?.id ?: return
+        // One call at a time: a second tap while busy is ignored.
+        if (_sub.value.busy) return
+        lastAction = block
+        _sub.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
-            _sub.update { it.copy(busy = true, error = null) }
             try {
                 block(id)
+                lastAction = null
                 _mine.update { it.copy(loaded = false) }
                 reloadSubscription(id)
             } catch (e: Throwable) {
@@ -464,10 +498,55 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         }
     }
 
+    /** Tries the failed action again, or reloads when nothing failed mid-action. */
+    fun retry() {
+        val block = lastAction
+        val id = _sub.value.subscription?.id ?: return
+        if (block != null) act(block) else reloadSubscription(id)
+    }
+
+    fun dismissError() {
+        lastAction = null
+        _sub.update { it.copy(error = null) }
+    }
+
     fun choose(date: String, slot: String, dishId: String) = act { api.choose(it, date, slot, dishId) }
     fun skip(date: String, slot: String) = act { api.skip(it, date, slot) }
+    fun unskip(date: String, slot: String) = act { api.unskip(it, date, slot) }
     fun pause(from: String, to: String) = act { api.pause(it, from, to) }
+    fun resume() = act { id ->
+        val out = api.resume(id)
+        _sub.update { it.copy(resumesOn = out.resumesOn) }
+    }
     fun cancel() = act { api.cancel(it, "customer_request") }
+
+    fun loadReview(id: String = _sub.value.subscription?.id ?: "") {
+        if (id.isEmpty()) return
+        _sub.update { it.copy(review = it.review.copy(loading = true, error = null)) }
+        viewModelScope.launch {
+            try {
+                val r = api.myReview(id)
+                _sub.update { it.copy(review = it.review.copy(data = r, loading = false)) }
+            } catch (e: Throwable) {
+                _sub.update { it.copy(review = it.review.copy(loading = false, error = e.toFailure())) }
+            }
+        }
+    }
+
+    fun saveReview(rating: Int, comment: String) {
+        val id = _sub.value.subscription?.id ?: return
+        if (_sub.value.review.saving || rating !in 1..5) return
+        _sub.update { it.copy(review = it.review.copy(saving = true, saved = false, error = null)) }
+        viewModelScope.launch {
+            try {
+                api.writeReview(id, rating, comment.trim())
+                val r = api.myReview(id)
+                _sub.update { it.copy(review = ReviewUiState(data = r, saved = true)) }
+            } catch (e: Throwable) {
+                _sub.update { it.copy(review = it.review.copy(saving = false, error = e.toFailure())) }
+            }
+        }
+    }
     fun setAutoRenew(auto: Boolean) = act { api.setRenewal(it, auto) }
 
     /** Pays the outstanding order: a first cycle that failed, or a renewal that is due. */
@@ -481,17 +560,30 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         api.payOrder(next.orderId).redirectUrl?.let { url -> _sub.update { s -> s.copy(paymentUrl = url) } }
     }
 
-    fun cancelRotation(id: String) {
-        viewModelScope.launch {
-            try { api.cancelRotation(id, "customer_request"); loadMine(force = true) }
-            catch (e: Throwable) { _mine.update { it.copy(error = e.toFailure()) } }
-        }
-    }
+    fun cancelRotation(id: String) = rotationAct(id) { api.cancelRotation(id, "customer_request") }
 
-    fun setRotationRenewal(id: String, auto: Boolean) {
+    fun setRotationRenewal(id: String, auto: Boolean) = rotationAct(id) { api.setRotationRenewal(id, auto) }
+
+    fun dismissMineError() = _mine.update { it.copy(error = null) }
+
+    private fun rotationAct(id: String, block: suspend () -> Unit) {
+        if (_mine.value.busyRotation != null) return
+        _mine.update { it.copy(busyRotation = id, error = null) }
         viewModelScope.launch {
-            try { api.setRotationRenewal(id, auto); loadMine(force = true) }
-            catch (e: Throwable) { _mine.update { it.copy(error = e.toFailure()) } }
+            val failure = try {
+                block()
+                null
+            } catch (e: Throwable) {
+                e.toFailure()
+            }
+            // Reload either way, so a failed toggle shows the server's value again.
+            val reloadFailure = try {
+                fetchMine()
+                null
+            } catch (e: Throwable) {
+                e.toFailure()
+            }
+            _mine.update { it.copy(busyRotation = null, error = failure ?: reloadFailure) }
         }
     }
 

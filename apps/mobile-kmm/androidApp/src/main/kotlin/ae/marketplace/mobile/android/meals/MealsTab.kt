@@ -1129,9 +1129,12 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
             !s.loaded -> LoadingBlock()
             s.subscriptions.isEmpty() && s.rotations.isEmpty() -> EmptyBlock(stringResource(R.string.meals_no_subs))
             else -> LazyColumn(Modifier.fillMaxSize()) {
+                failure?.let { f ->
+                    item { FailureStrip(f, onRetry = { vm.loadMine(force = true) }, onDismiss = vm::dismissMineError) }
+                }
                 if (s.rotations.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_rotations)) }
-                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen) }
+                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, busy = s.busyRotation != null) }
                 }
                 if (s.subscriptions.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_subscriptions)) }
@@ -1144,7 +1147,7 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
 }
 
 @Composable
-private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit) {
+private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit, busy: Boolean = false) {
     var confirming by remember { mutableStateOf(false) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1170,13 +1173,13 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
         if (r.status == "active" || r.status == "pending") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.meals_auto_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
-                RenewSwitch(r.autoRenew) { vm.setRotationRenewal(r.id, it) }
+                RenewSwitch(r.autoRenew, enabled = !busy) { vm.setRotationRenewal(r.id, it) }
             }
             Text(
                 stringResource(R.string.meals_cancel_rotation),
-                color = Palette.Bad,
+                color = if (busy) M.Faint else Palette.Bad,
                 fontSize = Type.Secondary,
-                modifier = Modifier.clickable { confirming = true }.padding(vertical = Space.Small),
+                modifier = Modifier.clickable(enabled = !busy) { confirming = true }.padding(vertical = Space.Small),
             )
             if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancelRotation(r.id) }, onDismiss = { confirming = false })
         }
@@ -1223,10 +1226,11 @@ private fun StatusPill(status: String) {
 }
 
 @Composable
-private fun RenewSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun RenewSwitch(checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Switch(
         checked = checked,
         onCheckedChange = onChange,
+        enabled = enabled,
         colors = SwitchDefaults.colors(checkedTrackColor = M.Chilli, checkedThumbColor = M.OnAccent),
     )
 }
@@ -1241,7 +1245,7 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
         TopBar(sub?.let { pick(it.kitchenName, it.kitchenNameAr, arabic) } ?: "", onBack)
         val failure = s.error
         when {
-            sub == null && failure != null -> FailureBlock(failure, onRetry = null)
+            sub == null && failure != null -> FailureBlock(failure, onRetry = vm::retryOpen)
             sub == null -> LoadingBlock()
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 item {
@@ -1255,17 +1259,27 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                         if (sub.rotationId == null && sub.status in setOf("active", "paused")) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(stringResource(R.string.meals_auto_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
-                                RenewSwitch(sub.renewalMode == "auto") { vm.setAutoRenew(it) }
+                                RenewSwitch(sub.renewalMode == "auto", enabled = !s.busy) { vm.setAutoRenew(it) }
                             }
                         }
                         if (sub.pendingOrderId != null) PrimaryButton(stringResource(R.string.meals_pay_due), vm::payPending, enabled = !s.busy)
                         if (sub.canRenew) PrimaryButton(stringResource(R.string.meals_renew), vm::renew, enabled = !s.busy)
                     }
-                    s.error?.let { FailureStrip(it, onRetry = null) }
+                    s.error?.let { FailureStrip(it, onRetry = vm::retry, onDismiss = vm::dismissError) }
                 }
-                if (sub.upcoming.isNotEmpty()) {
+                val meals = (sub.upcoming + sub.skipped).sortedWith(compareBy({ it.date }, { it.cutoffAt }))
+                if (meals.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_upcoming)) }
-                    items(sub.upcoming, key = { it.date + it.mealSlot }) { m -> MealCard(m, arabic, s.busy, vm) }
+                    items(meals, key = { it.date + it.mealSlot }) { m ->
+                        if (m.skipped) SkippedMealCard(m, arabic, s.busy, vm) else MealCard(m, arabic, s.busy, vm)
+                    }
+                }
+                if (sub.recent.isNotEmpty()) item { RecentDeliveriesCard(sub.recent, arabic) }
+                if (sub.rotationId == null && (sub.status == "paused" || sub.pauses.isNotEmpty())) {
+                    item { ResumeCard(sub, s.busy, s.resumesOn, arabic, vm) }
+                }
+                if (sub.status != "pending_payment" && sub.status != "pending") {
+                    item { RateKitchenCard(s.review, vm) }
                 }
                 if (sub.rotationId == null && sub.status == "active" && sub.pauseAllowanceDays > 0) {
                     item { PauseCard(sub, s.busy, vm) }
@@ -1285,23 +1299,6 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                 item { BottomPad() }
             }
         }
-    }
-}
-
-@Composable
-private fun PauseCard(sub: MySubscription, busy: Boolean, vm: MealsViewModel) {
-    val left = (sub.pauseAllowanceDays - sub.pauseDaysUsed).coerceAtLeast(0)
-    val first = sub.upcoming.firstOrNull { !it.locked }?.date ?: return
-    var from by remember(first) { mutableStateOf(first) }
-    var to by remember(first) { mutableStateOf(first) }
-    Card {
-        Text(stringResource(R.string.meals_pause_title), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
-        Text(stringResource(R.string.meals_pause_left, left, sub.pauseAllowanceDays), color = M.Muted, fontSize = Type.Secondary)
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
-            Field(from, { from = it }, Modifier.weight(1f), placeholder = stringResource(R.string.meals_pause_from))
-            Field(to, { to = it }, Modifier.weight(1f), placeholder = stringResource(R.string.meals_pause_to))
-        }
-        PrimaryButton(stringResource(R.string.meals_pause), { vm.pause(from.trim(), to.trim()) }, enabled = !busy && left > 0)
     }
 }
 
@@ -1326,14 +1323,27 @@ private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsV
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(shortDate(m.date, arabic) + " · " + slotLabel(m.mealSlot), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            m.deliveryStatus?.let { DeliveryPill(it) }
             if (m.locked) {
                 Text(stringResource(R.string.meals_locked), color = M.Faint, fontSize = Type.Caption)
             } else {
+                var confirming by remember { mutableStateOf(false) }
                 Text(
                     stringResource(R.string.meals_skip),
                     color = M.Muted,
                     fontSize = Type.Secondary,
-                    modifier = Modifier.clickable(enabled = !busy) { vm.skip(m.date, m.mealSlot) }.padding(Space.Small),
+                    modifier = Modifier.clickable(enabled = !busy) { confirming = true }.padding(Space.Small),
+                )
+                if (confirming) ConfirmSkip(onConfirm = { confirming = false; vm.skip(m.date, m.mealSlot) }, onDismiss = { confirming = false })
+            }
+        }
+        if (!m.locked) {
+            val cutoff = cutoffLabel(m.cutoffAt, arabic)
+            if (cutoff != null) {
+                Text(
+                    stringResource(if (m.options.size > 1) R.string.meals_change_until else R.string.meals_skip_until, cutoff),
+                    color = M.Faint,
+                    fontSize = Type.Caption,
                 )
             }
         }

@@ -8,7 +8,9 @@ import ae.marketplace.mobile.model.KitchenDetail
 import ae.marketplace.mobile.model.KitchenPage
 import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealsHome
+import ae.marketplace.mobile.model.MyReview
 import ae.marketplace.mobile.model.MySubscription
+import ae.marketplace.mobile.model.Resumed
 import ae.marketplace.mobile.model.PaymentIntent
 import ae.marketplace.mobile.model.ReviewPage
 import ae.marketplace.mobile.model.Rotation
@@ -83,6 +85,20 @@ class MealsApi(private val client: HttpClient) {
         client.post("subscriptions/$id/skip") { json(SkipBody(date, slot)) }
     }
 
+    suspend fun unskip(id: String, date: String, slot: String) {
+        client.post("subscriptions/$id/unskip") { json(SkipBody(date, slot)) }
+    }
+
+    /** Ends the current or next pause from the first day still before its cutoff. */
+    suspend fun resume(id: String): Resumed =
+        client.post("subscriptions/$id/resume") { json(Empty()) }.body()
+
+    suspend fun myReview(id: String): MyReview = client.get("me/subscriptions/$id/review").body()
+
+    suspend fun writeReview(id: String, rating: Int, comment: String) {
+        client.put("subscriptions/$id/review") { json(ReviewBody(rating, comment)) }
+    }
+
     suspend fun pause(id: String, from: String, to: String) {
         client.post("subscriptions/$id/pause") { json(PauseBody(from, to)) }
     }
@@ -138,3 +154,4 @@ class MealsApi(private val client: HttpClient) {
 @Serializable private data class PauseBody(@SerialName("from_date") val from: String, @SerialName("to_date") val to: String)
 @Serializable private data class ReasonBody(val reason: String)
 @Serializable private data class AutoBody(val auto: Boolean)
+@Serializable private data class ReviewBody(val rating: Int, val comment: String)
