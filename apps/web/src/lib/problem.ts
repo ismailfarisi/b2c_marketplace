@@ -16,6 +16,17 @@ const FIELD: Record<string, { en: string; ar: string }> = {
   invalid_slot: { en: "That delivery slot isn't available.", ar: "فترة التوصيل هذه غير متاحة." },
   unknown_dish: { en: "That dish is no longer on the menu.", ar: "هذا الطبق لم يعد في القائمة." },
   invalid_status: { en: "This can't be changed right now.", ar: "لا يمكن تغيير هذا الآن." },
+  past_cutoff: {
+    en: "That day is past its cutoff. Pick a later date.",
+    ar: "انتهى موعد التغيير لهذا اليوم. اختر تاريخًا لاحقًا.",
+  },
+  before_from: { en: "The end date must be on or after the start date.", ar: "يجب أن يكون تاريخ النهاية في يوم البداية أو بعده." },
+  allowance_exceeded: {
+    en: "That's more pause days than you have left this cycle.",
+    ar: "هذه أيام إيقاف أكثر مما تبقى لك في هذه الدورة.",
+  },
+  no_deliveries: { en: "There are no deliveries in those dates.", ar: "لا توجد توصيلات في هذه التواريخ." },
+  not_on_menu: { en: "That dish is no longer on the menu.", ar: "هذا الطبق لم يعد في القائمة." },
 };
 
 const REASON: Record<string, { en: string; ar: string }> = {
@@ -33,6 +44,24 @@ const REASON: Record<string, { en: string; ar: string }> = {
   over_meal_cap: { en: "That's over your meal allowance.", ar: "هذا يتجاوز حد الوجبات المسموح." },
   over_credit_limit: { en: "That's over the company's credit limit.", ar: "هذا يتجاوز حد الائتمان للشركة." },
   role_read_only: { en: "Your role can view this but not change it.", ar: "دورك يسمح بالعرض فقط دون التعديل." },
+  not_paused: { en: "There is no pause to end.", ar: "لا يوجد إيقاف لإنهائه." },
+  resume_past_cutoff: {
+    en: "The rest of this pause is past the cutoff and can no longer change.",
+    ar: "باقي أيام الإيقاف تجاوزت موعد التغيير ولا يمكن تعديلها.",
+  },
+  resume_wallet_pause: {
+    en: "This pause was credited to your wallet, so it can't be ended early.",
+    ar: "أُضيف رصيد هذا الإيقاف إلى محفظتك، لذا لا يمكن إنهاؤه مبكرًا.",
+  },
+  not_skipped: { en: "That meal is not skipped.", ar: "هذه الوجبة غير متخطاة." },
+  rotation_no_pause: {
+    en: "A rotation week can't be paused. Skip meals instead.",
+    ar: "لا يمكن إيقاف أسبوع في التناوب. تخطَّ الوجبات بدلًا من ذلك.",
+  },
+  cancel_rotation: { en: "Cancel the whole rotation instead.", ar: "ألغِ التناوب بالكامل بدلًا من ذلك." },
+  not_live: { en: "Only a running plan can change this.", ar: "لا يمكن تغيير هذا إلا لخطة جارية." },
+  not_active: { en: "This subscription is not active.", ar: "هذا الاشتراك غير نشط." },
+  not_paid: { en: "Pay for this first.", ar: "ادفع أولًا." },
 };
 
 const FALLBACK = {

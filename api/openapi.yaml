@@ -1478,6 +1478,74 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  /subscriptions/{subscriptionId}/unskip:
+    post:
+      tags: [subscriptions]
+      operationId: unskipDelivery
+      summary: Put a skipped meal back before its cutoff
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date]
+              properties:
+                date: { type: string, format: date }
+                meal_slot:
+                  type: string
+                  enum: [breakfast, lunch, dinner, snack, suhoor, iftar]
+      responses:
+        "200": { description: Back on the schedule }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Nothing to change (code says why)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /subscriptions/{subscriptionId}/resume:
+    post:
+      tags: [subscriptions]
+      operationId: resumeSubscription
+      summary: End the current or next pause early
+      description: |
+        Deliveries come back from the first day still before its cutoff; days
+        before that stay paused. Pause days given back return to the allowance,
+        and an `extend` pause pulls the end date in by the same number. A
+        `wallet` pause has already been credited and cannot be ended early
+        (409 `resume_wallet_pause`).
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resumes_on, days_returned]
+                properties:
+                  resumes_on: { type: string, format: date }
+                  days_returned: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Nothing to change (code says why)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /subscriptions/{subscriptionId}/cancel:
     post:
       tags: [subscriptions]
@@ -6978,6 +7046,19 @@ components:
         chosen_by: { type: string, enum: [customer, default, vendor] }
         cutoff_at: { type: string, format: date-time }
         locked: { type: boolean }
+        delivery_status:
+          type: [string, "null"]
+          enum: [scheduled, dispatched, en_route, arrived, completed, failed, null]
+          description: Set once the delivery for this meal is scheduled.
+        skipped: { type: boolean, description: True for an entry in `skipped` }
+    MyDelivery:
+      type: object
+      required: [date, meal_slot, status]
+      properties:
+        date: { type: string, format: date }
+        meal_slot: { type: string }
+        status: { type: string, enum: [dispatched, en_route, arrived, completed, failed] }
+        at: { type: [string, "null"], format: date-time }
     MySubscriptionDetail:
       allOf:
         - $ref: "#/components/schemas/MySubscription"
@@ -6987,6 +7068,14 @@ components:
             pause_allowance_days: { type: integer }
             pause_days_used: { type: integer }
             upcoming: { type: array, items: { $ref: "#/components/schemas/UpcomingMeal" } }
+            skipped:
+              type: array
+              description: Skipped meals in the upcoming window; can be put back before the cutoff.
+              items: { $ref: "#/components/schemas/UpcomingMeal" }
+            recent:
+              type: array
+              description: Deliveries of the last two weeks, newest first.
+              items: { $ref: "#/components/schemas/MyDelivery" }
             cycles:
               type: array
               items:

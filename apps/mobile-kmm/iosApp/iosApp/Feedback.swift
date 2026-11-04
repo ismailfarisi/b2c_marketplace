@@ -96,6 +96,7 @@ struct FailureBlock: View {
 struct FailureStrip: View {
     let failure: Failure
     var onRetry: (() -> Void)?
+    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: Space.medium) {
@@ -109,6 +110,14 @@ struct FailureStrip: View {
                     Text("action_retry")
                         .font(.system(size: TypeScale.caption).weight(.semibold))
                         .foregroundStyle(Palette.accent)
+                        .frame(minHeight: Space.touch)
+                }
+            }
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Text("action_dismiss")
+                        .font(.system(size: TypeScale.caption))
+                        .foregroundStyle(Palette.textMuted)
                         .frame(minHeight: Space.touch)
                 }
             }

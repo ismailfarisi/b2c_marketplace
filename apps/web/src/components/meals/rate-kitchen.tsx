@@ -1,10 +1,11 @@
 "use client";
 
-import { ApiError } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
+import { LoadError } from "@/components/load-error";
 import { getMyReview, writeReview } from "@/lib/customer-api";
+import { problemMessage } from "@/lib/problem";
 
 const COPY = {
   en: {
@@ -17,6 +18,7 @@ const COPY = {
     saved: "Thanks. Your review is on the kitchen page.",
     hidden: "This review was hidden by our team.",
     failed: "Could not save your review. Try again.",
+    loading: "Loading…",
   },
   ar: {
     title: "قيّم هذا المطبخ",
@@ -28,6 +30,7 @@ const COPY = {
     saved: "شكرًا. تقييمك منشور في صفحة المطبخ.",
     hidden: "أخفى فريقنا هذا التقييم.",
     failed: "تعذّر حفظ التقييم. حاول مرة أخرى.",
+    loading: "جارٍ التحميل…",
   },
 };
 
@@ -63,7 +66,24 @@ export function RateKitchen({
       });
     },
   });
-  if (!q.data) return null;
+  if (q.isPending)
+    return (
+      <section aria-busy="true">
+        <h2>{t.title}</h2>
+        <p className="ms-note">{t.loading}</p>
+      </section>
+    );
+  if (q.isError)
+    return (
+      <section>
+        <h2>{t.title}</h2>
+        <LoadError
+          error={q.error}
+          onRetry={() => void q.refetch()}
+          locale={locale}
+        />
+      </section>
+    );
   if (!q.data.can_review)
     return (
       <section>
@@ -71,12 +91,7 @@ export function RateKitchen({
         <p className="ms-sub">{t.after}</p>
       </section>
     );
-  const err =
-    save.error instanceof ApiError && save.error.problem?.errors?.[0]?.message
-      ? save.error.problem.errors[0].message
-      : save.error
-        ? t.failed
-        : null;
+  const err = save.error ? problemMessage(save.error, locale) : null;
   return (
     <section>
       <h2>{t.title}</h2>

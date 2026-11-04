@@ -126,7 +126,7 @@ internal fun statusLabel(status: String): String = when (status) {
     "paused" -> stringResource(R.string.meals_status_paused)
     "cancelled" -> stringResource(R.string.meals_status_cancelled)
     "ended", "completed", "expired" -> stringResource(R.string.meals_status_ended)
-    else -> status
+    else -> stringResource(R.string.meals_status_other)
 }
 
 internal fun pick(en: String, ar: String?, arabic: Boolean) = localised(en, ar ?: "", arabic)

@@ -127,6 +127,7 @@ fun FailureStrip(
     failure: Failure,
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onDismiss: (() -> Unit)? = null,
 ) {
     Row(
         modifier
@@ -150,6 +151,17 @@ fun FailureStrip(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .clickable(onClick = onRetry)
+                    .defaultMinSize(minHeight = Space.Touch)
+                    .padding(vertical = Space.Medium),
+            )
+        }
+        if (onDismiss != null) {
+            Text(
+                text = stringResource(R.string.action_dismiss),
+                color = Palette.TextMuted,
+                fontSize = Type.Caption,
+                modifier = Modifier
+                    .clickable(onClick = onDismiss)
                     .defaultMinSize(minHeight = Space.Touch)
                     .padding(vertical = Space.Medium),
             )

@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState, type FormEvent } from "react";
 
+import { LoadError } from "@/components/load-error";
+import { DeliveryStatus, RecentDeliveries } from "@/components/meals/delivery-status";
 import { RateKitchen } from "@/components/meals/rate-kitchen";
 import {
   CustomerShell,
@@ -22,11 +24,15 @@ import {
   pauseSubscription,
   payOrder,
   renewSubscription,
+  resumeSubscription,
   setRenewal,
   skipMeal,
+  unskipMeal,
   type MySubscriptionDetail,
   type UpcomingMeal,
 } from "@/lib/customer-api";
+import { problemMessage } from "@/lib/problem";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
 const COPY = {
   en: {
@@ -47,12 +53,24 @@ const COPY = {
     choose: "Choose your dish",
     locked: "Locked: the cutoff has passed",
     until: (d: string) => `Change until ${d}`,
+    skipUntil: (d: string) => `Skip until ${d}`,
     yourPick: "Your pick",
     skip: "Skip this meal",
-    skipConfirm: "Skip this meal? It is credited to the end of your cycle.",
+    skipConfirm:
+      "Skip this meal? Skipped meals are not credited. To move days to the end of your cycle, pause instead.",
+    skipped: "Skipped",
+    skippedNote:
+      "Meal skipped. Skips are not credited; pause instead to move days to the end of your cycle.",
+    unskip: "Put it back",
+    unskipped: "Meal back on your schedule.",
     pause: "Pause deliveries",
     pauseNote: (left: number) =>
       `You can pause up to ${left} more day${left === 1 ? "" : "s"} this cycle. Paused days move to the end of the cycle.`,
+    resume: "Resume deliveries",
+    resuming: "Resuming…",
+    resumeNote: "Deliveries restart from the first day still before its cutoff.",
+    resumed: (d: string) => `Deliveries resume ${d}.`,
+    cancelling: "Cancelling…",
     from: "From",
     to: "To",
     pauseBtn: "Pause",
@@ -115,12 +133,24 @@ const COPY = {
     choose: "اختر طبقك",
     locked: "مغلق: انتهى الموعد النهائي",
     until: (d: string) => `يمكن التغيير حتى ${d}`,
+    skipUntil: (d: string) => `يمكن التخطي حتى ${d}`,
     yourPick: "اختيارك",
     skip: "تخطي هذه الوجبة",
-    skipConfirm: "تخطي هذه الوجبة؟ تُضاف إلى نهاية دورتك.",
+    skipConfirm:
+      "تخطي هذه الوجبة؟ لا يُعوَّض عن الوجبات المتخطاة. لنقل الأيام إلى نهاية دورتك، استخدم الإيقاف المؤقت.",
+    skipped: "متخطاة",
+    skippedNote:
+      "تم تخطي الوجبة. لا يُعوَّض عن التخطي؛ استخدم الإيقاف المؤقت لنقل الأيام إلى نهاية دورتك.",
+    unskip: "أعدها",
+    unskipped: "عادت الوجبة إلى جدولك.",
     pause: "إيقاف التوصيل مؤقتًا",
     pauseNote: (left: number) =>
-      `يمكنك الإيقاف ${left} يومًا إضافيًا في هذه الدورة. تنتقل الأيام الموقوفة إلى نهاية الدورة.`,
+      `${arPauseLeft(left)} تنتقل الأيام الموقوفة إلى نهاية الدورة.`,
+    resume: "استئناف التوصيل",
+    resuming: "جارٍ الاستئناف…",
+    resumeNote: "يُستأنف التوصيل من أول يوم لم يفت موعد تغييره.",
+    resumed: (d: string) => `يُستأنف التوصيل في ${d}.`,
+    cancelling: "جارٍ الإلغاء…",
     from: "من",
     to: "إلى",
     pauseBtn: "إيقاف مؤقت",
@@ -176,10 +206,23 @@ const COPY = {
 };
 type Copy = (typeof COPY)["en"];
 
-const problemText = (err: unknown, fallback: string) =>
-  err instanceof ApiError
-    ? (err.problem?.errors?.[0]?.message ?? err.problem?.detail ?? fallback)
-    : fallback;
+/** Arabic counted nouns change form with the number (يومان، ٣ أيام، ١١ يومًا). */
+function arPauseLeft(n: number): string {
+  switch (new Intl.PluralRules("ar").select(n)) {
+    case "zero":
+      return "لم يتبقَّ لك أي يوم إيقاف في هذه الدورة.";
+    case "one":
+      return "يمكنك الإيقاف يومًا واحدًا إضافيًا في هذه الدورة.";
+    case "two":
+      return "يمكنك الإيقاف يومين إضافيين في هذه الدورة.";
+    case "few":
+      return `يمكنك الإيقاف ${n} أيام إضافية في هذه الدورة.`;
+    case "many":
+      return `يمكنك الإيقاف ${n} يومًا إضافيًا في هذه الدورة.`;
+    default:
+      return `يمكنك الإيقاف ${n} يوم إضافي في هذه الدورة.`;
+  }
+}
 
 export default function SubscriptionPage({
   params,
@@ -197,13 +240,16 @@ export default function SubscriptionPage({
   let body;
   if (q.isPending) body = <p className="ms-note">{t.loading}</p>;
   else if (q.isError)
-    body = (
-      <p className="ms-empty">
-        {q.error instanceof ApiError && q.error.status === 404
-          ? t.notFound
-          : t.failed}
-      </p>
-    );
+    body =
+      q.error instanceof ApiError && q.error.status === 404 ? (
+        <p className="ms-empty">{t.notFound}</p>
+      ) : (
+        <LoadError
+          error={q.error}
+          onRetry={() => void q.refetch()}
+          locale={locale}
+        />
+      );
   else body = <Detail s={q.data} locale={locale} t={t} />;
 
   return (
@@ -231,6 +277,7 @@ function Detail({
       qc.invalidateQueries({ queryKey: ["me", "subscription", s.id] }),
       qc.invalidateQueries({ queryKey: ["me", "subscriptions"] }),
     ]);
+  const [notice, setNotice] = useState<string | null>(null);
   const pay = useMutation({
     mutationFn: () => payOrder(s.pending_order_id!),
     onSuccess: refresh,
@@ -246,6 +293,11 @@ function Detail({
     else if (q.get("payment") === "pending") setOutcome("pending");
   }, []);
   const firstDelivery = s.upcoming[0]?.date ?? null;
+  const meals = [...s.upcoming, ...(s.skipped ?? [])].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.cutoff_at.localeCompare(b.cutoff_at),
+  );
   const money = (n: number) =>
     formatMoney({ amount: n, currency: s.currency }, locale);
   const live =
@@ -310,7 +362,14 @@ function Detail({
               ? t.renewalDue(formatDay(locale, cycle.starts_on))
               : t.payNote}
           </p>
-          {(pay.isError || (outcome === "failed" && !pay.isSuccess)) && (
+          {pay.isError && (
+            <p className="ms-bad" role="alert">
+              {pay.error instanceof ApiError
+                ? problemMessage(pay.error, locale)
+                : t.payFailed}
+            </p>
+          )}
+          {outcome === "failed" && !pay.isError && !pay.isSuccess && (
             <p className="ms-bad" role="alert">
               {t.payFailed}
             </p>
@@ -333,11 +392,16 @@ function Detail({
 
       <section>
         <h2>{t.upcoming}</h2>
-        {s.upcoming.length === 0 ? (
+        {notice && (
+          <p className="ms-ok" role="status">
+            {notice}
+          </p>
+        )}
+        {meals.length === 0 ? (
           <p className="ms-note">{t.noUpcoming}</p>
         ) : (
           <ul className="ms-meals">
-            {s.upcoming.map((m) => (
+            {meals.map((m) => (
               <Meal
                 key={`${m.date}-${m.meal_slot}`}
                 m={m}
@@ -345,12 +409,19 @@ function Detail({
                 locale={locale}
                 t={t}
                 onChange={refresh}
+                onNotice={setNotice}
                 editable={live}
               />
             ))}
           </ul>
         )}
       </section>
+
+      <RecentDeliveries
+        items={s.recent ?? []}
+        locale={locale}
+        slotLabel={(slot) => t.slot[slot] ?? slot}
+      />
 
       {s.pauses.length > 0 && (
         <section>
@@ -362,6 +433,9 @@ function Detail({
               </li>
             ))}
           </ul>
+          {!s.rotation_id && (
+            <Resume s={s} locale={locale} t={t} onDone={refresh} />
+          )}
         </section>
       )}
 
@@ -374,9 +448,11 @@ function Detail({
       )}
 
       {s.status === "active" && !s.rotation_id && (
-        <Pause s={s} t={t} onDone={refresh} />
+        <Pause s={s} locale={locale} t={t} onDone={refresh} />
       )}
-      {live && !s.rotation_id && <Cancel s={s} t={t} onDone={refresh} />}
+      {live && !s.rotation_id && (
+        <Cancel s={s} locale={locale} t={t} onDone={refresh} />
+      )}
     </div>
   );
 }
@@ -394,14 +470,20 @@ function Renewal({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const renewKey = useIdempotencyKey();
   const toggle = useMutation({
     mutationFn: (auto: boolean) => setRenewal(s.id, auto),
     onSuccess: onDone,
-    onError: (err) => setError(problemText(err, t.failed)),
+    onError: async (err) => {
+      setError(problemMessage(err, locale));
+      await onDone();
+    },
   });
   const renew = useMutation({
     mutationFn: async () => {
-      const next = await renewSubscription(s.id);
+      const next = await renewSubscription(s.id, {
+        headers: renewKey.headers(),
+      });
       try {
         await payOrder(next.order_id);
       } catch {
@@ -410,10 +492,11 @@ function Renewal({
       return next;
     },
     onSuccess: async (next) => {
+      renewKey.reset();
       await onDone();
       router.push(`/${locale}/subscriptions/${next.id}`);
     },
-    onError: (err) => setError(problemText(err, t.failed)),
+    onError: (err) => setError(problemMessage(err, locale)),
   });
   const running = s.status === "active" || s.status === "paused";
   const paidEnd = s.cycles.find((c) => c.status === "paid")?.ends_on;
@@ -495,6 +578,7 @@ function Meal({
   locale,
   t,
   onChange,
+  onNotice,
   editable,
 }: {
   m: UpcomingMeal;
@@ -502,6 +586,7 @@ function Meal({
   locale: Locale;
   t: Copy;
   onChange: () => Promise<unknown>;
+  onNotice: (text: string | null) => void;
   editable: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -509,12 +594,23 @@ function Meal({
     mutationFn: (dishId: string) =>
       chooseMeal(sub.id, m.date, m.meal_slot, dishId),
     onSuccess: onChange,
-    onError: (err) => setError(problemText(err, t.failed)),
+    onError: (err) => setError(problemMessage(err, locale)),
   });
   const skip = useMutation({
     mutationFn: () => skipMeal(sub.id, m.date, m.meal_slot),
-    onSuccess: onChange,
-    onError: (err) => setError(problemText(err, t.failed)),
+    onSuccess: async () => {
+      onNotice(t.skippedNote);
+      await onChange();
+    },
+    onError: (err) => setError(problemMessage(err, locale)),
+  });
+  const unskip = useMutation({
+    mutationFn: () => unskipMeal(sub.id, m.date, m.meal_slot),
+    onSuccess: async () => {
+      onNotice(t.unskipped);
+      await onChange();
+    },
+    onError: (err) => setError(problemMessage(err, locale)),
   });
   const chosen =
     m.chosen_dish_id ?? m.options.find((o) => o.is_default)?.id ?? null;
@@ -527,7 +623,7 @@ function Meal({
   const day = new Date(`${m.date}T00:00:00`);
 
   return (
-    <li className={`ms-meal${m.locked ? " locked" : ""}`}>
+    <li className={`ms-meal${m.locked || m.skipped ? " locked" : ""}`}>
       <div className="ms-meal-when">
         <strong>{t.weekdays[m.weekday]}</strong>
         <span>
@@ -539,7 +635,7 @@ function Meal({
         </small>
       </div>
       <div className="ms-meal-what">
-        {m.options.length > 1 && canEdit ? (
+        {m.options.length > 1 && canEdit && !m.skipped ? (
           <fieldset>
             <legend className="ms-sub">{t.choose}</legend>
             {m.options.map((o) => (
@@ -581,8 +677,18 @@ function Meal({
             )}
           </span>
         )}
+        {m.skipped && (
+          <span className="ms-status ms-status-cancelled">{t.skipped}</span>
+        )}
+        {m.delivery_status && (
+          <DeliveryStatus status={m.delivery_status} locale={locale} />
+        )}
         <small className="ms-sub">
-          {m.locked ? t.locked : t.until(cutoff)}
+          {m.locked
+            ? t.locked
+            : m.options.length > 1 && !m.skipped
+              ? t.until(cutoff)
+              : t.skipUntil(cutoff)}
         </small>
         {error && (
           <small className="ms-bad" role="alert">
@@ -590,7 +696,21 @@ function Meal({
           </small>
         )}
       </div>
-      {canEdit && (
+      {canEdit && m.skipped && (
+        <button
+          type="button"
+          className="ms-link"
+          disabled={unskip.isPending}
+          onClick={() => {
+            setError(null);
+            onNotice(null);
+            unskip.mutate();
+          }}
+        >
+          {t.unskip}
+        </button>
+      )}
+      {canEdit && !m.skipped && (
         <button
           type="button"
           className="ms-link"
@@ -598,6 +718,7 @@ function Meal({
           onClick={() => {
             if (window.confirm(t.skipConfirm)) {
               setError(null);
+              onNotice(null);
               skip.mutate();
             }
           }}
@@ -611,10 +732,12 @@ function Meal({
 
 function Pause({
   s,
+  locale,
   t,
   onDone,
 }: {
   s: MySubscriptionDetail;
+  locale: Locale;
   t: Copy;
   onDone: () => Promise<unknown>;
 }) {
@@ -629,7 +752,7 @@ function Pause({
       setTo("");
       await onDone();
     },
-    onError: (err) => setError(problemText(err, t.failed)),
+    onError: (err) => setError(problemMessage(err, locale)),
   });
   if (s.pause_allowance_days === 0) return null;
 
@@ -680,21 +803,80 @@ function Pause({
   );
 }
 
-function Cancel({
+function Resume({
   s,
+  locale,
   t,
   onDone,
 }: {
   s: MySubscriptionDetail;
+  locale: Locale;
+  t: Copy;
+  onDone: () => Promise<unknown>;
+}) {
+  const key = useIdempotencyKey();
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const m = useMutation({
+    mutationFn: () => resumeSubscription(s.id, { headers: key.headers() }),
+    onSuccess: async (out) => {
+      key.reset();
+      setDone(t.resumed(formatDay(locale, out.resumes_on)));
+      await onDone();
+    },
+    onError: (err) => setError(problemMessage(err, locale)),
+  });
+  return (
+    <div className="ms-renew">
+      <button
+        type="button"
+        className="ms-cta ms-cta-quiet"
+        disabled={m.isPending}
+        onClick={() => {
+          setError(null);
+          setDone(null);
+          m.mutate();
+        }}
+      >
+        {m.isPending ? t.resuming : t.resume}
+      </button>
+      <p className="ms-sub">{t.resumeNote}</p>
+      {done && (
+        <p className="ms-ok" role="status">
+          {done}
+        </p>
+      )}
+      {error && (
+        <p className="ms-bad" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Cancel({
+  s,
+  locale,
+  t,
+  onDone,
+}: {
+  s: MySubscriptionDetail;
+  locale: Locale;
   t: Copy;
   onDone: () => Promise<unknown>;
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const key = useIdempotencyKey();
   const m = useMutation({
-    mutationFn: () => cancelSubscription(s.id, reason.trim()),
-    onSuccess: onDone,
-    onError: (err) => setError(problemText(err, t.failed)),
+    mutationFn: () =>
+      cancelSubscription(s.id, reason.trim(), { headers: key.headers() }),
+    onSuccess: async () => {
+      key.reset();
+      await onDone();
+    },
+    onError: (err) => setError(problemMessage(err, locale)),
   });
   return (
     <details className="ms-danger">
@@ -726,7 +908,7 @@ function Cancel({
           }
         }}
       >
-        {t.cancelBtn}
+        {m.isPending ? t.cancelling : t.cancelBtn}
       </button>
     </details>
   );

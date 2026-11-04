@@ -13,6 +13,9 @@ import {
   type Locale,
   formatRange,
 } from "@/components/meals/shell";
+import { LoadError } from "@/components/load-error";
+import { problemMessage } from "@/lib/problem";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import {
   cancelRotation,
   getMyRotation,
@@ -40,6 +43,7 @@ const COPY = {
     reason: "Reason (optional)",
     cancelConfirm: "Cancel this rotation? All future deliveries stop.",
     cancelFailed: "Could not cancel. Try again.",
+    cancelling: "Cancelling…",
     renewal: "Renewal",
     autoRenew: "Renew automatically",
     autoNote:
@@ -73,6 +77,7 @@ const COPY = {
     reason: "السبب (اختياري)",
     cancelConfirm: "إلغاء هذا التناوب؟ ستتوقف كل التوصيلات القادمة.",
     cancelFailed: "تعذر الإلغاء. حاول مرة أخرى.",
+    cancelling: "جارٍ الإلغاء…",
     renewal: "التجديد",
     autoRenew: "التجديد التلقائي",
     autoNote:
@@ -112,11 +117,15 @@ export default function RotationDetailPage({
       {q.isPending ? (
         <p className="ms-note">{t.loading}</p>
       ) : q.isError ? (
-        <p className="ms-empty">
-          {q.error instanceof ApiError && q.error.status === 404
-            ? t.notFound
-            : t.failed}
-        </p>
+        q.error instanceof ApiError && q.error.status === 404 ? (
+          <p className="ms-empty">{t.notFound}</p>
+        ) : (
+          <LoadError
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            locale={locale}
+          />
+        )
       ) : (
         <Detail r={q.data} locale={locale} t={t} />
       )}
@@ -137,9 +146,14 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
     onSuccess: refresh,
   });
   const [reason, setReason] = useState("");
+  const cancelKey = useIdempotencyKey();
   const cancel = useMutation({
-    mutationFn: () => cancelRotation(r.id, reason.trim()),
-    onSuccess: refresh,
+    mutationFn: () =>
+      cancelRotation(r.id, reason.trim(), { headers: cancelKey.headers() }),
+    onSuccess: async () => {
+      cancelKey.reset();
+      await refresh();
+    },
   });
   const money = (n: number) =>
     formatMoney({ amount: n, currency: r.currency }, locale);
@@ -165,7 +179,13 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
       {r.status === "pending_payment" && (
         <section className="ms-callout">
           <p>{t.payNote}</p>
-          {pay.isError && <p className="ms-bad">{t.payFailed}</p>}
+          {pay.isError && (
+            <p className="ms-bad" role="alert">
+              {pay.error instanceof ApiError
+                ? problemMessage(pay.error, locale)
+                : t.payFailed}
+            </p>
+          )}
           <button
             type="button"
             className="ms-cta"
@@ -223,7 +243,13 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
               dir="auto"
             />
           </label>
-          {cancel.isError && <p className="ms-bad">{t.cancelFailed}</p>}
+          {cancel.isError && (
+            <p className="ms-bad" role="alert">
+              {cancel.error instanceof ApiError
+                ? problemMessage(cancel.error, locale)
+                : t.cancelFailed}
+            </p>
+          )}
           <button
             type="button"
             className="ms-cta ms-cta-danger"
@@ -232,7 +258,7 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
               if (window.confirm(t.cancelConfirm)) cancel.mutate();
             }}
           >
-            {t.cancel}
+            {cancel.isPending ? t.cancelling : t.cancel}
           </button>
         </details>
       )}
@@ -252,13 +278,16 @@ function Renewal({
   onDone: () => Promise<unknown>;
 }) {
   const router = useRouter();
+  const renewKey = useIdempotencyKey();
   const toggle = useMutation({
     mutationFn: (auto: boolean) => setRotationRenewal(r.id, auto),
     onSuccess: onDone,
+    // The checkbox shows the server's value again once this reloads.
+    onError: () => onDone(),
   });
   const renew = useMutation({
     mutationFn: async () => {
-      const next = await renewRotation(r.id);
+      const next = await renewRotation(r.id, { headers: renewKey.headers() });
       try {
         await payRotation(next.id);
       } catch {
@@ -267,6 +296,7 @@ function Renewal({
       return next;
     },
     onSuccess: async (next) => {
+      renewKey.reset();
       await onDone();
       router.push(`/${locale}/rotations/${next.id}`);
     },
@@ -293,7 +323,10 @@ function Renewal({
               type="checkbox"
               checked={r.auto_renew}
               disabled={toggle.isPending}
-              onChange={(e) => toggle.mutate(e.target.checked)}
+              onChange={(e) => {
+                renew.reset();
+                toggle.mutate(e.target.checked);
+              }}
             />
             <span>{t.autoRenew}</span>
           </label>
@@ -306,19 +339,25 @@ function Renewal({
             type="button"
             className="ms-cta"
             disabled={renew.isPending}
-            onClick={() => renew.mutate()}
+            onClick={() => {
+              toggle.reset();
+              renew.mutate();
+            }}
           >
             {renew.isPending ? t.renewing : t.renew}
           </button>
           <p className="ms-sub">{t.renewNote}</p>
         </div>
       )}
-      {(toggle.isError || renew.isError) && (
+      {toggle.isError && (
+        <p className="ms-bad" role="alert">
+          {problemMessage(toggle.error, locale)}
+        </p>
+      )}
+      {renew.isError && (
         <p className="ms-bad" role="alert">
           {renew.error instanceof ApiError
-            ? (renew.error.problem?.errors?.[0]?.message ??
-              renew.error.problem?.detail ??
-              t.renewFailed)
+            ? problemMessage(renew.error, locale)
             : t.renewFailed}
         </p>
       )}

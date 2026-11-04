@@ -47,6 +47,7 @@ import type {
   PreviewSubscriptionBody,
   Problem,
   RenewSubscription201,
+  ResumeSubscription200,
   Rotation,
   RotationInput,
   RotationQuote,
@@ -57,6 +58,7 @@ import type {
   SubscriptionPreview,
   UnauthorizedResponse,
   UnprocessableEntityResponse,
+  UnskipDeliveryBody,
   UpcomingMeal
 } from '../../models';
 
@@ -366,6 +368,139 @@ export const useSkipDelivery = <TError = UnauthorizedResponse | NotFoundResponse
       > => {
 
       const mutationOptions = getSkipDeliveryMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * @summary Put a skipped meal back before its cutoff
+ */
+export const unskipDelivery = (
+    subscriptionId: string,
+    unskipDeliveryBody: UnskipDeliveryBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/subscriptions/${subscriptionId}/unskip`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: unskipDeliveryBody, signal
+    },
+      );
+    }
+  
+
+
+export const getUnskipDeliveryMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unskipDelivery>>, TError,{subscriptionId: string;data: UnskipDeliveryBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof unskipDelivery>>, TError,{subscriptionId: string;data: UnskipDeliveryBody}, TContext> => {
+
+const mutationKey = ['unskipDelivery'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unskipDelivery>>, {subscriptionId: string;data: UnskipDeliveryBody}> = (props) => {
+          const {subscriptionId,data} = props ?? {};
+
+          return  unskipDelivery(subscriptionId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnskipDeliveryMutationResult = NonNullable<Awaited<ReturnType<typeof unskipDelivery>>>
+    export type UnskipDeliveryMutationBody = UnskipDeliveryBody
+    export type UnskipDeliveryMutationError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse
+
+    /**
+ * @summary Put a skipped meal back before its cutoff
+ */
+export const useUnskipDelivery = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unskipDelivery>>, TError,{subscriptionId: string;data: UnskipDeliveryBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unskipDelivery>>,
+        TError,
+        {subscriptionId: string;data: UnskipDeliveryBody},
+        TContext
+      > => {
+
+      const mutationOptions = getUnskipDeliveryMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * Deliveries come back from the first day still before its cutoff; days
+before that stay paused. Pause days given back return to the allowance,
+and an `extend` pause pulls the end date in by the same number. A
+`wallet` pause has already been credited and cannot be ended early
+(409 `resume_wallet_pause`).
+
+ * @summary End the current or next pause early
+ */
+export const resumeSubscription = (
+    subscriptionId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ResumeSubscription200>(
+      {url: `/subscriptions/${subscriptionId}/resume`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getResumeSubscriptionMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeSubscription>>, TError,{subscriptionId: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof resumeSubscription>>, TError,{subscriptionId: string}, TContext> => {
+
+const mutationKey = ['resumeSubscription'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resumeSubscription>>, {subscriptionId: string}> = (props) => {
+          const {subscriptionId} = props ?? {};
+
+          return  resumeSubscription(subscriptionId,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResumeSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof resumeSubscription>>>
+    
+    export type ResumeSubscriptionMutationError = UnauthorizedResponse | NotFoundResponse | Problem
+
+    /**
+ * @summary End the current or next pause early
+ */
+export const useResumeSubscription = <TError = UnauthorizedResponse | NotFoundResponse | Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeSubscription>>, TError,{subscriptionId: string}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resumeSubscription>>,
+        TError,
+        {subscriptionId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getResumeSubscriptionMutationOptions(options);
 
       return useMutation(mutationOptions);
     }

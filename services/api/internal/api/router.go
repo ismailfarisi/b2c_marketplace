@@ -133,6 +133,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/subscriptions/preview", h.Subscriptions.Preview)
 			r.Post("/subscriptions/{subscriptionId}/pause", h.Subscriptions.Pause)
 			r.Post("/subscriptions/{subscriptionId}/skip", h.Subscriptions.Skip)
+			r.Post("/subscriptions/{subscriptionId}/unskip", h.Subscriptions.Unskip)
+			r.Post("/subscriptions/{subscriptionId}/resume", h.Subscriptions.Resume)
 			r.Post("/subscriptions/{subscriptionId}/cancel", h.Subscriptions.Cancel)
 			r.Put("/subscriptions/{subscriptionId}/renewal", h.Subscriptions.SetRenewal)
 			r.Post("/subscriptions/{subscriptionId}/renew", h.Subscriptions.Renew)

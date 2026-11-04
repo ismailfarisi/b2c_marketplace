@@ -70,6 +70,20 @@ type UpcomingMeal struct {
 	ChosenBy    string     `json:"chosen_by"`
 	CutoffAt    time.Time  `json:"cutoff_at"`
 	Locked      bool       `json:"locked"`
+	// Set once a delivery exists for the meal: scheduled, dispatched,
+	// en_route, arrived, completed or failed.
+	DeliveryStatus *string `json:"delivery_status"`
+	// True for a meal the customer skipped; it stays listed so it can be put
+	// back before the cutoff.
+	Skipped bool `json:"skipped"`
+}
+
+// MyDelivery is one recent delivery and how it went.
+type MyDelivery struct {
+	Date   string     `json:"date"`
+	Slot   string     `json:"meal_slot"`
+	Status string     `json:"status"`
+	At     *time.Time `json:"at"`
 }
 
 // MyCycle is one billing period as the customer sees it.
@@ -97,6 +111,11 @@ type MyDetail struct {
 	Upcoming       []UpcomingMeal `json:"upcoming"`
 	Cycles         []MyCycle      `json:"cycles"`
 	Pauses         []MyPause      `json:"pauses"`
+	// Skipped meals in the same window as upcoming, kept apart so older
+	// clients that only read upcoming don't show them as coming.
+	Skipped []UpcomingMeal `json:"skipped"`
+	// The last two weeks' deliveries, newest first.
+	Recent []MyDelivery `json:"recent"`
 }
 
 const mySelect = `
@@ -189,10 +208,14 @@ func (s *Service) MyDetail(ctx context.Context, userID, subID uuid.UUID, now tim
 			}
 		}
 		d.Upcoming = []UpcomingMeal{}
+		d.Skipped = []UpcomingMeal{}
+		if d.Recent, err = recentDeliveries(ctx, tx, subID, dayIn(now, live.Location)); err != nil {
+			return err
+		}
 		if live.Status != "active" && live.Status != "pending_payment" {
 			return nil
 		}
-		d.Upcoming, err = s.upcoming(ctx, tx, live, dayIn(now, live.Location), dayIn(now, live.Location).Add(UpcomingHorizon), now)
+		d.Upcoming, d.Skipped, err = s.upcoming(ctx, tx, live, dayIn(now, live.Location), dayIn(now, live.Location).Add(UpcomingHorizon), now)
 		return err
 	})
 	return d, err
@@ -228,7 +251,7 @@ type menuKey struct {
 
 // upcoming plans the meals between from and to and attaches each day's dish
 // options and the customer's pick.
-func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to, now time.Time) ([]UpcomingMeal, error) {
+func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to, now time.Time) ([]UpcomingMeal, []UpcomingMeal, error) {
 	sub := live.Subscription
 	// An unpaid subscription is suspended for the scheduler, but the customer
 	// still previews, and may pick, the meals it will bring.
@@ -242,26 +265,31 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 		SELECT max(ends_on) FROM subscription_cycles
 		 WHERE subscription_id = $1
 		   AND (status = 'paid' OR (status = 'pending' AND cycle_no = 1))`, live.ID).Scan(&through); err != nil {
-		return nil, fmt.Errorf("subscriptions: shown through: %w", err)
+		return nil, nil, fmt.Errorf("subscriptions: shown through: %w", err)
 	}
 	if through == nil {
-		return []UpcomingMeal{}, nil
+		return []UpcomingMeal{}, []UpcomingMeal{}, nil
 	}
 	if limit := dayIn(*through, live.Location); sub.End.IsZero() || limit.Before(sub.End) {
 		sub.End = limit
 	}
-	occ := Plan(sub, live.Rules, live.Pauses, live.Skips, from, to, now)
-	out := []UpcomingMeal{}
+	// Planned without skips, so skipped meals can be listed and put back.
+	occ := Plan(sub, live.Rules, live.Pauses, nil, from, to, now)
+	out, skipped := []UpcomingMeal{}, []UpcomingMeal{}
 	if len(occ) == 0 {
-		return out, nil
+		return out, skipped, nil
 	}
 	menu, err := branchMenu(ctx, tx, live.BranchID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	windows, err := windowsByID(ctx, tx, live.BranchID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	delivery, err := deliveryStatuses(ctx, tx, live.ID, from, to)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	type pick struct {
@@ -275,7 +303,7 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 		 WHERE subscription_id = $1 AND service_date BETWEEN $2 AND $3`,
 		live.ID, from, to)
 	if err != nil {
-		return nil, fmt.Errorf("subscriptions: load selections: %w", err)
+		return nil, nil, fmt.Errorf("subscriptions: load selections: %w", err)
 	}
 	for rows.Next() {
 		var day time.Time
@@ -283,13 +311,13 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 		var id *uuid.UUID
 		if err := rows.Scan(&day, &slot, &id, &by); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("subscriptions: scan selection: %w", err)
+			return nil, nil, fmt.Errorf("subscriptions: scan selection: %w", err)
 		}
 		picks[day.Format("2006-01-02")+"/"+slot] = pick{id, by}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, o := range occ {
@@ -307,9 +335,69 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 		if p, ok := picks[date+"/"+o.Slot]; ok && p.id != nil {
 			m.ChosenID, m.ChosenBy = p.id, p.by
 		}
+		if skippedOn(live.Skips, o.Date, o.Slot) {
+			m.Skipped = true
+			skipped = append(skipped, m)
+			continue
+		}
+		if st, ok := delivery[date+"/"+o.Slot]; ok {
+			m.DeliveryStatus = &st
+		}
 		out = append(out, m)
 	}
-	return out, nil
+	return out, skipped, nil
+}
+
+// deliveryStatuses maps "date/slot" to the live fulfillment's status.
+func deliveryStatuses(ctx context.Context, tx pgx.Tx, subID uuid.UUID, from, to time.Time) (map[string]string, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT scheduled_date, COALESCE(payload_ref, ''), status::text
+		  FROM fulfillments
+		 WHERE subscription_id = $1 AND scheduled_date BETWEEN $2 AND $3
+		   AND status <> 'cancelled'`, subID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: load delivery status: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var day time.Time
+		var slot, status string
+		if err := rows.Scan(&day, &slot, &status); err != nil {
+			return nil, fmt.Errorf("subscriptions: scan delivery status: %w", err)
+		}
+		out[day.Format("2006-01-02")+"/"+slot] = status
+	}
+	return out, rows.Err()
+}
+
+// recentDeliveries are the deliveries of the two weeks before today that went
+// out, newest first.
+func recentDeliveries(ctx context.Context, tx pgx.Tx, subID uuid.UUID, today time.Time) ([]MyDelivery, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT scheduled_date, COALESCE(payload_ref, ''), status::text,
+		       COALESCE(completed_at, failed_at, arrived_at, dispatched_at)
+		  FROM fulfillments
+		 WHERE subscription_id = $1
+		   AND scheduled_date >= $2::date - 14 AND scheduled_date < $2::date
+		   AND status NOT IN ('scheduled', 'cancelled')
+		 ORDER BY scheduled_date DESC, sequence DESC
+		 LIMIT 20`, subID, today)
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: load recent deliveries: %w", err)
+	}
+	defer rows.Close()
+	out := []MyDelivery{}
+	for rows.Next() {
+		var d MyDelivery
+		var day time.Time
+		if err := rows.Scan(&day, &d.Slot, &d.Status, &d.At); err != nil {
+			return nil, fmt.Errorf("subscriptions: scan recent delivery: %w", err)
+		}
+		d.Date = day.Format("2006-01-02")
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // CutoffAt is the last moment a meal can still be changed: the plan's cutoff
@@ -399,7 +487,7 @@ func (s *Service) ChooseMeal(ctx context.Context, userID, subID uuid.UUID, date 
 			return httpx.Coded(httpx.ErrConflict, "not_active", "This subscription is not active.")
 		}
 		day := dayIn(date, live.Location)
-		meals, err := s.upcoming(ctx, tx, live, day, day.AddDate(0, 0, 1).Add(-time.Second), now)
+		meals, _, err := s.upcoming(ctx, tx, live, day, day.AddDate(0, 0, 1).Add(-time.Second), now)
 		if err != nil {
 			return err
 		}
