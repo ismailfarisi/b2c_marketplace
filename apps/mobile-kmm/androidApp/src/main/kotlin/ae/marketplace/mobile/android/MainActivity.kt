@@ -82,8 +82,14 @@ class MainActivity : ComponentActivity() {
     /** A push `link` or App Link URL waiting for the meals tab to open it. */
     private val pendingLink = mutableStateOf<String?>(null)
 
+    // A foreground push is posted by our service with EXTRA_LINK. A push that
+    // arrived while the app was in the background was drawn by the system tray,
+    // which hands the FCM data map to the launcher intent as plain extras — so
+    // the same value arrives under "link".
     private fun linkOf(intent: android.content.Intent?): String? =
-        intent?.getStringExtra(ae.marketplace.mobile.android.push.Push.EXTRA_LINK) ?: intent?.dataString
+        intent?.getStringExtra(ae.marketplace.mobile.android.push.Push.EXTRA_LINK)
+            ?: intent?.getStringExtra(ae.marketplace.mobile.android.push.Push.FCM_LINK)
+            ?: intent?.dataString
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)

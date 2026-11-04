@@ -17,6 +17,7 @@ package notify
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -192,6 +193,37 @@ func PickLocale(notificationLocale, uiLocale string) string {
 		}
 	}
 	return "en"
+}
+
+// LocalizeLink points a web path at the recipient's locale. Callers build
+// links as "/en/..." because they do not know who will read them; an Arabic
+// reader tapping a push should land on the Arabic page. Paths without a
+// locale prefix and absolute URLs pass through unchanged.
+func LocalizeLink(link, locale string) string {
+	if locale != "en" && locale != "ar" {
+		return link
+	}
+	for _, from := range []string{"/en", "/ar"} {
+		if link == from || strings.HasPrefix(link, from+"/") {
+			return "/" + locale + link[len(from):]
+		}
+	}
+	return link
+}
+
+// localizeParams returns params with "link" localised, copying rather than
+// mutating the caller's map.
+func localizeParams(params map[string]string, locale string) map[string]string {
+	link, ok := params["link"]
+	if !ok {
+		return params
+	}
+	out := make(map[string]string, len(params))
+	for k, v := range params {
+		out[k] = v
+	}
+	out["link"] = LocalizeLink(link, locale)
+	return out
 }
 
 // Message is what a caller asks for. It names a template and supplies its

@@ -40,10 +40,20 @@ final class AppEnvironment: ObservableObject {
 }
 
 enum Config {
-    /// The simulator reaches the host directly, unlike Android's 10.0.2.2.
-    static let apiBaseUrl = "http://localhost:8080/v1"
-    /// The web app, for pages the app links out to (office lunch sign-up).
-    static let webBaseUrl = "http://localhost:3000"
+    /// From Info.plist `ApiBaseUrl` (= $(API_BASE_URL), set per configuration in
+    /// Config.xcconfig). The localhost default is the simulator, which reaches
+    /// the host directly, unlike Android's 10.0.2.2.
+    static let apiBaseUrl = value("ApiBaseUrl", fallback: "http://localhost:8080/v1")
+    /// The web app, for pages the app links out to. Info.plist `WebBaseUrl`.
+    static let webBaseUrl = value("WebBaseUrl", fallback: "http://localhost:3000")
+
+    /// An unset build setting arrives as an empty string or the literal
+    /// `$(NAME)`; both mean "not configured".
+    private static func value(_ key: String, fallback: String) -> String {
+        guard let s = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+              !s.isEmpty, !s.hasPrefix("$(") else { return fallback }
+        return s
+    }
 }
 
 @main

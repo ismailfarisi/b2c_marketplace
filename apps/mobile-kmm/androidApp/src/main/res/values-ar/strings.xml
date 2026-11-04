@@ -138,6 +138,8 @@
     <string name="err_rejected">تعذّر تنفيذ ذلك.</string>
     <string name="err_server">حدث خطأ لدينا. حاول بعد قليل.</string>
     <string name="err_unknown">حدث خطأ ما. حاول مجدداً.</string>
+    <string name="feed_save">حفظ</string>
+    <string name="feed_unsave">إزالة من المحفوظات</string>
     <string name="action_retry">إعادة المحاولة</string>
     <string name="action_close">إغلاق</string>
 

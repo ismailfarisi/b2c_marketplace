@@ -19,6 +19,7 @@ export interface FeedAction {
   id: string;
   kind: string;
   label: string;
+  label_ar?: string;
   target_type: string;
   target_id: string;
 }
@@ -174,5 +175,25 @@ export const reportEvents = (
     url: "/events",
     method: "POST",
     data: { session_id: deviceId(), events },
+    headers: { "X-Device-Id": deviceId() },
+  });
+
+/** What a CTA press resolves to: where to go, or why it can't. */
+export interface ResolvedAction extends FeedAction {
+  available: boolean;
+  reason: string | null;
+  /** A client path ("/kitchens/…", with or without a locale) or an absolute URL for external. */
+  route?: string;
+}
+
+/**
+ * Records the press and returns the route in one call, so a dropped analytics
+ * request can never under-count a conversion (see clickAction in the contract).
+ */
+export const clickAction = (actionId: string) =>
+  apiFetch<ResolvedAction>({
+    url: `/actions/${actionId}/click`,
+    method: "POST",
+    data: { session_id: deviceId(), surface: "feed" },
     headers: { "X-Device-Id": deviceId() },
   });

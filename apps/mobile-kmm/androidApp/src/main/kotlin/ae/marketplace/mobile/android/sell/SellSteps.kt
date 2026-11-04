@@ -11,6 +11,7 @@ import ae.marketplace.mobile.model.SellField
 import ae.marketplace.mobile.model.SellVertical
 import ae.marketplace.mobile.sell.FieldIssue
 import ae.marketplace.mobile.sell.FieldProblem
+import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.network.isRetryable
 import ae.marketplace.mobile.sell.SellUiState
 import androidx.compose.foundation.background
@@ -210,6 +211,12 @@ fun DetailsStep(
 ) {
     val form = state.form ?: return
     val issues = state.issues.associateBy { it.key }
+    // A server refusal names fields by key; show each under its own box, and
+    // anything that is not about a field (or a network/server failure) above
+    // the button instead of nowhere.
+    val rejected = state.error as? Failure.Rejected
+    val serverFields = rejected?.fields.orEmpty()
+    val formError = state.error?.takeIf { rejected == null || serverFields.keys.none { k -> form.fields.any { it.key == k } } }
 
     StepScaffold(
         title = stringResource(R.string.sell_three_fields),
@@ -217,6 +224,7 @@ fun DetailsStep(
         onBack = onBack,
         modifier = modifier,
         footer = {
+            formError?.let { FailureBlock(it, onRetry = onNext) }
             PrimaryButton(
                 label = stringResource(R.string.sell_next_clock),
                 enabled = !state.busy,
@@ -230,6 +238,7 @@ fun DetailsStep(
                 value = state.values[field.key].orEmpty(),
                 display = state.lookupLabels[field.key],
                 issue = issues[field.key],
+                serverError = serverFields[field.key],
                 lookupOpen = state.lookupFor == field.key,
                 lookupResults = state.lookupResults,
                 onValue = { onValue(field.key, it) },
@@ -308,6 +317,7 @@ private fun FieldInput(
     lookupOpen: Boolean,
     lookupResults: List<ae.marketplace.mobile.model.SellOption>,
     onValue: (String) -> Unit,
+    serverError: String? = null,
     onLookupQuery: (String) -> Unit,
     onLookupPick: (ae.marketplace.mobile.model.SellOption) -> Unit,
 ) {
@@ -352,7 +362,15 @@ private fun FieldInput(
                 modifier = Modifier.padding(top = 5.dp),
             )
         }
-        if (issue == null && field.hint.isNotEmpty()) {
+        if (issue == null && !serverError.isNullOrBlank()) {
+            Text(
+                text = serverError,
+                color = Accent,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 5.dp),
+            )
+        }
+        if (issue == null && serverError.isNullOrBlank() && field.hint.isNotEmpty()) {
             Text(
                 text = field.hint,
                 color = Palette.Text.copy(alpha = 0.35f),

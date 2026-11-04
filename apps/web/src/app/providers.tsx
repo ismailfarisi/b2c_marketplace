@@ -46,14 +46,19 @@ configureApiClient({
       return;
     }
     const customer =
-      /^\/(en|ar)\/(subscriptions|rotations?|kitchens\/[^/]+\/subscribe)(\/|$)/.exec(path);
+      /^\/(en|ar)\/(subscriptions|rotations?|kitchens\/[^/]+\/subscribe|support|invoices|business)(\/|$)/.exec(
+        path,
+      );
     if (customer) {
-      window.location.href = `/${customer[1]}/signin?next=${encodeURIComponent(path)}`;
+      const next = path + window.location.search;
+      window.location.href = `/${customer[1]}/signin?next=${encodeURIComponent(next)}`;
       return;
     }
 
-    // A signed-out visitor on a public page just sees the public page.
-    if (reason === "expired") window.location.href = "/";
+    // A signed-out visitor on a public page just sees the public page, in the
+    // language they were reading.
+    const locale = /^\/(en|ar)(\/|$)/.exec(path)?.[1] ?? "en";
+    if (reason === "expired") window.location.href = `/${locale}`;
   },
 });
 

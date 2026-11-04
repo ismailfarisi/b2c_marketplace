@@ -173,6 +173,14 @@ struct MealsScreen: View {
             requireAccount { viewModel.loadMine(force: false); stack = [.home, .mine] }
         case .rotation:
             requireAccount { viewModel.startRotation(); stack = [.home, .rotation] }
+        case .rotationDetail:
+            // No native rotation screen yet; rotations are listed on My meals.
+            requireAccount { viewModel.loadMine(force: false); stack = [.home, .mine] }
+        case .support:
+            // Help is web-only for now.
+            let path = (isArabicLocale ? "/ar/support" : "/en/support") + (l.id.map { "/" + $0 } ?? "")
+            if let url = URL(string: Config.webBaseUrl + path) { openURL(url) }
+            stack = [.home]
         default:
             stack = [.home]
         }

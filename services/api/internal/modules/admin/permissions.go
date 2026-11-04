@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/marketplace/api/internal/httpx"
 )
@@ -313,13 +314,11 @@ func (s *Service) GrantRole(ctx context.Context, actorID, userID uuid.UUID, role
 		return fmt.Errorf("admin: grant role: %w", err)
 	}
 
-	// The console also needs a `platform_admins` row, because Phase 2's staff
-	// checks still read it. Kept in step here rather than leaving two sources of
-	// "is this person staff" to drift.
-	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO platform_admins (user_id, role) VALUES ($1, 'ops')
-		ON CONFLICT (user_id) DO NOTHING`, userID); err != nil {
-		return fmt.Errorf("admin: ensure staff row: %w", err)
+	// `platform_admins` is kept as the "is staff" record (it carries locales
+	// for the staff list). No authorisation check reads it any more; its role
+	// is synced from the strongest grant so it never claims more than that.
+	if err := syncPlatformAdmin(ctx, s.pool, userID); err != nil {
+		return err
 	}
 
 	s.Invalidate(userID)
@@ -357,8 +356,40 @@ func (s *Service) RevokeRole(ctx context.Context, actorID, userID uuid.UUID, rol
 	if tag.RowsAffected() == 0 {
 		return httpx.ErrNotFound
 	}
+	if err := syncPlatformAdmin(ctx, s.pool, userID); err != nil {
+		return err
+	}
 
 	s.Invalidate(userID)
+	return nil
+}
+
+// syncPlatformAdmin makes the legacy `platform_admins` row follow the grants:
+// deleted when no unexpired grant remains, otherwise role = ops/superadmin
+// when one of those is held and moderator for everything else.
+func syncPlatformAdmin(ctx context.Context, db interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, userID uuid.UUID) error {
+	if _, err := db.Exec(ctx, `
+		WITH live AS (
+		    SELECT role_key FROM admin_grants
+		     WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > now())
+		), wanted AS (
+		    SELECT CASE
+		             WHEN bool_or(role_key = 'superadmin') THEN 'superadmin'
+		             WHEN bool_or(role_key = 'ops') THEN 'ops'
+		             ELSE 'moderator'
+		           END AS role
+		      FROM live HAVING count(*) > 0
+		), gone AS (
+		    DELETE FROM platform_admins
+		     WHERE user_id = $1 AND NOT EXISTS (SELECT 1 FROM wanted)
+		)
+		INSERT INTO platform_admins (user_id, role)
+		SELECT $1, role FROM wanted
+		ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role`, userID); err != nil {
+		return fmt.Errorf("admin: sync staff row: %w", err)
+	}
 	return nil
 }
 

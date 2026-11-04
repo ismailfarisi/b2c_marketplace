@@ -87,6 +87,8 @@
 "err_rejected" = "That could not be done.";
 "err_server" = "Something went wrong on our side. Try again shortly.";
 "err_unknown" = "Something went wrong. Try again.";
+"feed_save" = "Save";
+"feed_unsave" = "Remove from saved";
 "action_retry" = "Retry";
 "action_close" = "Close";
 "sell_camera_needed" = "The camera is how you list";
@@ -151,6 +153,9 @@
 "me_no_listings_hint" = "Open Sell to film one. It takes about a minute.";
 "me_sign_out" = "Sign out";
 "me_delete_account" = "Delete account";
+"legal_terms" = "Terms of use";
+"legal_privacy" = "Privacy policy";
+"legal_agree" = "By continuing you agree to the Terms of use and Privacy policy.";
 "me_deleting" = "Deleting account…";
 "me_delete_title" = "Delete your account?";
 "me_delete_body" = "Your meal plans are cancelled and unused days are credited back. Your name, phone, addresses and listings are removed and you are signed out on every device. Invoices are kept, as the law requires. This cannot be undone.";
@@ -298,6 +303,14 @@
 "saved_signin_title" = "Sign in to see saved videos";
 "saved_signin_why" = "Videos you save stay on your account, so they are there on any phone.";
 "feed_more" = "More from the video marketplace";
+"push_channel_name" = "Meal and delivery updates";
+"update_title" = "Update available";
+"update_body" = "A newer version of the app is available.";
+"update_required_title" = "Update required";
+"update_required_body" = "This version is no longer supported. Please update to keep ordering.";
+"update_action" = "Update";
+"update_later" = "Later";
+"legal_help" = "Help";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

@@ -236,7 +236,7 @@ func (h *ComplianceHandlers) AddPayoutAccount(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ComplianceHandlers) DecideKYC(w http.ResponseWriter, r *http.Request) {
-	reviewerID, ok := h.requireOps(w, r)
+	reviewerID, ok := h.requirePerm(w, r, admin.PermIdentityReview)
 	if !ok {
 		return
 	}
@@ -263,7 +263,7 @@ func (h *ComplianceHandlers) DecideKYC(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ComplianceHandlers) VerifyPayoutAccount(w http.ResponseWriter, r *http.Request) {
-	reviewerID, ok := h.requireOps(w, r)
+	reviewerID, ok := h.requirePerm(w, r, admin.PermMoneyWrite)
 	if !ok {
 		return
 	}
@@ -361,7 +361,7 @@ func (h *ComplianceHandlers) OpenAppeal(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ComplianceHandlers) DecideAppeal(w http.ResponseWriter, r *http.Request) {
-	reviewerID, ok := h.requireOps(w, r)
+	reviewerID, ok := h.requirePerm(w, r, admin.PermContentReview)
 	if !ok {
 		return
 	}
@@ -394,7 +394,7 @@ func (h *ComplianceHandlers) DecideAppeal(w http.ResponseWriter, r *http.Request
 // that they are never decided at all, and a queue showing every open appeal
 // makes the breached ones invisible among them.
 func (h *ComplianceHandlers) AppealQueue(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requireOps(w, r); !ok {
+	if _, ok := h.requirePerm(w, r, admin.PermContentReview); !ok {
 		return
 	}
 
@@ -419,19 +419,19 @@ func (h *ComplianceHandlers) AppealQueue(w http.ResponseWriter, r *http.Request)
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
 }
 
-// requireOps resolves the caller and checks staff authority.
+// requirePerm resolves the caller and checks one admin permission.
 //
-// Checked against `platform_admins` on every call rather than carried in a
-// token claim — the same rule Phase 2 set when the table was created. Revoking
-// someone must take effect immediately, and a claim in a token issued this
-// morning does not.
-func (h *ComplianceHandlers) requireOps(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+// Checked against `admin_grants` on every call (through the 30s grant cache,
+// which RevokeRole invalidates) rather than the legacy `platform_admins` row:
+// that row said "staff" for every role, so a support agent could decide KYC
+// cases, and it outlived a revoke.
+func (h *ComplianceHandlers) requirePerm(w http.ResponseWriter, r *http.Request, perm string) (uuid.UUID, bool) {
 	userID, ok := httpx.UserIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
 		return uuid.Nil, false
 	}
-	if err := h.Admin.RequireOps(r.Context(), userID); err != nil {
+	if _, err := h.Admin.Require(r.Context(), userID, perm); err != nil {
 		httpx.WriteProblem(w, r, err)
 		return uuid.Nil, false
 	}
@@ -446,8 +446,9 @@ func (h *ComplianceHandlers) requireOps(w http.ResponseWriter, r *http.Request) 
 // a queue that disappears from a dashboard when it empties is one whose sudden
 // reappearance nobody notices.
 func (h *ComplianceHandlers) Queues(w http.ResponseWriter, r *http.Request) {
-	userID, ok := h.requireOps(w, r)
+	userID, ok := httpx.UserIDFromContext(r.Context())
 	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
 		return
 	}
 
@@ -475,7 +476,7 @@ func (h *ComplianceHandlers) Queues(w http.ResponseWriter, r *http.Request) {
 
 // KYCQueue lists identity checks awaiting a decision, with their documents.
 func (h *ComplianceHandlers) KYCQueue(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requireOps(w, r); !ok {
+	if _, ok := h.requirePerm(w, r, admin.PermIdentityReview); !ok {
 		return
 	}
 
@@ -522,7 +523,7 @@ func (h *ComplianceHandlers) KYCQueue(w http.ResponseWriter, r *http.Request) {
 
 // PayoutAccountQueue lists bank accounts awaiting the name check.
 func (h *ComplianceHandlers) PayoutAccountQueue(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requireOps(w, r); !ok {
+	if _, ok := h.requirePerm(w, r, admin.PermMoneyRead); !ok {
 		return
 	}
 

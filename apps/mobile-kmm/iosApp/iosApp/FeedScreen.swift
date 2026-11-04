@@ -257,6 +257,18 @@ struct ReelPage: View {
             ReelOverlay(item: item, skewMillis: skewMillis, chromeBottom: navBarHeight) { action in
                 viewModel.onActionClick(actionId: action.id, reelId: item.id)
             }
+
+            HStack {
+                Spacer()
+                Button { viewModel.toggleSave(reelId: item.id) } label: {
+                    Image(systemName: item.viewer.saved ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(Text(item.viewer.saved ? "feed_unsave" : "feed_save"))
+            }
+            .padding(.trailing, 12)
         }
     }
 }

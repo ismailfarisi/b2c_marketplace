@@ -1,9 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
-import { getFeed, type FeedItem } from "@/lib/feed-api";
+import { clickAction, getFeed, type FeedAction, type FeedItem } from "@/lib/feed-api";
+import { problemMessage } from "@/lib/problem";
 
 /**
  * The front door.
@@ -35,6 +37,7 @@ const COPY = {
     exhausted: "That is everything available near you.",
     failed: "Could not load the feed.",
     sponsored: "Sponsored",
+    unavailable: "This isn't available right now.",
     seconds: "s",
   },
   ar: {
@@ -47,6 +50,7 @@ const COPY = {
     exhausted: "هذا كل ما هو متاح بالقرب منك.",
     failed: "تعذّر تحميل الخلاصة.",
     sponsored: "مموّل",
+    unavailable: "هذا غير متاح حاليًا.",
     seconds: "ث",
   },
 } as const;
@@ -90,7 +94,55 @@ function useViewerLocation() {
 
 type Copy = (typeof COPY)[keyof typeof COPY];
 
-function Card({ item, t }: { item: FeedItem; t: Copy }) {
+/** Where a resolved route goes on the web: absolute URLs as-is, paths under the reader's locale. */
+function hrefFor(route: string, locale: "en" | "ar"): string {
+  if (/^https?:\/\//.test(route)) return route;
+  if (/^\/(en|ar)(\/|$)/.test(route)) return route.replace(/^\/(en|ar)/, `/${locale}`);
+  return `/${locale}${route.startsWith("/") ? route : `/${route}`}`;
+}
+
+function Cta({ action, t, locale }: { action: FeedAction; t: Copy; locale: "en" | "ar" }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const label = (locale === "ar" && action.label_ar) || action.label;
+  return (
+    <>
+      <button
+        type="button"
+        className="cta"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setNote(null);
+          try {
+            const r = await clickAction(action.id);
+            if (!r.available || !r.route) {
+              setNote(r.reason ?? t.unavailable);
+              return;
+            }
+            const href = hrefFor(r.route, locale);
+            if (href.startsWith("http")) window.open(href, "_blank", "noopener");
+            else router.push(href);
+          } catch (err) {
+            setNote(problemMessage(err, locale));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {label}
+      </button>
+      {note ? (
+        <span className="muted" role="status">
+          {note}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function Card({ item, t, locale }: { item: FeedItem; t: Copy; locale: "en" | "ar" }) {
   const seconds = Math.round(item.duration_ms / 1000);
 
   return (
@@ -117,9 +169,7 @@ function Card({ item, t }: { item: FeedItem; t: Copy }) {
       {item.actions.length > 0 && (
         <div className="row">
           {item.actions.map((a) => (
-            <button key={a.id} className="cta">
-              {a.label}
-            </button>
+            <Cta key={a.id} action={a} t={t} locale={locale} />
           ))}
         </div>
       )}
@@ -170,7 +220,7 @@ export default function FeedPage({
 
       <ul className="stack">
         {items.map((it) => (
-          <Card key={it.id} item={it} t={t} />
+          <Card key={it.id} item={it} t={t} locale={locale === "ar" ? "ar" : "en"} />
         ))}
       </ul>
 

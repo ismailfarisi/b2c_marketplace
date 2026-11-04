@@ -310,9 +310,11 @@ export function Action({
 
 /** Pulls the sentence out of an RFC 7807 problem, falling back sensibly. */
 export function messageOf(err: unknown): string {
-  const body = (err as { body?: { detail?: string; errors?: Array<{ message?: string }>; title?: string } })
-    ?.body;
-  if (body?.errors?.length) return body.errors.map((e) => e.message).filter(Boolean).join("; ");
+  // ApiError carries the RFC 7807 body as `problem`; there is no `body`.
+  const body = (err as { problem?: { detail?: string; errors?: Array<{ message?: string; field?: string; code?: string }>; title?: string } | null })
+    ?.problem;
+  if (body?.errors?.length)
+    return body.errors.map((e) => e.message || (e.field ? `${e.field}: ${e.code}` : e.code)).filter(Boolean).join("; ");
   if (body?.detail) return body.detail;
   if (body?.title) return body.title;
   return err instanceof Error ? err.message : "Request failed.";

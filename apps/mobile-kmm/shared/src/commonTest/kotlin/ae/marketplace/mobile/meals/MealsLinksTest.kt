@@ -25,4 +25,15 @@ class MealsLinksTest {
         assertNull(MealsLinks.parse("https://meals.example/en/admin/users"))
         assertNull(MealsLinks.parse("/en/console"))
     }
+
+    @Test fun rotationList() = assertEquals(MealsLink(MealsLinkPage.MINE), MealsLinks.parse("/en/rotations"))
+
+    @Test fun rotationDetail() = assertEquals(
+        MealsLink(MealsLinkPage.ROTATION_DETAIL, "r7"),
+        MealsLinks.parse("https://meals.example/ar/rotations/r7?x=1"),
+    )
+
+    @Test fun supportTicket() = assertEquals(MealsLink(MealsLinkPage.SUPPORT, "t3"), MealsLinks.parse("/en/support/t3"))
+
+    @Test fun supportList() = assertEquals(MealsLink(MealsLinkPage.SUPPORT), MealsLinks.parse("/support"))
 }

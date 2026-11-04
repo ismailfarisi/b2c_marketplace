@@ -227,7 +227,7 @@ func run() error {
 	handlers.Rotations = &api.RotationHandlers{Service: handlers.Subscriptions.Service, Payments: paymentsSvc}
 	companySvc := company.NewService(pool, handlers.Subscriptions.Service, paymentsSvc)
 	handlers.Company = &api.CompanyHandlers{Company: companySvc}
-	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc}
+	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc, Console: consoleSvc}
 	handlers.Console = &api.ConsoleHandlers{
 		Console: consoleSvc,
 		Payouts: payoutsSvc,

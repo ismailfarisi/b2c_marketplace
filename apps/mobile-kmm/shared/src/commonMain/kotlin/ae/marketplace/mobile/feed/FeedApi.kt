@@ -88,4 +88,13 @@ class FeedApi(private val client: HttpClient) {
     suspend fun unlike(reelId: String) {
         client.delete("reels/$reelId/like")
     }
+
+    /** Bookmark a reel; it shows under Saved on Me. Idempotent on the server. */
+    suspend fun save(reelId: String) {
+        client.put("reels/$reelId/save")
+    }
+
+    suspend fun unsave(reelId: String) {
+        client.delete("reels/$reelId/save")
+    }
 }

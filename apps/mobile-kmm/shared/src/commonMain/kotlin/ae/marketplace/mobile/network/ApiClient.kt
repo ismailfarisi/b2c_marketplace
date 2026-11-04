@@ -21,6 +21,8 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
+import kotlin.coroutines.cancellation.CancellationException
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -103,25 +105,44 @@ object ApiClientFactory {
                 }
                 refreshTokens {
                     val current = tokens.load() ?: return@refreshTokens null
-                    runCatching {
-                        // `client` here is the *unauthenticated* client Ktor
-                        // hands the block, so the refresh call cannot recurse
-                        // into another refresh.
-                        val refreshed: TokenPair = client.post("$baseUrl/auth/refresh") {
+                    // `client` here is the *unauthenticated* client Ktor hands
+                    // the block, so the refresh call cannot recurse into
+                    // another refresh.
+                    val res = try {
+                        client.post("$baseUrl/auth/refresh") {
                             markAsRefreshTokenRequest()
                             contentType(ContentType.Application.Json)
                             setBody(RefreshRequest(current.refresh))
-                        }.body()
-                        tokens.save(Tokens(refreshed.accessToken, refreshed.refreshToken))
-                        BearerTokens(refreshed.accessToken, refreshed.refreshToken)
-                    }.getOrElse {
-                        // The refresh token is spent or revoked. Clearing here
-                        // rather than leaving it means the next launch starts as
-                        // an anonymous viewer — which is a working state — instead
-                        // of retrying a dead token on every request.
-                        tokens.clear()
-                        onAuthLost()
-                        null
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        // Offline, timed out, TLS: the token may well be fine.
+                        // Keep it so the next request, on a better network,
+                        // refreshes instead of signing the person out in a lift.
+                        return@refreshTokens null
+                    }
+                    when {
+                        refreshRejected(res.status.value) -> {
+                            // Spent or revoked. Clearing means the next launch
+                            // starts as an anonymous viewer — a working state —
+                            // instead of retrying a dead token on every request.
+                            tokens.clear()
+                            onAuthLost()
+                            null
+                        }
+                        // 5xx and anything else unexpected: the server had a
+                        // bad moment, not the session. Keep the tokens.
+                        !res.status.isSuccess() -> null
+                        else -> try {
+                            val refreshed: TokenPair = res.body()
+                            tokens.save(Tokens(refreshed.accessToken, refreshed.refreshToken))
+                            BearerTokens(refreshed.accessToken, refreshed.refreshToken)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            null
+                        }
                     }
                 }
             }
@@ -211,3 +232,10 @@ private data class TokenPair(
     @SerialName("access_token") val accessToken: String,
     @SerialName("refresh_token") val refreshToken: String,
 )
+
+/**
+ * Whether a refresh response means the refresh token itself is dead. Only a
+ * 400 or 401 says that; a 5xx or a network failure says nothing about the
+ * session and must not sign anyone out.
+ */
+internal fun refreshRejected(status: Int): Boolean = status == 400 || status == 401

@@ -309,6 +309,41 @@ class FeedViewModel(
      * heart that un-fills when you scroll away and back is immediately wrong to
      * the one person who knows the answer."
      */
+    /**
+     * Optimistic save, the same shape as [toggleLike]: flip locally, fire the
+     * request, and put it back if the request fails so the bookmark never
+     * claims something that did not happen.
+     */
+    fun toggleSave(reelId: String) {
+        val items = _state.value.items
+        val index = items.indexOfFirst { it.id == reelId }
+        if (index < 0) return
+
+        val item = items[index]
+        val saved = !item.viewer.saved
+        val updated = items.toMutableList()
+        updated[index] = item.copy(viewer = item.viewer.copy(saved = saved))
+        _state.value = _state.value.copy(items = updated)
+
+        events.enqueue(
+            ClientEvent(
+                type = if (saved) ClientEvent.SAVE else ClientEvent.UNSAVE,
+                reelId = reelId,
+                occurredAt = events.timestamp(),
+            )
+        )
+
+        viewModelScope.launch {
+            runCatching { if (saved) api.save(reelId) else api.unsave(reelId) }
+                .onFailure {
+                    val current = _state.value.items.toMutableList()
+                    val i = current.indexOfFirst { it.id == reelId }
+                    if (i >= 0) current[i] = current[i].copy(viewer = current[i].viewer.copy(saved = item.viewer.saved))
+                    _state.value = _state.value.copy(items = current)
+                }
+        }
+    }
+
     fun toggleLike(reelId: String) {
         val items = _state.value.items
         val index = items.indexOfFirst { it.id == reelId }

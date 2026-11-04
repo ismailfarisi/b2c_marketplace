@@ -72,6 +72,7 @@ func (s *Service) Enqueue(ctx context.Context, tx pgx.Tx, m Message) (uuid.UUID,
 
 	locale := PickLocale(r.notifLocal, r.uiLocale)
 	now := time.Now()
+	m.Params = localizeParams(m.Params, locale)
 
 	channel, tmpl, suppression := s.choose(ctx, tx, m, r, locale, now)
 	if suppression != "" {

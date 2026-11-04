@@ -8,8 +8,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/console"
 	"github.com/marketplace/api/internal/modules/dispatch"
 	"github.com/marketplace/api/internal/modules/driver"
+	"github.com/marketplace/api/internal/modules/kitchen"
 	"github.com/marketplace/api/internal/seam/fulfillment"
 )
 
@@ -24,6 +26,31 @@ import (
 type DriverHandlers struct {
 	Driver   *driver.Service
 	Dispatch *dispatch.Service
+	// Console authorises the dispatch board: the caller must be a member of
+	// the branch (any role to read, owner/manager to plan or assign).
+	Console *console.Service
+}
+
+// authoriseBranch is the dispatch board's gate. A non-member gets 404, the
+// same answer the rest of the vendor portal gives, so branch ids are not
+// probeable; staff members can read but not plan or assign.
+func (h *DriverHandlers) authoriseBranch(w http.ResponseWriter, r *http.Request, branchID uuid.UUID, write bool) bool {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return false
+	}
+	_, role, err := h.Console.BranchRole(r.Context(), userID, branchID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return false
+	}
+	if write && !kitchen.CanEdit(role) {
+		httpx.WriteProblem(w, r, httpx.Coded(httpx.ErrForbidden, "role_read_only",
+			"Only an owner or manager can plan or assign routes."))
+		return false
+	}
+	return true
 }
 
 // driverID resolves the signed-in user to a driver on every call.
@@ -314,7 +341,7 @@ func (h *DriverHandlers) DeclareRemittance(w http.ResponseWriter, r *http.Reques
 
 func (h *DriverHandlers) Board(w http.ResponseWriter, r *http.Request) {
 	branchID, ok := branchParam(w, r)
-	if !ok {
+	if !ok || !h.authoriseBranch(w, r, branchID, false) {
 		return
 	}
 	board, err := h.Dispatch.Board(r.Context(), branchID, dateParam(r, "date"))
@@ -343,7 +370,7 @@ func (h *DriverHandlers) Board(w http.ResponseWriter, r *http.Request) {
 
 func (h *DriverHandlers) BuildRoutes(w http.ResponseWriter, r *http.Request) {
 	branchID, ok := branchParam(w, r)
-	if !ok {
+	if !ok || !h.authoriseBranch(w, r, branchID, true) {
 		return
 	}
 	res, err := h.Dispatch.BuildRoutes(r.Context(), branchID, dateParam(r, "date"))
@@ -370,6 +397,14 @@ func (h *DriverHandlers) AssignRoute(w http.ResponseWriter, r *http.Request) {
 	routeID, err := uuid.Parse(chi.URLParam(r, "routeId"))
 	if err != nil {
 		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return
+	}
+	branchID, err := h.Dispatch.RouteBranch(r.Context(), routeID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if !h.authoriseBranch(w, r, branchID, true) {
 		return
 	}
 	var body struct {

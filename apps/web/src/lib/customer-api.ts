@@ -108,8 +108,17 @@ export const previewSubscription = (data: SubscribeInput) =>
     data,
   });
 
-export const subscribe = (data: SubscribeInput) =>
-  apiFetch<Subscribed>({ url: "/subscriptions", method: "POST", data });
+/**
+ * Per-call options for mutating calls. Pass `headers` from
+ * `useIdempotencyKey()` so a retried draft reuses its key instead of the
+ * fresh one apiFetch would otherwise mint per call.
+ */
+export interface CallOptions {
+  headers?: Record<string, string>;
+}
+
+export const subscribe = (data: SubscribeInput, opts?: CallOptions) =>
+  apiFetch<Subscribed>({ url: "/subscriptions", method: "POST", data, headers: opts?.headers });
 
 export interface PaymentIntent {
   id: string;
@@ -303,8 +312,8 @@ export interface Rotation extends RotationQuote {
 export const previewRotation = (data: RotationInput) =>
   apiFetch<RotationQuote>({ url: "/rotations/preview", method: "POST", data });
 
-export const createRotation = (data: RotationInput) =>
-  apiFetch<Rotation>({ url: "/rotations", method: "POST", data });
+export const createRotation = (data: RotationInput, opts?: CallOptions) =>
+  apiFetch<Rotation>({ url: "/rotations", method: "POST", data, headers: opts?.headers });
 
 /** One payment for all four weeks, keyed on the rotation like payOrder. */
 export const payRotation = (id: string) =>

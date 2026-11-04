@@ -263,3 +263,24 @@ func TestMessageValidation(t *testing.T) {
 		t.Errorf("valid message rejected: %v", err)
 	}
 }
+
+func TestLocalizeLinkFollowsRecipient(t *testing.T) {
+	cases := []struct{ link, locale, want string }{
+		{"/en/subscriptions/abc", "ar", "/ar/subscriptions/abc"},
+		{"/ar/support/1", "en", "/en/support/1"},
+		{"/en", "ar", "/ar"},
+		{"/english-menu", "ar", "/english-menu"},
+		{"https://example.com/en/x", "ar", "https://example.com/en/x"},
+		{"/en/x", "fr", "/en/x"},
+	}
+	for _, c := range cases {
+		if got := LocalizeLink(c.link, c.locale); got != c.want {
+			t.Errorf("LocalizeLink(%q, %q) = %q, want %q", c.link, c.locale, got, c.want)
+		}
+	}
+	in := map[string]string{"link": "/en/support/1", "subject": "x"}
+	out := localizeParams(in, "ar")
+	if out["link"] != "/ar/support/1" || in["link"] != "/en/support/1" || out["subject"] != "x" {
+		t.Fatalf("localizeParams mutated or mis-copied: in=%v out=%v", in, out)
+	}
+}

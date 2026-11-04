@@ -247,6 +247,21 @@ func (s *Service) insertStops(ctx context.Context, tx pgx.Tx, routeID uuid.UUID,
 // The driver's own capacity is re-checked here against the route's stop count,
 // because the planner split routes against a *default* maximum and the driver
 // who ends up taking one may be on a bike.
+// RouteBranch returns the branch a route belongs to, so the handler can
+// authorise the caller against it before assigning. 404 for an unknown route.
+func (s *Service) RouteBranch(ctx context.Context, routeID uuid.UUID) (uuid.UUID, error) {
+	var branchID uuid.UUID
+	err := s.pool.QueryRow(ctx,
+		`SELECT branch_id FROM delivery_routes WHERE id = $1`, routeID).Scan(&branchID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, httpx.ErrNotFound
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("load route branch: %w", err)
+	}
+	return branchID, nil
+}
+
 func (s *Service) Assign(ctx context.Context, routeID, driverID uuid.UUID, by string, byID *uuid.UUID) error {
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		var stops int
@@ -263,11 +278,18 @@ func (s *Service) Assign(ctx context.Context, routeID, driverID uuid.UUID, by st
 			return fmt.Errorf("%w: this route is %s", httpx.ErrConflict, status)
 		}
 
+		// A vendor's own driver only works that vendor's routes; a platform
+		// driver (vendor_id NULL) works any. Anything else reads as not found
+		// so driver ids of other vendors are not probeable.
 		var maxStops int
 		var driverStatus string
-		if err := tx.QueryRow(ctx,
-			`SELECT max_stops, status FROM drivers WHERE id = $1`,
-			driverID).Scan(&maxStops, &driverStatus); err != nil {
+		if err := tx.QueryRow(ctx, `
+			SELECT d.max_stops, d.status
+			  FROM drivers d, delivery_routes rt
+			  JOIN vendor_branches b ON b.id = rt.branch_id
+			 WHERE d.id = $1 AND rt.id = $2
+			   AND (d.vendor_id IS NULL OR d.vendor_id = b.vendor_id)`,
+			driverID, routeID).Scan(&maxStops, &driverStatus); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return httpx.ErrNotFound
 			}

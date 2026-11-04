@@ -24,6 +24,9 @@ import kotlinx.coroutines.launch
 object Push {
     const val CHANNEL = "meals"
     const val EXTRA_LINK = "push_link"
+
+    /** The FCM data key, as the tray delivers it for a background push. */
+    const val FCM_LINK = "link"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** False when the build has no Firebase project, in which case push is off. */

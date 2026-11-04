@@ -137,6 +137,16 @@ fun MealsTab(
             MealsLinkPage.SUBSCRIPTION -> if (id != null) requireAccount { viewModel.openSubscription(id); home(Page.Subscription) }
             MealsLinkPage.MINE -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
             MealsLinkPage.ROTATION -> requireAccount { viewModel.startRotation(); home(Page.Rotation) }
+            // No native rotation screen yet; rotations are listed on My meals.
+            MealsLinkPage.ROTATION_DETAIL -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
+            // Help is web-only for now; open it in the viewer's language.
+            MealsLinkPage.SUPPORT -> {
+                val lang = if (ctx.resources.configuration.locales[0].language == "ar") "ar" else "en"
+                val path = "/$lang/support" + (id?.let { "/$it" } ?: "")
+                runCatching {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ae.marketplace.mobile.android.BuildConfig.WEB_BASE_URL + path)))
+                }
+            }
             MealsLinkPage.HOME -> home()
         }
         onLinkHandled()

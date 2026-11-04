@@ -328,7 +328,10 @@ func (s *Service) Delete(ctx context.Context, userID, commentID uuid.UUID) error
 		                  -- named branch would lock a vendor's owner out of
 		                  -- their own storefront.
 		                  AND (vu.branch_id IS NULL OR vu.branch_id = vb.id))
-		        OR EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = $2)
+		        OR EXISTS (SELECT 1 FROM admin_grants g
+		                    JOIN admin_role_permissions rp ON rp.role_key = g.role_key
+		                   WHERE g.user_id = $2 AND rp.permission_key = 'content.review'
+		                     AND (g.expires_at IS NULL OR g.expires_at > now()))
 		       )
 		),
 		removed AS (

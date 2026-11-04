@@ -55,7 +55,9 @@ func SLAFor(queue string) time.Duration { return queueSLA[queue] }
 
 // Queues returns every review surface's depth in one round trip.
 func (s *Service) Queues(ctx context.Context, actorID uuid.UUID) ([]QueueDepth, error) {
-	if err := s.RequireOps(ctx, actorID); err != nil {
+	// Counts only, so any staff role may see them; each queue checks its own
+	// permission when opened.
+	if err := s.RequireStaff(ctx, actorID); err != nil {
 		return nil, err
 	}
 

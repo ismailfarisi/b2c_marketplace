@@ -175,6 +175,10 @@ const (
 // VerifyOTP exchanges a code for a session, creating the user on first login.
 func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code string, device DeviceInfo) (*Session, error) {
 	var session *Session
+	// rejected carries a wrong-code refusal out of a transaction that must
+	// still commit. postgres.InTx rolls back on any returned error, which used
+	// to undo the attempt counter and make the five-try limit decorative.
+	var rejected error
 
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		var (
@@ -242,11 +246,14 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code str
 			// than letting the viewer discover it on the next try. Recomputed
 			// from the row read under FOR UPDATE, so it is exact.
 			if attempts+1 >= maxAttempts {
-				return httpx.Coded(httpx.ErrUnauthorized, CodeTooManyAttempts,
+				rejected = httpx.Coded(httpx.ErrUnauthorized, CodeTooManyAttempts,
 					"Too many incorrect codes. Ask for a new one.")
+			} else {
+				rejected = httpx.Coded(httpx.ErrUnauthorized, CodeWrongCode,
+					"That code is not right.")
 			}
-			return httpx.Coded(httpx.ErrUnauthorized, CodeWrongCode,
-				"That code is not right.")
+			// nil so the increment commits; the refusal is returned below.
+			return nil
 		}
 
 		if _, err := tx.Exec(ctx,
@@ -265,6 +272,9 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code str
 
 	if err != nil {
 		return nil, err
+	}
+	if rejected != nil {
+		return nil, rejected
 	}
 	return session, nil
 }
@@ -285,6 +295,9 @@ type DeviceInfo struct {
 // whole session family is revoked.
 func (s *Service) Refresh(ctx context.Context, refreshToken string, device DeviceInfo) (*Session, error) {
 	var session *Session
+	// reused is set when a rotated token is replayed. The revoke has to commit,
+	// so the closure returns nil and the 401 is returned after InTx.
+	var reused bool
 
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		var (
@@ -318,7 +331,8 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string, device Devic
 				userID); err != nil {
 				return fmt.Errorf("revoke sessions: %w", err)
 			}
-			return httpx.ErrUnauthorized
+			reused = true
+			return nil
 		}
 
 		if revokedAt != nil || time.Now().After(expiresAt) {
@@ -349,6 +363,9 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string, device Devic
 
 	if err != nil {
 		return nil, err
+	}
+	if reused {
+		return nil, httpx.ErrUnauthorized
 	}
 	return session, nil
 }

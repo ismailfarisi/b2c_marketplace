@@ -1,6 +1,12 @@
 package ae.marketplace.mobile.meals
 
-enum class MealsLinkPage { HOME, KITCHEN, MINE, SUBSCRIPTION, ROTATION }
+enum class MealsLinkPage {
+    HOME, KITCHEN, MINE, SUBSCRIPTION, ROTATION,
+    /** One rotation subscription (`/rotations/{id}`). */
+    ROTATION_DETAIL,
+    /** Help: the ticket list, or one ticket when [MealsLink.id] is set. Web-only today. */
+    SUPPORT,
+}
 
 /** A screen in the meals tab that a web URL or push `link` points at. */
 data class MealsLink(val page: MealsLinkPage, val id: String? = null)
@@ -26,7 +32,8 @@ object MealsLinks {
             null -> MealsLink(MealsLinkPage.HOME)
             "kitchens" -> id?.let { MealsLink(MealsLinkPage.KITCHEN, it) } ?: MealsLink(MealsLinkPage.HOME)
             "subscriptions" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.SUBSCRIPTION, id)
-            "rotations" -> MealsLink(MealsLinkPage.MINE)
+            "rotations" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.ROTATION_DETAIL, id)
+            "support" -> MealsLink(MealsLinkPage.SUPPORT, id)
             "rotation" -> MealsLink(MealsLinkPage.ROTATION)
             else -> null
         }

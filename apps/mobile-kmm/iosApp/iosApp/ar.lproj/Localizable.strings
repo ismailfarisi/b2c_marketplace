@@ -87,6 +87,8 @@
 "err_rejected" = "تعذّر تنفيذ ذلك.";
 "err_server" = "حدث خطأ لدينا. حاول بعد قليل.";
 "err_unknown" = "حدث خطأ ما. حاول مجدداً.";
+"feed_save" = "حفظ";
+"feed_unsave" = "إزالة من المحفوظات";
 "action_retry" = "إعادة المحاولة";
 "action_close" = "إغلاق";
 "sell_camera_needed" = "الكاميرا هي طريقة العرض";
@@ -301,9 +303,7 @@
 "saved_signin_title" = "سجّل الدخول لعرض الفيديوهات المحفوظة";
 "saved_signin_why" = "الفيديوهات التي تحفظها تبقى في حسابك، فتجدها على أي هاتف.";
 "feed_more" = "المزيد من سوق الفيديو";
-
-"action_back" = "رجوع";
-
+"push_channel_name" = "تحديثات الوجبات والتوصيل";
 "update_title" = "يتوفر تحديث";
 "update_body" = "يتوفر إصدار أحدث من التطبيق.";
 "update_required_title" = "التحديث مطلوب";
@@ -311,3 +311,5 @@
 "update_action" = "تحديث";
 "update_later" = "لاحقًا";
 "legal_help" = "المساعدة";
+
+"action_back" = "رجوع";

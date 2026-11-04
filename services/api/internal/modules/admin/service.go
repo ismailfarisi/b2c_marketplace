@@ -30,27 +30,38 @@ type Service struct {
 
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
 
-// RequireOps checks platform staff membership on every privileged call.
+// RequireOps checks that the caller holds the ops or superadmin role.
 //
-// A table lookup, not a token claim, for the reason Phase 2 gave when
-// `platform_admins` was created: revoking someone must take effect immediately,
-// and a claim stays valid until the access token expires.
+// Resolved from `admin_grants` (see Grants), not `platform_admins`: that legacy
+// row was written as 'ops' for every granted role and survived a revoke, so it
+// over-granted. A moderator judges content; refunding money and suspending
+// vendors is a different job with a different blast radius.
 func (s *Service) RequireOps(ctx context.Context, userID uuid.UUID) error {
-	var role string
-	err := s.pool.QueryRow(ctx,
-		`SELECT role FROM platform_admins WHERE user_id = $1`, userID).Scan(&role)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return httpx.ErrForbidden
-	}
+	g, err := s.Grants(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("check admin: %w", err)
+		return err
 	}
-	if role != "ops" && role != "superadmin" {
-		// A moderator judges content. Refunding money and suspending vendors is
-		// a different job with a different blast radius, and one role covering
-		// both is how a content moderator ends up able to move cash.
-		return fmt.Errorf("%w: this action needs ops or superadmin, you are %s",
-			httpx.ErrForbidden, role)
+	for _, role := range g.Roles {
+		if role == "ops" || role == "superadmin" {
+			return nil
+		}
+	}
+	held := "nothing"
+	if len(g.Roles) > 0 {
+		held = fmt.Sprintf("%v", g.Roles)
+	}
+	return fmt.Errorf("%w: this action needs ops or superadmin; you hold %s",
+		httpx.ErrForbidden, held)
+}
+
+// RequireStaff checks that the caller holds any unexpired admin grant.
+func (s *Service) RequireStaff(ctx context.Context, userID uuid.UUID) error {
+	g, err := s.Grants(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if len(g.Roles) == 0 {
+		return httpx.ErrForbidden
 	}
 	return nil
 }

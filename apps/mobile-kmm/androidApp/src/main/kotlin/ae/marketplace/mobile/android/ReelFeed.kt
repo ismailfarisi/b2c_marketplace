@@ -24,7 +24,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * The feed.
@@ -105,6 +109,7 @@ fun ReelFeed(
                     skewMillis = state.clockSkewMillis,
                     viewModel = viewModel,
                     onLike = { viewModel.toggleLike(state.items[page].id) },
+                    onSave = { viewModel.toggleSave(state.items[page].id) },
                     onAction = { action ->
                         // Recorded first, always — including when the target
                         // turns out to be unavailable. Phase 3 built the funnel
@@ -165,6 +170,7 @@ private fun ReelPage(
     skewMillis: Long,
     viewModel: FeedViewModel,
     onLike: () -> Unit,
+    onSave: () -> Unit,
     onAction: (ResolvedAction) -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -221,13 +227,25 @@ private fun ReelPage(
             chromeBottom = NAV_BAR_HEIGHT,
         )
 
-        Text(
-            text = if (item.viewer.liked) "♥ ${item.counters.likes}" else "♡ ${item.counters.likes}",
-            color = Color.White,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(16.dp)
-                .clickable(onClick = onLike),
-        )
+        Column(
+            Modifier.align(Alignment.CenterEnd).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = if (item.viewer.liked) "♥ ${item.counters.likes}" else "♡ ${item.counters.likes}",
+                color = Color.White,
+                modifier = Modifier.clickable(onClick = onLike),
+            )
+            val saveLabel = stringResource(if (item.viewer.saved) R.string.feed_unsave else R.string.feed_save)
+            Text(
+                text = if (item.viewer.saved) "★" else "☆",
+                color = Color.White,
+                fontSize = 22.sp,
+                modifier = Modifier
+                    .padding(top = 18.dp)
+                    .semantics { contentDescription = saveLabel }
+                    .clickable(onClick = onSave),
+            )
+        }
     }
 }

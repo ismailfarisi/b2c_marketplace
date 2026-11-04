@@ -1,0 +1,6 @@
+// Per-configuration endpoints, read by Config in MarketplaceApp.swift through
+// the Info.plist keys ApiBaseUrl = $(API_BASE_URL) and WebBaseUrl = $(WEB_BASE_URL).
+// "//" starts a comment in xcconfig, hence the $() between the slashes.
+// Unset, the app falls back to localhost (the simulator).
+API_BASE_URL = http:/$()/localhost:8080/v1
+WEB_BASE_URL = http:/$()/localhost:3000

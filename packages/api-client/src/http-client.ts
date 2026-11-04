@@ -17,6 +17,8 @@ export interface ApiProblem {
   title: string;
   status: number;
   detail?: string;
+  /** Stable reason where the status alone is not enough (e.g. otp_wrong_code). */
+  code?: string;
   request_id?: string;
   errors?: Array<{ field: string; code: string; message?: string }>;
 }
@@ -89,16 +91,30 @@ async function refreshTokens(): Promise<boolean> {
       return false;
     }
 
+    // A network failure throws (TypeError) and keeps the tokens: being offline
+    // says nothing about whether the session is still good.
     const res = await fetch(`${config.baseUrl}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
     });
 
-    if (!res.ok) {
+    // Only 400/401 mean the refresh token itself is spent or revoked.
+    if (res.status === 400 || res.status === 401) {
       await config.tokens?.clear();
       config.onUnauthenticated?.("expired");
       return false;
+    }
+    // A 5xx is the server's bad moment, not the session's: keep the tokens and
+    // surface it as an ApiError so the screen can offer a retry.
+    if (!res.ok) {
+      let problem: ApiProblem | null = null;
+      try {
+        problem = (await res.json()) as ApiProblem;
+      } catch {
+        // Non-JSON gateway error.
+      }
+      throw new ApiError(res.status, problem, res.headers.get("X-Request-Id"));
     }
 
     const body = (await res.json()) as { access_token: string; refresh_token: string };

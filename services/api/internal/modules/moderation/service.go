@@ -43,7 +43,13 @@ func (s *Service) RequireStaff(ctx context.Context, userID uuid.UUID) error {
 func (s *Service) requireModerator(ctx context.Context, userID uuid.UUID) error {
 	var ok bool
 	if err := s.pool.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $1)`,
+		// admin_grants, not platform_admins: the legacy row said "staff" for
+		// every role and outlived a revoke.
+		`SELECT EXISTS (
+		    SELECT 1 FROM admin_grants g
+		      JOIN admin_role_permissions rp ON rp.role_key = g.role_key
+		     WHERE g.user_id = $1 AND rp.permission_key = 'content.review'
+		       AND (g.expires_at IS NULL OR g.expires_at > now()))`,
 		userID).Scan(&ok); err != nil {
 		return fmt.Errorf("moderation: authorize: %w", err)
 	}
