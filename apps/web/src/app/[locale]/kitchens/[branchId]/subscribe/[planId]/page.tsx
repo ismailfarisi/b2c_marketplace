@@ -159,7 +159,6 @@ const COPY = {
 };
 type Copy = (typeof COPY)["en"];
 
-
 function toggle<T>(list: T[], v: T, max: number): T[] {
   if (list.includes(v)) return list.filter((x) => x !== v);
   if (max === 1) return [v];
@@ -330,7 +329,10 @@ function Checkout({
 
   if (kitchen.isPending || addresses.isPending)
     return <p className="ms-note">{t.loading}</p>;
-  if (kitchen.isError && !(kitchen.error instanceof ApiError && kitchen.error.status === 404)) {
+  if (
+    kitchen.isError &&
+    !(kitchen.error instanceof ApiError && kitchen.error.status === 404)
+  ) {
     return (
       <LoadError
         error={kitchen.error}
@@ -377,7 +379,8 @@ function Checkout({
           return;
         }
         if (intent.status === "authorized") outcome = "paid=1";
-        else if (intent.status === "requires_action") outcome = "payment=pending";
+        else if (intent.status === "requires_action")
+          outcome = "payment=pending";
       } catch {
         /* outcome stays failed */
       }

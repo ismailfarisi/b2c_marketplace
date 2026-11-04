@@ -39,7 +39,8 @@ const COPY = {
       d
         ? `Payment received. Your first delivery is on ${d}.`
         : "Payment received. Your meals are scheduled.",
-    payPending: "Your payment is being confirmed. This page updates once it goes through.",
+    payPending:
+      "Your payment is being confirmed. This page updates once it goes through.",
     cycle: (n: number, s: string, e: string) => `Cycle ${n}: ${s} – ${e}`,
     upcoming: "Next two weeks",
     noUpcoming: "No deliveries in the next two weeks.",
@@ -235,7 +236,9 @@ function Detail({
     onSuccess: refresh,
   });
   // Checkout lands here with ?paid=1 or ?payment=failed|pending.
-  const [outcome, setOutcome] = useState<"paid" | "failed" | "pending" | null>(null);
+  const [outcome, setOutcome] = useState<"paid" | "failed" | "pending" | null>(
+    null,
+  );
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     if (q.get("paid") === "1") setOutcome("paid");
@@ -285,7 +288,9 @@ function Detail({
 
       {outcome === "paid" && !s.pending_order_id && (
         <p className="ms-callout ms-ok" role="status">
-          {t.paidBanner(firstDelivery ? formatDay(locale, firstDelivery) : null)}
+          {t.paidBanner(
+            firstDelivery ? formatDay(locale, firstDelivery) : null,
+          )}
         </p>
       )}
 

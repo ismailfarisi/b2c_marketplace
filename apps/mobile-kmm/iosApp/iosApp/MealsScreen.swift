@@ -220,7 +220,7 @@ struct MealsScreen: View {
             case .rotation:
                 RotationPage(vm: viewModel, onBack: back, onPaid: { go(.paid) }, openPayment: openPayment)
             case .paid:
-                PaidPage(redirected: redirected) {
+                PaidPage(redirected: redirected, pending: viewModel.checkout.value.paymentPending) {
                     viewModel.loadMine(force: true)
                     stack = [.home, .mine]
                 }
@@ -1272,12 +1272,16 @@ private struct CheckoutPage: View {
 
     @State private var current: CheckoutUiState?
     private var s: CheckoutUiState { current ?? vm.checkout.value }
-    @State private var startDate = ""
     @State private var promo = ""
 
     private var promoCode: String? {
         guard let failure = s.error, case .rejected(let r) = onEnum(of: failure) else { return nil }
         return r.fieldCodes["promo_code"]
+    }
+
+    private var startCode: String? {
+        guard let failure = s.error, case .rejected(let r) = onEnum(of: failure) else { return nil }
+        return r.fieldCodes["start_date"]
     }
 
     var body: some View {
@@ -1296,7 +1300,6 @@ private struct CheckoutPage: View {
             }
         }
         .task {
-            startDate = vm.checkout.value.startDate
             promo = vm.checkout.value.promoCode
             for await state in vm.checkout {
                 current = state
@@ -1321,8 +1324,8 @@ private struct CheckoutPage: View {
                 ForEach(s.addresses, id: \.id) { a in
                     Choice(title: a.label, detail: a.line, selected: a.id == s.addressId) { vm.selectAddress(id: a.id) }
                 }
-                AddressForm(startOpen: s.addresses.isEmpty, busy: s.busy) { label, building, area, city in
-                    vm.addAddress(label: label, building: building, area: area, city: city, at: LatLng(lat: lat, lng: lng))
+                AddressForm(startOpen: s.addresses.isEmpty, busy: s.busy, saves: s.addressSaves) { label, building, area, city, pin in
+                    vm.addAddress(label: label, building: building, area: area, city: city, at: pin)
                 }
                 FieldLabel(text: tr("meals_days", Int(plan.daysPerWeek)))
                 chips(plan.deliveryWeekdays.map { $0.int32Value }.sorted(), label: { weekday($0) },
@@ -1336,9 +1339,14 @@ private struct CheckoutPage: View {
                           selected: { $0 == s.windowId }) { vm.selectWindow(id: $0) }
                 }
                 FieldLabel(text: NSLocalizedString("meals_start", comment: ""))
-                InputField(placeholder: "YYYY-MM-DD", text: $startDate)
-                    .padding(.horizontal, Space.edge)
-                    .onChange(of: startDate) { _, new in vm.setStartDate(date: new) }
+                StartDatePicker(date: s.startDate, earliest: s.earliestStart) { vm.setStartDate(date: $0) }
+                if let reason = startReason(startCode) {
+                    Text(reason)
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(MP.bad)
+                        .padding(.horizontal, Space.edge)
+                        .padding(.vertical, 6)
+                }
                 FieldLabel(text: NSLocalizedString("meals_promo", comment: ""))
                 HStack(spacing: Space.small) {
                     InputField(placeholder: "", text: $promo)
@@ -1366,7 +1374,16 @@ private struct CheckoutPage: View {
                     }
                     .padding(.top, Space.medium)
                 }
-                if promoCode == nil, let failure = s.error { FailureStrip(failure: failure) }
+                if s.paymentFailed {
+                    Text(NSLocalizedString("meals_pay_failed", comment: ""))
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(MP.bad)
+                        .padding(.horizontal, Space.edge)
+                        .padding(.vertical, 6)
+                }
+                if promoCode == nil, startCode == nil, let failure = s.error {
+                    FailureStrip(failure: failure, onRetry: { vm.retryCheckout() })
+                }
                 Color.clear.frame(height: Space.xl)
             }
         }
@@ -1388,8 +1405,10 @@ private struct CheckoutPage: View {
 private struct AddressForm: View {
     let startOpen: Bool
     let busy: Bool
-    let onSave: (String, String, String, String) -> Void
+    let saves: Int32
+    let onSave: (String, String, String, String, LatLng) -> Void
 
+    @StateObject private var locator = CheckoutLocator()
     @State private var open = false
     @State private var label = ""
     @State private var building = ""
@@ -1397,6 +1416,15 @@ private struct AddressForm: View {
     @State private var city = "Dubai"
 
     var body: some View {
+        // Collapse only once the address is saved; a failed save keeps what was typed.
+        content.onChange(of: saves) { _, _ in
+            open = false
+            label = ""; building = ""; area = ""
+            locator.fix = nil
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         if !open && !startOpen {
             Button { open = true } label: {
                 Text("+ " + NSLocalizedString("meals_add_address", comment: ""))
@@ -1414,14 +1442,33 @@ private struct AddressForm: View {
                 InputField(placeholder: NSLocalizedString("meals_building", comment: ""), text: $building)
                 InputField(placeholder: NSLocalizedString("meals_area", comment: ""), text: $area)
                 InputField(placeholder: NSLocalizedString("meals_city", comment: ""), text: $city)
+                pinRow
                 PrimaryButton(
                     label: NSLocalizedString("meals_save_address", comment: ""),
-                    enabled: !busy && !label.isEmpty && !city.isEmpty
+                    enabled: !busy && !label.isEmpty && !city.isEmpty && locator.fix != nil
                 ) {
-                    onSave(label, building, area, city)
-                    open = false
+                    if let c = locator.fix {
+                        onSave(label, building, area, city, LatLng(lat: c.latitude, lng: c.longitude))
+                    }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var pinRow: some View {
+        if locator.fix != nil {
+            Text("✓ " + NSLocalizedString("meals_pin_set", comment: ""))
+                .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.leaf)
+        } else {
+            Text(NSLocalizedString("meals_pin_needed", comment: ""))
+                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+            SecondaryButton(label: NSLocalizedString("meals_use_location", comment: "")) {
+                if locator.status != .locating { locator.locate() }
+            }
+        }
+        if locator.status == .denied || locator.status == .failed {
+            Text(NSLocalizedString(locator.status == .denied ? "meals_pin_denied" : "meals_pin_failed", comment: ""))
+                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
         }
     }
 }
@@ -1497,12 +1544,13 @@ private struct RotationPage: View {
 
 private struct PaidPage: View {
     let redirected: Bool
+    var pending = false
     let onMine: () -> Void
 
     var body: some View {
         VStack(spacing: Space.large) {
-            Text("✓").font(.system(size: TypeScale.title * 2.5)).foregroundStyle(Warm.leaf)
-            Text(LocalizedStringKey(redirected ? "meals_paying" : "meals_paid"))
+            Text(pending && !redirected ? "…" : "✓").font(.system(size: TypeScale.title * 2.5)).foregroundStyle(Warm.leaf)
+            Text(LocalizedStringKey(redirected ? "meals_paying" : pending ? "meals_pay_pending" : "meals_paid"))
                 .font(.system(size: TypeScale.heading))
                 .foregroundStyle(MP.text)
                 .multilineTextAlignment(.center)

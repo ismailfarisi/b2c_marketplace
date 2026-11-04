@@ -27,7 +27,11 @@ export function earliestStart(
   const minutes = Number(parts.hour) * 60 + Number(parts.minute);
   const days = Math.floor((cutoffHours * 60 + minutes) / 1440) + 1;
   const d = new Date(
-    Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) + days),
+    Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day) + days,
+    ),
   );
   return d.toISOString().slice(0, 10);
 }

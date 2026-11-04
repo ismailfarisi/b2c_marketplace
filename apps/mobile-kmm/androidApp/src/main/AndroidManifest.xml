@@ -14,6 +14,8 @@
       product's front door is worse than a slightly larger radius.
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Precise only at checkout, to pin a new delivery address at the door. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!--
       The recorder.

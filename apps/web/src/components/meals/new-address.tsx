@@ -84,7 +84,8 @@ export function NewAddress({
   onSaved: (a: Address) => void;
 }) {
   const qc = useQueryClient();
-  const locale = useParams<{ locale?: string }>()?.locale === "ar" ? "ar" : "en";
+  const locale =
+    useParams<{ locale?: string }>()?.locale === "ar" ? "ar" : "en";
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
     label: "",
@@ -136,7 +137,9 @@ export function NewAddress({
       onSaved(a);
       setOpen(false);
     } catch (err) {
-      setError(err instanceof ApiError ? problemMessage(err, locale) : t.failed);
+      setError(
+        err instanceof ApiError ? problemMessage(err, locale) : t.failed,
+      );
     } finally {
       setBusy(false);
     }
