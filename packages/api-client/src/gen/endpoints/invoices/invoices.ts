@@ -32,6 +32,7 @@ import type {
 import type {
   InvoiceDocument,
   ListMyInvoices200,
+  ListMyInvoicesParams,
   NotFoundResponse,
   UnauthorizedResponse
 } from '../../models';
@@ -42,16 +43,18 @@ import { apiFetch } from '../../../http-client';
 
 
 /**
+ * Newest first, pages of 50; pass `next_cursor` back as `cursor` for older invoices.
  * @summary Tax invoices issued to the caller
  */
 export const listMyInvoices = (
-    
+    params?: ListMyInvoicesParams,
  signal?: AbortSignal
 ) => {
       
       
       return apiFetch<ListMyInvoices200>(
-      {url: `/me/invoices`, method: 'GET', signal
+      {url: `/me/invoices`, method: 'GET',
+        params, signal
     },
       );
     }
@@ -59,23 +62,23 @@ export const listMyInvoices = (
 
 
 
-export const getListMyInvoicesQueryKey = () => {
+export const getListMyInvoicesQueryKey = (params?: ListMyInvoicesParams,) => {
     return [
-    `/me/invoices`
+    `/me/invoices`, ...(params ? [params]: [])
     ] as const;
     }
 
     
-export const getListMyInvoicesQueryOptions = <TData = Awaited<ReturnType<typeof listMyInvoices>>, TError = unknown>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData>, }
+export const getListMyInvoicesQueryOptions = <TData = Awaited<ReturnType<typeof listMyInvoices>>, TError = unknown>(params?: ListMyInvoicesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListMyInvoicesQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListMyInvoicesQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyInvoices>>> = ({ signal }) => listMyInvoices(signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyInvoices>>> = ({ signal }) => listMyInvoices(params, signal);
 
       
 
@@ -93,11 +96,11 @@ export type ListMyInvoicesQueryError = unknown
  */
 
 export function useListMyInvoices<TData = Awaited<ReturnType<typeof listMyInvoices>>, TError = unknown>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData>, }
+ params?: ListMyInvoicesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyInvoices>>, TError, TData>, }
   
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListMyInvoicesQueryOptions(options)
+  const queryOptions = getListMyInvoicesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

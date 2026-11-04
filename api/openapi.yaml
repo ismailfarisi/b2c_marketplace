@@ -195,6 +195,9 @@ paths:
       tags: [support]
       operationId: listMySupportTickets
       summary: The customer's help tickets, most recent activity first
+      description: Pages of 50; pass `next_cursor` back as `cursor` for older tickets.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
       responses:
         "200":
           description: OK
@@ -205,6 +208,9 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/SupportTicket" } }
+                  next_cursor:
+                    type: [string, "null"]
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [support]
@@ -3946,6 +3952,9 @@ paths:
       tags: [invoices]
       operationId: listMyInvoices
       summary: Tax invoices issued to the caller
+      description: Newest first, pages of 50; pass `next_cursor` back as `cursor` for older invoices.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
       responses:
         "200":
           description: OK
@@ -3957,6 +3966,8 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/InvoiceSummary" }
+                  next_cursor:
+                    type: [string, "null"]
 
   /me/invoices/{invoiceId}:
     get:

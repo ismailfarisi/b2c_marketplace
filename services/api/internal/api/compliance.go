@@ -120,7 +120,12 @@ func (h *ComplianceHandlers) MyInvoices(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	list, err := h.Invoices.List(r.Context(), userID, 50)
+	before, err := httpx.DecodeKeysetCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	list, next, err := h.Invoices.ListPage(r.Context(), userID, before, intParam(r.URL.Query().Get("limit"), 50))
 	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
@@ -142,7 +147,12 @@ func (h *ComplianceHandlers) MyInvoices(w http.ResponseWriter, r *http.Request) 
 			"status":      inv.Status,
 		})
 	}
-	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out})
+	var cursor *string
+	if next != nil {
+		c := next.Encode()
+		cursor = &c
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": out, "next_cursor": cursor})
 }
 
 // --- KYC --------------------------------------------------------------------

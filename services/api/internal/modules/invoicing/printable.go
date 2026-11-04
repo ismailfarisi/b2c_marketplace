@@ -57,13 +57,13 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, buyer *uuid.UUID) (*Pri
 	var supply time.Time
 	err := s.pool.QueryRow(ctx, `
 		SELECT i.id, i.number, i.kind, i.status, i.country, i.currency,
-		       i.supplier_name, coalesce(i.supplier_trn, ''),
+		       i.supplier_name, coalesce(i.supplier_trn, ''), coalesce(i.supplier_address, ''),
 		       coalesce(i.buyer_name, ''), coalesce(i.buyer_trn, ''), coalesce(i.buyer_address, ''),
 		       i.supply_date, i.issued_at, c.number, i.net_minor, i.tax_minor, i.gross_minor, i.buyer_user_id
 		  FROM invoices i LEFT JOIN invoices c ON c.id = i.corrects_invoice_id
 		 WHERE i.id = $1`, id).Scan(
 		&p.ID, &p.Number, &p.Kind, &p.Status, &p.Country, &p.Currency,
-		&p.Supplier.Name, &p.Supplier.TRN, &p.Buyer.Name, &p.Buyer.TRN, &p.Buyer.Address,
+		&p.Supplier.Name, &p.Supplier.TRN, &p.Supplier.Address, &p.Buyer.Name, &p.Buyer.TRN, &p.Buyer.Address,
 		&supply, &p.IssuedAt, &p.Corrects, &p.NetMinor, &p.TaxMinor, &p.GrossMinor, &p.buyerUserID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, httpx.ErrNotFound

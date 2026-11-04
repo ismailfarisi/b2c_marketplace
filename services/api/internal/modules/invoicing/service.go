@@ -89,6 +89,11 @@ func (s *Service) buildFromOrder(ctx context.Context, tx pgx.Tx, orderID uuid.UU
 		SELECT q.id, q.currency, o.user_id, b.vendor_id, o.created_at,
 		       coalesce(v.country, 'AE'),
 		       coalesce(v.legal_name, ''), coalesce(v.tax_registration_no, ''),
+		       coalesce((SELECT r.address_line FROM tax_registrations r
+		                  WHERE r.owner_type = 'vendor' AND r.owner_id = v.id AND r.valid_to IS NULL
+		                  ORDER BY r.valid_from DESC LIMIT 1),
+		                nullif(concat_ws(', ', nullif(b.address_line, ''), nullif(b.city, ''), nullif(b.emirate, '')), ''),
+		                ''),
 		       coalesce(u.display_name, ''),
 		       (SELECT max(f.completed_at) FROM fulfillments f
 		         WHERE f.order_id = o.id AND f.status = 'completed')
@@ -99,7 +104,7 @@ func (s *Service) buildFromOrder(ctx context.Context, tx pgx.Tx, orderID uuid.UU
 		  LEFT JOIN users u ON u.id = o.user_id
 		 WHERE o.id = $1`, orderID).
 		Scan(&quoteID, &doc.Currency, &buyerUserID, &vendorID, &placedAt, &doc.Country,
-			&doc.Supplier.Name, &doc.Supplier.TRN, &doc.Buyer.Name, &deliveredAt)
+			&doc.Supplier.Name, &doc.Supplier.TRN, &doc.Supplier.Address, &doc.Buyer.Name, &deliveredAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return doc, uuid.Nil, nil, httpx.ErrNotFound
 	}
@@ -246,17 +251,17 @@ func (s *Service) insert(ctx context.Context, tx pgx.Tx, doc Document, refs inse
 		    supplier_type, supplier_id, supplier_name, supplier_trn,
 		    buyer_name, buyer_trn, buyer_user_id, buyer_address,
 		    country, currency, net_minor, tax_minor, gross_minor,
-		    supply_date, corrects_invoice_id)
+		    supply_date, corrects_invoice_id, supplier_address)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, nullif($12, ''),
 		        nullif($13, ''), nullif($14, ''), $15, nullif($16, ''),
-		        $17, $18, $19, $20, $21, $22, $23)
+		        $17, $18, $19, $20, $21, $22, $23, nullif($24, ''))
 		RETURNING id`,
 		seriesID, number, seq, string(doc.Kind),
 		refs.OrderID, refs.SubscriptionCycleID, refs.PackagePurchaseID, refs.PayoutStatementID,
 		supplierType, supplierID, doc.Supplier.Name, doc.Supplier.TRN,
 		doc.Buyer.Name, doc.Buyer.TRN, refs.BuyerUserID, doc.Buyer.Address,
 		doc.Country, doc.Currency, doc.NetMinor, doc.TaxMinor, doc.GrossMinor,
-		doc.SupplyDate, refs.CorrectsInvoiceID).Scan(&id)
+		doc.SupplyDate, refs.CorrectsInvoiceID, doc.Supplier.Address).Scan(&id)
 	if err != nil {
 		if isUniqueViolation(err, "invoices_one_per_order_idx") {
 			// The one-invoice-per-order index fired. Someone else got there
@@ -385,13 +390,13 @@ func (s *Service) CreditNote(ctx context.Context, invoiceID uuid.UUID, reason st
 		)
 		err := tx.QueryRow(ctx, `
 			SELECT kind, country, currency, supplier_type, supplier_id,
-			       supplier_name, coalesce(supplier_trn, ''),
-			       coalesce(buyer_name, ''), coalesce(buyer_trn, ''), buyer_user_id,
+			       supplier_name, coalesce(supplier_trn, ''), coalesce(supplier_address, ''),
+			       coalesce(buyer_name, ''), coalesce(buyer_trn, ''), coalesce(buyer_address, ''), buyer_user_id,
 			       supply_date, order_id, status
 			  FROM invoices WHERE id = $1 FOR UPDATE`, invoiceID).
 			Scan(&doc.Kind, &doc.Country, &doc.Currency, &supplierType, &supplierID,
-				&doc.Supplier.Name, &doc.Supplier.TRN,
-				&doc.Buyer.Name, &doc.Buyer.TRN, &buyerUser,
+				&doc.Supplier.Name, &doc.Supplier.TRN, &doc.Supplier.Address,
+				&doc.Buyer.Name, &doc.Buyer.TRN, &doc.Buyer.Address, &buyerUser,
 				&doc.SupplyDate, &orderID, &status)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.ErrNotFound
@@ -456,30 +461,55 @@ func (s *Service) CreditNote(ctx context.Context, invoiceID uuid.UUID, reason st
 	return id, nil
 }
 
-// List returns a buyer's invoices.
+// List returns a buyer's newest invoices.
 func (s *Service) List(ctx context.Context, userID uuid.UUID, limit int) ([]Summary, error) {
+	out, _, err := s.ListPage(ctx, userID, nil, limit)
+	return out, err
+}
+
+// ListPage returns one page of a buyer's invoices, newest first, starting
+// after [before] (nil: the newest). next is set when there are older ones, so
+// a long-time subscriber can reach every invoice they were ever issued.
+func (s *Service) ListPage(ctx context.Context, userID uuid.UUID, before *httpx.KeysetCursor, limit int) (
+	out []Summary, next *httpx.KeysetCursor, err error,
+) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
+	var at *time.Time
+	var id *uuid.UUID
+	if before != nil {
+		at, id = &before.At, &before.ID
+	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, number, kind, currency, gross_minor, tax_minor, supply_date, issued_at, status
-		  FROM invoices WHERE buyer_user_id = $1
-		 ORDER BY issued_at DESC LIMIT $2`, userID, limit)
+		  FROM invoices
+		 WHERE buyer_user_id = $1
+		   AND ($3::timestamptz IS NULL OR (issued_at, id) < ($3, $4::uuid))
+		 ORDER BY issued_at DESC, id DESC LIMIT $2`, userID, limit+1, at, id)
 	if err != nil {
-		return nil, fmt.Errorf("invoicing: list: %w", err)
+		return nil, nil, fmt.Errorf("invoicing: list: %w", err)
 	}
 	defer rows.Close()
 
-	var out []Summary
+	out = []Summary{}
 	for rows.Next() {
 		var s Summary
 		if err := rows.Scan(&s.ID, &s.Number, &s.Kind, &s.Currency, &s.GrossMinor,
 			&s.TaxMinor, &s.SupplyDate, &s.IssuedAt, &s.Status); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out = append(out, s)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if len(out) > limit {
+		out = out[:limit]
+		last := out[limit-1]
+		next = &httpx.KeysetCursor{At: last.IssuedAt, ID: last.ID}
+	}
+	return out, next, nil
 }
 
 // isUniqueViolation reports whether err is a 23505 on the named constraint.

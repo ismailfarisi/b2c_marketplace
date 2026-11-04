@@ -20,7 +20,9 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import type { InvoiceSummary } from './invoiceSummary';
+import type { ListMyInvoices200NextCursor } from './listMyInvoices200NextCursor';
 
 export type ListMyInvoices200 = {
   items?: InvoiceSummary[];
+  next_cursor?: ListMyInvoices200NextCursor;
 };

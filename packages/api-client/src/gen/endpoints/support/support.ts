@@ -35,6 +35,7 @@ import type {
 
 import type {
   ListMySupportTickets200,
+  ListMySupportTicketsParams,
   NotFoundResponse,
   OpenSupportTicketBody,
   ReplyToMySupportTicketBody,
@@ -49,16 +50,18 @@ import { apiFetch } from '../../../http-client';
 
 
 /**
+ * Pages of 50; pass `next_cursor` back as `cursor` for older tickets.
  * @summary The customer's help tickets, most recent activity first
  */
 export const listMySupportTickets = (
-    
+    params?: ListMySupportTicketsParams,
  signal?: AbortSignal
 ) => {
       
       
       return apiFetch<ListMySupportTickets200>(
-      {url: `/me/support/tickets`, method: 'GET', signal
+      {url: `/me/support/tickets`, method: 'GET',
+        params, signal
     },
       );
     }
@@ -66,23 +69,23 @@ export const listMySupportTickets = (
 
 
 
-export const getListMySupportTicketsQueryKey = () => {
+export const getListMySupportTicketsQueryKey = (params?: ListMySupportTicketsParams,) => {
     return [
-    `/me/support/tickets`
+    `/me/support/tickets`, ...(params ? [params]: [])
     ] as const;
     }
 
     
-export const getListMySupportTicketsQueryOptions = <TData = Awaited<ReturnType<typeof listMySupportTickets>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMySupportTickets>>, TError, TData>, }
+export const getListMySupportTicketsQueryOptions = <TData = Awaited<ReturnType<typeof listMySupportTickets>>, TError = UnauthorizedResponse | UnprocessableEntityResponse>(params?: ListMySupportTicketsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMySupportTickets>>, TError, TData>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListMySupportTicketsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListMySupportTicketsQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMySupportTickets>>> = ({ signal }) => listMySupportTickets(signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMySupportTickets>>> = ({ signal }) => listMySupportTickets(params, signal);
 
       
 
@@ -92,19 +95,19 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListMySupportTicketsQueryResult = NonNullable<Awaited<ReturnType<typeof listMySupportTickets>>>
-export type ListMySupportTicketsQueryError = UnauthorizedResponse
+export type ListMySupportTicketsQueryError = UnauthorizedResponse | UnprocessableEntityResponse
 
 
 /**
  * @summary The customer's help tickets, most recent activity first
  */
 
-export function useListMySupportTickets<TData = Awaited<ReturnType<typeof listMySupportTickets>>, TError = UnauthorizedResponse>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMySupportTickets>>, TError, TData>, }
+export function useListMySupportTickets<TData = Awaited<ReturnType<typeof listMySupportTickets>>, TError = UnauthorizedResponse | UnprocessableEntityResponse>(
+ params?: ListMySupportTicketsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMySupportTickets>>, TError, TData>, }
   
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListMySupportTicketsQueryOptions(options)
+  const queryOptions = getListMySupportTicketsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

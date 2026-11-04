@@ -20,7 +20,9 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import type { SupportTicket } from './supportTicket';
+import type { ListMySupportTickets200NextCursor } from './listMySupportTickets200NextCursor';
 
 export type ListMySupportTickets200 = {
   items: SupportTicket[];
+  next_cursor?: ListMySupportTickets200NextCursor;
 };
