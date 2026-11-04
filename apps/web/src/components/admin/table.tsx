@@ -1,12 +1,11 @@
 "use client";
 
-import { ApiError } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState, type ReactNode } from "react";
 
+import { messageOf } from "@/components/admin/detail";
 import { ConsoleError } from "@/components/admin/errors";
 import { POLL_MS } from "@/components/admin/shell";
-import { messageOf } from "@/components/admin/detail";
 
 /**
  * Table primitives for the queues that are read rather than watched.

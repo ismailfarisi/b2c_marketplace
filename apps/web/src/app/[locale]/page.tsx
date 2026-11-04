@@ -36,7 +36,6 @@ import {
   getTomorrowDishes,
   type HomeSection,
 } from "@/lib/meals-api";
-import { LoadError } from "@/components/load-error";
 
 /** Tomorrow's date in Asia/Dubai as YYYY-MM-DD. */
 function dubaiTomorrow() {

@@ -16,7 +16,6 @@ import {
   type Locale,
   formatRange,
 } from "@/components/meals/shell";
-import { LoadError } from "@/components/load-error";
 import { problemMessage } from "@/lib/problem";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import {

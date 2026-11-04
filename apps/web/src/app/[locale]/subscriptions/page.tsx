@@ -14,7 +14,6 @@ import {
   formatDay,
   formatRange,
 } from "@/components/meals/shell";
-import { LoadError } from "@/components/load-error";
 import { problemMessage } from "@/lib/problem";
 import { tokenStore } from "@/lib/token-store";
 import {
@@ -23,7 +22,6 @@ import {
   listMyRotations,
   listMySubscriptions,
 } from "@/lib/customer-api";
-import { LoadError } from "@/components/load-error";
 
 const COPY = {
   en: {
