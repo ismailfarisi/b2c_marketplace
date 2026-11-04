@@ -161,6 +161,9 @@ func run() error {
 	paymentsSvc := payments.NewService(pool, provider, commissionBP, platformVATBP)
 
 	notifySvc := app.BuildNotify(cfg, pool)
+	if err := api.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		return err
+	}
 	identitySvc := identity.NewService(pool, issuer, cfg.OTPTTL, cfg.OTPDevEcho)
 	identitySvc.SetReviewAccount(cfg.OTPReviewPhone, cfg.OTPReviewCode)
 	identitySvc.SetOTPSender(app.LoginCodeNotifier{Notify: notifySvc, TTL: cfg.OTPTTL})

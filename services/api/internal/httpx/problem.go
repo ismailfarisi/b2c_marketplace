@@ -9,7 +9,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Problem is RFC 9457 problem details. One error shape for the whole API, so
@@ -54,7 +56,18 @@ var (
 	ErrConflict            = errors.New("conflict")
 	ErrCapacityTaken       = errors.New("capacity exhausted")
 	ErrIdempotencyMismatch = errors.New("idempotency key reused with a different body")
+	// ErrRateLimited is 429. Wrap it in RetryAfter when the wait is known.
+	ErrRateLimited = errors.New("rate limited")
 )
+
+// RetryAfter adds a Retry-After header to whatever Err maps to.
+type RetryAfter struct {
+	Err   error
+	After time.Duration
+}
+
+func (e *RetryAfter) Error() string { return e.Err.Error() }
+func (e *RetryAfter) Unwrap() error { return e.Err }
 
 // ValidationError carries field-level detail. Returned by request validation and
 // by strategy implementations rejecting vertical-specific options.
@@ -141,6 +154,16 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 		p.Status = http.StatusConflict
 		p.Title = "Conflict"
 		p.Detail = sentenceFor(err, ErrConflict)
+
+	case errors.Is(err, ErrRateLimited):
+		p.Status = http.StatusTooManyRequests
+		p.Title = "Too many requests"
+	}
+
+	var retry *RetryAfter
+	if errors.As(err, &retry) && retry.After > 0 {
+		secs := int((retry.After + time.Second - 1) / time.Second)
+		w.Header().Set("Retry-After", strconv.Itoa(secs))
 	}
 
 	// Applied after the switch, so the code rides along with whatever status the

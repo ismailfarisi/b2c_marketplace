@@ -161,6 +161,11 @@
     <string name="signin_err_too_many">Too many attempts. Wait a minute, then try again.</string>
     <string name="signin_err_offline">No connection. Check your network and try again.</string>
     <string name="signin_err_unknown">Sign-in is not working right now. Try again shortly.</string>
+    <string name="signin_err_blocked">This account can\'t sign in right now. Contact support for help.</string>
+    <string name="signin_err_resend_failed">Couldn\'t send a new code. Your previous code still works until it expires.</string>
+    <string name="signin_err_resend_too_many">Too many codes requested. Wait a while; your previous code still works until it expires.</string>
+    <string name="signin_sending">Sending…</string>
+    <string name="signin_checking">Checking…</string>
 
     <!--
         Shown only when a session ends without the viewer ending it — a revoked

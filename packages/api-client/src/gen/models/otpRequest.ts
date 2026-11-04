@@ -23,10 +23,7 @@ import type { OtpRequestPurpose } from './otpRequestPurpose';
 import type { Locale } from './locale';
 
 export interface OtpRequest {
-  /**
-   * E.164, including country code.
-   * @pattern ^\+[1-9]\d{7,14}$
-   */
+  /** E.164 with country code, or a UAE national number (0501234567) or 00-prefixed international number, which the server normalises to E.164 before validating. */
   phone: string;
   purpose?: OtpRequestPurpose;
   locale?: Locale;

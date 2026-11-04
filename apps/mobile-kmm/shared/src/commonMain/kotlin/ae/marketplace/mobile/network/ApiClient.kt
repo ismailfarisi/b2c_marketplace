@@ -10,6 +10,8 @@ import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.auth.Auth
+import io.ktor.client.plugins.auth.authProvider
+import io.ktor.client.plugins.auth.providers.BearerAuthProvider
 import io.ktor.client.plugins.auth.providers.BearerTokens
 import io.ktor.client.plugins.auth.providers.bearer
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -239,3 +241,12 @@ private data class TokenPair(
  * session and must not sign anyone out.
  */
 internal fun refreshRejected(status: Int): Boolean = status == 400 || status == 401
+
+/**
+ * Forget the bearer Ktor cached from [TokenStore]. Its `loadTokens` result is
+ * kept until cleared, so a sign-out or account switch that only empties the
+ * store keeps sending the old access token for up to its lifetime.
+ */
+fun HttpClient.forgetCachedBearer() {
+    authProvider<BearerAuthProvider>()?.clearToken()
+}

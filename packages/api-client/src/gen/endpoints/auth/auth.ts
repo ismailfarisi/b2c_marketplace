@@ -33,6 +33,7 @@ import type {
   OtpChallenge,
   OtpRequest,
   OtpVerification,
+  Problem,
   RefreshSessionBody,
   TokenPair,
   TooManyRequestsResponse,
@@ -64,7 +65,7 @@ export const requestOtp = (
   
 
 
-export const getRequestOtpMutationOptions = <TError = UnprocessableEntityResponse | TooManyRequestsResponse,
+export const getRequestOtpMutationOptions = <TError = UnprocessableEntityResponse | Problem,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestOtp>>, TError,{data: OtpRequest}, TContext>, }
 ): UseMutationOptions<Awaited<ReturnType<typeof requestOtp>>, TError,{data: OtpRequest}, TContext> => {
 
@@ -91,12 +92,12 @@ const {mutation: mutationOptions} = options ?
 
     export type RequestOtpMutationResult = NonNullable<Awaited<ReturnType<typeof requestOtp>>>
     export type RequestOtpMutationBody = OtpRequest
-    export type RequestOtpMutationError = UnprocessableEntityResponse | TooManyRequestsResponse
+    export type RequestOtpMutationError = UnprocessableEntityResponse | Problem
 
     /**
  * @summary Send a one-time code to a phone number
  */
-export const useRequestOtp = <TError = UnprocessableEntityResponse | TooManyRequestsResponse,
+export const useRequestOtp = <TError = UnprocessableEntityResponse | Problem,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestOtp>>, TError,{data: OtpRequest}, TContext>, }
  ): UseMutationResult<
         Awaited<ReturnType<typeof requestOtp>>,
@@ -128,7 +129,7 @@ export const verifyOtp = (
   
 
 
-export const getVerifyOtpMutationOptions = <TError = UnauthorizedResponse | TooManyRequestsResponse,
+export const getVerifyOtpMutationOptions = <TError = UnauthorizedResponse | Problem | TooManyRequestsResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyOtp>>, TError,{data: OtpVerification}, TContext>, }
 ): UseMutationOptions<Awaited<ReturnType<typeof verifyOtp>>, TError,{data: OtpVerification}, TContext> => {
 
@@ -155,12 +156,12 @@ const {mutation: mutationOptions} = options ?
 
     export type VerifyOtpMutationResult = NonNullable<Awaited<ReturnType<typeof verifyOtp>>>
     export type VerifyOtpMutationBody = OtpVerification
-    export type VerifyOtpMutationError = UnauthorizedResponse | TooManyRequestsResponse
+    export type VerifyOtpMutationError = UnauthorizedResponse | Problem | TooManyRequestsResponse
 
     /**
  * @summary Exchange a one-time code for a token pair
  */
-export const useVerifyOtp = <TError = UnauthorizedResponse | TooManyRequestsResponse,
+export const useVerifyOtp = <TError = UnauthorizedResponse | Problem | TooManyRequestsResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyOtp>>, TError,{data: OtpVerification}, TContext>, }
  ): UseMutationResult<
         Awaited<ReturnType<typeof verifyOtp>>,

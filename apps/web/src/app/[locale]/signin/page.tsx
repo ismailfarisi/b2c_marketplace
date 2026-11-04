@@ -3,12 +3,13 @@
 import { ApiError } from "@marketplace/api-client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, use, useState, type FormEvent } from "react";
+import { Suspense, use, useEffect, useState, type FormEvent } from "react";
 
 import {
   CustomerShell,
   asLocale,
   safeNext,
+  useHasSession,
   type Locale,
 } from "@/components/meals/shell";
 import { requestOtp, verifyOtp } from "@/lib/auth-api";
@@ -28,10 +29,21 @@ const COPY = {
     verify: "Continue",
     checking: "Checking…",
     change: "Change number",
-    badCode: "That code is not right, or it has expired. Request a new one.",
+    resend: "Resend code",
+    resendIn: (s: number) => `Resend code in ${s}s`,
+    resent: "New code sent. Earlier codes no longer work.",
+    wrongCode: "That code is not right. Check the message and try again.",
+    staleCode: "That code can no longer be used. Send a new one.",
+    blocked:
+      "This account can't sign in right now. Contact support for help.",
     tooMany: "Too many attempts. Wait a little, then try again.",
+    resendFailed:
+      "Couldn't send a new code. Your previous code still works until it expires.",
+    resendTooMany:
+      "Too many codes requested. Wait a while; your previous code still works until it expires.",
     badPhone:
-      "Check the number and try again. Use the international format, e.g. +971501234567.",
+      "Check the number and try again, e.g. 0501234567 or +971501234567.",
+    offline: "No connection. Check your network and try again.",
     failed: "Something went wrong. Try again.",
     dev: "Development: no SMS is sent; the code is in the API log.",
   },
@@ -47,14 +59,44 @@ const COPY = {
     verify: "متابعة",
     checking: "جارٍ التحقق…",
     change: "تغيير الرقم",
-    badCode: "الرمز غير صحيح أو انتهت صلاحيته. اطلب رمزًا جديدًا.",
+    resend: "أعد إرسال الرمز",
+    resendIn: (s: number) => `إعادة الإرسال بعد ${s} ث`,
+    resent: "أرسلنا رمزًا جديدًا. الرموز السابقة لم تعد صالحة.",
+    wrongCode: "الرمز غير صحيح. تحقق من الرسالة وحاول مرة أخرى.",
+    staleCode: "لم يعد بالإمكان استخدام هذا الرمز. اطلب رمزًا جديدًا.",
+    blocked: "لا يمكن لهذا الحساب تسجيل الدخول حاليًا. تواصل مع الدعم للمساعدة.",
     tooMany: "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.",
+    resendFailed:
+      "تعذر إرسال رمز جديد. رمزك السابق ما زال صالحًا حتى تنتهي مدته.",
+    resendTooMany:
+      "طلبت رموزًا كثيرة. انتظر قليلًا؛ رمزك السابق ما زال صالحًا حتى تنتهي مدته.",
     badPhone:
-      "تحقق من الرقم وحاول مرة أخرى بالصيغة الدولية، مثل ‎+971501234567.",
+      "تحقق من الرقم وحاول مرة أخرى، مثل ‎0501234567 أو ‎+971501234567.",
+    offline: "لا يوجد اتصال. تحقق من الشبكة وحاول مرة أخرى.",
     failed: "حدث خطأ. حاول مرة أخرى.",
     dev: "بيئة التطوير: لا تُرسل رسائل، الرمز في سجل الخادم.",
   },
 };
+
+type Copy = (typeof COPY)["en"];
+
+/** Codes after which this challenge is dead and only a new code helps. */
+const STALE_CODES = new Set([
+  "otp_expired",
+  "otp_already_used",
+  "otp_too_many_attempts",
+  "otp_unknown_challenge",
+]);
+
+const isRateLimited = (err: ApiError) =>
+  err.status === 429 || err.problem?.code === "otp_rate_limited";
+
+function requestFailure(err: unknown, t: Copy): string {
+  if (!(err instanceof ApiError)) return t.offline;
+  if (isRateLimited(err)) return t.tooMany;
+  if (err.status === 422) return t.badPhone;
+  return t.failed;
+}
 
 export default function SignInPage({
   params,
@@ -71,31 +113,69 @@ export default function SignInPage({
   );
 }
 
+type Challenge = { id: string; resendAt: number };
+
 function Form({ locale }: { locale: Locale }) {
   const t = COPY[locale];
   const router = useRouter();
   const next = safeNext(locale, useSearchParams().get("next"));
+  const signedIn = useHasSession();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [challenge, setChallenge] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (signedIn) router.replace(next);
+  }, [signedIn, next, router]);
+
+  const waiting = challenge ? challenge.resendAt > now : false;
+  useEffect(() => {
+    if (!waiting) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [waiting]);
+
+  async function request(): Promise<Challenge> {
+    const c = await requestOtp(phone.trim(), locale);
+    const at = Date.now();
+    setNow(at);
+    return { id: c.challenge_id, resendAt: at + c.resend_after_seconds * 1000 };
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
-      const c = await requestOtp(phone.trim(), locale);
-      setChallenge(c.challenge_id);
+      setChallenge(await request());
       setCode("");
     } catch (err) {
+      setError(requestFailure(err, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // A failed resend keeps the challenge on screen: the code already sent is
+  // still good until it expires, and saying so stops a retype into nothing.
+  async function resend() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      setChallenge(await request());
+      setCode("");
+      setNotice(t.resent);
+    } catch (err) {
       setError(
-        err instanceof ApiError && (err.status === 429 || err.status === 409)
-          ? t.tooMany
-          : err instanceof ApiError && err.status === 422
-            ? t.badPhone
-            : t.failed,
+        err instanceof ApiError && isRateLimited(err)
+          ? t.resendTooMany
+          : t.resendFailed,
       );
     } finally {
       setBusy(false);
@@ -107,27 +187,50 @@ function Form({ locale }: { locale: Locale }) {
     if (!challenge) return;
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
-      await verifyOtp(challenge, code.trim());
+      await verifyOtp(challenge.id, code.trim(), "Web");
       router.replace(next);
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 401
-          ? t.badCode
-          : err instanceof ApiError && err.status === 429
-            ? t.tooMany
-            : t.failed,
-      );
+      if (!(err instanceof ApiError)) {
+        setError(t.offline);
+      } else if (err.status === 401 && STALE_CODES.has(err.problem?.code ?? "")) {
+        setChallenge(null);
+        setCode("");
+        setError(t.staleCode);
+      } else if (err.status === 401) {
+        setError(t.wrongCode);
+      } else if (err.status === 403) {
+        setError(t.blocked);
+      } else if (isRateLimited(err)) {
+        setError(t.tooMany);
+      } else {
+        setError(t.failed);
+      }
       setBusy(false);
     }
   }
+
+  const alert = error && (
+    <p className="ms-bad" role="alert">
+      {error}
+    </p>
+  );
 
   return (
     <section className="ms-auth">
       <h1>{t.title}</h1>
       {challenge ? (
         <form onSubmit={verify} className="ms-form">
-          <p className="ms-sub">{t.sentTo(phone.trim())}</p>
+          <p className="ms-sub">
+            {t.sentTo(phone.trim())}
+            {notice && (
+              <>
+                {" "}
+                <span role="status">{notice}</span>
+              </>
+            )}
+          </p>
           <label>
             <span>{t.code}</span>
             <input
@@ -143,11 +246,7 @@ function Form({ locale }: { locale: Locale }) {
               required
             />
           </label>
-          {error && (
-            <p className="ms-bad" role="alert">
-              {error}
-            </p>
-          )}
+          {alert}
           <button
             className="ms-cta"
             type="submit"
@@ -158,7 +257,22 @@ function Form({ locale }: { locale: Locale }) {
           <button
             type="button"
             className="ms-link"
-            onClick={() => setChallenge(null)}
+            disabled={busy || waiting}
+            onClick={resend}
+          >
+            {waiting && challenge
+              ? t.resendIn(Math.ceil((challenge.resendAt - now) / 1000))
+              : t.resend}
+          </button>
+          <button
+            type="button"
+            className="ms-link"
+            disabled={busy}
+            onClick={() => {
+              setChallenge(null);
+              setError(null);
+              setNotice(null);
+            }}
           >
             {t.change}
           </button>
@@ -175,21 +289,17 @@ function Form({ locale }: { locale: Locale }) {
               type="tel"
               inputMode="tel"
               autoComplete="tel"
-              placeholder="+971501234567"
+              placeholder="0501234567"
               dir="ltr"
               autoFocus
               required
             />
           </label>
-          {error && (
-            <p className="ms-bad" role="alert">
-              {error}
-            </p>
-          )}
+          {alert}
           <button
             className="ms-cta"
             type="submit"
-            disabled={busy || phone.trim().length < 8}
+            disabled={busy || phone.replace(/\D/g, "").length < 9}
           >
             {busy ? t.sending : t.send}
           </button>

@@ -4,6 +4,7 @@ import ae.marketplace.mobile.network.ApiException
 import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.network.TokenStore
 import ae.marketplace.mobile.network.Tokens
+import ae.marketplace.mobile.network.forgetCachedBearer
 import ae.marketplace.mobile.network.toFailure
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -32,12 +33,12 @@ import kotlinx.serialization.Serializable
  */
 class SignInApi(private val client: HttpClient, private val tokens: TokenStore) {
 
-    suspend fun requestCode(phone: String): String {
+    suspend fun requestCode(phone: String): CodeSent {
         val res: OtpChallenge = client.post("auth/otp/request") {
             contentType(ContentType.Application.Json)
             setBody(OtpRequest(phone = phone, purpose = "login"))
         }.body()
-        return res.challengeId
+        return CodeSent(res.challengeId, res.resendAfterSeconds)
     }
 
     suspend fun verify(challengeId: String, code: String) {
@@ -46,18 +47,32 @@ class SignInApi(private val client: HttpClient, private val tokens: TokenStore) 
             setBody(OtpVerify(challengeId = challengeId, code = code))
         }.body()
         tokens.save(Tokens(res.accessToken, res.refreshToken))
+        // Ktor keeps the last bearer it loaded until told otherwise, so without
+        // this the next request still carries the previous account's token.
+        client.forgetCachedBearer()
     }
 
     suspend fun signedIn(): Boolean = tokens.load() != null
 
-    suspend fun signOut() = tokens.clear()
+    suspend fun signOut() {
+        tokens.clear()
+        client.forgetCachedBearer()
+    }
 }
+
+/** A code is on its way; [resendAfterSeconds] is the server's cooldown. */
+data class CodeSent(val challengeId: String, val resendAfterSeconds: Int)
 
 @Serializable
 private data class OtpRequest(val phone: String, val purpose: String)
 
 @Serializable
-private data class OtpChallenge(@SerialName("challenge_id") val challengeId: String)
+private data class OtpChallenge(
+    @SerialName("challenge_id") val challengeId: String,
+    @SerialName("resend_after_seconds") val resendAfterSeconds: Int = DEFAULT_RESEND_SECONDS,
+)
+
+private const val DEFAULT_RESEND_SECONDS = 60
 
 @Serializable
 private data class OtpVerify(
@@ -118,6 +133,22 @@ enum class SignInProblem {
     /** Asking for codes too quickly. */
     TooMany,
 
+    /**
+     * The account is suspended or blocked (verify answered 403). Retyping
+     * cannot help, so the copy points to support instead.
+     */
+    AccountBlocked,
+
+    /**
+     * A resend failed while a code is already out. The earlier code still
+     * works until it expires, and the screen says so rather than implying the
+     * typed code is at fault.
+     */
+    ResendFailed,
+
+    /** A resend was refused for asking too often; the earlier code still works. */
+    ResendTooMany,
+
     /** No usable connection. */
     Offline,
 
@@ -165,19 +196,28 @@ class SignInViewModel(
         if (phone.isEmpty() || s.busy) return
         if (nowMillis < s.resendAtMillis) return
 
+        val resending = s.challengeId.isNotEmpty()
         _state.value = s.copy(busy = true, error = null)
         viewModelScope.launch {
             runCatching { api.requestCode(phone) }
                 .onSuccess {
                     _state.value = _state.value.copy(
                         busy = false,
-                        challengeId = it,
+                        challengeId = it.challengeId,
                         code = "",
-                        resendAtMillis = nowMillis + RESEND_COOLDOWN_MS,
+                        resendAtMillis = nowMillis + it.resendAfterSeconds * 1000L,
                     )
                 }
                 .onFailure { e ->
-                    _state.value = _state.value.copy(busy = false, error = classify(e))
+                    val problem = classify(e)
+                    // A resend keeps the challenge that is already out: that
+                    // code still works, and the copy says so.
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        error = if (!resending) problem
+                        else if (problem == SignInProblem.TooMany) SignInProblem.ResendTooMany
+                        else SignInProblem.ResendFailed,
+                    )
                 }
         }
     }
@@ -238,18 +278,24 @@ class SignInViewModel(
     private fun classify(e: Throwable): SignInProblem = when (val f = e.toFailure()) {
         Failure.Offline, Failure.Timeout -> SignInProblem.Offline
         is Failure.RateLimited -> SignInProblem.TooMany
-        Failure.Unauthorized, Failure.Forbidden -> when ((e as? ApiException)?.code) {
+        Failure.Unauthorized -> when ((e as? ApiException)?.code) {
             OTP_EXPIRED, OTP_ALREADY_USED, OTP_TOO_MANY, OTP_UNKNOWN -> SignInProblem.NeedsNewCode
             else -> SignInProblem.WrongCode
         }
-        is Failure.Rejected -> SignInProblem.BadPhone
+        Failure.Forbidden -> SignInProblem.AccountBlocked
+        // Older servers answered the OTP rate limit with a bare 409; only a 422
+        // validation error means the number itself is wrong.
+        is Failure.Rejected -> when {
+            f.code == OTP_RATE_LIMITED -> SignInProblem.TooMany
+            (e as? ApiException)?.status == 422 -> SignInProblem.BadPhone
+            (e as? ApiException)?.status == 409 -> SignInProblem.TooMany
+            else -> SignInProblem.Unknown
+        }
         is Failure.Server, Failure.NotFound, Failure.Unknown -> SignInProblem.Unknown
-
     }
 
     private companion object {
         const val CODE_LENGTH = 6
-        const val RESEND_COOLDOWN_MS = 30_000L
 
         // Mirrors `identity.Code*` in services/api. Wire contract: these strings
         // are matched, not parsed, and the server's comment says they may be
@@ -258,5 +304,6 @@ class SignInViewModel(
         const val OTP_ALREADY_USED = "otp_already_used"
         const val OTP_TOO_MANY = "otp_too_many_attempts"
         const val OTP_UNKNOWN = "otp_unknown_challenge"
+        const val OTP_RATE_LIMITED = "otp_rate_limited"
     }
 }

@@ -71,7 +71,8 @@ struct SignInGate: View {
                         if state.code.count == 6 && !state.busy { viewModel.verify() }
                     }
 
-                primaryButton("signin_verify", enabled: state.code.count == 6 && !state.busy) {
+                primaryButton("signin_verify", busyKey: "signin_checking", busy: state.busy,
+                              enabled: state.code.count == 6 && !state.busy) {
                     viewModel.verify()
                 }
 
@@ -100,7 +101,7 @@ struct SignInGate: View {
                 field($phone, placeholder: "signin_phone_hint", keyboard: .phonePad)
                     .onChange(of: phone) { _, new in viewModel.onPhone(value: new) }
 
-                primaryButton("signin_send_code",
+                primaryButton("signin_send_code", busyKey: "signin_sending", busy: state.busy,
                               enabled: !phone.trimmingCharacters(in: .whitespaces).isEmpty && !state.busy) {
                     viewModel.sendCode(nowMillis: Self.millis())
                 }
@@ -162,17 +163,25 @@ struct SignInGate: View {
             .environment(\.layoutDirection, .leftToRight)
     }
 
+    /// Shows a spinner and "Sending…"/"Checking…" while busy; dimming alone
+    /// looked frozen on a slow connection.
     private func primaryButton(
-        _ key: LocalizedStringKey, enabled: Bool, action: @escaping () -> Void
+        _ key: LocalizedStringKey, busyKey: LocalizedStringKey, busy: Bool,
+        enabled: Bool, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Text(key)
+            HStack(spacing: 10) {
+                if busy {
+                    ProgressView().tint(.white)
+                }
+                Text(busy ? busyKey : key)
+            }
                 .font(.system(size: TypeScale.body).weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: Space.touch)
                 .padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 10)
-                    .fill(enabled ? accent : accent.opacity(0.3)))
+                    .fill(enabled || busy ? accent : accent.opacity(0.3)))
         }
         .disabled(!enabled)
         .padding(.top, Space.large)
@@ -192,6 +201,9 @@ struct SignInGate: View {
         case "NeedsNewCode": return String(localized: "signin_err_stale")
         case "TooMany": return String(localized: "signin_err_too_many")
         case "Offline": return String(localized: "signin_err_offline")
+        case "AccountBlocked": return String(localized: "signin_err_blocked")
+        case "ResendFailed": return String(localized: "signin_err_resend_failed")
+        case "ResendTooMany": return String(localized: "signin_err_resend_too_many")
         default: return String(localized: "signin_err_unknown")
         }
     }

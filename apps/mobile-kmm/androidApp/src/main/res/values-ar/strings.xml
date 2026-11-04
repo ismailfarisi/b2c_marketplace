@@ -126,6 +126,11 @@
     <string name="signin_err_too_many">محاولات كثيرة. انتظر دقيقة ثم حاول مجدداً.</string>
     <string name="signin_err_offline">لا يوجد اتصال. تحقق من الشبكة وحاول مجدداً.</string>
     <string name="signin_err_unknown">تسجيل الدخول لا يعمل الآن. حاول بعد قليل.</string>
+    <string name="signin_err_blocked">لا يمكن لهذا الحساب تسجيل الدخول حالياً. تواصل مع الدعم للمساعدة.</string>
+    <string name="signin_err_resend_failed">تعذّر إرسال رمز جديد. رمزك السابق ما زال صالحاً حتى تنتهي مدته.</string>
+    <string name="signin_err_resend_too_many">طلبت رموزاً كثيرة. انتظر قليلاً؛ رمزك السابق ما زال صالحاً حتى تنتهي مدته.</string>
+    <string name="signin_sending">جارٍ الإرسال…</string>
+    <string name="signin_checking">جارٍ التحقق…</string>
 
     <string name="session_expired">تم تسجيل خروجك. سجّل الدخول مجدداً للمتابعة.</string>
 

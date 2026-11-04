@@ -102,9 +102,17 @@ class Session(private val tokens: TokenStore) {
     /** Runs before local tokens are dropped, while the server session is still usable. */
     var beforeSignOut: (suspend () -> Unit)? = null
 
+    /**
+     * Drops the HTTP client's in-memory bearer. Ktor caches the last token it
+     * loaded until cleared, so clearing only [tokens] let the next request (or
+     * the next person on a shared phone) go out as the previous account.
+     */
+    var forgetCachedCredential: (() -> Unit)? = null
+
     suspend fun signOut() {
         if (_state.value.isAuthenticated) runCatching { beforeSignOut?.invoke() }
         runCatching { tokens.clear() }
+        runCatching { forgetCachedCredential?.invoke() }
         _ended.value = SessionEnded.ByViewer
         _state.value = SessionState.Anonymous
     }
@@ -119,6 +127,7 @@ class Session(private val tokens: TokenStore) {
      * revoked token looks like a crash.
      */
     fun expired() {
+        runCatching { forgetCachedCredential?.invoke() }
         if (_state.value is SessionState.Anonymous) return
         _ended.value = SessionEnded.Expired
         _state.value = SessionState.Anonymous
