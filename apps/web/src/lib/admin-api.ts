@@ -2043,11 +2043,12 @@ export const getSupportQueue = (status = "") =>
 export const getSupportTicket = (id: string) =>
   apiFetch<AdminSupportThread>({ url: `/admin/support/tickets/${id}`, method: "GET" });
 
-export const replySupportTicket = (id: string, body: string) =>
+export const replySupportTicket = (id: string, body: string, headers?: Record<string, string>) =>
   apiFetch<AdminSupportThread>({
     url: `/admin/support/tickets/${id}/messages`,
     method: "POST",
     data: { body },
+    headers,
   });
 
 export const setSupportStatus = (id: string, status: "open" | "answered" | "closed") =>

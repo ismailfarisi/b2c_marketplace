@@ -1,6 +1,7 @@
 "use client";
 
 import { formatMoney } from "@marketplace/api-client";
+import type { ReactNode } from "react";
 
 import type { InvoiceDocument } from "@/lib/customer-api";
 
@@ -60,9 +61,14 @@ const COPY = {
 export function InvoiceView({
   invoice,
   locale,
+  back,
+  actions,
 }: {
   invoice: InvoiceDocument;
   locale: "en" | "ar";
+  /** Where the screen copy leads back to; hidden in print with the button. */
+  back?: { href: string; label: string };
+  actions?: ReactNode;
 }) {
   const t = COPY[locale];
   const m = (amount: number) =>
@@ -79,6 +85,12 @@ export function InvoiceView({
       lang={locale}
     >
       <div className="inv-actions">
+        {back ? (
+          <a href={back.href}>
+            <span aria-hidden>{locale === "ar" ? "→" : "←"}</span> {back.label}
+          </a>
+        ) : null}
+        {actions}
         <button type="button" onClick={() => window.print()}>
           {t.print}
         </button>

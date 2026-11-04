@@ -7,6 +7,12 @@ import { Panel, Ref, plural } from "@/components/admin/detail";
 import { Tag, money } from "@/components/admin/table";
 import { getInvoices, getRefunds } from "@/lib/admin-api";
 
+const KIND_LABEL: Record<string, string> = {
+  tax_invoice: "Tax invoice",
+  simplified: "Simplified",
+  credit_note: "Credit note",
+};
+
 /**
  * Refunds and invoices — the two documents that get asked about after the fact.
  *
@@ -170,7 +176,7 @@ export default function RefundsPage({ params }: { params: Promise<{ locale: stri
                     ) : null}
                   </td>
                   <td>
-                    <Tag tone={i.kind === "credit_note" ? "warn" : undefined}>{i.kind}</Tag>
+                    <Tag tone={i.kind === "credit_note" ? "warn" : undefined}>{KIND_LABEL[i.kind] ?? i.kind}</Tag>
                   </td>
                   <td className="faint">{i.buyer ?? "—"}</td>
                   <td className="num">{money(i.net)}</td>
