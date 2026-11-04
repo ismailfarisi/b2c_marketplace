@@ -409,6 +409,10 @@ type BranchAccess struct {
 	VendorName   string    `json:"vendor_name"`
 	VendorStatus string    `json:"vendor_status"`
 	Role         string    `json:"role"`
+	// Timezone is the branch's IANA zone. The portal defaults its date pickers
+	// to the kitchen's today, not the browser's: a dispatcher abroad, or anyone
+	// around midnight UTC, would otherwise plan the wrong day.
+	Timezone string `json:"timezone"`
 }
 
 // Branches expands memberships into concrete branches: a vendor-wide row
@@ -416,7 +420,7 @@ type BranchAccess struct {
 // needs and what Memberships deliberately does not do.
 func (s *Service) Branches(ctx context.Context, userID uuid.UUID) ([]BranchAccess, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (b.id) b.id, b.name, b.city, v.id, v.trade_name, v.status, vu.role
+		SELECT DISTINCT ON (b.id) b.id, b.name, b.city, v.id, v.trade_name, v.status, vu.role, b.timezone
 		  FROM vendor_users vu
 		  JOIN vendors v ON v.id = vu.vendor_id AND v.deleted_at IS NULL
 		  JOIN vendor_branches b ON b.vendor_id = v.id AND b.deleted_at IS NULL
@@ -431,7 +435,7 @@ func (s *Service) Branches(ctx context.Context, userID uuid.UUID) ([]BranchAcces
 	for rows.Next() {
 		var b BranchAccess
 		if err := rows.Scan(&b.BranchID, &b.BranchName, &b.City, &b.VendorID, &b.VendorName,
-			&b.VendorStatus, &b.Role); err != nil {
+			&b.VendorStatus, &b.Role, &b.Timezone); err != nil {
 			return nil, fmt.Errorf("scan branch: %w", err)
 		}
 		out = append(out, b)

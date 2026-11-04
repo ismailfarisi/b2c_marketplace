@@ -8,6 +8,8 @@ struct LegalLinks: View {
     var body: some View {
         HStack(spacing: 20) {
             if showHelp { link("legal_help", page: "support") }
+            // The kitchen console is web-only; vendors reach it from here.
+            if showHelp { link("legal_kitchen", page: "console") }
             link("legal_terms", page: "terms")
             link("legal_privacy", page: "privacy")
         }

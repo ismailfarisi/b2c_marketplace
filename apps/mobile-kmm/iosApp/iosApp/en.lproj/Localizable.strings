@@ -459,6 +459,7 @@
 "invoices_empty" = "No invoices yet. An invoice is issued once a paid order is delivered.";
 "invoices_credit" = "Credit note";
 "invoices_print_hint" = "Tap an invoice to open the printable copy on the web.";
+"legal_kitchen" = "Kitchen portal";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

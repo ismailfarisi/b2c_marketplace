@@ -2,13 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@marketplace/api-client";
-import { use, useState } from "react";
+import { useState } from "react";
 
+import { label } from "@/components/kitchen/copy";
+import { ConsoleError, errorText, useBranch } from "@/components/kitchen/portal";
 import { getBoard, getQueue, getSummary, planRoutes } from "@/lib/api";
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { branchToday } from "@/lib/vendor-api";
 
 /**
  * The branch dashboard: today's numbers, the order queue, the dispatch board.
@@ -18,16 +17,15 @@ function today(): string {
  * whereas a websocket per open dashboard is a connection to hold, a reconnect
  * path to get right, and an auth refresh story, for a screen that is idle
  * nineteen hours a day.
+ *
+ * "Today" is the kitchen's day (its timezone), not the browser's.
  */
-export default function BranchDashboard({
-  params,
-}: {
-  params: Promise<{ locale: string; branchId: string }>;
-}) {
-  const { locale, branchId } = use(params);
-  const isAr = locale === "ar";
-  const loc = isAr ? "ar" : "en";
-  const [date, setDate] = useState(today());
+export default function BranchDashboard() {
+  const branch = useBranch();
+  const { t, locale, branch_id: branchId } = branch;
+  const d = t.deliveries;
+  const loc = locale === "ar" ? "ar" : "en";
+  const [date, setDate] = useState(() => branchToday(branch.timezone));
   const queryClient = useQueryClient();
 
   const summary = useQuery({
@@ -60,157 +58,166 @@ export default function BranchDashboard({
     },
   });
 
+  const loadError = summary.error ?? queue.error ?? board.error;
+  const retry = () => {
+    if (summary.error) void summary.refetch();
+    if (queue.error) void queue.refetch();
+    if (board.error) void board.refetch();
+  };
+
   return (
     <main className="page wide">
       <header className="row spread">
-        <h1>{isAr ? "اليوم" : "Today"}</h1>
+        <h1>{d.today}</h1>
         <input
           type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
-          aria-label={isAr ? "التاريخ" : "Date"}
+          onChange={(e) => {
+            plan.reset();
+            setDate(e.target.value);
+          }}
+          aria-label={d.date}
         />
       </header>
 
+      {loadError ? <ConsoleError error={loadError} onRetry={retry} locale={locale} /> : null}
+
       <section className="metrics">
-        <Metric label={isAr ? "مجدول" : "Scheduled"} value={summary.data?.scheduled} />
-        <Metric label={isAr ? "قيد التنفيذ" : "In progress"} value={summary.data?.in_progress} />
-        <Metric label={isAr ? "مكتمل" : "Completed"} value={summary.data?.completed} />
+        <Metric label={d.scheduled} value={summary.data?.scheduled} />
+        <Metric label={d.inProgress} value={summary.data?.in_progress} />
+        <Metric label={d.completed} value={summary.data?.completed} />
+        <Metric label={d.failed} value={summary.data?.failed} tone={summary.data?.failed ? "bad" : undefined} />
         <Metric
-          label={isAr ? "فشل" : "Failed"}
-          value={summary.data?.failed}
-          tone={summary.data?.failed ? "bad" : undefined}
-        />
-        <Metric
-          label={isAr ? "بدون سائق" : "Unassigned"}
+          label={d.unassigned}
           value={summary.data?.unassigned}
           tone={summary.data?.unassigned ? "warn" : undefined}
         />
         <Metric
-          label={isAr ? "نقد لدى السائقين" : "Cash with drivers"}
+          label={d.cash}
           value={
             summary.data &&
-            formatMoney(
-              { amount: summary.data.cash_held_minor, currency: summary.data.currency },
-              loc,
-            )
+            formatMoney({ amount: summary.data.cash_held_minor, currency: summary.data.currency }, loc)
           }
         />
         <Metric
-          label={isAr ? "المستحق" : "Payable"}
+          label={d.payable}
           value={
-            summary.data &&
-            formatMoney(
-              { amount: summary.data.payable_minor, currency: summary.data.currency },
-              loc,
-            )
+            summary.data && formatMoney({ amount: summary.data.payable_minor, currency: summary.data.currency }, loc)
           }
         />
       </section>
 
       <section>
         <div className="row spread">
-          <h2>{isAr ? "التوزيع" : "Dispatch"}</h2>
-          <button onClick={() => plan.mutate()} disabled={plan.isPending}>
-            {plan.isPending
-              ? isAr
-                ? "جارٍ التخطيط…"
-                : "Planning…"
-              : isAr
-                ? "خطّط المسارات"
-                : "Plan routes"}
-          </button>
+          <h2>{d.dispatch}</h2>
+          {/* Planning routes is a write: staff see the board but not the button
+              (the server refuses them too, 403 role_read_only). */}
+          {branch.editable ? (
+            <button onClick={() => plan.mutate()} disabled={plan.isPending}>
+              {plan.isPending ? d.planning : d.plan}
+            </button>
+          ) : null}
         </div>
+
+        {plan.error ? (
+          <p className="danger" role="alert">
+            {errorText(plan.error, locale)}
+          </p>
+        ) : null}
 
         {plan.data && (
           <p className="muted">
-            {isAr
-              ? `${plan.data.routes_created} مسار، ${plan.data.stops_routed} محطة`
-              : `${plan.data.routes_created} routes, ${plan.data.stops_routed} stops`}
+            {d.planned(plan.data.routes_created, plan.data.stops_routed)}
             {plan.data.stops_already_late > 0 && (
               /* Surfaced, not buried. A plan containing stops that are already
                  past their window is a reassignment decision now — not a
                  customer discovery in three hours. */
-              <strong className="bad">
-                {isAr
-                  ? ` · ${plan.data.stops_already_late} متأخرة بالفعل`
-                  : ` · ${plan.data.stops_already_late} already late`}
-              </strong>
+              <strong className="bad">{d.late(plan.data.stops_already_late)}</strong>
             )}
           </p>
         )}
 
-        {board.data && board.data.unassigned > 0 && (
-          <p className="warn">
-            {isAr
-              ? `${board.data.unassigned} طلب بدون مسار`
-              : `${board.data.unassigned} stops have no route`}
-          </p>
-        )}
+        {board.data && board.data.unassigned > 0 && <p className="warn">{d.noRoute(board.data.unassigned)}</p>}
 
         <div className="scroll">
           <table>
             <thead>
               <tr>
-                <th>{isAr ? "السائق" : "Driver"}</th>
-                <th>{isAr ? "الحالة" : "Status"}</th>
-                <th>{isAr ? "محطات" : "Stops"}</th>
-                <th>{isAr ? "المسافة" : "Distance"}</th>
-                <th>{isAr ? "أول وصول" : "First ETA"}</th>
+                <th>{d.driver}</th>
+                <th>{d.status}</th>
+                <th>{d.stops}</th>
+                <th>{d.distance}</th>
+                <th>{d.firstEta}</th>
               </tr>
             </thead>
             <tbody>
               {(board.data?.routes ?? []).map((r) => (
                 <tr key={r.id}>
-                  <td>{r.driver_name || <span className="muted">—</span>}</td>
+                  <td dir="auto">{r.driver_name || <span className="muted">—</span>}</td>
                   <td>
-                    <span className="pill">{r.status}</span>
+                    <span className="pill">{label(t.statuses, r.status)}</span>
                   </td>
                   <td>
                     {r.completed_stops}/{r.planned_stops}
                     {r.failed_stops > 0 && <span className="bad"> · {r.failed_stops}</span>}
                   </td>
-                  <td>{(r.planned_distance_m / 1000).toFixed(1)} km</td>
-                  <td>{r.first_eta ? new Date(r.first_eta).toLocaleTimeString(loc) : "—"}</td>
+                  <td>{d.km((r.planned_distance_m / 1000).toLocaleString(loc, { maximumFractionDigits: 1, minimumFractionDigits: 1 }))}</td>
+                  <td>
+                    {r.first_eta
+                      ? new Date(r.first_eta).toLocaleTimeString(loc, branch.timezone ? { timeZone: branch.timezone } : {})
+                      : "—"}
+                  </td>
                 </tr>
               ))}
+              {board.data && board.data.routes.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    {d.noRoutes}
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
       </section>
 
       <section>
-        <h2>{isAr ? "قائمة الطلبات" : "Order queue"}</h2>
+        <h2>{d.queue}</h2>
         <div className="scroll">
           <table>
             <thead>
               <tr>
-                <th>{isAr ? "النافذة" : "Window"}</th>
-                <th>{isAr ? "الطلب" : "Order"}</th>
-                <th>{isAr ? "الأصناف" : "Items"}</th>
-                <th>{isAr ? "المستلم" : "Recipient"}</th>
-                <th>{isAr ? "المنطقة" : "Area"}</th>
-                <th>{isAr ? "السائق" : "Driver"}</th>
-                <th>{isAr ? "الحالة" : "Status"}</th>
+                <th>{d.window}</th>
+                <th>{d.order}</th>
+                <th>{d.items}</th>
+                <th>{d.recipient}</th>
+                <th>{d.area}</th>
+                <th>{d.driver}</th>
+                <th>{d.status}</th>
               </tr>
             </thead>
             <tbody>
               {(queue.data?.items ?? []).map((q) => (
                 <tr key={q.fulfillment_id}>
-                  <td>{q.window}</td>
+                  <td dir="auto">{q.window}</td>
                   <td className="mono">{q.order_no || q.payload_ref || "—"}</td>
-                  <td>{q.items || <span className="muted">—</span>}</td>
-                  <td>{q.recipient_name}</td>
-                  <td>{q.area}</td>
-                  <td>{q.driver_name || <span className="muted">—</span>}</td>
+                  <td dir="auto">{q.items || <span className="muted">—</span>}</td>
+                  <td dir="auto">{q.recipient_name}</td>
+                  <td dir="auto">{q.area}</td>
+                  <td dir="auto">{q.driver_name || <span className="muted">—</span>}</td>
                   <td>
-                    <span className={`pill ${q.status === "failed" ? "bad" : ""}`}>{q.status}</span>
-                    {q.attempt_count > 1 && (
-                      <span className="warn"> ·{q.attempt_count}</span>
-                    )}
+                    <span className={`pill ${q.status === "failed" ? "bad" : ""}`}>{label(t.statuses, q.status)}</span>
+                    {q.attempt_count > 1 && <span className="warn"> ·{q.attempt_count}</span>}
                   </td>
                 </tr>
               ))}
+              {queue.data && queue.data.items.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="muted">
+                    {d.noOrders}
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

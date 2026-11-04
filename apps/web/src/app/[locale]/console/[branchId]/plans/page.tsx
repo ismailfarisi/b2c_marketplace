@@ -2,10 +2,12 @@
 
 import { formatMoney } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Panel } from "@/components/admin/detail";
-import { errorText, fieldErrors, useBranch } from "@/components/kitchen/portal";
+import { label, type ConsoleCopy } from "@/components/kitchen/copy";
+import { ConsoleError, errorText, fieldErrors, useBranch } from "@/components/kitchen/portal";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import {
   createPlan,
   listPlans,
@@ -13,7 +15,6 @@ import {
   SLOTS,
   toMajorInput,
   updatePlan,
-  WEEKDAYS,
   type Plan,
   type PlanInput,
   type Slot,
@@ -26,11 +27,13 @@ type Draft = {
   name_ar: string;
   description: string;
   cycle_days: number;
-  days_per_week: number;
+  // Numeric inputs are kept as typed and converted on submit, so clearing a
+  // field to retype it does not turn it into 0.
+  days_per_week: string;
   meal_slots: Slot[];
   delivery_weekdays: number[];
-  cutoff_hours: number;
-  allowed_pause_days: number;
+  cutoff_hours: string;
+  allowed_pause_days: string;
   price: string;
   rotation_enabled: boolean;
   rotation_price: string;
@@ -43,11 +46,11 @@ const fresh: Draft = {
   name_ar: "",
   description: "",
   cycle_days: 28,
-  days_per_week: 5,
+  days_per_week: "5",
   meal_slots: ["lunch"],
   delivery_weekdays: [0, 1, 2, 3, 4],
-  cutoff_hours: 20,
-  allowed_pause_days: 7,
+  cutoff_hours: "20",
+  allowed_pause_days: "7",
   price: "",
   rotation_enabled: false,
   rotation_price: "",
@@ -61,11 +64,11 @@ function toDraft(p: Plan): Draft {
     name_ar: p.name_ar ?? "",
     description: p.description ?? "",
     cycle_days: p.cycle_days,
-    days_per_week: p.days_per_week,
+    days_per_week: String(p.days_per_week),
     meal_slots: p.meal_slots,
     delivery_weekdays: p.delivery_weekdays,
-    cutoff_hours: p.cutoff_hours,
-    allowed_pause_days: p.allowed_pause_days,
+    cutoff_hours: String(p.cutoff_hours),
+    allowed_pause_days: String(p.allowed_pause_days),
     price: toMajorInput(p.price_minor, p.currency),
     rotation_enabled: p.rotation_enabled,
     rotation_price: toMajorInput(p.rotation_week_price_minor, p.currency),
@@ -83,9 +86,18 @@ function toDraft(p: Plan): Draft {
   };
 }
 
-function shape(p: { days_per_week: number; meal_slots: string[]; delivery_weekdays: number[]; cycle_days: number }) {
-  const days = p.delivery_weekdays.map((d) => WEEKDAYS[d]).join(" ");
-  return `${p.days_per_week} days/week from ${days} · ${p.meal_slots.join(" + ")} · ${p.cycle_days}-day cycle`;
+function shape(
+  t: ConsoleCopy,
+  p: { days_per_week: number; meal_slots: string[]; delivery_weekdays: number[]; cycle_days: number },
+) {
+  const days = p.delivery_weekdays.map((d) => t.weekdays[d]).join(" ");
+  return t.plans.shape(p.days_per_week, days, p.meal_slots.map((s) => label(t.slots, s)).join(" + "), p.cycle_days);
+}
+
+/** A whole number as typed, or null when the field is empty or not a whole number. */
+function wholeNumber(raw: string): number | null {
+  const s = raw.trim();
+  return /^\d+$/.test(s) ? Number(s) : null;
 }
 
 /**
@@ -101,9 +113,12 @@ function shape(p: { days_per_week: number; meal_slots: string[]; delivery_weekda
  */
 export default function PlansPage() {
   const branch = useBranch();
+  const { t, locale } = branch;
+  const c = t.plans;
+  const money = locale === "ar" ? "ar" : "en";
   const qc = useQueryClient();
   const key = ["vendor", "plans", branch.branch_id];
-  const { data, error, isPending } = useQuery({ queryKey: key, queryFn: () => listPlans(branch.branch_id) });
+  const { data, error, isPending, refetch } = useQuery({ queryKey: key, queryFn: () => listPlans(branch.branch_id) });
   const [editing, setEditing] = useState<{ plan: Plan | null } | null>(null);
   const plans = data?.items ?? [];
 
@@ -125,33 +140,33 @@ export default function PlansPage() {
 
       <section className="panel">
         <header className="panel-head">
-          <h3>Plans</h3>
+          <h3>{c.title}</h3>
           <div className="spacer" />
           {branch.editable ? (
             <button className="btn primary" type="button" onClick={() => setEditing({ plan: null })}>
-              New plan
+              {c.new}
             </button>
           ) : null}
         </header>
         {error ? (
-          <div className="state error">{errorText(error)}</div>
+          <ConsoleError error={error} onRetry={() => void refetch()} locale={locale} />
         ) : isPending ? (
           <div className="panel-body">
             <div className="skeleton" style={{ inlineSize: "40%" }} />
           </div>
         ) : plans.length === 0 ? (
-          <div className="state">No plans yet. Create the plan customers will subscribe to.</div>
+          <div className="state">{c.empty}</div>
         ) : (
           <div className="table-wrap">
             <table className="data">
               <thead>
                 <tr>
-                  <th className="grow">Plan</th>
-                  <th className="num">Price / cycle</th>
-                  <th className="num">Rotation / week</th>
-                  <th>Tiers</th>
-                  <th className="num">Subscribers</th>
-                  <th>Status</th>
+                  <th className="grow">{c.colPlan}</th>
+                  <th className="num">{c.colPrice}</th>
+                  <th className="num">{c.colRotation}</th>
+                  <th>{c.colTiers}</th>
+                  <th className="num">{c.colSubscribers}</th>
+                  <th>{c.colStatus}</th>
                   {branch.editable ? <th /> : null}
                 </tr>
               </thead>
@@ -160,33 +175,33 @@ export default function PlansPage() {
                   <tr key={p.id}>
                     <td className="grow">
                       <strong dir="auto">{p.name}</strong>
-                      <div className="muted">{shape(p)}</div>
+                      <div className="muted">{shape(t, p)}</div>
                     </td>
-                    <td className="num">{formatMoney({ amount: p.price_minor, currency: p.currency }, "en")}</td>
+                    <td className="num">{formatMoney({ amount: p.price_minor, currency: p.currency }, money)}</td>
                     <td className="num">
                       {p.rotation_enabled && p.rotation_week_price_minor != null ? (
-                        formatMoney({ amount: p.rotation_week_price_minor, currency: p.currency }, "en")
+                        formatMoney({ amount: p.rotation_week_price_minor, currency: p.currency }, money)
                       ) : (
-                        <span className="muted">not in rotation</span>
+                        <span className="muted">{c.notInRotation}</span>
                       )}
                     </td>
                     <td>
                       {p.tiers
                         .filter((t) => t.is_active)
                         .map((t) => (
-                          <span key={t.id} className="tag">
+                          <span key={t.id} className="tag" dir="auto">
                             {t.name}
                           </span>
                         ))}
                     </td>
                     <td className="num">{p.active_subscribers}</td>
                     <td>
-                      <span className={`tag ${p.is_active ? "ok" : ""}`}>{p.is_active ? "live" : "paused"}</span>
+                      <span className={`tag ${p.is_active ? "ok" : ""}`}>{p.is_active ? c.live : c.paused}</span>
                     </td>
                     {branch.editable ? (
                       <td>
                         <button className="btn link" type="button" onClick={() => setEditing({ plan: p })}>
-                          Edit
+                          {t.edit}
                         </button>
                       </td>
                     ) : null}
@@ -213,26 +228,48 @@ function PlanForm({
   onCancel: () => void;
 }) {
   const branch = useBranch();
+  const { locale } = branch;
+  const T = branch.t;
+  const c = T.plans;
   const [d, setD] = useState<Draft>(plan ? toDraft(plan) : fresh);
   const [local, setLocal] = useState<Record<string, string>>({});
   const locked = (plan?.active_subscribers ?? 0) > 0;
 
+  // One key per open form, so a double-click on "Create plan" is one plan.
+  const idem = useIdempotencyKey();
+  const submitting = useRef(false);
   const save = useMutation({
     mutationFn: (body: PlanInput) =>
-      plan ? updatePlan(branch.branch_id, plan.id, body) : createPlan(branch.branch_id, body),
-    onSuccess: onDone,
+      plan
+        ? updatePlan(branch.branch_id, plan.id, body)
+        : createPlan(branch.branch_id, body, { headers: idem.headers() }),
+    onSuccess: () => {
+      idem.reset();
+      onDone();
+    },
+    onError: () => idem.reset(),
+    onSettled: () => {
+      submitting.current = false;
+    },
   });
-  const errs = { ...fieldErrors(save.error), ...local };
+  const errs = { ...fieldErrors(save.error, locale), ...local };
 
   function submit() {
+    if (save.isPending || submitting.current) return;
     const bad: Record<string, string> = {};
     const price = parseMajor(d.price, currency);
-    if (price == null || price <= 0) bad.price_minor = "Enter a price, e.g. 1200 or 1200.50";
+    if (price == null || price <= 0) bad.price_minor = c.priceRequired;
     const rotation = d.rotation_enabled ? parseMajor(d.rotation_price, currency) : null;
-    if (d.rotation_enabled && (rotation == null || rotation <= 0)) bad.rotation_week_price_minor = "Enter your weekly rotation price";
+    if (d.rotation_enabled && (rotation == null || rotation <= 0)) bad.rotation_week_price_minor = c.rotationRequired;
+    const daysPerWeek = wholeNumber(d.days_per_week);
+    if (daysPerWeek == null) bad.days_per_week = c.wholeNumber;
+    const cutoffHours = wholeNumber(d.cutoff_hours);
+    if (cutoffHours == null) bad.cutoff_hours = c.wholeNumber;
+    const pauseDays = wholeNumber(d.allowed_pause_days);
+    if (pauseDays == null) bad.allowed_pause_days = c.wholeNumber;
     const tiers = d.tiers.map((t, i) => {
       const tp = parseMajor(t.price, currency);
-      if (tp == null || tp <= 0) bad[`tiers[${i}].price_minor`] = "Enter a price";
+      if (tp == null || tp <= 0) bad[`tiers[${i}].price_minor`] = c.tierPriceRequired;
       return {
         key: t.key || t.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
         name: t.name,
@@ -245,6 +282,7 @@ function PlanForm({
     });
     setLocal(bad);
     if (Object.keys(bad).length > 0) return;
+    submitting.current = true;
     save.mutate({
       name: d.name,
       name_ar: d.name_ar.trim() || null,
@@ -252,11 +290,11 @@ function PlanForm({
       description_ar: plan?.description_ar ?? null,
       image_url: plan?.image_url ?? null,
       cycle_days: d.cycle_days,
-      days_per_week: d.days_per_week,
+      days_per_week: daysPerWeek ?? 0,
       meal_slots: d.meal_slots,
       delivery_weekdays: d.delivery_weekdays,
-      allowed_pause_days: d.allowed_pause_days,
-      cutoff_hours: d.cutoff_hours,
+      allowed_pause_days: pauseDays ?? 0,
+      cutoff_hours: cutoffHours ?? 0,
       price_minor: price ?? 0,
       rotation_enabled: d.rotation_enabled,
       rotation_week_price_minor: rotation,
@@ -269,7 +307,7 @@ function PlanForm({
   const err = (k: string) => (errs[k] ? <span className="err">{errs[k]}</span> : null);
 
   return (
-    <Panel title={plan ? `Edit ${plan.name}` : "New plan"} note={currency}>
+    <Panel title={plan ? c.editTitle(plan.name) : c.new} note={currency}>
       <form
         className="vp-form"
         onSubmit={(e) => {
@@ -278,30 +316,29 @@ function PlanForm({
         }}
       >
         <label>
-          Plan name
-          <input className="field" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} required autoFocus />
+          {c.name}
+          <input className="field" dir="auto" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} required autoFocus />
           {err("name")}
         </label>
         <label>
-          Name in Arabic
+          {c.nameAr}
           <input className="field" dir="rtl" value={d.name_ar} onChange={(e) => setD({ ...d, name_ar: e.target.value })} />
         </label>
         <label className="wide">
-          Description
-          <textarea className="field" rows={2} value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} />
+          {c.description}
+          <textarea className="field" dir="auto" rows={2} value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} />
         </label>
 
         {locked ? (
           <div className="vp-readonly wide">
-            {plan?.active_subscribers} customers are subscribed, so the cycle, days per week and meals are fixed.
-            Create a new plan to sell a different shape.
+            {c.locked(plan?.active_subscribers ?? 0)}
           </div>
         ) : null}
 
         <div className="vp-label wide">
-          Delivery days <span className="hint">the days your kitchen delivers this plan</span>
+          {c.deliveryDays} <span className="hint">{c.deliveryDaysHint}</span>
           <div className="vp-chips">
-            {WEEKDAYS.map((name, i) => (
+            {T.weekdays.map((name, i) => (
               <button
                 key={name}
                 type="button"
@@ -316,7 +353,7 @@ function PlanForm({
           {err("delivery_weekdays")}
         </div>
         <div className="vp-label wide">
-          Meals
+          {c.meals}
           <div className="vp-chips">
             {SLOTS.map((s) => (
               <button
@@ -327,14 +364,14 @@ function PlanForm({
                 aria-pressed={d.meal_slots.includes(s)}
                 onClick={() => setD({ ...d, meal_slots: SLOTS.filter((x) => (x === s ? !d.meal_slots.includes(s) : d.meal_slots.includes(x))) })}
               >
-                {s}
+                {label(T.slots, s)}
               </button>
             ))}
           </div>
           {err("meal_slots")}
         </div>
         <label>
-          Days per week <span className="hint">how many delivery days a customer picks</span>
+          {c.daysPerWeek} <span className="hint">{c.daysPerWeekHint}</span>
           <input
             className="field"
             type="number"
@@ -342,54 +379,54 @@ function PlanForm({
             max={7}
             value={d.days_per_week}
             disabled={locked}
-            onChange={(e) => setD({ ...d, days_per_week: Number(e.target.value) })}
+            onChange={(e) => setD({ ...d, days_per_week: e.target.value })}
           />
           {err("days_per_week")}
         </label>
         <label>
-          Billing cycle
+          {c.cycle}
           <select className="field" value={d.cycle_days} disabled={locked} onChange={(e) => setD({ ...d, cycle_days: Number(e.target.value) })}>
             {[7, 14, 28, 30].map((n) => (
               <option key={n} value={n}>
-                {n} days{n === 28 ? " (4 weeks)" : ""}
+                {c.cycleDays(n)}
               </option>
             ))}
           </select>
           {err("cycle_days")}
         </label>
         <label>
-          Price per cycle ({currency}) <span className="hint">before VAT</span>
-          <input className="field" inputMode="decimal" value={d.price} onChange={(e) => setD({ ...d, price: e.target.value })} placeholder="1200.00" />
+          {c.price(currency)} <span className="hint">{c.beforeVat}</span>
+          <input className="field" dir="ltr" inputMode="decimal" value={d.price} onChange={(e) => setD({ ...d, price: e.target.value })} placeholder="1200.00" />
           {err("price_minor")}
         </label>
         <label>
-          Change cutoff (hours before delivery)
+          {c.cutoff}
           <input
             className="field"
             type="number"
             min={0}
             max={168}
             value={d.cutoff_hours}
-            onChange={(e) => setD({ ...d, cutoff_hours: Number(e.target.value) })}
+            onChange={(e) => setD({ ...d, cutoff_hours: e.target.value })}
           />
           {err("cutoff_hours")}
         </label>
         <label>
-          Pause days allowed per cycle
+          {c.pauseDays}
           <input
             className="field"
             type="number"
             min={0}
             value={d.allowed_pause_days}
-            onChange={(e) => setD({ ...d, allowed_pause_days: Number(e.target.value) })}
+            onChange={(e) => setD({ ...d, allowed_pause_days: e.target.value })}
           />
           {err("allowed_pause_days")}
         </label>
         <label>
-          Status
+          {c.status}
           <select className="field" value={d.is_active ? "live" : "paused"} onChange={(e) => setD({ ...d, is_active: e.target.value === "live" })}>
-            <option value="live">Live — open to new subscribers</option>
-            <option value="paused">Paused — hidden from new subscribers</option>
+            <option value="live">{c.statusLive}</option>
+            <option value="paused">{c.statusPaused}</option>
           </select>
         </label>
 
@@ -400,18 +437,16 @@ function PlanForm({
               checked={d.rotation_enabled}
               onChange={(e) => setD({ ...d, rotation_enabled: e.target.checked })}
             />
-            Join the 4-kitchen rotation
+            {c.rotation}
           </label>
-          <span className="hint">
-            Customers pick four kitchens for a month and get one week from each. You set your own weekly price; the
-            customer pays the sum of the four kitchens, and the usual commission applies to your week.
-          </span>
+          <span className="hint">{c.rotationHint}</span>
         </div>
         {d.rotation_enabled ? (
           <label>
-            Your price for one rotation week ({currency})
+            {c.rotationPrice(currency)}
             <input
               className="field"
+              dir="ltr"
               inputMode="decimal"
               value={d.rotation_price}
               onChange={(e) => setD({ ...d, rotation_price: e.target.value })}
@@ -422,16 +457,16 @@ function PlanForm({
         ) : null}
 
         <div className="vp-label wide">
-          Tiers <span className="hint">optional variants at their own price, e.g. large portion</span>
+          {c.tiers} <span className="hint">{c.tiersHint}</span>
           {d.tiers.length > 0 ? (
             <table className="data">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Portion</th>
-                  <th>Days/week</th>
-                  <th>Meals/day</th>
-                  <th>Price / cycle</th>
+                  <th>{c.tierName}</th>
+                  <th>{c.portion}</th>
+                  <th>{c.tierDays}</th>
+                  <th>{c.tierMeals}</th>
+                  <th>{c.tierPrice}</th>
                   <th />
                 </tr>
               </thead>
@@ -442,24 +477,24 @@ function PlanForm({
                   return (
                     <tr key={i}>
                       <td>
-                        <input className="field" value={t.name} onChange={(e) => set({ name: e.target.value })} required />
+                        <input className="field" dir="auto" value={t.name} onChange={(e) => set({ name: e.target.value })} required />
                         {err(`tiers[${i}].name`)}
                         {err(`tiers[${i}].key`)}
                       </td>
                       <td>
                         <select className="field" value={t.portion} onChange={(e) => set({ portion: e.target.value as TierRow["portion"] })}>
                           <option value="">—</option>
-                          <option value="small">small</option>
-                          <option value="regular">regular</option>
-                          <option value="large">large</option>
+                          <option value="small">{c.portions.small}</option>
+                          <option value="regular">{c.portions.regular}</option>
+                          <option value="large">{c.portions.large}</option>
                         </select>
                       </td>
                       <td>
-                        <input className="field" type="number" min={1} max={7} value={t.days} placeholder="plan" onChange={(e) => set({ days: e.target.value })} />
+                        <input className="field" type="number" min={1} max={7} value={t.days} placeholder={c.planDefault} onChange={(e) => set({ days: e.target.value })} />
                         {err(`tiers[${i}].days_per_week`)}
                       </td>
                       <td>
-                        <input className="field" type="number" min={1} max={6} value={t.meals} placeholder="plan" onChange={(e) => set({ meals: e.target.value })} />
+                        <input className="field" type="number" min={1} max={6} value={t.meals} placeholder={c.planDefault} onChange={(e) => set({ meals: e.target.value })} />
                         {err(`tiers[${i}].meals_per_day`)}
                       </td>
                       <td>
@@ -468,7 +503,7 @@ function PlanForm({
                       </td>
                       <td>
                         <button className="btn link" type="button" onClick={() => setD({ ...d, tiers: d.tiers.filter((_, j) => j !== i) })}>
-                          Remove
+                          {c.remove}
                         </button>
                       </td>
                     </tr>
@@ -483,20 +518,20 @@ function PlanForm({
               type="button"
               onClick={() => setD({ ...d, tiers: [...d.tiers, { key: "", name: "", portion: "", days: "", meals: "", price: "" }] })}
             >
-              Add tier
+              {c.addTier}
             </button>
           </div>
         </div>
 
         <div className="vp-actions wide">
           <button className="btn primary" type="submit" disabled={save.isPending}>
-            {save.isPending ? "Saving…" : plan ? "Save plan" : "Create plan"}
+            {save.isPending ? T.saving : plan ? c.save : c.create}
           </button>
           <button className="btn" type="button" onClick={onCancel} disabled={save.isPending}>
-            Never mind
+            {T.neverMind}
           </button>
-          {save.error && Object.keys(fieldErrors(save.error)).length === 0 ? (
-            <span className="danger">{errorText(save.error)}</span>
+          {save.error && Object.keys(fieldErrors(save.error, locale)).length === 0 ? (
+            <span className="danger">{errorText(save.error, locale)}</span>
           ) : null}
         </div>
       </form>

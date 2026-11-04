@@ -565,4 +565,5 @@
     <string name="invoices_empty">لا توجد فواتير بعد. تصدر الفاتورة بعد توصيل الطلب المدفوع.</string>
     <string name="invoices_credit">إشعار دائن</string>
     <string name="invoices_print_hint">اضغط على فاتورة لفتح النسخة القابلة للطباعة على الويب.</string>
+    <string name="legal_kitchen">بوابة المطبخ</string>
 </resources>

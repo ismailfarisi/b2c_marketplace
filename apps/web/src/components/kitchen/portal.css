@@ -1,0 +1,101 @@
+/*
+ * Vendor-portal-only rules layered on the staff console stylesheet
+ * (app/admin.css). Kept here so the kitchen shell can change on phones without
+ * touching the staff console.
+ */
+
+.vp-nav-toggle {
+  display: none;
+}
+
+.vp-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/*
+ * Phones. The staff console collapses its sidebar to a strip of two-letter
+ * stand-ins, which works for counts but not for a kitchen owner on a phone:
+ * "Ov", "We", "Di" mean nothing. Below 640px the sidebar becomes a top bar
+ * with a Menu toggle that opens the full, labelled list.
+ */
+@media (max-width: 640px) {
+  .console.vp-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .vp-shell .console-nav {
+    position: static;
+    block-size: auto;
+    padding-block: 8px;
+  }
+
+  .vp-shell .console-brand {
+    align-items: center;
+  }
+
+  .vp-shell .console-brand span:not(.env),
+  .vp-shell .console-group,
+  .vp-shell .console-link .label {
+    display: revert;
+  }
+
+  .vp-shell .console-link .abbr {
+    display: none;
+  }
+
+  .vp-shell .console-link {
+    justify-content: flex-start;
+    padding-inline: 18px;
+  }
+
+  .vp-shell .vp-nav-toggle {
+    display: inline-flex;
+    margin-inline-start: auto;
+    font: inherit;
+    font-size: 13px;
+    color: var(--a-nav-text-active);
+    background: var(--a-nav-hover);
+    border: 1px solid var(--a-nav-active);
+    border-radius: var(--a-radius-sm);
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+
+  .vp-shell .vp-nav-links {
+    display: none;
+  }
+
+  .vp-shell.vp-nav-open .vp-nav-links {
+    display: block;
+  }
+
+  .vp-shell .console-appbar {
+    block-size: auto;
+    min-block-size: var(--a-appbar-h);
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .vp-shell .console-content {
+    padding: 12px;
+  }
+
+  .vp-shell .metrics,
+  .vp-shell .stats {
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  }
+
+  .vp-shell .page.wide {
+    padding-inline: 0;
+    max-inline-size: 100%;
+  }
+
+  .vp-shell .row.spread {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

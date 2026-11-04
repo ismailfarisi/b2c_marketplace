@@ -30,4 +30,6 @@ export interface BranchAccess {
   vendor_name?: string;
   vendor_status?: string;
   role?: BranchAccessRole;
+  /** The branch's IANA timezone; the portal's "today" is this zone's date. */
+  timezone?: string;
 }

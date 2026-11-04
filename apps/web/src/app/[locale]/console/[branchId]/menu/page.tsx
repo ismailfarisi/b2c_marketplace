@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Panel } from "@/components/admin/detail";
-import { errorText, useBranch } from "@/components/kitchen/portal";
-import { getMenu, listDishes, listPlans, setMenuSlot, SLOTS, WEEKDAYS, type MenuSlot, type Slot } from "@/lib/vendor-api";
+import { label } from "@/components/kitchen/copy";
+import { ConsoleError, errorText, useBranch } from "@/components/kitchen/portal";
+import { getMenu, listDishes, listPlans, setMenuSlot, SLOTS, type MenuSlot, type Slot } from "@/lib/vendor-api";
 
 /**
  * The weekly menu: for each weekday and meal, one default dish and optionally
@@ -19,6 +20,8 @@ import { getMenu, listDishes, listPlans, setMenuSlot, SLOTS, WEEKDAYS, type Menu
  */
 export default function MenuPage() {
   const branch = useBranch();
+  const { t, locale } = branch;
+  const c = t.menu;
   const qc = useQueryClient();
   const id = branch.branch_id;
   const menu = useQuery({ queryKey: ["vendor", "menu", id], queryFn: () => getMenu(id) });
@@ -54,7 +57,7 @@ export default function MenuPage() {
     },
   });
 
-  if (menu.error) return <div className="state error">{errorText(menu.error)}</div>;
+  if (menu.error) return <ConsoleError error={menu.error} onRetry={() => void menu.refetch()} locale={locale} />;
   const activeDishes = (dishes.data?.items ?? []).filter((d) => d.is_active);
   const gapCount = [...needed].filter((k) => !cells.get(k)?.default).length;
   const sel = selected ? cells.get(`${selected.weekday}:${selected.slot}`) : undefined;
@@ -63,11 +66,11 @@ export default function MenuPage() {
     <>
       <section className="panel">
         <header className="panel-head">
-          <h3>This week, every week</h3>
-          {gapCount > 0 ? <span className="tag warn">{gapCount} empty slot{gapCount === 1 ? "" : "s"} on live plans</span> : null}
+          <h3>{c.title}</h3>
+          {gapCount > 0 ? <span className="tag warn">{c.gaps(gapCount)}</span> : null}
           <div className="spacer" />
           <label className="muted">
-            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all meals
+            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> {c.showAll}
           </label>
         </header>
         <div className="panel-body table-wrap">
@@ -78,7 +81,7 @@ export default function MenuPage() {
               <thead>
                 <tr>
                   <th className="slot" />
-                  {WEEKDAYS.map((d) => (
+                  {t.weekdays.map((d) => (
                     <th key={d}>{d}</th>
                   ))}
                 </tr>
@@ -86,8 +89,8 @@ export default function MenuPage() {
               <tbody>
                 {rows.map((slot) => (
                   <tr key={slot}>
-                    <th className="slot">{slot}</th>
-                    {WEEKDAYS.map((_, weekday) => {
+                    <th className="slot">{label(t.slots, slot)}</th>
+                    {t.weekdays.map((_, weekday) => {
                       const k = `${weekday}:${slot}`;
                       const c = cells.get(k);
                       const isSel = selected?.weekday === weekday && selected.slot === slot;
@@ -116,12 +119,12 @@ export default function MenuPage() {
                                 </span>
                                 {c.alternative ? (
                                   <span className="alt" dir="auto">
-                                    or {c.alternative.name}
+                                    {t.menu.or(c.alternative.name)}
                                   </span>
                                 ) : null}
                               </>
                             ) : (
-                              <span className="empty">{needed.has(k) ? "Needs a dish" : branch.editable ? "+ Add" : "—"}</span>
+                              <span className="empty">{needed.has(k) ? t.menu.needsDish : branch.editable ? t.menu.add : "—"}</span>
                             )}
                           </button>
                         </td>
@@ -138,7 +141,7 @@ export default function MenuPage() {
       {selected && branch.editable ? (
         <SlotEditor
           key={`${selected.weekday}:${selected.slot}`}
-          title={`${WEEKDAYS[selected.weekday] ?? ""} ${selected.slot}`}
+          title={`${t.weekdays[selected.weekday] ?? ""} ${label(t.slots, selected.slot)}`}
           dishes={activeDishes}
           initialDefault={sel?.default?.dish_id ?? ""}
           initialAlt={sel?.alternative?.dish_id ?? ""}
@@ -174,26 +177,38 @@ function SlotEditor({
   onSave: (def: string | null, alt: string | null) => void;
   onCancel: () => void;
 }) {
+  const { t, locale } = useBranch();
+  const c = t.menu;
   const [def, setDef] = useState(initialDefault);
   const [alt, setAlt] = useState(initialAlt);
   return (
-    <Panel title={title} note="Customers who do not choose get the default">
+    <Panel title={title} note={c.note}>
       {dishes.length === 0 ? (
         <p className="muted">
-          No active dishes yet. <Link href={dishesHref}>Add dishes</Link> first.
+          {c.noDishes} <Link href={dishesHref}>{c.addDishes}</Link> {c.first}
         </p>
       ) : (
         <form
           className="vp-form"
           onSubmit={(e) => {
             e.preventDefault();
-            onSave(def || null, def && alt ? alt : null);
+            onSave(def || null, def && alt && alt !== def ? alt : null);
           }}
         >
           <label>
-            Default dish
-            <select className="field" value={def} onChange={(e) => setDef(e.target.value)}>
-              <option value="">— none —</option>
+            {c.defaultDish}
+            <select
+              className="field"
+              value={def}
+              onChange={(e) => {
+                const next = e.target.value;
+                setDef(next);
+                // The alternative list hides the default, so a kept alt equal to
+                // the new default would be invisible yet sent (and refused, 422).
+                if (alt === next) setAlt("");
+              }}
+            >
+              <option value="">{c.none}</option>
               {dishes.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
@@ -202,9 +217,9 @@ function SlotEditor({
             </select>
           </label>
           <label>
-            Alternative <span className="hint">optional second choice</span>
+            {c.alternative} <span className="hint">{c.alternativeHint}</span>
             <select className="field" value={alt} onChange={(e) => setAlt(e.target.value)} disabled={!def}>
-              <option value="">— no choice, default only —</option>
+              <option value="">{c.noChoice}</option>
               {dishes
                 .filter((d) => d.id !== def)
                 .map((d) => (
@@ -216,12 +231,12 @@ function SlotEditor({
           </label>
           <div className="vp-actions wide">
             <button className="btn primary" type="submit" disabled={busy}>
-              {busy ? "Saving…" : def ? "Save" : "Clear slot"}
+              {busy ? t.saving : def ? c.save : c.clear}
             </button>
             <button className="btn" type="button" onClick={onCancel} disabled={busy}>
-              Never mind
+              {t.neverMind}
             </button>
-            {error ? <span className="danger">{errorText(error)}</span> : null}
+            {error ? <span className="danger">{errorText(error, locale)}</span> : null}
           </div>
         </form>
       )}

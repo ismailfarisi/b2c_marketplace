@@ -1,5 +1,7 @@
 import { apiFetch, exponentFor } from "@marketplace/api-client";
 
+import type { CallOptions } from "@/lib/customer-api";
+
 /**
  * Bindings for the vendor portal's kitchen setup surface.
  *
@@ -19,6 +21,23 @@ export interface BranchAccess {
   vendor_name: string;
   vendor_status: string;
   role: Role;
+  /** IANA zone of the branch; the portal's "today" is this zone's date. */
+  timezone?: string | undefined;
+}
+
+/**
+ * Today's date (YYYY-MM-DD) in a branch's timezone. The kitchen's day, not the
+ * browser's: a dispatcher abroad or a late-night session must not plan the
+ * wrong date. Falls back to the market zone when the branch sends none.
+ */
+export function branchToday(timezone?: string | undefined, now: Date = new Date()): string {
+  const fmt = (tz: string) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  try {
+    return fmt(timezone || "Asia/Dubai");
+  } catch {
+    return fmt("Asia/Dubai");
+  }
 }
 
 export const SLOTS = [
@@ -240,11 +259,12 @@ export const listDishes = (branchId: string) =>
     method: "GET",
   });
 
-export const createDish = (branchId: string, body: DishInput) =>
+export const createDish = (branchId: string, body: DishInput, opts?: CallOptions) =>
   apiFetch<Dish>({
     url: `/branches/${branchId}/dishes`,
     method: "POST",
     data: body,
+    headers: opts?.headers,
   });
 
 export const updateDish = (branchId: string, dishId: string, body: DishInput) =>
@@ -275,11 +295,12 @@ export const listPlans = (branchId: string) =>
     method: "GET",
   });
 
-export const createPlan = (branchId: string, body: PlanInput) =>
+export const createPlan = (branchId: string, body: PlanInput, opts?: CallOptions) =>
   apiFetch<Plan>({
     url: `/branches/${branchId}/plans`,
     method: "POST",
     data: body,
+    headers: opts?.headers,
   });
 
 export const updatePlan = (branchId: string, planId: string, body: PlanInput) =>
@@ -349,9 +370,10 @@ export const listBranchReviews = (branchId: string) =>
     method: "GET",
   });
 
-export const replyToReview = (branchId: string, reviewId: string, reply: string) =>
+export const replyToReview = (branchId: string, reviewId: string, reply: string, opts?: CallOptions) =>
   apiFetch<BranchReview>({
     url: `/branches/${branchId}/reviews/${reviewId}/reply`,
     method: "PUT",
     data: { reply },
+    headers: opts?.headers,
   });
