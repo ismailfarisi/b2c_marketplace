@@ -1,10 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Panel } from "@/components/admin/detail";
-import { errorText, fieldErrors, useBranch } from "@/components/kitchen/portal";
+import { label, type ConsoleCopy } from "@/components/kitchen/copy";
+import { ConsoleError, errorText, fieldErrors, useBranch } from "@/components/kitchen/portal";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import { createDish, listDishes, updateDish, type Dish, type DishInput } from "@/lib/vendor-api";
 
 const blank: DishInput = {
@@ -44,23 +46,48 @@ const toInput = (d: Dish): DishInput => ({
  */
 export default function DishesPage() {
   const branch = useBranch();
+  const { t, locale } = branch;
+  const c = t.dishes;
   const qc = useQueryClient();
   const key = ["vendor", "dishes", branch.branch_id];
-  const { data, error, isPending } = useQuery({ queryKey: key, queryFn: () => listDishes(branch.branch_id) });
+  const { data, error, isPending, refetch } = useQuery({ queryKey: key, queryFn: () => listDishes(branch.branch_id) });
   const [editing, setEditing] = useState<{ id: string | null; input: DishInput } | null>(null);
   const [q, setQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
 
+  // One key per open form: a double-click or a retry of the same new dish is
+  // the same request to the server, so it cannot create the dish twice.
+  const idem = useIdempotencyKey();
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: key });
+    qc.invalidateQueries({ queryKey: ["vendor", "menu", branch.branch_id] });
+    qc.invalidateQueries({ queryKey: ["vendor", "overview", branch.branch_id] });
+  };
   const save = useMutation({
     mutationFn: (e: { id: string | null; input: DishInput }) =>
-      e.id ? updateDish(branch.branch_id, e.id, e.input) : createDish(branch.branch_id, e.input),
+      e.id
+        ? updateDish(branch.branch_id, e.id, e.input)
+        : createDish(branch.branch_id, e.input, { headers: idem.headers() }),
     onSuccess: () => {
+      idem.reset();
       setEditing(null);
-      qc.invalidateQueries({ queryKey: key });
-      qc.invalidateQueries({ queryKey: ["vendor", "menu", branch.branch_id] });
-      qc.invalidateQueries({ queryKey: ["vendor", "overview", branch.branch_id] });
+      refresh();
     },
+    // A rejected draft will be corrected and sent again as a different body,
+    // which must not collide with the key of the one the server refused.
+    onError: () => idem.reset(),
   });
+  // Archive/restore from the list is its own mutation, so it never closes (or
+  // discards the input of) a dish form that is open for a different dish.
+  const archive = useMutation({
+    mutationFn: (d: Dish) => updateDish(branch.branch_id, d.id, { ...toInput(d), is_active: !d.is_active }),
+    onSuccess: refresh,
+  });
+  const open = (next: { id: string | null; input: DishInput } | null) => {
+    save.reset();
+    idem.reset();
+    setEditing(next);
+  };
 
   const all = data?.items ?? [];
   const items = all.filter(
@@ -75,73 +102,68 @@ export default function DishesPage() {
     <>
       {unphotographed > 0 && branch.editable ? (
         <div className="state photo-nudge">
-          <strong>
-            {unphotographed === 1
-              ? "1 dish has no photo."
-              : `${unphotographed} dishes have no photo.`}
-          </strong>{" "}
-          Customers see your dish photos on your kitchen card, in the
-          &ldquo;On the menu tomorrow&rdquo; row and on your weekly menu. Dishes
-          without one show a plain tile. Add a photo link with Edit.
+          <strong>{c.noPhoto(unphotographed)}</strong> {c.noPhotoBody}
         </div>
       ) : null}
       {editing ? (
         <DishForm
           key={editing.id ?? "new"}
-          title={editing.id ? "Edit dish" : "New dish"}
+          title={editing.id ? c.edit : c.new}
           initial={editing.input}
           allergens={data?.allergens ?? []}
           busy={save.isPending}
           error={save.error}
-          onCancel={() => {
-            save.reset();
-            setEditing(null);
+          onCancel={() => open(null)}
+          onSave={(input) => {
+            if (save.isPending) return;
+            save.mutate({ id: editing.id, input });
           }}
-          onSave={(input) => save.mutate({ id: editing.id, input })}
         />
       ) : null}
 
       <section className="panel">
         <header className="panel-head">
-          <h3>Dishes</h3>
-          <input type="search" placeholder="Search dishes" value={q} onChange={(e) => setQ(e.target.value)} />
+          <h3>{c.title}</h3>
+          <input type="search" placeholder={c.search} value={q} onChange={(e) => setQ(e.target.value)} />
           <label className="muted">
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show
-            archived
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />{" "}
+            {c.showArchived}
           </label>
           <div className="spacer" />
           {branch.editable ? (
             <button
               className="btn primary"
               type="button"
-              onClick={() => {
-                save.reset();
-                setEditing({ id: null, input: blank });
-              }}
+              onClick={() => open({ id: null, input: blank })}
             >
-              New dish
+              {c.new}
             </button>
           ) : null}
         </header>
+        {archive.error ? (
+          <div className="state error" role="alert">
+            {errorText(archive.error, locale)}
+          </div>
+        ) : null}
         {error ? (
-          <div className="state error">{errorText(error)}</div>
+          <ConsoleError error={error} onRetry={() => void refetch()} locale={locale} />
         ) : isPending ? (
           <div className="panel-body">
             <div className="skeleton" style={{ inlineSize: "40%" }} />
           </div>
         ) : items.length === 0 ? (
-          <div className="state">{all.length === 0 ? "No dishes yet. Add the first dish you cook." : "Nothing matches."}</div>
+          <div className="state">{all.length === 0 ? c.empty : c.noMatch}</div>
         ) : (
           <div className="table-wrap">
             <table className="data">
               <thead>
                 <tr>
-                  <th className="grow">Dish</th>
-                  <th>Allergens</th>
-                  <th>Tags</th>
-                  <th className="num">kcal</th>
-                  <th className="num">On menu</th>
-                  <th>Status</th>
+                  <th className="grow">{c.colDish}</th>
+                  <th>{c.colAllergens}</th>
+                  <th>{c.colTags}</th>
+                  <th className="num">{c.colKcal}</th>
+                  <th className="num">{c.colOnMenu}</th>
+                  <th>{c.colStatus}</th>
                   {branch.editable ? <th /> : null}
                 </tr>
               </thead>
@@ -158,18 +180,18 @@ export default function DishesPage() {
                     </td>
                     <td>
                       {d.allergens.length === 0 ? (
-                        <span className="muted">none</span>
+                        <span className="muted">{c.none}</span>
                       ) : (
                         d.allergens.map((a) => (
                           <span key={a} className="tag warn">
-                            {a.replace("_", " ")}
+                            {label(t.allergens, a)}
                           </span>
                         ))
                       )}
                     </td>
                     <td>
                       {d.tags.map((t) => (
-                        <span key={t} className="tag">
+                        <span key={t} className="tag" dir="auto">
                           {t}
                         </span>
                       ))}
@@ -177,42 +199,33 @@ export default function DishesPage() {
                     <td className="num">{d.calories ?? "—"}</td>
                     <td className="num">{d.menu_slots}</td>
                     <td>
-                      <span className={`tag ${d.is_active ? "ok" : ""}`}>{d.is_active ? "active" : "archived"}</span>
+                      <span className={`tag ${d.is_active ? "ok" : ""}`}>{d.is_active ? c.active : c.archived}</span>
                     </td>
                     {branch.editable ? (
                       <td className="nowrap">
                         <button
                           className="btn link"
                           type="button"
-                          onClick={() => {
-                            save.reset();
-                            setEditing({ id: d.id, input: toInput(d) });
-                          }}
+                          onClick={() => open({ id: d.id, input: toInput(d) })}
                         >
-                          Edit
+                          {t.edit}
                         </button>
                         <button
                           className="btn link"
                           type="button"
-                          disabled={save.isPending}
-                          title={
-                            d.is_active && d.menu_slots > 0
-                              ? `On ${d.menu_slots} menu slot(s) — archiving leaves them showing a dish you no longer cook`
-                              : undefined
-                          }
+                          disabled={archive.isPending}
+                          title={d.is_active && d.menu_slots > 0 ? c.archiveHint(d.menu_slots) : undefined}
                           onClick={() => {
                             if (
                               d.is_active &&
                               d.menu_slots > 0 &&
-                              !window.confirm(
-                                `${d.name} is on ${d.menu_slots} menu slot(s). Archive it anyway? Replace it on the weekly menu afterwards.`,
-                              )
+                              !window.confirm(c.archiveConfirm(d.name, d.menu_slots))
                             )
                               return;
-                            save.mutate({ id: d.id, input: { ...toInput(d), is_active: !d.is_active } });
+                            archive.mutate(d);
                           }}
                         >
-                          {d.is_active ? "Archive" : "Restore"}
+                          {d.is_active ? c.archive : c.restore}
                         </button>
                       </td>
                     ) : null}
@@ -244,9 +257,15 @@ function DishForm({
   onSave: (d: DishInput) => void;
   onCancel: () => void;
 }) {
+  const { t, locale } = useBranch();
+  const c: ConsoleCopy["dishes"] = t.dishes;
   const [d, setD] = useState<DishInput>(initial);
   const [tags, setTags] = useState(initial.tags.join(", "));
-  const errs = fieldErrors(error);
+  const errs = fieldErrors(error, locale);
+  // React disables the button only after a re-render; a fast double-click
+  // lands both clicks before that. The ref closes the gap synchronously.
+  const submitting = useRef(false);
+  if (!busy) submitting.current = false;
   const text = (k: "name_ar" | "description" | "description_ar" | "image_url") => ({
     value: d[k] ?? "",
     onChange: (e: { target: { value: string } }) => setD({ ...d, [k]: e.target.value === "" ? null : e.target.value }),
@@ -266,6 +285,8 @@ function DishForm({
         className="vp-form"
         onSubmit={(e) => {
           e.preventDefault();
+          if (busy || submitting.current) return;
+          submitting.current = true;
           onSave({
             ...d,
             tags: tags
@@ -276,41 +297,41 @@ function DishForm({
         }}
       >
         <label>
-          Name
-          <input className="field" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} required autoFocus />
+          {c.name}
+          <input className="field" dir="auto" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} required autoFocus />
           {errs.name ? <span className="err">{errs.name}</span> : null}
         </label>
         <label>
-          Name in Arabic
+          {c.nameAr}
           <input className="field" dir="rtl" {...text("name_ar")} />
         </label>
         <label className="wide">
-          Description
-          <textarea className="field" rows={2} {...text("description")} />
+          {c.description}
+          <textarea className="field" dir="auto" rows={2} {...text("description")} />
         </label>
         <label className="wide">
-          Description in Arabic
+          {c.descriptionAr}
           <textarea className="field" dir="rtl" rows={2} {...text("description_ar")} />
         </label>
         <label>
-          Calories
+          {c.calories}
           <input className="field" {...num("calories")} />
           {errs.calories ? <span className="err">{errs.calories}</span> : null}
         </label>
         <label>
-          Protein (g)
+          {c.protein}
           <input className="field" {...num("protein_g")} />
         </label>
         <label>
-          Carbs (g)
+          {c.carbs}
           <input className="field" {...num("carbs_g")} />
         </label>
         <label>
-          Fat (g)
+          {c.fat}
           <input className="field" {...num("fat_g")} />
         </label>
         <div className="vp-label wide">
-          Allergens <span className="hint">customers filter by these, so declare every one</span>
+          {c.allergensLabel} <span className="hint">{c.allergensHint}</span>
           <div className="vp-chips">
             {allergens.map((a) => {
               const on = d.allergens.includes(a);
@@ -324,7 +345,7 @@ function DishForm({
                     setD({ ...d, allergens: on ? d.allergens.filter((x) => x !== a) : [...d.allergens, a] })
                   }
                 >
-                  {a.replace("_", " ")}
+                  {label(t.allergens, a)}
                 </button>
               );
             })}
@@ -332,23 +353,23 @@ function DishForm({
           {errs.allergens ? <span className="err">{errs.allergens}</span> : null}
         </div>
         <label>
-          Tags <span className="hint">comma-separated, e.g. spicy, vegetarian</span>
-          <input className="field" value={tags} onChange={(e) => setTags(e.target.value)} />
+          {c.tags} <span className="hint">{c.tagsHint}</span>
+          <input className="field" dir="auto" value={tags} onChange={(e) => setTags(e.target.value)} />
           {errs.tags ? <span className="err">{errs.tags}</span> : null}
         </label>
         <label>
-          Image URL
-          <input className="field" placeholder="https://" {...text("image_url")} />
+          {c.imageUrl}
+          <input className="field" dir="ltr" placeholder="https://" {...text("image_url")} />
           {errs.image_url ? <span className="err">{errs.image_url}</span> : null}
         </label>
         <div className="vp-actions wide">
           <button className="btn primary" type="submit" disabled={busy}>
-            {busy ? "Saving…" : "Save dish"}
+            {busy ? t.saving : c.save}
           </button>
           <button className="btn" type="button" onClick={onCancel} disabled={busy}>
-            Never mind
+            {t.neverMind}
           </button>
-          {error && Object.keys(errs).length === 0 ? <span className="danger">{errorText(error)}</span> : null}
+          {error && Object.keys(errs).length === 0 ? <span className="danger">{errorText(error, locale)}</span> : null}
         </div>
       </form>
     </Panel>

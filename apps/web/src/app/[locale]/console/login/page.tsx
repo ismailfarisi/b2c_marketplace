@@ -7,6 +7,7 @@ import { Suspense, use, useEffect, useRef, useState, type FormEvent } from "reac
 
 import { listMyBranches } from "@/lib/vendor-api";
 import { logout, requestOtp, verifyOtp } from "@/lib/auth-api";
+import { consoleCopy, type ConsoleCopy } from "@/components/kitchen/copy";
 import { BRANCHES_KEY } from "@/components/kitchen/portal";
 
 /**
@@ -37,13 +38,14 @@ export default function VendorLogin({
   const { locale } = use(params);
 
   return (
-    <Suspense fallback={<Frame>Loading…</Frame>}>
+    <Suspense fallback={<Frame locale={locale}>{consoleCopy(locale).loading}</Frame>}>
       <LoginForm locale={locale} />
     </Suspense>
   );
 }
 
 function LoginForm({ locale }: { locale: string }) {
+  const t = consoleCopy(locale);
   const router = useRouter();
   const search = useSearchParams();
   const queryClient = useQueryClient();
@@ -89,7 +91,7 @@ function LoginForm({ locale }: { locale: string }) {
         resendAt: Date.now() + challenge.resend_after_seconds * 1000,
       });
     } catch (err) {
-      setError(describeRequestFailure(err));
+      setError(describeRequestFailure(err, t));
     } finally {
       setBusy(false);
     }
@@ -115,7 +117,7 @@ function LoginForm({ locale }: { locale: string }) {
       queryClient.setQueryData(BRANCHES_KEY, branches);
       router.replace(destination);
     } catch (err) {
-      setError(describeVerifyFailure(err));
+      setError(describeVerifyFailure(err, t));
     } finally {
       setBusy(false);
     }
@@ -123,14 +125,11 @@ function LoginForm({ locale }: { locale: string }) {
 
   if (refused) {
     return (
-      <Frame>
+      <Frame locale={locale}>
         <div className="state error">
-          <div className="headline">This number is not on a kitchen&apos;s team.</div>
+          <div className="headline">{t.login.notOnTeam}</div>
         </div>
-        <p className="muted">
-          The code was right — you are signed in. Ask the kitchen&apos;s owner to
-          add this number, or contact the marketplace to onboard your kitchen.
-        </p>
+        <p className="muted">{t.login.notOnTeamBody}</p>
         {/* Revokes before returning to the form. The code was right, so a real
             session exists — leaving it alive because the *console* refused them
             would strand a working refresh token in this tab's storage for
@@ -152,7 +151,7 @@ function LoginForm({ locale }: { locale: string }) {
             }
           }}
         >
-          Use a different number
+          {t.login.differentNumber}
         </button>
       </Frame>
     );
@@ -160,14 +159,17 @@ function LoginForm({ locale }: { locale: string }) {
 
   if (step.phase === "code") {
     return (
-      <Frame>
+      <Frame locale={locale}>
         <form onSubmit={onVerify} className="console-login-form">
           <p className="muted">
-            Code sent to <span className="mono">{step.phone}</span>.
+            {t.login.codeSentTo}{" "}
+            <span className="mono" dir="ltr">
+              {step.phone}
+            </span>
           </p>
 
           <label className="console-login-field">
-            <span>Six-digit code</span>
+            <span>{t.login.codeLabel}</span>
             <input
               ref={codeRef}
               className="field"
@@ -184,7 +186,7 @@ function LoginForm({ locale }: { locale: string }) {
 
           <div className="console-login-actions">
             <button className="btn primary" type="submit" disabled={busy || code.length < 6}>
-              {busy ? "Checking…" : "Sign in"}
+              {busy ? t.login.checking : t.login.signIn}
             </button>
             <button
               type="button"
@@ -195,16 +197,12 @@ function LoginForm({ locale }: { locale: string }) {
                 setStep({ phase: "phone" });
               }}
             >
-              Change number
+              {t.login.changeNumber}
             </button>
           </div>
 
           {IS_DEV ? (
-            <p className="console-login-note">
-              Development: <code>OTP_DEV_ECHO</code> is on, so no SMS is sent —
-              the code is written to the API log as{" "}
-              <code>OTP issued (dev echo…)</code>.
-            </p>
+            <p className="console-login-note">{t.login.devNote}</p>
           ) : null}
         </form>
       </Frame>
@@ -212,10 +210,10 @@ function LoginForm({ locale }: { locale: string }) {
   }
 
   return (
-    <Frame>
+    <Frame locale={locale}>
       <form onSubmit={onRequestCode} className="console-login-form">
         <label className="console-login-field">
-          <span>Phone number</span>
+          <span>{t.login.phoneLabel}</span>
           <input
             className="field"
             value={phone}
@@ -224,6 +222,7 @@ function LoginForm({ locale }: { locale: string }) {
             inputMode="tel"
             autoComplete="tel"
             placeholder="+971501234567"
+            dir="ltr"
             autoFocus
             required
           />
@@ -233,25 +232,22 @@ function LoginForm({ locale }: { locale: string }) {
 
         <div className="console-login-actions">
           <button className="btn primary" type="submit" disabled={busy || phone.trim().length < 8}>
-            {busy ? "Sending…" : "Send code"}
+            {busy ? t.login.sending : t.login.sendCode}
           </button>
         </div>
 
-        <p className="console-login-note">
-          The same account you use as a customer. Kitchen access is granted by
-          the kitchen&apos;s owner and checked on the server on every call.
-        </p>
+        <p className="console-login-note">{t.login.note}</p>
       </form>
     </Frame>
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ locale, children }: { locale: string; children: React.ReactNode }) {
   return (
     <div className="console-gate">
       <div className="console-gate-card">
         <div className="console-login-brand">
-          <span>Kitchen portal</span>
+          <span>{consoleCopy(locale).portal}</span>
           {/* Which environment this is, on the sign-in screen as well as in the
               sidebar. Signing into production believing it is staging is the
               mistake worth spending a badge on. */}
@@ -263,25 +259,21 @@ function Frame({ children }: { children: React.ReactNode }) {
   );
 }
 
-function describeRequestFailure(err: unknown): string {
+function describeRequestFailure(err: unknown, t: ConsoleCopy): string {
   if (err instanceof ApiError) {
     const field = err.fieldErrors["phone"];
-    if (field) return `That number was not accepted: ${field}`;
-    if (err.status === 409 || err.status === 429) {
-      return "Too many codes have been requested for this number in the last hour. Wait, then try again.";
-    }
+    if (field) return t.login.phoneRejected(field);
+    if (err.status === 409 || err.status === 429) return t.login.tooManyCodes;
   }
-  return "The code could not be sent. Check the number and try again.";
+  if (err instanceof TypeError) return t.errors.offline;
+  return t.login.sendFailed;
 }
 
-function describeVerifyFailure(err: unknown): string {
+function describeVerifyFailure(err: unknown, t: ConsoleCopy): string {
   if (err instanceof ApiError) {
-    if (err.status === 401) {
-      return "That code is not right, or it has expired. Request a new one.";
-    }
-    if (err.status === 429) {
-      return "Too many attempts. Request a new code.";
-    }
+    if (err.problem?.code === "otp_too_many_attempts" || err.status === 429) return t.login.tooManyAttempts;
+    if (err.status === 401 || err.status === 422) return t.login.wrongCode;
   }
-  return "Could not verify that code. Try again.";
+  if (err instanceof TypeError) return t.errors.offline;
+  return t.login.verifyFailed;
 }

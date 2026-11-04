@@ -311,6 +311,7 @@
 "update_action" = "Update";
 "update_later" = "Later";
 "legal_help" = "Help";
+"legal_kitchen" = "Kitchen portal";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 
-import { SignOut, useBranches } from "@/components/kitchen/portal";
+import { consoleCopy } from "@/components/kitchen/copy";
+import { ConsoleError, SignOut, useBranches } from "@/components/kitchen/portal";
 
 /**
  * Branch picker.
@@ -17,7 +18,8 @@ import { SignOut, useBranches } from "@/components/kitchen/portal";
 export default function ConsoleHome({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = use(params);
   const router = useRouter();
-  const { data } = useBranches();
+  const t = consoleCopy(locale);
+  const { data, error, isPending, refetch } = useBranches();
   const items = data?.items ?? [];
   const only = items.length === 1 ? items[0] : undefined;
 
@@ -29,14 +31,21 @@ export default function ConsoleHome({ params }: { params: Promise<{ locale: stri
     <div className="console-gate">
       <div className="console-gate-card">
         <div className="console-login-brand">
-          <span>Kitchen portal</span>
+          <span>{t.portal}</span>
           <span className="env">{process.env.NEXT_PUBLIC_ENV ?? "dev"}</span>
         </div>
-        {only ? (
-          <p className="muted">Opening {only.branch_name}…</p>
+        {isPending ? (
+          <div className="vp-picker" aria-busy="true">
+            <div className="skeleton" style={{ inlineSize: "70%" }} />
+            <div className="skeleton" style={{ inlineSize: "50%" }} />
+          </div>
+        ) : error ? (
+          <ConsoleError error={error} onRetry={() => void refetch()} locale={locale} />
+        ) : only ? (
+          <p className="muted">{t.picker.opening(only.branch_name)}</p>
         ) : (
           <>
-            <p className="muted">Choose a branch.</p>
+            <p className="muted">{t.picker.choose}</p>
             <div className="vp-picker">
               {items.map((b) => (
                 <Link key={b.branch_id} href={`/${locale}/console/${b.branch_id}`}>
@@ -48,7 +57,7 @@ export default function ConsoleHome({ params }: { params: Promise<{ locale: stri
                       {b.city ? ` · ${b.city}` : ""}
                     </span>
                   </span>
-                  <span className="tag">{b.role}</span>
+                  <span className="tag">{t.roles[b.role] ?? b.role}</span>
                 </Link>
               ))}
             </div>

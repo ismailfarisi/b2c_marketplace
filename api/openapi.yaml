@@ -6637,6 +6637,10 @@ components:
         vendor_name: { type: string }
         vendor_status: { type: string }
         role: { type: string, enum: [owner, manager, staff] }
+        timezone:
+          type: string
+          description: The branch's IANA timezone; the portal's "today" is this zone's date.
+          example: Asia/Dubai
 
     MealSlot:
       type: string

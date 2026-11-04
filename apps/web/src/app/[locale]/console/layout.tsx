@@ -2,13 +2,14 @@ import { use, type ReactNode } from "react";
 
 import { VendorGate } from "@/components/kitchen/portal";
 import "@/app/admin.css";
+import "@/components/kitchen/portal.css";
 
 /**
  * The vendor portal.
  *
- * Shares the staff console's stylesheet and English chrome. Content a kitchen
- * writes — dish names, descriptions — is often Arabic, and every such element
- * carries `dir="auto"` so it reads correctly inside the English frame.
+ * Shares the staff console's stylesheet. The chrome follows the route locale
+ * (English or Arabic, RTL for Arabic); content a kitchen writes — dish names,
+ * descriptions — carries `dir="auto"` so it reads correctly in either frame.
  */
 export default function VendorLayout({
   children,
@@ -19,7 +20,7 @@ export default function VendorLayout({
 }) {
   const { locale } = use(params);
   return (
-    <div dir="ltr">
+    <div dir={locale === "ar" ? "rtl" : "ltr"} lang={locale === "ar" ? "ar" : "en"}>
       <VendorGate locale={locale}>{children}</VendorGate>
     </div>
   );

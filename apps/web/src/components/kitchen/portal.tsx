@@ -4,10 +4,13 @@ import { ApiError } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 import { logout } from "@/lib/auth-api";
+import { problemFields, problemMessage } from "@/lib/problem";
 import { listMyBranches, type BranchAccess } from "@/lib/vendor-api";
+
+import { consoleCopy, consoleLocale, type ConsoleCopy } from "./copy";
 
 /**
  * The vendor portal's frame: the sign-in gate, the sidebar and the branch
@@ -30,6 +33,7 @@ export function useBranches() {
     queryKey: BRANCHES_KEY,
     queryFn: listMyBranches,
     staleTime: 5 * 60_000,
+    refetchOnReconnect: true,
     retry: (count, err) =>
       !(err instanceof ApiError && err.status === 401) && count < 2,
   });
@@ -39,21 +43,63 @@ export function canEdit(role: BranchAccess["role"]): boolean {
   return role === "owner" || role === "manager";
 }
 
-/** The server's sentence for a failed call, not a generic one. */
-export function errorText(err: unknown): string {
+/**
+ * One sentence for a failed call. English readers get the server's own
+ * sentence (written for the kitchen); Arabic readers get the localized one for
+ * its code. A call that never got a response (fetch's TypeError) is a
+ * connection problem, said as such — never the browser's "Failed to fetch".
+ */
+export function errorText(err: unknown, locale: string = "en"): string {
+  const t = consoleCopy(locale);
   if (err instanceof ApiError) {
+    if (consoleLocale(locale) === "ar") return problemMessage(err, "ar");
     const fields = err.problem?.errors ?? [];
     if (fields.length > 0) {
       return fields.map((f) => f.message ?? `${f.field}: ${f.code}`).join("; ");
     }
     return err.problem?.detail ?? err.problem?.title ?? err.message;
   }
-  return err instanceof Error ? err.message : "Request failed.";
+  if (err instanceof TypeError || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+    return t.errors.offline;
+  }
+  return t.errors.failed;
 }
 
-/** Field-level errors from a 422, keyed by field name. */
-export function fieldErrors(err: unknown): Record<string, string> {
-  return err instanceof ApiError ? err.fieldErrors : {};
+/** Field-level errors from a 422, keyed by field name, in the reader's language. */
+export function fieldErrors(err: unknown, locale: string = "en"): Record<string, string> {
+  if (!(err instanceof ApiError)) return {};
+  return consoleLocale(locale) === "ar" ? problemFields(err, "ar") : err.fieldErrors;
+}
+
+/** A failed load: the reason, the request id for a server failure, and Try again. */
+export function ConsoleError({
+  error,
+  onRetry,
+  locale,
+}: {
+  error: unknown;
+  onRetry?: (() => void) | undefined;
+  locale: string;
+}) {
+  const t = consoleCopy(locale);
+  const requestId = error instanceof ApiError && error.status >= 500 ? error.requestId : null;
+  const final = error instanceof ApiError && (error.status === 403 || error.status === 404);
+  return (
+    <div className="state error vp-error" role="alert">
+      <span>{errorText(error, locale)}</span>
+      {requestId ? (
+        <span className="muted mono">
+          {" "}
+          {t.errors.request} {requestId}
+        </span>
+      ) : null}
+      {onRetry && !final ? (
+        <button type="button" className="btn" onClick={onRetry}>
+          {t.retry}
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function Waiting({ children }: { children: ReactNode }) {
@@ -65,6 +111,7 @@ function Waiting({ children }: { children: ReactNode }) {
 }
 
 export function SignOut({ locale }: { locale: string }) {
+  const t = consoleCopy(locale);
   const router = useRouter();
   const queryClient = useQueryClient();
   const signOut = useMutation({
@@ -81,7 +128,7 @@ export function SignOut({ locale }: { locale: string }) {
       onClick={() => signOut.mutate()}
       disabled={signOut.isPending}
     >
-      {signOut.isPending ? "Signing out…" : "Sign out"}
+      {signOut.isPending ? t.signingOut : t.signOut}
     </button>
   );
 }
@@ -99,9 +146,10 @@ export function VendorGate({
 }
 
 function Gate({ locale, children }: { locale: string; children: ReactNode }) {
+  const t = consoleCopy(locale);
   const router = useRouter();
   const pathname = usePathname();
-  const { data, error, isPending } = useBranches();
+  const { data, error, isPending, refetch, isRefetching } = useBranches();
   const unauthenticated = error instanceof ApiError && error.status === 401;
 
   useEffect(() => {
@@ -111,16 +159,31 @@ function Gate({ locale, children }: { locale: string; children: ReactNode }) {
     );
   }, [unauthenticated, router, locale, pathname]);
 
-  if (isPending) return <Waiting>Checking your access…</Waiting>;
-  if (unauthenticated) return <Waiting>Taking you to sign in…</Waiting>;
+  if (isPending) return <Waiting>{t.gate.checking}</Waiting>;
+  if (unauthenticated) return <Waiting>{t.gate.toSignIn}</Waiting>;
   if (error) {
     return (
       <Waiting>
-        <div className="state error">
-          <div className="headline">The portal could not reach the API.</div>
+        <div className="state error" role="alert">
+          <div className="headline">
+            {error instanceof TypeError ? t.errors.offline : t.gate.unreachable}
+          </div>
           {error instanceof ApiError && error.requestId ? (
-            <p className="muted mono">request {error.requestId}</p>
+            <p className="muted mono">
+              {t.errors.request} {error.requestId}
+            </p>
           ) : null}
+        </div>
+        <div className="console-gate-actions">
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => void refetch()}
+            disabled={isRefetching}
+          >
+            {isRefetching ? t.loading : t.retry}
+          </button>
+          <SignOut locale={locale} />
         </div>
       </Waiting>
     );
@@ -129,14 +192,9 @@ function Gate({ locale, children }: { locale: string; children: ReactNode }) {
     return (
       <Waiting>
         <div className="state error">
-          <div className="headline">
-            This account is not attached to a kitchen.
-          </div>
+          <div className="headline">{t.gate.noKitchen}</div>
         </div>
-        <p className="muted">
-          Signing in worked. Ask the kitchen&apos;s owner to add this number to
-          their team, or contact the marketplace to onboard a new kitchen.
-        </p>
+        <p className="muted">{t.gate.noKitchenBody}</p>
         <div className="console-gate-actions">
           <SignOut locale={locale} />
         </div>
@@ -152,6 +210,7 @@ type BranchContext = BranchAccess & {
   editable: boolean;
   base: string;
   locale: string;
+  t: ConsoleCopy;
 };
 
 const Ctx = createContext<BranchContext | null>(null);
@@ -162,45 +221,36 @@ export function useBranch(): BranchContext {
   return ctx;
 }
 
+type NavKey = keyof Omit<ConsoleCopy["nav"], "sections" | "branch" | "menuToggle" | "groups">;
+
 const NAV: Array<{
-  title: string | null;
-  items: Array<{ href: string; label: string }>;
+  group: keyof ConsoleCopy["nav"]["groups"] | null;
+  items: Array<{ href: string; key: NavKey }>;
 }> = [
-  { title: null, items: [{ href: "", label: "Overview" }] },
+  { group: null, items: [{ href: "", key: "overview" }] },
   {
-    title: "Kitchen",
+    group: "kitchen",
     items: [
-      { href: "/menu", label: "Weekly menu" },
-      { href: "/dishes", label: "Dishes" },
-      { href: "/plans", label: "Plans & pricing" },
+      { href: "/menu", key: "menu" },
+      { href: "/dishes", key: "dishes" },
+      { href: "/plans", key: "plans" },
     ],
   },
   {
-    title: "Operations",
+    group: "operations",
     items: [
-      { href: "/prep", label: "Prep sheet" },
-      { href: "/deliveries", label: "Deliveries & dispatch" },
-      { href: "/reviews", label: "Reviews" },
+      { href: "/prep", key: "prep" },
+      { href: "/deliveries", key: "deliveries" },
+      { href: "/reviews", key: "reviews" },
     ],
   },
-  { title: "Money", items: [{ href: "/payouts", label: "Payouts" }] },
-  {
-    title: "Settings",
-    items: [{ href: "/profile", label: "Kitchen profile" }],
-  },
+  { group: "money", items: [{ href: "/payouts", key: "payouts" }] },
+  { group: "settings", items: [{ href: "/profile", key: "profile" }] },
 ];
 
-const TITLES: Record<string, string> = {
-  "": "Overview",
-  "/menu": "Weekly menu",
-  "/dishes": "Dishes",
-  "/plans": "Plans & pricing",
-  "/prep": "Prep sheet",
-  "/deliveries": "Deliveries & dispatch",
-  "/reviews": "Reviews",
-  "/payouts": "Payouts",
-  "/profile": "Kitchen profile",
-};
+const TITLES: Record<string, NavKey> = Object.fromEntries(
+  NAV.flatMap((g) => g.items.map((i) => [i.href, i.key] as const)),
+);
 
 export function VendorShell({
   locale,
@@ -211,9 +261,12 @@ export function VendorShell({
   branchId: string;
   children: ReactNode;
 }) {
+  const t = consoleCopy(locale);
   const router = useRouter();
   const pathname = usePathname();
   const { data } = useBranches();
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => setNavOpen(false), [pathname]);
   const branches = data?.items ?? [];
   const branch = branches.find((b) => b.branch_id === branchId);
   const base = `/${locale}/console/${branchId}`;
@@ -227,10 +280,10 @@ export function VendorShell({
     return (
       <Waiting>
         <div className="state error">
-          <div className="headline">This branch is not one of yours.</div>
+          <div className="headline">{t.gate.notYours}</div>
         </div>
         <Link className="btn" href={`/${locale}/console`}>
-          Choose a branch
+          {t.gate.chooseBranch}
         </Link>
       </Waiting>
     );
@@ -241,16 +294,27 @@ export function VendorShell({
     editable: canEdit(branch.role),
     base,
     locale,
+    t,
   };
 
   return (
     <Ctx.Provider value={ctx}>
-      <div className="console">
-        <nav className="console-nav" aria-label="Sections">
+      <div className={`console vp-shell ${navOpen ? "vp-nav-open" : ""}`}>
+        <nav className="console-nav" aria-label={t.nav.sections}>
           <div className="console-brand">
-            <span>Kitchen</span>
+            <span>{t.brand}</span>
             <span className="env">{process.env.NEXT_PUBLIC_ENV ?? "dev"}</span>
+            <button
+              type="button"
+              className="vp-nav-toggle"
+              aria-expanded={navOpen}
+              aria-controls="vp-nav-links"
+              onClick={() => setNavOpen((o) => !o)}
+            >
+              {t.nav.menuToggle}
+            </button>
           </div>
+          <div id="vp-nav-links" className="vp-nav-links">
 
           <div className="vp-branch">
             <span className="vendor" dir="auto">
@@ -258,7 +322,7 @@ export function VendorShell({
             </span>
             {branches.length > 1 ? (
               <select
-                aria-label="Branch"
+                aria-label={t.nav.branch}
                 value={branchId}
                 onChange={(e) =>
                   router.push(`/${locale}/console/${e.target.value}${current}`)
@@ -278,46 +342,48 @@ export function VendorShell({
           </div>
 
           {NAV.map((group) => (
-            <div key={group.title ?? "top"}>
-              {group.title ? (
-                <div className="console-group">{group.title}</div>
+            <div key={group.group ?? "top"}>
+              {group.group ? (
+                <div className="console-group">{t.nav.groups[group.group]}</div>
               ) : null}
-              {group.items.map((item) => (
-                <Link
-                  key={item.href}
-                  href={`${base}${item.href}`}
-                  className={`console-link ${current === item.href ? "active" : ""}`}
-                  title={item.label}
-                  aria-label={item.label}
-                >
-                  <span className="abbr" aria-hidden="true">
-                    {item.label.slice(0, 2)}
-                  </span>
-                  <span className="label">{item.label}</span>
-                </Link>
-              ))}
+              {group.items.map((item) => {
+                const text = t.nav[item.key];
+                return (
+                  <Link
+                    key={item.href}
+                    href={`${base}${item.href}`}
+                    className={`console-link ${current === item.href ? "active" : ""}`}
+                    title={text}
+                    aria-label={text}
+                    aria-current={current === item.href ? "page" : undefined}
+                  >
+                    <span className="abbr" aria-hidden="true">
+                      {Array.from(text).slice(0, 2).join("")}
+                    </span>
+                    <span className="label">{text}</span>
+                  </Link>
+                );
+              })}
             </div>
           ))}
+          </div>
         </nav>
 
         <div className="console-main">
           <header className="console-appbar">
-            <h1>{TITLES[current] ?? "Kitchen"}</h1>
+            <h1>{t.nav[TITLES[current] ?? "overview"]}</h1>
             {branch.vendor_status !== "active" ? (
-              <span className="tag warn">vendor {branch.vendor_status}</span>
+              <span className="tag warn">{t.vendorStatus(branch.vendor_status)}</span>
             ) : null}
             <div className="spacer" />
             <div className="console-session">
-              <span className="who">{branch.role}</span>
+              <span className="who">{t.roles[branch.role] ?? branch.role}</span>
               <SignOut locale={locale} />
             </div>
           </header>
           <div className="console-content">
             {!ctx.editable ? (
-              <div className="vp-readonly">
-                You are signed in as staff, so this portal is read-only. An
-                owner or manager can change the menu, plans and profile.
-              </div>
+              <div className="vp-readonly">{t.readOnly}</div>
             ) : null}
             {children}
           </div>
