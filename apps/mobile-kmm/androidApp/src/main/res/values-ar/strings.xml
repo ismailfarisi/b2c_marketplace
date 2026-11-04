@@ -106,6 +106,7 @@
     <string name="sell_field_required">مطلوب قبل النشر.</string>
     <string name="sell_field_number">أرقام فقط.</string>
     <string name="sell_field_option">اختر أحد الخيارات.</string>
+    <string name="sell_field_invalid">تحقّق من هذه الإجابة.</string>
     <string name="sell_field_min">%1$s %2$s على الأقل.</string>
     <string name="sell_field_max">%1$s %2$s كحد أقصى.</string>
 
@@ -242,10 +243,17 @@
     <string name="inbox_empty">لا توجد رسائل بعد.</string>
     <string name="inbox_empty_hint">تبدأ عندما يضغط مشترٍ على الزر في أحد مقاطعك.</string>
     <string name="inbox_untitled">محادثة</string>
+    <string name="search_distance_m">على بُعد %1$s م</string>
+    <string name="search_distance_km">على بُعد %1$s كم</string>
+    <string name="search_mileage_km">%1$s كم</string>
+    <string name="inbox_state_closed">مغلقة</string>
+    <string name="inbox_state_blocked">محظورة</string>
     <string name="thread_empty">ابدأ بالتحية.</string>
     <string name="thread_empty_hint">أبقِ المحادثة هنا — لا يمكننا المساعدة إلا إذا حدث شيء داخل المنصة.</string>
     <string name="thread_hint">رسالة</string>
     <string name="thread_send">إرسال</string>
+    <string name="feed_like">إعجاب</string>
+    <string name="feed_unlike">إلغاء الإعجاب</string>
     <string name="msg_held">قيد المراجعة — لم تُسلَّم بعد.</string>
     <string name="msg_redacted">تمت إزالة بيانات التواصل.</string>
     <string name="msg_blocked">لم تُسلَّم.</string>

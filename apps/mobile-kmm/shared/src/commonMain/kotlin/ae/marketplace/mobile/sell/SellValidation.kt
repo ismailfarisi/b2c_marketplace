@@ -19,7 +19,9 @@ enum class FieldProblem {
     TooSmall,
     TooLarge,
     /** A select or lookup answer that is not one of the offered values. */
-    NotAnOption;
+    NotAnOption,
+    /** The server refused the answer for a reason the form's rules do not express. */
+    Invalid;
 
     /** The entry's Kotlin name, for Swift, which spells multi-word case names unpredictably. */
     val code: String get() = name
@@ -50,6 +52,30 @@ data class FieldIssue(
  * option list are all data, and adding a vertical adds no case to this function.
  */
 object SellValidation {
+
+    /**
+     * The server's field refusals, as issues under the boxes they name.
+     *
+     * Keyed off `errors[].code`, never `message`: the message is an English
+     * sentence and the wording belongs in each platform's string table. Keys the
+     * form does not have are left out — they are not something the seller can
+     * fix on this step, and the caller shows them as a form-level failure.
+     */
+    fun fromServer(form: SellForm, fieldCodes: Map<String, String>): List<FieldIssue> {
+        val known = form.fields.associateBy { it.key } +
+            listOfNotNull(form.trust?.reference).associateBy { it.key }
+        return fieldCodes.mapNotNull { (key, code) ->
+            val field = known[key] ?: return@mapNotNull null
+            val problem = when (code) {
+                "required" -> FieldProblem.Required
+                "not_a_number" -> FieldProblem.NotANumber
+                "invalid_option", "not_an_option" -> FieldProblem.NotAnOption
+                "invalid" -> if (field.options.isNotEmpty()) FieldProblem.NotAnOption else FieldProblem.Invalid
+                else -> FieldProblem.Invalid
+            }
+            FieldIssue(key, problem)
+        }
+    }
 
     fun check(form: SellForm, values: Map<String, String>): List<FieldIssue> {
         val issues = mutableListOf<FieldIssue>()

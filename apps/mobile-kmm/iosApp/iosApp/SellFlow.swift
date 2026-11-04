@@ -590,6 +590,7 @@ private struct FieldInput: View {
         case "Required": return String(localized: "sell_field_required")
         case "NotANumber": return String(localized: "sell_field_number")
         case "NotAnOption": return String(localized: "sell_field_option")
+        case "Invalid": return String(localized: "sell_field_invalid")
         case "TooSmall":
             return String(format: String(localized: "sell_field_min"),
                           issue.bound.map { "\($0)" } ?? "", localised(field.unit, field.unitAr))

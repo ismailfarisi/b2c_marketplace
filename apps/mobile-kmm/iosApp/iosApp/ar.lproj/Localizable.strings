@@ -59,6 +59,7 @@
 "sell_field_required" = "مطلوب قبل النشر.";
 "sell_field_number" = "أرقام فقط.";
 "sell_field_option" = "اختر أحد الخيارات.";
+"sell_field_invalid" = "تحقّق من هذه الإجابة.";
 "sell_field_min" = "%@ %@ على الأقل.";
 "sell_field_max" = "%@ %@ كحد أقصى.";
 "signin_title" = "سجّل الدخول للعرض";
@@ -176,10 +177,17 @@
 "inbox_empty" = "لا توجد رسائل بعد.";
 "inbox_empty_hint" = "تبدأ عندما يضغط مشترٍ على الزر في أحد مقاطعك.";
 "inbox_untitled" = "محادثة";
+"search_distance_m" = "على بُعد %@ م";
+"search_distance_km" = "على بُعد %@ كم";
+"search_mileage_km" = "%@ كم";
+"inbox_state_closed" = "مغلقة";
+"inbox_state_blocked" = "محظورة";
 "thread_empty" = "ابدأ بالتحية.";
 "thread_empty_hint" = "أبقِ المحادثة هنا — لا يمكننا المساعدة إلا إذا حدث شيء داخل المنصة.";
 "thread_hint" = "رسالة";
 "thread_send" = "إرسال";
+"feed_like" = "إعجاب";
+"feed_unlike" = "إلغاء الإعجاب";
 "msg_held" = "قيد المراجعة — لم تُسلَّم بعد.";
 "msg_redacted" = "تمت إزالة بيانات التواصل.";
 "msg_blocked" = "لم تُسلَّم.";

@@ -35,6 +35,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -122,7 +125,11 @@ private fun InboxRow(c: Conversation, onClick: () -> Unit) {
                 // thread the seller closed and getting silence is worse than
                 // being told.
                 Text(
-                    text = c.state,
+                    text = when (c.state) {
+                        "closed" -> stringResource(R.string.inbox_state_closed)
+                        "blocked" -> stringResource(R.string.inbox_state_blocked)
+                        else -> c.state
+                    },
                     color = Palette.TextFaint,
                     fontSize = Type.Caption,
                     modifier = Modifier.padding(top = Space.Hair),
@@ -195,7 +202,10 @@ fun ThreadScreen(viewModel: MeViewModel, onBack: () -> Unit, modifier: Modifier 
                 // to type their question a second time into a conversation that
                 // already has it.
                 state.error != null && state.messages.isEmpty() ->
-                    FailureBlock(state.error!!)
+                    FailureBlock(
+                        state.error!!,
+                        onRetry = viewModel::retryThread.takeIf { state.loadFailed },
+                    )
 
                 state.messages.isEmpty() ->
                     EmptyBlock(
@@ -218,7 +228,9 @@ fun ThreadScreen(viewModel: MeViewModel, onBack: () -> Unit, modifier: Modifier 
             FailureStrip(it, onRetry = viewModel::sendDraft)
         }
 
-        Row(
+        // No composer over a thread that never opened: there is no
+        // conversation to send into, and Retry above is the way forward.
+        if (!state.loadFailed) Row(
             Modifier
                 .navigationBarsPadding()
                 .fillMaxWidth()
@@ -336,16 +348,20 @@ private fun Header(title: String, onBack: () -> Unit) {
         Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = Space.Medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "‹",
-            color = Palette.Text,
-            fontSize = 26.sp,
-            modifier = Modifier
+        // AutoMirrored, so it points the reading direction's way in Arabic.
+        Box(
+            Modifier
                 .clickable(onClick = onBack)
                 .defaultMinSize(minWidth = Space.Touch, minHeight = Space.Touch)
-                .semantics { contentDescription = "Back" }
                 .padding(end = Space.Medium),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.meals_back),
+                tint = Palette.Text,
+            )
+        }
         Text(
             text = title,
             color = Palette.Text,

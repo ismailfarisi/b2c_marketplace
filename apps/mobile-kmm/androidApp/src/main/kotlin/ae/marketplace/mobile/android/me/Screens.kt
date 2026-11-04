@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import ae.marketplace.mobile.android.meals.money
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -312,7 +313,7 @@ private fun SearchRow(r: SearchResult, onClick: () -> Unit) {
             }
             Text(
                 text = listOfNotNull(
-                    if (r.mileageKm > 0) "${group(r.mileageKm.toLong())} km" else null,
+                    if (r.mileageKm > 0) stringResource(R.string.search_mileage_km, group(r.mileageKm.toLong())) else null,
                     r.regionalSpec.uppercase().ifEmpty { null },
                     r.city.ifEmpty { r.emirate }.ifEmpty { null },
                     r.distanceM?.let { distance(it) },
@@ -322,7 +323,7 @@ private fun SearchRow(r: SearchResult, onClick: () -> Unit) {
                 modifier = Modifier.padding(top = Space.Hair),
             )
             Text(
-                text = "${r.currency} ${group(r.priceMinor / 100)}",
+                text = money(r.priceMinor, r.currency),
                 color = Palette.Accent,
                 fontSize = Type.Body,
                 fontWeight = FontWeight.SemiBold,
@@ -340,10 +341,11 @@ private fun SearchRow(r: SearchResult, onClick: () -> Unit) {
  * where distance is the deciding column meant the nearest results looked like
  * missing data.
  */
+@Composable
 private fun distance(metres: Long): String = when {
-    metres < 1000 -> "$metres m away"
-    metres < 10_000 -> "${metres / 1000}.${(metres % 1000) / 100} km away"
-    else -> "${metres / 1000} km away"
+    metres < 1000 -> stringResource(R.string.search_distance_m, "$metres")
+    metres < 10_000 -> stringResource(R.string.search_distance_km, "${metres / 1000}.${(metres % 1000) / 100}")
+    else -> stringResource(R.string.search_distance_km, "${metres / 1000}")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -444,7 +446,7 @@ private fun SavedRow(item: SavedItem, onClick: () -> Unit) {
             val price = summary?.priceMinor
             if (price != null && !summary.currency.isNullOrEmpty()) {
                 Text(
-                    text = "${summary.currency} ${group(price / 100)}${summary.priceSuffix}",
+                    text = money(price, summary.currency.orEmpty()) + summary.priceSuffix,
                     color = Palette.Accent.copy(alpha = fade),
                     fontSize = Type.Secondary,
                     fontWeight = FontWeight.SemiBold,
@@ -636,9 +638,9 @@ private fun ListingRow(l: MyListing) {
             }
             Text(
                 text = listOfNotNull(
-                    if (l.mileageKm > 0) "${group(l.mileageKm.toLong())} km" else null,
+                    if (l.mileageKm > 0) stringResource(R.string.search_mileage_km, group(l.mileageKm.toLong())) else null,
                     l.city.ifEmpty { null },
-                    "${l.currency} ${group(l.priceMinor / 100)}",
+                    money(l.priceMinor, l.currency),
                 ).joinToString(" · "),
                 color = Palette.TextMuted,
                 fontSize = Type.Secondary,

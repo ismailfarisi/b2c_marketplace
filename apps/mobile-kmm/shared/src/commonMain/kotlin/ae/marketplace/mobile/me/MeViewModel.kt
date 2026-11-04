@@ -70,6 +70,12 @@ data class ThreadUiState(
     val loading: Boolean = false,
     val sending: Boolean = false,
     val error: Failure? = null,
+    /**
+     * The thread itself did not open (inquire or load failed), as opposed to a
+     * send failing. The screen shows Retry instead of a composer, because there
+     * is no conversation to type into yet.
+     */
+    val loadFailed: Boolean = false,
 )
 
 /**
@@ -352,12 +358,24 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
         }
     }
 
+    /** The last open/inquire, kept so a failed one can be re-run with the same arguments. */
+    private var lastThreadCall: (() -> Unit)? = null
+
+    /** Re-runs whichever of [openThread] or [inquire] last failed. */
+    fun retryThread() {
+        if (_thread.value.loading) return
+        lastThreadCall?.invoke()
+    }
+
     fun openThread(conversationId: String, title: String) {
+        lastThreadCall = { openThread(conversationId, title) }
         _thread.value = ThreadUiState(conversationId = conversationId, title = title, loading = true)
         viewModelScope.launch {
             runCatching { api.thread(conversationId) }
                 .onSuccess { _thread.value = _thread.value.copy(messages = it.items, loading = false) }
-                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.toFailure()) }
+                .onFailure { e ->
+                    _thread.value = _thread.value.copy(loading = false, error = e.toFailure(), loadFailed = true)
+                }
             // Marking read is fire-and-forget: a failure costs an unread badge,
             // and blocking the thread on it would be a worse trade.
             runCatching { api.markRead(conversationId) }
@@ -373,11 +391,14 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
      * product exists to create looks organic.
      */
     fun inquire(listingId: String, title: String, reelId: String?, actionId: String?) {
+        lastThreadCall = { inquire(listingId, title, reelId, actionId) }
         _thread.value = ThreadUiState(title = title, loading = true)
         viewModelScope.launch {
             runCatching { api.inquire(listingId, reelId, actionId) }
                 .onSuccess { openThread(it.conversationId, title) }
-                .onFailure { e -> _thread.value = _thread.value.copy(loading = false, error = e.toFailure()) }
+                .onFailure { e ->
+                    _thread.value = _thread.value.copy(loading = false, error = e.toFailure(), loadFailed = true)
+                }
         }
     }
 
@@ -419,6 +440,7 @@ class MeViewModel(private val api: MeApi) : ViewModel() {
     }
 
     fun closeThread() {
+        lastThreadCall = null
         _thread.value = ThreadUiState()
     }
 
