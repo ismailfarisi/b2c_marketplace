@@ -1,5 +1,6 @@
 "use client";
 
+import { ApiError } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState, type ReactNode } from "react";
 
@@ -85,6 +86,7 @@ export function QueuePanel<T>({
   rowKey,
   renderRow,
   renderDetail,
+  onRetry,
 }: {
   title: string;
   hint?: string;
@@ -97,6 +99,7 @@ export function QueuePanel<T>({
   renderRow: (row: T) => ReactNode;
   /** The decision form, expanded inside the table. */
   renderDetail: (row: T, close: () => void) => ReactNode;
+  onRetry?: () => void;
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
 
@@ -116,8 +119,25 @@ export function QueuePanel<T>({
       {error ? (
         <div className="state error">
           <div className="headline">Could not load this queue.</div>
-          This account may not have staff access — every queue checks{" "}
-          <code>platform_admins</code> on the server, on every call.
+          {error instanceof ApiError && error.status === 403 ? (
+            <>
+              This account may not have staff access — every queue checks{" "}
+              <code>platform_admins</code> on the server, on every call.
+            </>
+          ) : (
+            <>
+              {typeof navigator !== "undefined" && navigator.onLine === false
+                ? "You're offline."
+                : "The server didn't answer."}{" "}
+              {onRetry ? (
+                <button type="button" onClick={onRetry}>
+                  Retry
+                </button>
+              ) : (
+                "It retries on its own every few seconds."
+              )}
+            </>
+          )}
         </div>
       ) : isPending ? (
         <SkeletonRows columns={columns.length} />

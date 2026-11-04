@@ -113,9 +113,33 @@ func (s *Service) Open(ctx context.Context, userID uuid.UUID, subject, body stri
 	return s.Thread(ctx, id, &userID)
 }
 
-// Mine lists a customer's tickets, most recent activity first.
-func (s *Service) Mine(ctx context.Context, userID uuid.UUID) ([]Ticket, error) {
-	return s.list(ctx, `WHERE t.user_id = $1 ORDER BY t.updated_at DESC LIMIT 100`, userID)
+// minePageSize is how many tickets one page of the customer's list holds
+// (a var so tests can page through a handful).
+var minePageSize = 50
+
+// Mine lists a customer's tickets, most recent activity first, one page at a
+// time: before (nil: the first page) is the cursor of the previous page's
+// last row, and next is set while there are older tickets.
+func (s *Service) Mine(ctx context.Context, userID uuid.UUID, before *httpx.KeysetCursor) (
+	items []Ticket, next *httpx.KeysetCursor, err error,
+) {
+	var at *time.Time
+	var id *uuid.UUID
+	if before != nil {
+		at, id = &before.At, &before.ID
+	}
+	items, err = s.list(ctx, `WHERE t.user_id = $1
+		AND ($2::timestamptz IS NULL OR (t.updated_at, t.id) < ($2, $3::uuid))
+		ORDER BY t.updated_at DESC, t.id DESC LIMIT $4`, userID, at, id, minePageSize+1)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(items) > minePageSize {
+		items = items[:minePageSize]
+		last := items[minePageSize-1]
+		next = &httpx.KeysetCursor{At: last.UpdatedAt, ID: last.ID}
+	}
+	return items, next, nil
 }
 
 // Queue lists tickets for staff by status ("" = open and answered), oldest
@@ -224,6 +248,7 @@ func (s *Service) Reply(ctx context.Context, id, authorID uuid.UUID, owner *uuid
 	if staff && s.notifier != nil {
 		if _, err := s.notifier.Enqueue(ctx, tx, notify.Message{
 			UserID: user.String(), TemplateKey: "support.reply", Category: notify.CategoryTransactional,
+			// notify.Enqueue rewrites the /en prefix to the recipient's locale.
 			Params:    map[string]string{"subject": subject, "link": "/en/support/" + id.String()},
 			DedupeKey: "support-reply:" + msgID.String(),
 		}); err != nil {

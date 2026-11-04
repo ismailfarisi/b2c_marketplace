@@ -26,6 +26,8 @@ import ae.marketplace.mobile.playback.ReelPlayerPool
 import ae.marketplace.mobile.playback.createReelPlayer
 import ae.marketplace.mobile.sell.SellApi
 import ae.marketplace.mobile.sell.SellViewModel
+import ae.marketplace.mobile.support.SupportApi
+import ae.marketplace.mobile.support.SupportViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +75,7 @@ class MarketplaceSdk private constructor(
     private val push: PushRegistry,
     private val app: AppConfigApi,
     private val account: ae.marketplace.mobile.me.AccountApi,
+    private val support: SupportApi,
 ) {
     companion object {
         suspend fun create(
@@ -119,6 +122,7 @@ class MarketplaceSdk private constructor(
                 push = push,
                 app = AppConfigApi(client),
                 account = ae.marketplace.mobile.me.AccountApi(client),
+                support = SupportApi(client),
             ).also { it.sessionId = sessionId }
         }
     }
@@ -204,4 +208,7 @@ class MarketplaceSdk private constructor(
 
     /** The meals tab: storefront, checkout and the customer's subscriptions. */
     fun createMealsViewModel(): MealsViewModel = MealsViewModel(meals)
+
+    /** Help tickets and invoices for the signed-in customer. */
+    fun createSupportViewModel(): SupportViewModel = SupportViewModel(support)
 }

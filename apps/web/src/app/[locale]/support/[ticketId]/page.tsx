@@ -3,12 +3,16 @@
 import { ApiError } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useRef, useState } from "react";
 
+import { LoadError } from "@/components/load-error";
 import { CustomerShell, asLocale } from "@/components/meals/shell";
 import { getMyTicket, replyToTicket } from "@/lib/customer-api";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
 import { SUPPORT_COPY } from "../copy";
+import { formatWhen, useDraft } from "../draft";
+import { FieldError, SendError } from "../send-error";
 
 export default function TicketPage({
   params,
@@ -25,37 +29,57 @@ export default function TicketPage({
     queryFn: () => getMyTicket(p.ticketId),
     retry: false,
   });
-  const [body, setBody] = useState("");
+  const [body, setBody, clearBody] = useDraft(`reply:${p.ticketId}`);
+  const [missing, setMissing] = useState(false);
+  const idem = useIdempotencyKey();
+  const busy = useRef(false);
   const reply = useMutation({
-    mutationFn: () => replyToTicket(p.ticketId, body),
+    networkMode: "always",
+    mutationFn: () =>
+      replyToTicket(p.ticketId, body.trim(), { headers: idem.headers() }),
     onSuccess: (thread) => {
-      setBody("");
+      idem.reset();
+      clearBody();
       qc.setQueryData(key, thread);
       qc.invalidateQueries({ queryKey: ["me", "support"], exact: true });
     },
+    onSettled: () => {
+      busy.current = false;
+    },
   });
+  const here = `/${locale}/support/${p.ticketId}`;
   const signedOut = q.error instanceof ApiError && q.error.status === 401;
-  const time = new Intl.DateTimeFormat(locale === "ar" ? "ar-AE" : "en-AE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const notFound = q.error instanceof ApiError && q.error.status === 404;
 
   return (
-    <CustomerShell locale={locale}>
+    <CustomerShell
+      locale={locale}
+      back={{ href: `/${locale}/support`, label: t.back }}
+    >
       <div className="ms-support">
-        <Link href={`/${locale}/support`}>← {t.back}</Link>
         {signedOut ? (
           <p>
             <Link
               className="ms-btn"
-              href={`/${locale}/signin?next=/${locale}/support/${p.ticketId}`}
+              href={`/${locale}/signin?next=${encodeURIComponent(here)}`}
             >
               {t.signIn}
             </Link>
           </p>
-        ) : null}
-        {q.isError && !signedOut ? (
-          <p className="ms-error">{t.failed}</p>
+        ) : notFound ? (
+          <p className="ms-empty" role="alert">
+            {t.notFound} <Link href={`/${locale}/support`}>{t.back}</Link>
+          </p>
+        ) : q.isError ? (
+          <LoadError
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            locale={locale}
+          />
+        ) : q.isPending ? (
+          <p className="ms-note" aria-busy="true">
+            {t.loading}
+          </p>
         ) : null}
         {q.data ? (
           <>
@@ -68,7 +92,7 @@ export default function TicketPage({
                 <li key={m.id} className={m.from_staff ? "is-staff" : "is-me"}>
                   <small>
                     {m.from_staff ? t.staff : t.you} ·{" "}
-                    {time.format(new Date(m.created_at))}
+                    {formatWhen(locale, m.created_at, true)}
                   </small>
                   <p dir="auto">{m.body}</p>
                 </li>
@@ -76,9 +100,14 @@ export default function TicketPage({
             </ol>
             <form
               className="ms-support-form"
+              noValidate
               onSubmit={(e) => {
                 e.preventDefault();
-                if (body.trim()) reply.mutate();
+                if (busy.current || reply.isPending) return;
+                setMissing(!body.trim());
+                if (!body.trim()) return;
+                busy.current = true;
+                reply.mutate();
               }}
             >
               <label>
@@ -87,19 +116,32 @@ export default function TicketPage({
                   value={body}
                   maxLength={4000}
                   rows={4}
-                  onChange={(e) => setBody(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    setBody(e.target.value);
+                    idem.reset();
+                  }}
+                  aria-invalid={missing || undefined}
+                />
+                <FieldError
+                  error={reply.error}
+                  field="body"
+                  local={missing ? t.needMessage : null}
+                  locale={locale}
                 />
               </label>
-              {reply.error ? (
-                <p className="ms-error">{reply.error.message}</p>
-              ) : null}
+              <SendError
+                error={reply.error}
+                paused={reply.isPaused}
+                locale={locale}
+                next={here}
+                fields={["body"]}
+              />
               <button
                 className="ms-btn"
                 type="submit"
-                disabled={reply.isPending}
+                disabled={reply.isPending && !reply.isPaused}
               >
-                {reply.isPending ? t.sending : t.send}
+                {reply.isPending && !reply.isPaused ? t.sending : t.send}
               </button>
             </form>
           </>

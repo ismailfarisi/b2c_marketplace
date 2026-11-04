@@ -77,7 +77,7 @@ struct MarketplaceApp: App {
 /// Messaging is not a destination. It is reached from the Me screen and from a
 /// CTA press three swipes into the feed, and making it a sixth tab would turn
 /// the second into a context switch out of the reel the viewer is watching.
-private enum Route: Equatable { case none, inbox, thread }
+private enum Route: Equatable { case none, inbox, thread, help, helpTicket, invoices }
 
 /// The tab host.
 ///
@@ -102,6 +102,7 @@ struct RootView: View {
     @State private var meViewModel: MeViewModel?
     @State private var signInViewModel: SignInViewModel?
     @State private var mealsViewModel: MealsViewModel?
+    @State private var supportViewModel: SupportViewModel?
     /// A meals action waiting on sign-in: checkout, rotation, My meals.
     @State private var pendingMeals: (() -> Void)?
     @State private var session: Session?
@@ -154,6 +155,17 @@ struct RootView: View {
     /// Universal Links and push taps: open the matching meals screen.
     private func openLink(_ url: String) {
         guard let target = MealsLinks.shared.parse(url: url) else { return }
+        if target.page == .support {
+            // Help is native: open the ticket on the app's own session.
+            destinationRaw = Destination.me.rawValue
+            if let id = target.id {
+                supportViewModel?.openTicket(id: id)
+                route = .helpTicket
+            } else {
+                route = .help
+            }
+            return
+        }
         route = .none
         destinationRaw = Destination.meals.rawValue
         link = target
@@ -227,6 +239,7 @@ struct RootView: View {
             if meViewModel == nil { meViewModel = sdk.createMeViewModel() }
             if signInViewModel == nil { signInViewModel = sdk.createSignInViewModel() }
             if mealsViewModel == nil { mealsViewModel = sdk.createMealsViewModel() }
+            if supportViewModel == nil { supportViewModel = sdk.createSupportViewModel() }
             if destination != .feed { feedViewModel?.onAppBackgrounded() }
             session = sdk.session
             let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
@@ -257,6 +270,7 @@ struct RootView: View {
                 guard let ended else { continue }
                 me.forget()
                 mealsViewModel?.forget()
+                supportViewModel?.forget()
                 if ended == .expired && destination != .feed && destination != .search {
                     destinationRaw = Destination.feed.rawValue
                 }
@@ -403,7 +417,9 @@ struct RootView: View {
                         Task { try? await session?.signOut() }
                         destinationRaw = Destination.feed.rawValue
                     },
-                    makeAccount: { env.sdk?.createAccountViewModel() }
+                    makeAccount: { env.sdk?.createAccountViewModel() },
+                    onOpenHelp: { route = .help },
+                    onOpenInvoices: { route = .invoices }
                 )
             case .sell:
                 // Its state holder is created on entry and released on exit
@@ -450,6 +466,21 @@ struct RootView: View {
                 // acquired an inbox, and this is the moment they learn it
                 // exists.
                 route = .inbox
+            }
+        case .help:
+            if let support = supportViewModel {
+                HelpScreen(viewModel: support, onBack: { route = .none }, onOpenTicket: { id in
+                    support.openTicket(id: id)
+                    route = .helpTicket
+                })
+            }
+        case .helpTicket:
+            if let support = supportViewModel {
+                HelpTicketScreen(viewModel: support, onBack: { route = .help })
+            }
+        case .invoices:
+            if let support = supportViewModel {
+                InvoicesScreen(viewModel: support, onBack: { route = .none })
             }
         case .none:
             EmptyView()

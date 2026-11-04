@@ -31,7 +31,12 @@ func (h *SupportHandlers) ListMine(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
 		return
 	}
-	items, err := h.Service.Mine(r.Context(), userID)
+	before, err := httpx.DecodeKeysetCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	items, next, err := h.Service.Mine(r.Context(), userID, before)
 	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
@@ -39,7 +44,12 @@ func (h *SupportHandlers) ListMine(w http.ResponseWriter, r *http.Request) {
 	for i := range items {
 		items[i].UserID, items[i].Phone = nil, ""
 	}
-	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": items})
+	var cursor *string
+	if next != nil {
+		c := next.Encode()
+		cursor = &c
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": items, "next_cursor": cursor})
 }
 
 func (h *SupportHandlers) Open(w http.ResponseWriter, r *http.Request) {
@@ -161,11 +171,15 @@ func (h *AdminHandlers) SupportReply(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
+	// Who answered a customer is part of the record; the message text is
+	// already in the thread, so only the outcome is audited.
+	h.record(r, grant, "support.reply", "support_ticket", id, "staff reply to customer", map[string]any{"status": t.Status})
 	httpx.WriteJSON(w, http.StatusOK, "", t)
 }
 
 func (h *AdminHandlers) SupportStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.caller(w, r, admin.PermCommerceContact); !ok {
+	grant, ok := h.caller(w, r, admin.PermCommerceContact)
+	if !ok {
 		return
 	}
 	id, ok := ticketParam(w, r)
@@ -183,5 +197,6 @@ func (h *AdminHandlers) SupportStatus(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
+	h.record(r, grant, "support.status", "support_ticket", id, "staff set ticket "+body.Status, map[string]any{"status": body.Status})
 	w.WriteHeader(http.StatusNoContent)
 }

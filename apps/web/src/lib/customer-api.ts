@@ -648,20 +648,28 @@ export type SupportMessage = {
 
 export type SupportThread = SupportTicket & { messages: SupportMessage[] };
 
-export const listMyTickets = () =>
-  apiFetch<{ items: SupportTicket[] }>({ url: "/me/support/tickets", method: "GET" });
+export const listMyTickets = (cursor?: string) =>
+  apiFetch<{ items: SupportTicket[]; next_cursor?: string | null }>({
+    url: "/me/support/tickets",
+    method: "GET",
+    params: cursor ? { cursor } : undefined,
+  });
 
-export const openTicket = (body: { subject: string; body: string; subscription_id?: string }) =>
-  apiFetch<SupportThread>({ url: "/me/support/tickets", method: "POST", data: body });
+export const openTicket = (
+  body: { subject: string; body: string; subscription_id?: string },
+  opts?: CallOptions,
+) =>
+  apiFetch<SupportThread>({ url: "/me/support/tickets", method: "POST", data: body, headers: opts?.headers });
 
 export const getMyTicket = (id: string) =>
   apiFetch<SupportThread>({ url: `/me/support/tickets/${id}`, method: "GET" });
 
-export const replyToTicket = (id: string, body: string) =>
+export const replyToTicket = (id: string, body: string, opts?: CallOptions) =>
   apiFetch<SupportThread>({
     url: `/me/support/tickets/${id}/messages`,
     method: "POST",
     data: { body },
+    headers: opts?.headers,
   });
 
 // --- invoices ---------------------------------------------------------------
@@ -704,8 +712,12 @@ export type InvoiceDocument = {
   }>;
 };
 
-export const listMyInvoices = () =>
-  apiFetch<{ items: InvoiceSummary[] }>({ url: "/me/invoices", method: "GET" });
+export const listMyInvoices = (cursor?: string) =>
+  apiFetch<{ items: InvoiceSummary[]; next_cursor?: string | null }>({
+    url: "/me/invoices",
+    method: "GET",
+    params: cursor ? { cursor } : undefined,
+  });
 
 export const getMyInvoice = (id: string) =>
   apiFetch<InvoiceDocument>({ url: `/me/invoices/${id}`, method: "GET" });
