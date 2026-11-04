@@ -133,7 +133,6 @@ struct RootView: View {
     /// Nearest sort knows whether to appear.
     @State private var lat: Double = 0
     @State private var pushAsk = false
-    @Environment(\.scenePhase) private var scenePhase
     @State private var lng: Double = 0
 
     private var destination: Destination {

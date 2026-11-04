@@ -818,7 +818,7 @@ extension MealsHomePage {
     @ViewBuilder
     fileprivate var refreshNote: some View {
         if let failure = s.error {
-            FailureStrip(failure: failure) { vm.loadStore() }
+            FailureStrip(failure: failure, onRetry: { vm.loadStore() })
                 .padding(.horizontal, Space.edge)
         } else if s.loading {
             HStack(spacing: Space.small) {
@@ -2364,7 +2364,7 @@ private struct RateKitchenCard: View {
                 form(data)
             }
         } else if let failure = state.error {
-            FailureStrip(failure: failure) { vm.loadReview(id: subscriptionId) }
+            FailureStrip(failure: failure, onRetry: { vm.loadReview(id: subscriptionId) })
         } else {
             LoadingBlock()
         }
@@ -2390,7 +2390,7 @@ private struct RateKitchenCard: View {
             }
             InputField(placeholder: NSLocalizedString("meals_rate_comment", comment: ""), text: $comment)
             if let failure = state.error {
-                FailureStrip(failure: failure) { vm.saveReview(rating: Int32(rating), comment: comment) }
+                FailureStrip(failure: failure, onRetry: { vm.saveReview(rating: Int32(rating), comment: comment) })
             }
             if state.saved {
                 Text("meals_rate_saved").font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.leaf)

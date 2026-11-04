@@ -145,7 +145,7 @@ struct ThreadScreen: View {
             }
 
             if let failure = state.error, !state.messages.isEmpty {
-                FailureStrip(failure: failure) { viewModel.sendDraft() }
+                FailureStrip(failure: failure, onRetry: { viewModel.sendDraft() })
             }
 
             // No composer over a thread that never opened.

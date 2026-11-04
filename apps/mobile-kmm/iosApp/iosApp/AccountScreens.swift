@@ -124,7 +124,7 @@ struct SearchScreen: View {
         } else {
             List {
                 if let failure = state.error {
-                    FailureStrip(failure: failure) { viewModel.submitSearch() }
+                    FailureStrip(failure: failure, onRetry: { viewModel.submitSearch() })
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Palette.ink)
                 }
