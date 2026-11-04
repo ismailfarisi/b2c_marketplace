@@ -286,6 +286,15 @@
 "meals_promo_invalid" = "لا يمكن استخدام رمز العرض هنا.";
 "meals_subscriber" = "مشترك";
 "meals_choice_help" = "في الأيام المعلَّمة بخيارين يمكنك اختيار أحد الطبقين قبل الموعد النهائي.";
+"meals_kitchen_reply" = "رد المطبخ";
+"meals_reviews_failed" = "تعذر تحميل التقييمات.";
+"meals_kcal" = "%lld سعرة";
+"meals_allergens" = "مسببات الحساسية: %@";
+"meals_offer_trial" = "تجربة %lld أيام";
+"meals_offer_percent" = "خصم %@";
+"meals_offer_percent_cap" = "خصم %@ حتى %@";
+"meals_offer_fixed" = "خصم %@";
+"meals_offer_new_only" = "للمشتركين الجدد";
 "meals_near_count" = "%lld مطبخ يوصل إليك";
 "meals_near_place" = "%lld مطبخ يوصل إلى %@";
 "meals_none_near" = "لا توجد مطابخ توصل إلى %@ بعد";

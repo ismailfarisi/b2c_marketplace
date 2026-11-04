@@ -635,21 +635,23 @@ private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onSubscribe: (Me
             FailureBlock(failure, onRetry = { vm.openKitchen(s.branchId) })
         }
         k == null -> Column(Modifier.fillMaxSize()) { TopBar("", onBack); LoadingBlock() }
-        else -> KitchenBody(k, s.reviews, arabic, onBack, onSubscribe)
+        else -> KitchenBody(k, s, arabic, onBack, onSubscribe, onRetryReviews = vm::retryReviews)
     }
 }
 
 @Composable
 private fun KitchenBody(
     k: ae.marketplace.mobile.model.KitchenDetail,
-    reviews: List<ae.marketplace.mobile.model.KitchenReview>,
+    state: ae.marketplace.mobile.meals.KitchenUiState,
     arabic: Boolean,
     onBack: () -> Unit,
     onSubscribe: (MealPlan) -> Unit,
+    onRetryReviews: () -> Unit,
 ) {
+    val reviews = state.reviews
     val name = pick(k.name, k.nameAr, arabic)
     val byDay = remember(k) { k.menu.slots.groupBy { it.weekday }.toSortedMap() }
-    var day by remember(k) { mutableStateOf(byDay.keys.firstOrNull()) }
+    var day by remember(k) { mutableStateOf(ae.marketplace.mobile.meals.KitchenMenu.defaultDay(k) ?: byDay.keys.firstOrNull()) }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     // hero, info, then (menu title, tabs, day, week) when there is a menu.
@@ -658,6 +660,8 @@ private fun KitchenBody(
         derivedStateOf { list.layoutInfo.visibleItemsInfo.any { it.key == "plans" || it.index > plansIndex } }
     }
     val dishPhoto = k.menu.slots.firstNotNullOfOrNull { it.default?.imageUrl ?: it.alternative?.imageUrl }
+
+    val backLabel = stringResource(R.string.meals_back)
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = list) {
@@ -676,7 +680,7 @@ private fun KitchenBody(
                             .size(Space.Touch)
                             .background(M.Surface, RoundedCornerShape(50))
                             .clickable(onClick = onBack)
-                            .semantics { role = Role.Button; contentDescription = "back" }
+                            .semantics { role = Role.Button; contentDescription = backLabel }
                             .padding(top = 11.dp),
                     )
                 }
@@ -702,6 +706,7 @@ private fun KitchenBody(
                         RatingText(k.rating, k.ratingCount)
                         if (k.foodSafetyVerified) VerifiedBadge()
                     }
+                    OfferChips(state.offers, arabic)
                     k.description?.let { Text(pick(it, k.descriptionAr, arabic), color = M.Muted, fontSize = Type.Body) }
                     if (k.deliversHere == false) {
                         Text(stringResource(R.string.meals_not_here), color = Palette.Bad, fontSize = Type.Secondary)
@@ -723,7 +728,7 @@ private fun KitchenBody(
                         Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.Edge),
                         horizontalArrangement = Arrangement.spacedBy(Space.Small),
                     ) {
-                        byDay.keys.forEach { d -> Chip(weekday(d, arabic), day == d, { day = d }) }
+                        byDay.keys.forEach { d -> DayChip(weekday(d, arabic), day == d, ae.marketplace.mobile.meals.KitchenMenu.hasChoice(k, d)) { day = d } }
                     }
                 }
                 item(key = "day") {
@@ -766,12 +771,19 @@ private fun KitchenBody(
                     PlanCard(p, arabic, popular = p.id == k.popularPlanId, enabled = k.deliversHere != false) { onSubscribe(p) }
                 }
             }
+            state.reviewsError?.let { failure ->
+                item(key = "reviewsFailed") {
+                    SectionTitle(stringResource(R.string.meals_reviews))
+                    ReviewsFailed(failure, onRetryReviews)
+                }
+            }
             if (reviews.isNotEmpty()) {
                 item { SectionTitle(stringResource(R.string.meals_reviews)) }
                 items(reviews.take(5), key = { it.id }) { r ->
                     Card {
                         Text("★".repeat(r.rating) + "☆".repeat(5 - r.rating), color = M.Saffron, fontSize = Type.Secondary)
                         if (r.comment.isNotBlank()) Text(r.comment, color = M.Ink, fontSize = Type.Body)
+                        KitchenReply(r.reply)
                         Text(
                             stringResource(R.string.meals_subscriber) + " · " + shortDate(r.createdAt, arabic),
                             color = M.Muted,
@@ -836,11 +848,15 @@ private fun DishCard(slot: ae.marketplace.mobile.model.MenuSlot, arabic: Boolean
         }
         Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(pick(main.name, main.nameAr, arabic), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.Bold)
+            DishFacts(main, arabic)
             val alt = slot.alternative
             if (slot.default != null && alt != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
                     KitchenCover(pick(alt.name, alt.nameAr, arabic), alt.imageUrl, emptyList(), Modifier.size(36.dp))
-                    Text(stringResource(R.string.meals_or, pick(alt.name, alt.nameAr, arabic)), color = M.Muted, fontSize = Type.Secondary)
+                    Column {
+                        Text(stringResource(R.string.meals_or, pick(alt.name, alt.nameAr, arabic)), color = M.Muted, fontSize = Type.Secondary)
+                        DishFacts(alt, arabic)
+                    }
                 }
             }
         }

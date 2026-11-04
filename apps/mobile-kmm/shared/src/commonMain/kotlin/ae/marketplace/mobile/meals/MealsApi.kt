@@ -9,6 +9,7 @@ import ae.marketplace.mobile.model.KitchenPage
 import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealsHome
 import ae.marketplace.mobile.model.MySubscription
+import ae.marketplace.mobile.model.OfferPage
 import ae.marketplace.mobile.model.PaymentIntent
 import ae.marketplace.mobile.model.ReviewPage
 import ae.marketplace.mobile.model.Rotation
@@ -52,6 +53,10 @@ class MealsApi(private val client: HttpClient) {
 
     suspend fun reviews(branchId: String): ReviewPage =
         client.get("meals/kitchens/$branchId/reviews").body()
+
+    /** Public promos and trials usable at the kitchen now. */
+    suspend fun offers(branchId: String): OfferPage =
+        client.get("meals/kitchens/$branchId/offers").body()
 
     suspend fun addresses(): AddressPage = client.get("me/addresses").body()
 
