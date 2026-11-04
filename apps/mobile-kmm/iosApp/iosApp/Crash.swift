@@ -23,4 +23,14 @@ enum Crash {
         }
         #endif
     }
+
+    /// Reports a handled error (e.g. APNs registration failing) when crash
+    /// reporting is on; logs it otherwise.
+    static func report(_ error: Error) {
+        #if canImport(Sentry)
+        SentrySDK.capture(error: error)
+        #else
+        print("reported error: \(error)")
+        #endif
+    }
 }

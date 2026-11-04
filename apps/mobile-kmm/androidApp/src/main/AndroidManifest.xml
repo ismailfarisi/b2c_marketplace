@@ -14,6 +14,9 @@
       product's front door is worse than a slightly larger radius.
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Pinning a delivery address: asked only when the customer taps "Pin my
+         current location", so the driver gets the door, not the district. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!--
       The recorder.
@@ -38,6 +41,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
+        android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.Marketplace">
 
         <activity

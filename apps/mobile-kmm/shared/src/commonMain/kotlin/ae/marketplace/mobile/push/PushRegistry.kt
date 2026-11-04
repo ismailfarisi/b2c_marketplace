@@ -9,6 +9,8 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,6 +31,7 @@ class PushRegistry(
     private var token: String? = null
     private var platform: String = ""
     private var sent: String? = null
+    private var retry: Job? = null
 
     init {
         scope.launch {
@@ -53,17 +56,51 @@ class PushRegistry(
         runCatching { client.post("auth/logout") }
     }
 
-    private suspend fun flush() = lock.withLock {
-        val t = token ?: return@withLock
-        if (!session.state.value.isAuthenticated || sent == t) return@withLock
+    /**
+     * Call when the app comes to the foreground or the network returns: retries
+     * a token that has not reached the server yet.
+     */
+    fun retryNow() {
+        scope.launch { flush() }
+    }
+
+    /**
+     * Sends the token, and on failure (offline or 5xx at sign-in) keeps
+     * retrying with backoff while the session lasts and the token is unsent.
+     * Dropping it would leave push off until the next sign-in.
+     */
+    private suspend fun flush() {
+        val ok = send() ?: return
+        if (ok) {
+            retry?.cancel()
+            return
+        }
+        if (retry?.isActive == true) return
+        retry = scope.launch {
+            var attempt = 0
+            while (true) {
+                delay(retryDelayMs(attempt++))
+                if (send() != false) return@launch
+            }
+        }
+    }
+
+    /** True when sent, false when it failed, null when there is nothing to send. */
+    private suspend fun send(): Boolean? = lock.withLock {
+        val t = token ?: return@withLock null
+        if (!session.state.value.isAuthenticated || sent == t) return@withLock null
         runCatching {
             client.put("me/device") {
                 contentType(ContentType.Application.Json)
                 setBody(DeviceBody(t, platform))
             }
-        }.onSuccess { sent = t }
+        }.onSuccess { sent = t }.isSuccess
     }
 }
+
+/** 2s, 4s, 8s … capped at five minutes. */
+internal fun retryDelayMs(attempt: Int): Long =
+    (2_000L shl attempt.coerceIn(0, 8)).coerceAtMost(300_000L)
 
 @Serializable
 private data class DeviceBody(

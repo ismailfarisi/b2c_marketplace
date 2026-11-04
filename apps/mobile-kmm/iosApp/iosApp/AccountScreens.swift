@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import Shared
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -347,6 +348,15 @@ struct MeScreen: View {
     let viewModel: MeViewModel
     let onOpenInbox: () -> Void
     let onSignOut: () -> Void
+    var makeAccount: () -> AccountViewModel? = { nil }
+
+    @State private var account: AccountViewModel?
+    @State private var accountState: AccountUiState?
+    @State private var editingProfile = false
+    @State private var removing: Address?
+    @State private var pushOff = false
+    @State private var deletedNotice = false
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var current: MyListingsUiState?
     private var state: MyListingsUiState { current ?? viewModel.listings.value }
@@ -359,6 +369,14 @@ struct MeScreen: View {
             ScreenTitle("nav_me")
 
             List {
+                if let account, let accountState {
+                    AccountSections(
+                        vm: account, state: accountState, pushOff: pushOff,
+                        onEdit: { editingProfile = true },
+                        onRemove: { removing = $0 }
+                    )
+                }
+
                 Button(action: onOpenInbox) {
                     HStack {
                         Text("me_messages")
@@ -380,25 +398,18 @@ struct MeScreen: View {
                 }
                 .listRowBackground(Palette.ink)
 
+                // Classifieds listings only once there are some; a meal
+                // customer has nothing to sell.
+                if !state.items.isEmpty {
                 Section {
-                    if state.loading && state.items.isEmpty {
-                        LoadingBlock().listRowBackground(Palette.ink)
-                    } else if let failure = state.error, state.items.isEmpty {
-                        FailureBlock(failure: failure) { viewModel.loadMyListings(force: true) }
-                            .listRowBackground(Palette.ink)
-                    } else if state.items.isEmpty {
-                        EmptyBlock(message: String(localized: "me_no_listings"),
-                                   hint: String(localized: "me_no_listings_hint"))
-                            .listRowBackground(Palette.ink)
-                    } else {
-                        ForEach(state.items, id: \.id) { listing in
-                            ListingRow(listing: listing).listRowBackground(Palette.ink)
-                        }
+                    ForEach(state.items, id: \.id) { listing in
+                        ListingRow(listing: listing).listRowBackground(Palette.ink)
                     }
                 } header: {
                     Text("me_your_listings")
                         .font(.system(size: TypeScale.caption).weight(.medium))
                         .foregroundStyle(Palette.text.opacity(0.45))
+                }
                 }
 
                 Button(action: onSignOut) {
@@ -411,7 +422,7 @@ struct MeScreen: View {
                 .listRowBackground(Palette.ink)
 
                 if let error = deletion?.error {
-                    Text(error.words)
+                    Text(Self.deletionWords(error))
                         .font(.system(size: TypeScale.secondary))
                         .foregroundStyle(Palette.bad)
                         .listRowBackground(Palette.ink)
@@ -438,12 +449,42 @@ struct MeScreen: View {
         } message: {
             Text("me_delete_body")
         }
+        .alert(Text("account_deleted"), isPresented: $deletedNotice) {
+            Button(role: .cancel) { onSignOut() } label: { Text("account_ok") }
+        }
+        .alert(Text("account_remove_title"), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            Button(role: .destructive) {
+                if let a = removing { account?.removeAddress(id: a.id) }
+                removing = nil
+            } label: { Text("account_remove") }
+            Button(role: .cancel) { removing = nil } label: { Text("account_keep") }
+        } message: {
+            Text("account_remove_body")
+        }
+        .sheet(isPresented: $editingProfile) {
+            if let account, let p = accountState?.profile {
+                ProfileEditor(vm: account, profile: p, saving: accountState?.saving == true,
+                              failure: accountState?.profileError, onClose: { editingProfile = false })
+            }
+        }
+        .onChange(of: accountState?.profileSaved) { _, _ in editingProfile = false }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshPushOff() } }
+        }
+        .task {
+            await refreshPushOff()
+            guard let vm = makeAccount() else { return }
+            account = vm
+            vm.load(force: false)
+            for await s in vm.state { accountState = s }
+        }
         .task {
             for await d in viewModel.deletion {
                 deletion = d
                 if d.done {
                     viewModel.clearDeletion()
-                    onSignOut()
+                    // Said before leaving, so the person knows it worked.
+                    deletedNotice = true
                 }
             }
         }
@@ -459,6 +500,25 @@ struct MeScreen: View {
                 unread = inbox.items.reduce(0) { $0 + Int($1.unread) }
             }
         }
+    }
+}
+
+extension MeScreen {
+    /// A refused delete, in the app's language, by the server's reason code.
+    static func deletionWords(_ failure: Failure) -> String {
+        if case .rejected(let r) = onEnum(of: failure) {
+            switch r.code {
+            case "owns_vendor": return String(localized: "me_delete_owns_vendor")
+            case "order_in_progress": return String(localized: "me_delete_order_in_progress")
+            default: break
+            }
+        }
+        return failure.words
+    }
+
+    func refreshPushOff() async {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        pushOff = status == .denied
     }
 }
 

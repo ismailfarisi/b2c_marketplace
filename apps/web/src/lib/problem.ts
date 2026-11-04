@@ -16,6 +16,10 @@ const FIELD: Record<string, { en: string; ar: string }> = {
   invalid_slot: { en: "That delivery slot isn't available.", ar: "فترة التوصيل هذه غير متاحة." },
   unknown_dish: { en: "That dish is no longer on the menu.", ar: "هذا الطبق لم يعد في القائمة." },
   invalid_status: { en: "This can't be changed right now.", ar: "لا يمكن تغيير هذا الآن." },
+  not_optional: {
+    en: "Delivery, account and order messages can't be switched off.",
+    ar: "لا يمكن إيقاف رسائل التوصيل والحساب والطلبات.",
+  },
 };
 
 const REASON: Record<string, { en: string; ar: string }> = {
@@ -33,6 +37,15 @@ const REASON: Record<string, { en: string; ar: string }> = {
   over_meal_cap: { en: "That's over your meal allowance.", ar: "هذا يتجاوز حد الوجبات المسموح." },
   over_credit_limit: { en: "That's over the company's credit limit.", ar: "هذا يتجاوز حد الائتمان للشركة." },
   role_read_only: { en: "Your role can view this but not change it.", ar: "دورك يسمح بالعرض فقط دون التعديل." },
+  owns_vendor: {
+    en: "You own a business on the marketplace. Contact support to hand it over before deleting your account.",
+    ar: "أنت مالك نشاط تجاري على المنصة. تواصل مع الدعم لنقل ملكيته قبل حذف حسابك.",
+  },
+  order_in_progress: {
+    en: "You have orders still in progress. Try again once they are delivered or cancelled.",
+    ar: "لديك طلبات قيد التنفيذ. حاول مرة أخرى بعد توصيلها أو إلغائها.",
+  },
+  email_taken: { en: "Another account already uses this email.", ar: "هذا البريد الإلكتروني مستخدم في حساب آخر." },
 };
 
 const FALLBACK = {

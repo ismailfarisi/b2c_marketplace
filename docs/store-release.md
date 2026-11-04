@@ -41,7 +41,7 @@ There is no Xcode project in the repo yet (CI only typechecks Swift). To ship:
 3. Capabilities: Push Notifications, Associated Domains (`applinks:<web-domain>`).
 4. Info.plist: `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`
    (Sell video recording), `NSPhotoLibraryUsageDescription` (picking photos),
-   `NSLocationWhenInUseUsageDescription` (kitchens near you), `SentryDSN`, and the API/web base URLs.
+   `NSLocationWhenInUseUsageDescription` (kitchens near you, pinning a delivery address), `SentryDSN`, and the API/web base URLs.
 5. Add the `sentry-cocoa` package (see `docs/crash-reporting.md`).
 
 ## Listing copy

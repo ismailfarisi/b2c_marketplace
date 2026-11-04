@@ -67,6 +67,8 @@ data class CheckoutUiState(
     val preview: SubscriptionPreview? = null,
     val busy: Boolean = false,
     val error: Failure? = null,
+    /** Bumped when a new address is saved, so the address form can close. */
+    val addressAdded: Int = 0,
     /** Set once the order exists and needs paying on the provider's page. */
     val paymentUrl: String? = null,
     /** Set once paid (or once paying is handed to the browser); the screen moves on. */
@@ -229,21 +231,30 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         }
     }
 
+    /**
+     * Saves what the customer typed, as typed: label and city are required by
+     * the server and its 422 comes back as field errors, so a blank is never
+     * silently stored as "Home" or "Dubai". [at] must be a pin the customer
+     * chose (a fresh fix), not the feed's area or a fallback point.
+     */
     fun addAddress(label: String, building: String, area: String, city: String, at: LatLng) {
+        if (_checkout.value.busy) return
         viewModelScope.launch {
             _checkout.update { it.copy(busy = true, error = null) }
             try {
                 val a = api.createAddress(
                     AddressInput(
-                        label = label.ifBlank { "Home" },
-                        building = building.ifBlank { null },
-                        area = area.ifBlank { null },
-                        city = city.ifBlank { "Dubai" },
+                        label = label.trim(),
+                        building = building.trim().ifBlank { null },
+                        area = area.trim().ifBlank { null },
+                        city = city.trim(),
                         point = at,
                         isDefault = _checkout.value.addresses.isEmpty(),
                     ),
                 )
-                _checkout.update { it.copy(addresses = it.addresses + a, addressId = a.id, busy = false) }
+                _checkout.update {
+                    it.copy(addresses = it.addresses + a, addressId = a.id, busy = false, addressAdded = it.addressAdded + 1)
+                }
                 _rotation.update { it.copy(addresses = it.addresses + a, addressId = a.id) }
                 refreshPreview()
             } catch (e: Throwable) {

@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { AccountDeletedNotice } from "@/components/meals/account";
 import { useCustomerPoint } from "@/components/meals/location";
 import { LocationPicker, placeLabel } from "@/components/meals/location-picker";
 import { logout } from "@/lib/auth-api";
 import { rememberInvite } from "@/lib/customer-api";
+import { switchLocaleHref } from "@/lib/locale-switch";
 import { tokenStore } from "@/lib/token-store";
 
 const COPY = {
@@ -255,7 +257,19 @@ export function CustomerShell({
             <span className="ms-nav-long">{t.mine}</span>
             <span className="ms-nav-short">{t.mineShort}</span>
           </Link>
-          <Link href={switchHref} lang={otherLocale} hrefLang={otherLocale}>
+          <Link
+            href={switchHref}
+            lang={otherLocale}
+            hrefLang={otherLocale}
+            onClick={(e) => {
+              // Read at click time: the query string (?next=, ?q=, ?ref=)
+              // must survive the switch.
+              e.preventDefault();
+              router.push(
+                switchLocaleHref(path, window.location.search, otherLocale),
+              );
+            }}
+          >
             {t.other}
           </Link>
           {signedIn ? (
@@ -276,6 +290,7 @@ export function CustomerShell({
         </nav>
       </header>
       <main className="ms-main">
+        <AccountDeletedNotice locale={locale} />
         {back && (
           <Link href={back.href} className="ms-back">
             <span aria-hidden>{locale === "ar" ? "→" : "←"}</span> {back.label}

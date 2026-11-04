@@ -91,6 +91,13 @@ class MainActivity : ComponentActivity() {
             ?: intent?.getStringExtra(ae.marketplace.mobile.android.push.Push.FCM_LINK)
             ?: intent?.dataString
 
+    override fun onStart() {
+        super.onStart()
+        // A push token that failed to reach the server at sign-in gets
+        // another go every time the app comes back to the foreground.
+        lifecycleScope.launch { (application as MarketplaceApp).sdk.await().retryPushToken() }
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         linkOf(intent)?.let { pendingLink.value = it }
@@ -257,17 +264,7 @@ class MainActivity : ComponentActivity() {
                 }).collectAsState()
                 val authorised = sessionState.isAuthenticated
                 val context = LocalContext.current
-                val notificationPrompt = rememberLauncherForActivityResult(
-                    ActivityResultContracts.RequestPermission(),
-                ) {}
-                LaunchedEffect(authorised) {
-                    if (authorised && Build.VERSION.SDK_INT >= 33 &&
-                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                        PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notificationPrompt.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                }
+                ae.marketplace.mobile.android.push.PushPrompt(authorised)
 
                 // A session that ends underneath the viewer takes its screens
                 // with it. Without the `forget`, the next person to sign in on

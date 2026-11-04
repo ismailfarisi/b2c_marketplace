@@ -376,9 +376,12 @@ func (s *Service) Erase(ctx context.Context, in EraseInput) error {
 			return fmt.Errorf("count open orders: %w", err)
 		}
 		if openOrders > 0 {
-			return fmt.Errorf("%w: %d order(s) are still in progress. Erasing the address "+
-				"and phone of a customer a driver is on the way to would strand the delivery",
-				httpx.ErrConflict, openOrders)
+			// Coded so the apps can say it in the reader's language: erasing
+			// the address and phone of a customer a driver is on the way to
+			// would strand the delivery.
+			return httpx.Coded(httpx.ErrConflict, "order_in_progress", say(httpx.LocaleFromContext(ctx),
+				fmt.Sprintf("%d order(s) are still in progress. Try again once they are delivered or cancelled.", openOrders),
+				fmt.Sprintf("لديك %d طلب قيد التنفيذ. حاول مرة أخرى بعد توصيلها أو إلغائها.", openOrders)))
 		}
 
 		// Money owed *to* the customer blocks erasure, because paying it
@@ -467,13 +470,18 @@ func (s *Service) DeleteOwnAccount(ctx context.Context, userID uuid.UUID) error 
 		return fmt.Errorf("count owned vendors: %w", err)
 	}
 	if owns > 0 {
-		return httpx.Coded(httpx.ErrConflict, "owns_vendor",
-			"You own a business on the marketplace. Contact support to hand it over before deleting your account.")
+		return httpx.Coded(httpx.ErrConflict, "owns_vendor", ownsVendorDetail(httpx.LocaleFromContext(ctx)))
 	}
 	return s.Erase(ctx, EraseInput{
 		UserID: userID, ActorID: userID,
 		Reason: "customer deleted their own account",
 	})
+}
+
+func ownsVendorDetail(locale string) string {
+	return say(locale,
+		"You own a business on the marketplace. Contact support to hand it over before deleting your account.",
+		"أنت مالك نشاط تجاري على المنصة. تواصل مع الدعم لنقل ملكيته قبل حذف حسابك.")
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────

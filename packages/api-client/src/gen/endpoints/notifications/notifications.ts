@@ -34,9 +34,11 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ListNotificationPreferences200,
   ListNotifications200,
   NotFoundResponse,
   SetNotificationPreferenceBody,
+  UnauthorizedResponse,
   UnprocessableEntityResponse
 } from '../../models';
 
@@ -175,6 +177,74 @@ const {mutation: mutationOptions} = options ?
       return useMutation(mutationOptions);
     }
     /**
+ * @summary The user's marketing switches, one per channel, in their current position
+ */
+export const listNotificationPreferences = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListNotificationPreferences200>(
+      {url: `/me/notification-preferences`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListNotificationPreferencesQueryKey = () => {
+    return [
+    `/me/notification-preferences`
+    ] as const;
+    }
+
+    
+export const getListNotificationPreferencesQueryOptions = <TData = Awaited<ReturnType<typeof listNotificationPreferences>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNotificationPreferences>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListNotificationPreferencesQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNotificationPreferences>>> = ({ signal }) => listNotificationPreferences(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listNotificationPreferences>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListNotificationPreferencesQueryResult = NonNullable<Awaited<ReturnType<typeof listNotificationPreferences>>>
+export type ListNotificationPreferencesQueryError = UnauthorizedResponse
+
+
+/**
+ * @summary The user's marketing switches, one per channel, in their current position
+ */
+
+export function useListNotificationPreferences<TData = Awaited<ReturnType<typeof listNotificationPreferences>>, TError = UnauthorizedResponse>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNotificationPreferences>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListNotificationPreferencesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
  * Only `marketing` may be switched off. A delivery code, a login code and an
 order confirmation cannot be - a customer who could refuse the first is a
 customer standing at their door unable to receive an order they paid for.

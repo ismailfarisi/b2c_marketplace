@@ -112,6 +112,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		// Authenticated, unlike the three /auth routes above, because revoking
 		// a session requires proving you hold it.
 		r.Post("/auth/logout", h.Logout)
+		r.Get("/me", h.GetMe)
+		r.Patch("/me", h.UpdateMe)
 		r.Delete("/me", h.DeleteMe)
 		r.Put("/me/device", h.RegisterDevice)
 		if h.Support != nil {
@@ -174,6 +176,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		if h.Addresses != nil {
 			r.Get("/me/addresses", h.Addresses.List)
 			r.Post("/me/addresses", h.Addresses.Create)
+			r.Patch("/me/addresses/{addressId}", h.Addresses.Update)
 			r.Delete("/me/addresses/{addressId}", h.Addresses.Delete)
 		}
 
@@ -336,6 +339,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/me/notifications/{notificationId}/read", h.Compliance.MarkNotificationRead)
 			// The opt-out. Required to work in both launch markets, which is
 			// why it is a first-class endpoint rather than a support action.
+			r.Get("/me/notification-preferences", h.Compliance.Preferences)
 			r.Put("/me/notification-preferences", h.Compliance.SetPreference)
 
 			r.Get("/me/invoices", h.Compliance.MyInvoices)

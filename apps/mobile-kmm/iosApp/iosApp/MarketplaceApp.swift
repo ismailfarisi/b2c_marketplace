@@ -125,6 +125,8 @@ struct RootView: View {
     /// Where the feed is pointed, so search measures distance from it and the
     /// Nearest sort knows whether to appear.
     @State private var lat: Double = 0
+    @State private var pushAsk = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var lng: Double = 0
 
     private var destination: Destination {
@@ -237,7 +239,11 @@ struct RootView: View {
             guard let session else { return }
             for await state in session.state {
                 sessionState = state
-                if state is SessionStateAuthenticated { PushDelegate.requestPermission() }
+                if state is SessionStateAuthenticated {
+                    // The system prompt only after a sentence saying what it
+                    // is for, and only while the person has not answered it.
+                    if await PushDelegate.shouldAsk() { pushAsk = true } else { PushDelegate.registerIfAllowed() }
+                }
             }
         }
         .task(id: session != nil) {
@@ -291,6 +297,16 @@ struct RootView: View {
             if new == .feed { vm.onAppForegrounded() } else { vm.onAppBackgrounded() }
         }
         .onOpenURL { openLink($0.absoluteString) }
+        .onChange(of: scenePhase) { _, phase in
+            // A push token that failed to reach the server gets another go.
+            if phase == .active { env.sdk?.retryPushToken() }
+        }
+        .alert(Text("push_rationale_title"), isPresented: $pushAsk) {
+            Button { PushDelegate.requestPermission() } label: { Text("push_rationale_allow") }
+            Button(role: .cancel) {} label: { Text("push_rationale_later") }
+        } message: {
+            Text("push_rationale_body")
+        }
         .task { PushDelegate.onLink = { openLink($0) } }
         .alert(
             Text(LocalizedStringKey(updateRequired ? "update_required_title" : "update_title")),
@@ -386,7 +402,8 @@ struct RootView: View {
                         // happens in the `ended` task, for both exits.
                         Task { try? await session?.signOut() }
                         destinationRaw = Destination.feed.rawValue
-                    }
+                    },
+                    makeAccount: { env.sdk?.createAccountViewModel() }
                 )
             case .sell:
                 // Its state holder is created on entry and released on exit

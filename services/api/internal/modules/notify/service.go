@@ -510,9 +510,12 @@ func (s *Service) dispatchOne(ctx context.Context) (claimed bool, sendErr error)
 // explanation rather than an error page.
 func (s *Service) SetPreference(ctx context.Context, userID uuid.UUID, cat Category, ch Channel, allowed bool) error {
 	if !cat.Optional() {
+		msg := "Delivery, account and order messages can't be switched off."
+		if httpx.LocaleFromContext(ctx) == "ar" {
+			msg = "لا يمكن إيقاف رسائل التوصيل والحساب والطلبات."
+		}
 		return &httpx.ValidationError{Fields: []httpx.FieldError{{
-			Field: "category", Code: "not_optional",
-			Message: "delivery, account and transactional messages cannot be switched off",
+			Field: "category", Code: "not_optional", Message: msg,
 		}}}
 	}
 	_, err := s.pool.Exec(ctx, `
