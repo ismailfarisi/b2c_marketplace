@@ -465,6 +465,15 @@
     <string name="meals_promo_invalid">This promo code cannot be used here.</string>
     <string name="meals_subscriber">Subscriber</string>
     <string name="meals_choice_help">Days marked 2 choices let you pick one of two mains before the cutoff.</string>
+    <string name="meals_kitchen_reply">Kitchen\'s reply</string>
+    <string name="meals_reviews_failed">Couldn\'t load reviews.</string>
+    <string name="meals_kcal">%1$d kcal</string>
+    <string name="meals_allergens">Allergens: %1$s</string>
+    <string name="meals_offer_trial">%1$d-day trial</string>
+    <string name="meals_offer_percent">%1$s off</string>
+    <string name="meals_offer_percent_cap">%1$s off up to %2$s</string>
+    <string name="meals_offer_fixed">%1$s off</string>
+    <string name="meals_offer_new_only">First-time subscribers</string>
     <string name="meals_near_count">%1$d kitchens deliver to you</string>
     <string name="meals_near_place">%1$d kitchens deliver to %2$s</string>
     <string name="meals_none_near">No kitchens deliver to %1$s yet</string>

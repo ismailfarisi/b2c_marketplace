@@ -395,6 +395,15 @@
     <string name="meals_promo_invalid">لا يمكن استخدام رمز العرض هنا.</string>
     <string name="meals_subscriber">مشترك</string>
     <string name="meals_choice_help">في الأيام المعلَّمة بخيارين يمكنك اختيار أحد الطبقين قبل الموعد النهائي.</string>
+    <string name="meals_kitchen_reply">رد المطبخ</string>
+    <string name="meals_reviews_failed">تعذر تحميل التقييمات.</string>
+    <string name="meals_kcal">%1$d سعرة</string>
+    <string name="meals_allergens">مسببات الحساسية: %1$s</string>
+    <string name="meals_offer_trial">تجربة %1$d أيام</string>
+    <string name="meals_offer_percent">خصم %1$s</string>
+    <string name="meals_offer_percent_cap">خصم %1$s حتى %2$s</string>
+    <string name="meals_offer_fixed">خصم %1$s</string>
+    <string name="meals_offer_new_only">للمشتركين الجدد</string>
     <string name="meals_near_count">%1$d مطبخ يوصل إليك</string>
     <string name="meals_near_place">%1$d مطبخ يوصل إلى %2$s</string>
     <string name="meals_none_near">لا توجد مطابخ توصل إلى %1$s بعد</string>

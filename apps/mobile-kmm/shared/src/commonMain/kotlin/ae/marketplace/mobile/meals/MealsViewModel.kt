@@ -11,6 +11,7 @@ import ae.marketplace.mobile.model.KitchenReview
 import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealPlan
 import ae.marketplace.mobile.model.MySubscription
+import ae.marketplace.mobile.model.PromoOffer
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationInput
 import ae.marketplace.mobile.model.ScheduleRule
@@ -94,6 +95,10 @@ data class KitchenUiState(
     val branchId: String = "",
     val kitchen: KitchenDetail? = null,
     val reviews: List<KitchenReview> = emptyList(),
+    /** Set when /reviews failed; the page keeps the kitchen and offers a retry for this section only. */
+    val reviewsError: Failure? = null,
+    /** Offers for plans (rotation-only ones dropped); empty when the call fails. */
+    val offers: List<PromoOffer> = emptyList(),
     val loading: Boolean = false,
     val error: Failure? = null,
 )
@@ -321,11 +326,42 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
             try {
                 val k = api.kitchen(branchId, at)
                 _kitchen.update { it.copy(kitchen = k, loading = false) }
-                val reviews = runCatching { api.reviews(branchId).items }.getOrDefault(emptyList())
-                _kitchen.update { it.copy(reviews = reviews) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 _kitchen.update { it.copy(loading = false, error = e.toFailure()) }
+                return@launch
             }
+            launch { loadOffers(branchId) }
+            loadReviews(branchId)
+        }
+    }
+
+    fun retryReviews() {
+        val branchId = _kitchen.value.branchId.ifEmpty { return }
+        viewModelScope.launch { loadReviews(branchId) }
+    }
+
+    private suspend fun loadReviews(branchId: String) {
+        _kitchen.update { it.copy(reviewsError = null) }
+        try {
+            val items = api.reviews(branchId).items
+            _kitchen.update { if (it.branchId == branchId) it.copy(reviews = items) else it }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            _kitchen.update { if (it.branchId == branchId) it.copy(reviewsError = e.toFailure()) else it }
+        }
+    }
+
+    // Offers are an extra on the page: a failure hides them rather than blocking it.
+    private suspend fun loadOffers(branchId: String) {
+        try {
+            val items = api.offers(branchId).items.filter { it.appliesTo != "rotations" }
+            _kitchen.update { if (it.branchId == branchId) it.copy(offers = items) else it }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
         }
     }
 

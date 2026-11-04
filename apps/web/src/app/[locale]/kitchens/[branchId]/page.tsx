@@ -3,7 +3,7 @@
 import { ApiError } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useEffect, useState, type KeyboardEvent } from "react";
 
 import { KitchenCover } from "@/components/meals/cover";
 import { DishPhoto, shortMoney } from "@/components/meals/food";
@@ -19,6 +19,8 @@ import {
 } from "@/lib/meals-api";
 import type { MenuChoice } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
+import { allergenLine } from "@/components/meals/allergens";
+import { LoadError } from "@/components/load-error";
 
 const COPY = {
   en: {
@@ -63,6 +65,10 @@ const COPY = {
     kcal: "kcal",
     notFound: "This kitchen is not taking subscriptions right now.",
     failed: "Could not load this kitchen.",
+    missing: "Kitchen not found. The link may be broken.",
+    backToKitchens: "Back to kitchens",
+    reviewsFailed: "Couldn't load reviews.",
+    retry: "Try again",
     loading: "Loading…",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     slot: {
@@ -117,6 +123,10 @@ const COPY = {
     kcal: "سعرة",
     notFound: "هذا المطبخ لا يقبل اشتراكات حاليًا.",
     failed: "تعذر تحميل المطبخ.",
+    missing: "لم يتم العثور على المطبخ. قد يكون الرابط غير صحيح.",
+    backToKitchens: "العودة إلى المطابخ",
+    reviewsFailed: "تعذر تحميل التقييمات.",
+    retry: "حاول مرة أخرى",
     loading: "جارٍ التحميل…",
     weekdays: [
       "الأحد",
@@ -138,6 +148,10 @@ const COPY = {
   },
 };
 type Copy = (typeof COPY)["en"];
+
+/** Kitchen branch ids are UUIDs; anything else is a broken link, not a request. */
+const KITCHEN_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Weekday (0 = Sunday) of tomorrow in Asia/Dubai. */
 function dubaiTomorrowWeekday() {
@@ -172,7 +186,9 @@ function DishCard({
             {d.calories != null && `${d.calories} ${t.kcal}`}
             {d.calories != null && d.allergens.length > 0 && " · "}
             {d.allergens.length > 0 && (
-              <span title={t.allergens}>{d.allergens.join(", ")}</span>
+              <span title={t.allergens}>
+                {allergenLine(d.allergens, locale)}
+              </span>
             )}
           </small>
         )}
@@ -204,6 +220,20 @@ function Menu({
   const cell = (d: number, slot: string) =>
     k.menu.slots.find((s) => s.weekday === d && s.slot === slot);
   const dishName = (d: MenuChoice) => (locale === "ar" && d.name_ar) || d.name;
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    let i = days.indexOf(day);
+    if (step) i += locale === "ar" ? -step : step;
+    else if (e.key === "Home") i = 0;
+    else if (e.key === "End") i = days.length - 1;
+    else return;
+    e.preventDefault();
+    i = (i + days.length) % days.length;
+    setPicked(days[i]!);
+    e.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      [i]?.focus();
+  };
   return (
     <div className="ms-menu2">
       {days.some((d) => slots.some((slot) => cell(d, slot)?.alternative)) && (
@@ -216,8 +246,10 @@ function Menu({
             type="button"
             role="tab"
             aria-selected={d === day}
+            tabIndex={d === day ? 0 : -1}
             className={d === day ? "ms-day on" : "ms-day"}
             onClick={() => setPicked(d)}
+            onKeyDown={onTabKey}
           >
             {t.weekdays[d]}
             {slots.some((slot) => cell(d, slot)?.alternative) && (
@@ -286,6 +318,7 @@ export default function KitchenPage({
   const locale = p.locale === "ar" ? "ar" : "en";
   const t = COPY[locale];
   const { point, precise } = useCustomerPoint();
+  const validId = KITCHEN_ID.test(p.branchId);
   const q = useQuery({
     queryKey: [
       "meal-kitchen",
@@ -294,32 +327,61 @@ export default function KitchenPage({
       precise ? point?.lng : null,
     ],
     queryFn: () => getMealKitchen(p.branchId, precise ? point : null),
-    enabled: point != null,
+    enabled: point != null && validId,
   });
   const offers = useQuery({
     queryKey: ["meal-kitchen-offers", p.branchId],
     queryFn: () => getKitchenOffers(p.branchId),
+    enabled: validId,
   });
   const reviews = useQuery({
     queryKey: ["meal-kitchen-reviews", p.branchId],
     queryFn: () => getKitchenReviews(p.branchId),
+    enabled: validId,
   });
-  const subOffers = (offers.data?.items ?? []).filter(
-    (o) => o.applies_to !== "rotations",
-  );
+  // Offers are an extra: a failure hides them (no promo links or new-customer
+  // pricing off a failed query) but is still reported.
+  useEffect(() => {
+    if (offers.isError)
+      console.warn("kitchen offers failed to load", p.branchId, offers.error);
+  }, [offers.isError, offers.error, p.branchId]);
+  const subOffers = offers.isSuccess
+    ? offers.data.items.filter((o) => o.applies_to !== "rotations")
+    : [];
 
   const money = (amount: number, currency: string) =>
     shortMoney(amount, currency, locale);
 
+  const status = q.error instanceof ApiError ? q.error.status : null;
+  const backLink = (
+    <p className="ms-empty">
+      <Link href={`/${locale}/kitchens`}>{t.backToKitchens}</Link>
+    </p>
+  );
+
   let body;
-  if (!point || q.isPending) body = <p className="ms-note">{t.loading}</p>;
+  if (!validId || status === 400 || status === 422)
+    body = (
+      <>
+        <p className="ms-empty">{t.missing}</p>
+        {backLink}
+      </>
+    );
+  else if (!point || q.isPending) body = <p className="ms-note">{t.loading}</p>;
   else if (q.isError)
     body = (
-      <p className="ms-empty">
-        {q.error instanceof ApiError && q.error.status === 404
-          ? t.notFound
-          : t.failed}
-      </p>
+      <>
+        {status === 404 ? (
+          <p className="ms-empty">{t.notFound}</p>
+        ) : (
+          <LoadError
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            locale={locale}
+          />
+        )}
+        {backLink}
+      </>
     );
   else {
     const k = q.data;
@@ -392,7 +454,21 @@ export default function KitchenPage({
 
             <section className="ms-k-reviews">
               <h2>{t.reviews}</h2>
-              {(reviews.data?.items ?? []).length === 0 ? (
+              {reviews.isError ? (
+                <p className="ms-sub" role="alert">
+                  {t.reviewsFailed}{" "}
+                  <button
+                    type="button"
+                    className="ms-link"
+                    onClick={() => void reviews.refetch()}
+                    disabled={reviews.isFetching}
+                  >
+                    {t.retry}
+                  </button>
+                </p>
+              ) : !reviews.isSuccess ? (
+                <p className="ms-sub">{t.loading}</p>
+              ) : reviews.data.items.length === 0 ? (
                 <p className="ms-sub">{t.noReviews}</p>
               ) : (
                 <ul className="ms-reviews">

@@ -1173,7 +1173,8 @@ private struct KitchenPage: View {
                     Spacer()
                 }
             } else if let k = s.kitchen {
-                KitchenBody(k: k, reviews: s.reviews, onBack: onBack, onSubscribe: onSubscribe)
+                KitchenBody(k: k, reviews: s.reviews, offers: s.offers, reviewsError: s.reviewsError,
+                            onRetryReviews: { vm.retryReviews() }, onBack: onBack, onSubscribe: onSubscribe)
             } else {
                 VStack(spacing: 0) {
                     TopBar(title: "", onBack: onBack)
@@ -1191,6 +1192,9 @@ private struct KitchenPage: View {
 private struct KitchenBody: View {
     let k: KitchenDetail
     let reviews: [KitchenReview]
+    let offers: [PromoOffer]
+    let reviewsError: Failure?
+    let onRetryReviews: () -> Void
     let onBack: () -> Void
     let onSubscribe: (MealPlan) -> Void
 
@@ -1201,7 +1205,8 @@ private struct KitchenBody: View {
     var body: some View {
         let byDay = Dictionary(grouping: k.menu.slots, by: { $0.weekday })
         let days = byDay.keys.sorted()
-        let selected = day.flatMap { byDay[$0] != nil ? $0 : nil } ?? days.first
+        let opening = KitchenMenu.shared.defaultDay(k: k).map { $0.int32Value } ?? days.first
+        let selected = day.flatMap { byDay[$0] != nil ? $0 : nil } ?? opening
         let name = pick(k.name, k.nameAr)
         let dishPhoto = k.menu.slots.compactMap { $0.`default`?.imageUrl ?? $0.alternative?.imageUrl }.first
         let enabled = k.deliversHere?.boolValue != false
@@ -1243,6 +1248,7 @@ private struct KitchenBody: View {
                                 RatingText(rating: k.rating, count: k.ratingCount)
                                 if k.foodSafetyVerified { VerifiedBadge() }
                             }
+                            if !offers.isEmpty { OfferChips(offers: offers) }
                             if let d = k.description_ {
                                 Text(pick(d, k.descriptionAr)).font(.system(size: TypeScale.body)).foregroundStyle(Warm.muted)
                             }
@@ -1257,7 +1263,7 @@ private struct KitchenBody: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: Space.small) {
                                     ForEach(days, id: \.self) { d in
-                                        Chip(label: weekday(d), selected: d == selected) { day = d }
+                                        DayChip(label: weekday(d), selected: d == selected, hasChoice: KitchenMenu.shared.hasChoice(k: k, day: d)) { day = d }
                                     }
                                 }
                                 .padding(.horizontal, Space.edge)
@@ -1302,6 +1308,14 @@ private struct KitchenBody: View {
                             }
                         }
                         Group {
+                            if let reviewsError {
+                                SectionTitle(text: NSLocalizedString("meals_reviews", comment: ""))
+                                Text("meals_reviews_failed")
+                                    .font(.system(size: TypeScale.secondary))
+                                    .foregroundStyle(Warm.ink)
+                                    .padding(.horizontal, Space.edge)
+                                FailureStrip(failure: reviewsError, onRetry: onRetryReviews)
+                            }
                             if !reviews.isEmpty {
                                 SectionTitle(text: NSLocalizedString("meals_reviews", comment: ""))
                                 ForEach(reviews.prefix(5), id: \.id) { r in
@@ -1312,6 +1326,17 @@ private struct KitchenBody: View {
                                             .foregroundStyle(Warm.saffron)
                                         if !r.comment.isEmpty {
                                             Text(r.comment).font(.system(size: TypeScale.body)).foregroundStyle(Warm.ink)
+                                        }
+                                        if let reply = r.reply, !reply.isEmpty {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("meals_kitchen_reply")
+                                                    .font(.system(size: TypeScale.caption, weight: .bold))
+                                                    .foregroundStyle(Warm.ink)
+                                                Text(reply).font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.ink)
+                                            }
+                                            .padding(10)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Warm.paper, in: RoundedRectangle(cornerRadius: 10))
                                         }
                                         Text(NSLocalizedString("meals_subscriber", comment: "") + " · " + shortDate(r.createdAt))
                                             .font(.system(size: TypeScale.caption))
@@ -1379,15 +1404,19 @@ private struct DishCard: View {
                     Text(pick(main.name, main.nameAr))
                         .font(.system(size: TypeScale.heading, weight: .bold))
                         .foregroundStyle(Warm.ink)
+                    DishFacts(d: main)
                 }
                 if let a = slot.alternative, slot.`default` != nil {
                     HStack(spacing: Space.small) {
                         FoodPhoto(seed: pick(a.name, a.nameAr), imageUrl: a.imageUrl)
                             .frame(width: 40, height: 40)
                             .clipShape(Circle())
-                        Text(tr("meals_or", pick(a.name, a.nameAr)))
-                            .font(.system(size: TypeScale.secondary))
-                            .foregroundStyle(Warm.muted)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tr("meals_or", pick(a.name, a.nameAr)))
+                                .font(.system(size: TypeScale.secondary))
+                                .foregroundStyle(Warm.muted)
+                            DishFacts(d: a)
+                        }
                     }
                 }
             }
@@ -1399,6 +1428,101 @@ private struct DishCard: View {
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Warm.line, lineWidth: 1))
         .padding(.horizontal, Space.edge)
         .padding(.vertical, 6)
+    }
+}
+
+/// "640 kcal · Allergens: Gluten, Sesame" under a dish name; nothing when neither was entered.
+private struct DishFacts: View {
+    let d: MenuChoice
+
+    var body: some View {
+        let allergens = KitchenMenu.shared.allergenLine(choice: d, arabic: isArabicLocale)
+        let parts = [
+            d.calories.map { tr("meals_kcal", Int($0.int32Value)) },
+            allergens.isEmpty ? nil : tr("meals_allergens", allergens),
+        ].compactMap { $0 }
+        if !parts.isEmpty {
+            Text(parts.joined(separator: " · "))
+                .font(.system(size: TypeScale.secondary))
+                .foregroundStyle(Warm.muted)
+        }
+    }
+}
+
+/// A weekday tab; `hasChoice` adds the dot the choice help text refers to (web: ms-day-dot).
+private struct DayChip: View {
+    let label: String
+    let selected: Bool
+    let hasChoice: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(label)
+                    .font(.system(size: TypeScale.secondary, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? Color.white : MP.text)
+                if hasChoice {
+                    Circle()
+                        .fill(selected ? Color.white : Warm.chilli)
+                        .frame(width: 7, height: 7)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(selected ? Warm.chilli : MP.surface, in: Capsule())
+            .overlay(Capsule().stroke(selected ? Color.clear : MP.line, lineWidth: 1))
+        }
+        .accessibilityLabel(hasChoice ? label + ", " + NSLocalizedString("meals_two_choices", comment: "") : label)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// The kitchen's public promos and trials, as on the web page; applied at checkout.
+private struct OfferChips: View {
+    let offers: [PromoOffer]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(offers, id: \.id) { o in
+                VStack(alignment: .leading, spacing: 2) {
+                    let label = offerLabel(o)
+                    if !label.isEmpty {
+                        Text(label)
+                            .font(.system(size: TypeScale.secondary, weight: .bold))
+                            .foregroundStyle(Warm.ink)
+                    }
+                    Text(pick(o.name, o.nameAr)
+                         + (o.newCustomersOnly ? " · " + NSLocalizedString("meals_offer_new_only", comment: "") : ""))
+                        .font(.system(size: TypeScale.caption))
+                        .foregroundStyle(Warm.muted)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Warm.saffronSoft, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Warm.saffron, lineWidth: 1))
+            }
+        }
+    }
+
+    private func offerLabel(_ o: PromoOffer) -> String {
+        var parts: [String] = []
+        if let days = o.trialDays?.intValue, days > 0 { parts.append(tr("meals_offer_trial", days)) }
+        switch o.discountType {
+        case "percent":
+            let pct = KitchenMenu.shared.percent(bp: o.percentBp)
+            if let cap = o.maxDiscountMinor?.int64Value, cap > 0 {
+                parts.append(tr("meals_offer_percent_cap", pct, money(cap, o.currency)))
+            } else {
+                parts.append(tr("meals_offer_percent", pct))
+            }
+        case "fixed":
+            parts.append(tr("meals_offer_fixed", money(o.amountMinor, o.currency)))
+        default:
+            break
+        }
+        return parts.joined(separator: " · ")
     }
 }
 

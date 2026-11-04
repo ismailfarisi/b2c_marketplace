@@ -291,6 +291,15 @@
 "meals_promo_invalid" = "This promo code cannot be used here.";
 "meals_subscriber" = "Subscriber";
 "meals_choice_help" = "Days marked 2 choices let you pick one of two mains before the cutoff.";
+"meals_kitchen_reply" = "Kitchen's reply";
+"meals_reviews_failed" = "Couldn't load reviews.";
+"meals_kcal" = "%lld kcal";
+"meals_allergens" = "Allergens: %@";
+"meals_offer_trial" = "%lld-day trial";
+"meals_offer_percent" = "%@ off";
+"meals_offer_percent_cap" = "%@ off up to %@";
+"meals_offer_fixed" = "%@ off";
+"meals_offer_new_only" = "First-time subscribers";
 "meals_near_count" = "%lld kitchens deliver to you";
 "meals_near_place" = "%lld kitchens deliver to %@";
 "meals_none_near" = "No kitchens deliver to %@ yet";
