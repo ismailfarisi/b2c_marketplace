@@ -119,7 +119,7 @@ private func statusLabel(_ status: String) -> String {
     case "paused": return NSLocalizedString("meals_status_paused", comment: "")
     case "cancelled": return NSLocalizedString("meals_status_cancelled", comment: "")
     case "ended", "completed", "expired": return NSLocalizedString("meals_status_ended", comment: "")
-    default: return status
+    default: return NSLocalizedString("meals_status_other", comment: "")
     }
 }
 
@@ -522,6 +522,7 @@ private struct StatusPill: View {
 
 private struct RenewToggle: View {
     let on: Bool
+    var enabled: Bool = true
     let onChange: (Bool) -> Void
 
     var body: some View {
@@ -531,6 +532,7 @@ private struct RenewToggle: View {
                 .foregroundStyle(MP.text)
         }
         .tint(Warm.chilli)
+        .disabled(!enabled)
     }
 }
 
@@ -1535,9 +1537,14 @@ private struct MinePage: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
+                        if let failure = s.error {
+                            FailureStrip(failure: failure, onRetry: { vm.loadMine(force: true) }, onDismiss: { vm.dismissMineError() })
+                        }
                         if !s.rotations.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_rotations", comment: ""))
-                            ForEach(s.rotations, id: \.id) { r in RotationCard(r: r, vm: vm, onOpen: onOpen) }
+                            ForEach(s.rotations, id: \.id) { r in
+                                RotationCard(r: r, vm: vm, onOpen: onOpen, busy: s.busyRotation != nil)
+                            }
                         }
                         if !s.subscriptions.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_subscriptions", comment: ""))
@@ -1561,6 +1568,7 @@ private struct RotationCard: View {
     let r: Rotation
     let vm: MealsViewModel
     let onOpen: (String) -> Void
+    var busy: Bool = false
     @State private var confirming = false
 
     var body: some View {
@@ -1586,10 +1594,11 @@ private struct RotationCard: View {
                 .disabled(w.subscriptionId == nil)
             }
             if r.status == "active" || r.status == "pending" {
-                RenewToggle(on: r.autoRenew) { vm.setRotationRenewal(id: r.id, auto: $0) }
+                RenewToggle(on: r.autoRenew, enabled: !busy) { vm.setRotationRenewal(id: r.id, auto: $0) }
                 Button { confirming = true } label: {
-                    Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
+                    Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(busy ? MP.textFaint : MP.bad)
                 }
+                .disabled(busy)
                 .padding(.vertical, Space.small)
             }
         }
@@ -1649,7 +1658,7 @@ private struct SubscriptionPage: View {
             if let sub = s.subscription {
                 content(sub)
             } else if let failure = s.error {
-                FailureBlock(failure: failure)
+                FailureBlock(failure: failure) { vm.retryOpen() }
                 Spacer()
             } else {
                 LoadingBlock()
@@ -1679,7 +1688,7 @@ private struct SubscriptionPage: View {
                     Text(shortDate(sub.startDate) + (end.map { " – " + shortDate($0) } ?? ""))
                         .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                     if sub.rotationId == nil && (sub.status == "active" || sub.status == "paused") {
-                        RenewToggle(on: sub.renewalMode == "auto") { vm.setAutoRenew(auto: $0) }
+                        RenewToggle(on: sub.renewalMode == "auto", enabled: !s.busy) { vm.setAutoRenew(auto: $0) }
                     }
                     if sub.pendingOrderId != nil {
                         PrimaryButton(label: NSLocalizedString("meals_pay_due", comment: ""), enabled: !s.busy) { vm.payPending() }
@@ -1688,10 +1697,26 @@ private struct SubscriptionPage: View {
                         PrimaryButton(label: NSLocalizedString("meals_renew", comment: ""), enabled: !s.busy) { vm.renew() }
                     }
                 }
-                if let failure = s.error { FailureStrip(failure: failure) }
-                if !sub.upcoming.isEmpty {
+                if let failure = s.error {
+                    FailureStrip(failure: failure, onRetry: { vm.retry() }, onDismiss: { vm.dismissError() })
+                }
+                let meals = (sub.upcoming + sub.skipped).sorted { ($0.date, $0.cutoffAt) < ($1.date, $1.cutoffAt) }
+                if !meals.isEmpty {
                     SectionTitle(text: NSLocalizedString("meals_upcoming", comment: ""))
-                    ForEach(sub.upcoming, id: \.self) { m in MealCard(m: m, busy: s.busy, vm: vm) }
+                    ForEach(meals, id: \.self) { m in
+                        if m.skipped {
+                            SkippedMealCard(m: m, busy: s.busy, vm: vm)
+                        } else {
+                            MealCard(m: m, busy: s.busy, vm: vm)
+                        }
+                    }
+                }
+                RecentDeliveries(items: sub.recent)
+                if sub.rotationId == nil && (sub.status == "paused" || !sub.pauses.isEmpty) {
+                    ResumeCard(sub: sub, busy: s.busy, resumesOn: s.resumesOn, vm: vm)
+                }
+                if sub.status != "pending_payment" && sub.status != "pending" {
+                    RateKitchenCard(state: s.review, subscriptionId: sub.id, vm: vm)
                 }
                 if sub.rotationId == nil && sub.status == "active" && sub.pauseAllowanceDays > 0 {
                     PauseCard(sub: sub, busy: s.busy, vm: vm)
@@ -1709,35 +1734,225 @@ private struct SubscriptionPage: View {
     }
 }
 
+private let isoDay: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.calendar = Calendar(identifier: .gregorian)
+    f.timeZone = TimeZone(identifier: "UTC")
+    f.dateFormat = "yyyy-MM-dd"
+    return f
+}()
+
+/// Pause dates from date pickers that start at the first day still before its
+/// cutoff, so a typo or a locked day never reaches the API.
 private struct PauseCard: View {
     let sub: MySubscription
     let busy: Bool
     let vm: MealsViewModel
 
-    @State private var from = ""
-    @State private var to = ""
+    @State private var from = Date()
+    @State private var to = Date()
 
     var body: some View {
         let left = max(0, Int(sub.pauseAllowanceDays) - Int(sub.pauseDaysUsed))
         let first = sub.upcoming.first { !$0.locked }?.date
-        if let first {
+        if let first, let earliest = isoDay.date(from: first) {
+            let valid = to >= from
             CardBox {
                 Text("meals_pause_title")
                     .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
                 Text(tr("meals_pause_left", left, Int(sub.pauseAllowanceDays)))
                     .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
-                HStack(spacing: Space.small) {
-                    InputField(placeholder: NSLocalizedString("meals_pause_from", comment: ""), text: $from)
-                    InputField(placeholder: NSLocalizedString("meals_pause_to", comment: ""), text: $to)
+                DatePicker(selection: $from, in: earliest..., displayedComponents: .date) {
+                    Text("meals_pause_from").font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
                 }
-                PrimaryButton(label: NSLocalizedString("meals_pause", comment: ""), enabled: !busy && left > 0) {
-                    vm.pause(from: from.trimmingCharacters(in: .whitespaces), to: to.trimmingCharacters(in: .whitespaces))
+                .environment(\.timeZone, TimeZone(identifier: "UTC")!)
+                DatePicker(selection: $to, in: from..., displayedComponents: .date) {
+                    Text("meals_pause_to").font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
+                }
+                .environment(\.timeZone, TimeZone(identifier: "UTC")!)
+                if !valid {
+                    Text("meals_pause_bad_range").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
+                }
+                PrimaryButton(label: NSLocalizedString("meals_pause", comment: ""), enabled: !busy && left > 0 && valid) {
+                    vm.pause(from: isoDay.string(from: from), to: isoDay.string(from: to))
                 }
             }
+            .tint(Warm.chilli)
             .task(id: first) {
-                from = first
-                to = first
+                from = earliest
+                to = earliest
             }
+            .onChange(of: from) { _, day in if to < day { to = day } }
+        }
+    }
+}
+
+private func deliveryLabel(_ status: String) -> String {
+    switch status {
+    case "scheduled", "dispatched", "en_route", "arrived", "completed", "failed":
+        return NSLocalizedString("meals_delivery_" + status, comment: "")
+    default:
+        return NSLocalizedString("meals_status_other", comment: "")
+    }
+}
+
+private struct DeliveryPill: View {
+    let status: String
+
+    var body: some View {
+        let tint: Color = switch status {
+        case "completed": Warm.leaf
+        case "failed": MP.bad
+        case "dispatched", "en_route", "arrived": Warm.chilli
+        default: MP.textMuted
+        }
+        Text(deliveryLabel(status))
+            .font(.system(size: TypeScale.caption, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 1))
+    }
+}
+
+/// "Mon 14:00" in the reader's language, or nil when the timestamp is unreadable.
+private func cutoffLabel(_ iso: String) -> String? {
+    guard let date = ISO8601DateFormatter().date(from: iso) else { return nil }
+    let out = DateFormatter()
+    out.locale = mealsLocale
+    out.dateFormat = "EEE HH:mm"
+    return out.string(from: date)
+}
+
+private struct RecentDeliveries: View {
+    let items: [MyDelivery]
+
+    var body: some View {
+        if !items.isEmpty {
+            SectionTitle(text: NSLocalizedString("meals_recent", comment: ""))
+            CardBox {
+                ForEach(items, id: \.self) { d in
+                    HStack {
+                        Text(shortDate(d.date) + " · " + slotLabel(d.mealSlot))
+                            .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                        Spacer()
+                        DeliveryPill(status: d.status)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The current and next pauses, and a way to end them early.
+private struct ResumeCard: View {
+    let sub: MySubscription
+    let busy: Bool
+    let resumesOn: String?
+    let vm: MealsViewModel
+
+    var body: some View {
+        CardBox {
+            Text("meals_paused_dates")
+                .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+            ForEach(sub.pauses, id: \.self) { p in
+                Text(shortDate(p.fromDate) + " – " + shortDate(p.toDate))
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+            }
+            if let resumesOn {
+                Text(tr("meals_resumes_on", shortDate(resumesOn)))
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.leaf)
+            }
+            PrimaryButton(label: NSLocalizedString("meals_resume", comment: ""), enabled: !busy) { vm.resume() }
+            Text("meals_resume_note").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+        }
+    }
+}
+
+/// A skipped meal stays listed, with a way to put it back before the cutoff.
+private struct SkippedMealCard: View {
+    let m: UpcomingMeal
+    let busy: Bool
+    let vm: MealsViewModel
+
+    var body: some View {
+        CardBox {
+            HStack {
+                Text(shortDate(m.date) + " · " + slotLabel(m.mealSlot))
+                    .font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(MP.textFaint)
+                Spacer()
+                Text("meals_skipped").font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(MP.textMuted)
+            }
+            if !m.locked {
+                Button { vm.unskip(date: m.date, slot: m.mealSlot) } label: {
+                    Text("meals_unskip").font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.chilli)
+                }
+                .disabled(busy)
+            }
+        }
+    }
+}
+
+/// One review per subscription, once the first delivery has arrived.
+private struct RateKitchenCard: View {
+    let state: ReviewUiState
+    let subscriptionId: String
+    let vm: MealsViewModel
+
+    @State private var rating = 0
+    @State private var comment = ""
+
+    var body: some View {
+        SectionTitle(text: NSLocalizedString("meals_rate_title", comment: ""))
+        if let data = state.data {
+            if !data.canReview {
+                CardBox {
+                    Text("meals_rate_after").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                }
+            } else {
+                form(data)
+            }
+        } else if let failure = state.error {
+            FailureStrip(failure: failure) { vm.loadReview(id: subscriptionId) }
+        } else {
+            LoadingBlock()
+        }
+    }
+
+    private func form(_ data: MyReview) -> some View {
+        CardBox {
+            if data.review?.status == "hidden" {
+                Text("meals_rate_hidden").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
+            }
+            HStack(spacing: Space.small) {
+                ForEach(1...5, id: \.self) { n in
+                    Button { rating = n } label: {
+                        Text("★")
+                            .font(.system(size: TypeScale.title))
+                            .foregroundStyle(n <= rating ? Warm.chilli : MP.textFaint)
+                            .frame(minWidth: Space.touch, minHeight: Space.touch)
+                    }
+                    .disabled(state.saving)
+                    .accessibilityLabel(tr("meals_rate_star", n))
+                    .accessibilityAddTraits(rating == n ? .isSelected : [])
+                }
+            }
+            InputField(placeholder: NSLocalizedString("meals_rate_comment", comment: ""), text: $comment)
+            if let failure = state.error {
+                FailureStrip(failure: failure) { vm.saveReview(rating: Int32(rating), comment: comment) }
+            }
+            if state.saved {
+                Text("meals_rate_saved").font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.leaf)
+            }
+            PrimaryButton(
+                label: NSLocalizedString(data.review != nil ? "meals_rate_update" : "meals_rate_save", comment: ""),
+                enabled: rating > 0 && !state.saving
+            ) { vm.saveReview(rating: Int32(rating), comment: comment) }
+        }
+        .task(id: data.review?.id) {
+            rating = Int(data.review?.rating ?? 0)
+            comment = data.review?.comment ?? ""
         }
     }
 }
@@ -1746,6 +1961,7 @@ private struct MealCard: View {
     let m: UpcomingMeal
     let busy: Bool
     let vm: MealsViewModel
+    @State private var confirmingSkip = false
 
     var body: some View {
         let chosen = m.chosenDishId ?? m.options.first { $0.isDefault }?.id
@@ -1754,15 +1970,20 @@ private struct MealCard: View {
                 Text(shortDate(m.date) + " · " + slotLabel(m.mealSlot))
                     .font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.chilli)
                 Spacer()
+                if let status = m.deliveryStatus { DeliveryPill(status: status) }
                 if m.locked {
                     Text("meals_locked").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textFaint)
                 } else {
-                    Button { vm.skip(date: m.date, slot: m.mealSlot) } label: {
+                    Button { confirmingSkip = true } label: {
                         Text("meals_skip").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                             .padding(Space.small)
                     }
                     .disabled(busy)
                 }
+            }
+            if !m.locked, let cutoff = cutoffLabel(m.cutoffAt) {
+                Text(tr(m.options.count > 1 ? "meals_change_until" : "meals_skip_until", cutoff))
+                    .font(.system(size: TypeScale.caption)).foregroundStyle(MP.textFaint)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Space.small) {
@@ -1773,6 +1994,12 @@ private struct MealCard: View {
                     }
                 }
             }
+        }
+        .alert(Text("meals_skip_confirm"), isPresented: $confirmingSkip) {
+            Button { vm.skip(date: m.date, slot: m.mealSlot) } label: { Text("meals_skip") }
+            Button(role: .cancel) {} label: { Text("meals_keep") }
+        } message: {
+            Text("meals_skip_note")
         }
     }
 }
