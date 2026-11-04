@@ -36,4 +36,11 @@ class MealsLinksTest {
     @Test fun supportTicket() = assertEquals(MealsLink(MealsLinkPage.SUPPORT, "t3"), MealsLinks.parse("/en/support/t3"))
 
     @Test fun supportList() = assertEquals(MealsLink(MealsLinkPage.SUPPORT), MealsLinks.parse("/support"))
+
+    @Test fun collection() = assertEquals(
+        MealsLink(MealsLinkPage.COLLECTION, "office-lunch"),
+        MealsLinks.parse("https://meals.example/ar/collections/office-lunch?utm=x"),
+    )
+
+    @Test fun collectionWithoutSlugIsHome() = assertEquals(MealsLink(MealsLinkPage.HOME), MealsLinks.parse("/en/collections"))
 }

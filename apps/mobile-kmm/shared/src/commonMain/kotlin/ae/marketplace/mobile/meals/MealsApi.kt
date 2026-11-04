@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.meals
 
+import ae.marketplace.mobile.model.CollectionKitchens
 import ae.marketplace.mobile.model.Address
 import ae.marketplace.mobile.model.NextDayDishes
 import ae.marketplace.mobile.model.AddressInput
@@ -40,12 +41,23 @@ class MealsApi(private val client: HttpClient) {
     suspend fun tomorrowDishes(at: LatLng): NextDayDishes =
         client.get("meals/dishes/tomorrow") { point(at) }.body()
 
-    suspend fun kitchens(at: LatLng, slot: String? = null, rotation: Boolean = false): KitchenPage =
+    suspend fun kitchens(
+        at: LatLng,
+        slot: String? = null,
+        rotation: Boolean = false,
+        q: String? = null,
+        cuisine: String? = null,
+    ): KitchenPage =
         client.get("meals/kitchens") {
             point(at)
             slot?.let { parameter("slot", it) }
             if (rotation) parameter("rotation", "true")
+            q?.takeIf { it.isNotBlank() }?.let { parameter("q", it) }
+            cuisine?.let { parameter("cuisine", it) }
         }.body()
+
+    suspend fun collection(slug: String, at: LatLng): CollectionKitchens =
+        client.get("meals/collections/$slug") { point(at) }.body()
 
     suspend fun kitchen(branchId: String, at: LatLng): KitchenDetail =
         client.get("meals/kitchens/$branchId") { point(at) }.body()

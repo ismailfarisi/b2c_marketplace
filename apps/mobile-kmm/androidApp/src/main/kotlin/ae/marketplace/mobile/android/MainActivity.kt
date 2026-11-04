@@ -106,6 +106,13 @@ class MainActivity : ComponentActivity() {
      */
     private val fallback = Place("Dubai Marina", 25.0805, 55.1403, R.string.place_dubai_marina)
 
+    private companion object {
+        /** A cached fix younger than this is trusted without asking again. */
+        const val FRESH_FIX_MS = 10 * 60 * 1000L
+        /** How long to wait for a fresh fix before falling back. */
+        const val FIX_TIMEOUT_MS = 6_000L
+    }
+
     /**
      * Registered here rather than inside composition: a permission result can
      * arrive after a configuration change, and a launcher owned by a composable
@@ -136,28 +143,57 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Last known fix only — no active request.
+     * The last known fix when it is recent; otherwise one fresh coarse fix.
      *
-     * The feed needs a district, not a doorstep, and waiting on a GPS lock for a
-     * screen that could already be showing video is how a front door feels slow.
-     * A device with no cached fix falls back rather than spinning.
+     * The feed needs a district, not a doorstep, so a cached fix under ten
+     * minutes old is used as is. An older one is shown at once and replaced
+     * when the fresh fix lands (a cache from another emirate would list the
+     * wrong kitchens). With no fix at all after a few seconds the screen falls
+     * back to Dubai Marina and says so.
      */
     @SuppressLint("MissingPermission")
     private fun useDeviceLocation(vm: FeedViewModel) {
         val manager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        val fix = manager?.let { m ->
+        val cached = manager?.let { m ->
             m.getProviders(true).asSequence()
                 .mapNotNull { runCatching { m.getLastKnownLocation(it) }.getOrNull() }
                 .maxByOrNull { it.time }
         }
-        if (fix != null) {
-            // Empty label, deliberately: there is no reverse geocoder here and
-            // "25.08, 55.14" is not a place anyone recognises. The sheet renders
-            // an empty label as "Use my location", which is what it is.
-            vm.onLocationSelected(fix.latitude, fix.longitude, "")
-        } else {
-            vm.onLocationSelected(fallback.lat, fallback.lng, fallback.label)
+        // Empty label, deliberately: there is no reverse geocoder here and
+        // "25.08, 55.14" is not a place anyone recognises. The sheet renders
+        // an empty label as "Use my location", which is what it is.
+        val use = { fix: android.location.Location -> vm.onLocationSelected(fix.latitude, fix.longitude, "") }
+        val fresh = cached != null && System.currentTimeMillis() - cached.time < FRESH_FIX_MS
+        if (cached != null) use(cached)
+        if (fresh) return
+        val provider = manager?.let { m ->
+            listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER).firstOrNull { m.isProviderEnabled(it) }
         }
+        val fallBack = {
+            if (cached == null) {
+                Toast.makeText(this, R.string.location_unavailable, Toast.LENGTH_SHORT).show()
+                vm.onLocationSelected(fallback.lat, fallback.lng, fallback.label)
+            }
+        }
+        if (manager == null || provider == null) { fallBack(); return }
+        val handler = android.os.Handler(mainLooper)
+        var settled = false
+        val settle = { fix: android.location.Location? ->
+            if (!settled) {
+                settled = true
+                handler.removeCallbacksAndMessages(null)
+                if (fix != null) use(fix) else fallBack()
+            }
+        }
+        handler.postDelayed({ settle(null) }, FIX_TIMEOUT_MS)
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                manager.getCurrentLocation(provider, null, mainExecutor) { settle(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                manager.requestSingleUpdate(provider, { settle(it) }, mainLooper)
+            }
+        }.onFailure { settle(null) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

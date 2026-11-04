@@ -162,7 +162,7 @@ export function CustomerShell({
   const here = (href: string) =>
     path === href || path.startsWith(`${href}/`) ? "page" : undefined;
   const router = useRouter();
-  const { place, precise, choose, locate } = useCustomerPoint();
+  const { place, precise, choose, locate, denied } = useCustomerPoint();
   const placeName = place
     ? placeLabel(place, locale)
     : precise
@@ -201,6 +201,7 @@ export function CustomerShell({
             current={place}
             onChoose={choose}
             onLocate={locate}
+            blocked={denied}
             label={
               <>
                 <span className="ms-bar-place-k">{t.deliverTo}</span>{" "}

@@ -107,7 +107,7 @@ private func shortDate(_ iso: String) -> String {
 
 private func slotLabel(_ slot: String) -> String {
     switch slot {
-    case "breakfast", "lunch", "dinner": return NSLocalizedString("meals_slot_" + slot, comment: "")
+    case "breakfast", "lunch", "dinner", "suhoor", "iftar": return NSLocalizedString("meals_slot_" + slot, comment: "")
     default: return slot
     }
 }
@@ -138,7 +138,7 @@ private func promoReason(_ code: String) -> String {
 }
 
 private enum MealsPage {
-    case home, kitchen, checkout, rotation, paid, mine, subscription
+    case home, kitchen, checkout, rotation, paid, mine, subscription, collection
 }
 
 /// The meals tab: storefront, kitchen, checkout, rotation and My meals, each
@@ -181,11 +181,20 @@ struct MealsScreen: View {
             let path = (isArabicLocale ? "/ar/support" : "/en/support") + (l.id.map { "/" + $0 } ?? "")
             if let url = URL(string: Config.webBaseUrl + path) { openURL(url) }
             stack = [.home]
+        case .collection:
+            if let id = l.id { viewModel.openCollection(slug: id); stack = [.home, .collection] }
         default:
             stack = [.home]
         }
     }
     private func back() { if stack.count > 1 { stack.removeLast() } }
+
+    /// A banner's link: a meals page opens in the tab, anything else in the browser.
+    private func openBannerLink(_ url: String) {
+        if url.hasPrefix("/"), let l = MealsLinks.shared.parse(url: url) { follow(l); return }
+        let full = url.hasPrefix("/") ? Config.webBaseUrl + (isArabicLocale ? "/ar" : "/en") + url : url
+        if let u = URL(string: full) { openURL(u) }
+    }
 
     private func openPayment(_ url: String) {
         redirected = true
@@ -203,8 +212,12 @@ struct MealsScreen: View {
                     onKitchen: { id in viewModel.openKitchen(branchId: id); go(.kitchen) },
                     onRotation: { requireAccount { viewModel.startRotation(); go(.rotation) } },
                     place: place,
-                    onPlace: { placeRaw = $0?.encoded ?? "" }
+                    onPlace: { placeRaw = $0?.encoded ?? "" },
+                    onCollection: { slug in viewModel.openCollection(slug: slug); go(.collection) },
+                    onLink: openBannerLink
                 )
+            case .collection:
+                CollectionPage(vm: viewModel, onBack: back) { id in viewModel.openKitchen(branchId: id); go(.kitchen) }
             case .kitchen:
                 KitchenPage(vm: viewModel, onBack: back) { plan in
                     requireAccount {
@@ -542,9 +555,12 @@ private struct MealsHomePage: View {
     let onRotation: () -> Void
     let place: ChosenPlace?
     let onPlace: (ChosenPlace?) -> Void
+    var onCollection: (String) -> Void = { _ in }
+    var onLink: (String) -> Void = { _ in }
 
     @State private var current: StorefrontUiState?
     @State private var picking = false
+    @State private var query = ""
     @Environment(\.openURL) private var openURL
     private var s: StorefrontUiState { current ?? vm.store.value }
 
@@ -558,24 +574,39 @@ private struct MealsHomePage: View {
                     LoadingBlock()
                 } else {
                     // Kitchens first: the choice is the page. Merchandising follows.
+                    if let strip = s.sections.first(where: { $0.type == "cuisine_strip" }) { cuisineStrip(strip) }
                     nearHeader
+                    refreshNote
                     if s.kitchens.isEmpty {
-                        EmptyBlock(message: NSLocalizedString("meals_none", comment: ""))
+                        if s.filtering {
+                            EmptyBlock(message: NSLocalizedString("meals_filters_empty", comment: ""))
+                            Chip(label: NSLocalizedString("meals_clear_filters", comment: ""), selected: false) {
+                                query = ""
+                                vm.clearFilters()
+                            }
+                            .frame(maxWidth: .infinity)
+                        } else {
+                            EmptyBlock(message: NSLocalizedString("meals_none", comment: ""))
+                        }
                     }
                     ForEach(Array(s.kitchens.prefix(3)), id: \.branchId) { k in kitchenButton(k) }
-                    if s.slot == nil { rotationPromo }
+                    if !s.filtering { rotationPromo }
                     ForEach(Array(s.kitchens.dropFirst(3)), id: \.branchId) { k in kitchenButton(k) }
-                    ForEach(s.sections.filter { $0.type == "banner_carousel" }, id: \.id) { section in sectionView(section) }
-                    if s.slot == nil && !s.dishes.isEmpty { dishRail }
-                    ForEach(s.sections.filter { $0.type == "kitchen_rail" }, id: \.id) { section in sectionView(section) }
-                    officeLink
+                    if !s.filtering {
+                        ForEach(s.sections.filter { $0.type == "banner_carousel" }, id: \.id) { section in sectionView(section) }
+                        if !s.dishes.isEmpty { dishRail }
+                        ForEach(s.sections.filter { $0.type == "kitchen_rail" }, id: \.id) { section in sectionView(section) }
+                        officeLink
+                    }
                 }
                 Color.clear.frame(height: navBarHeight + Space.xl)
             }
         }
         .task {
+            query = vm.store.value.query
             for await state in vm.store { current = state }
         }
+        .onChange(of: query) { _, q in vm.setQuery(query: q) }
         .sheet(isPresented: $picking) {
             PlacePicker(vm: vm, current: place) { onPlace($0); picking = false }
         }
@@ -588,7 +619,9 @@ private struct MealsHomePage: View {
 
     private var nearHeader: some View {
         let title: String
-        if let p = place {
+        if s.filtering && s.kitchens.isEmpty {
+            title = NSLocalizedString("meals_no_matches", comment: "")
+        } else if let p = place {
             title = s.kitchens.isEmpty ? tr("meals_none_near", p.name) : tr("meals_near_place", s.kitchens.count, p.name)
         } else {
             title = tr("meals_near_count", s.kitchens.count)
@@ -636,11 +669,12 @@ private struct MealsHomePage: View {
                     Chip(label: NSLocalizedString("meals_slot_all", comment: ""), selected: s.slot == nil) {
                         vm.selectSlot(slot: nil)
                     }
-                    ForEach(["breakfast", "lunch", "dinner"], id: \.self) { slot in
+                    ForEach(["breakfast", "lunch", "dinner", "suhoor", "iftar"], id: \.self) { slot in
                         Chip(label: slotLabel(slot), selected: s.slot == slot) { vm.selectSlot(slot: slot) }
                     }
                 }
             }
+            discoveryFilters
         }
         .padding(.horizontal, Space.edge)
         .padding(.top, Space.large)
@@ -697,7 +731,18 @@ private struct MealsHomePage: View {
             let listed = Set(s.kitchens.map { $0.branchId })
             let kitchens = (section.kitchens ?? []).filter { !listed.contains($0.branchId) }
             if !kitchens.isEmpty {
-                if let title { SectionTitle(text: title) }
+                HStack(alignment: .firstTextBaseline) {
+                    if let title { SectionTitle(text: title) }
+                    if let slug = section.collection?.slug {
+                        Button { onCollection(slug) } label: {
+                            Text("meals_see_all")
+                                .font(.system(size: TypeScale.body, weight: .semibold))
+                                .foregroundStyle(Warm.chilli)
+                                .frame(minHeight: Space.touch)
+                        }
+                        .padding(.horizontal, Space.edge)
+                    }
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Space.medium) {
                         ForEach(kitchens, id: \.branchId) { k in
@@ -726,19 +771,7 @@ private struct MealsHomePage: View {
             if !banners.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Space.medium) {
-                        ForEach(banners, id: \.id) { b in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(pick(b.title, b.titleAr)).font(display(TypeScale.heading)).foregroundStyle(Color.white)
-                                if let body = b.body {
-                                    Text(pick(body, b.bodyAr))
-                                        .font(.system(size: TypeScale.secondary))
-                                        .foregroundStyle(Color.white.opacity(0.75))
-                                }
-                            }
-                            .frame(width: 300, alignment: .leading)
-                            .padding(Space.large)
-                            .background(Warm.chilli, in: RoundedRectangle(cornerRadius: 16))
-                        }
+                        ForEach(banners, id: \.id) { b in bannerCard(b) }
                     }
                     .padding(.horizontal, Space.edge)
                     .padding(.vertical, Space.small)
@@ -746,6 +779,156 @@ private struct MealsHomePage: View {
             }
         default:
             EmptyView()
+        }
+    }
+}
+
+// MARK: - Home discovery
+
+extension MealsHomePage {
+    /// Kitchen/dish search and the rotation-kitchens toggle, under the slot chips.
+    fileprivate var discoveryFilters: some View {
+        VStack(alignment: .leading, spacing: Space.small) {
+            TextField(NSLocalizedString("meals_search_kitchens", comment: ""), text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(size: TypeScale.body))
+                .padding(.horizontal, Space.medium)
+                .padding(.vertical, 12)
+                .background(MP.surface, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(MP.line, lineWidth: 1))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Space.small) {
+                    Chip(label: NSLocalizedString("meals_rotation_filter", comment: ""), selected: s.rotationOnly) {
+                        vm.setRotationOnly(on: !s.rotationOnly)
+                    }
+                    if let c = s.cuisine {
+                        Chip(label: tagLabel(c) + " ×", selected: true) { vm.selectCuisine(cuisine: nil) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A refetch over a list still on screen: a spinner while it runs, the
+    /// failure with Retry when it fails, so an old list never passes for the
+    /// answer to a new place or filter.
+    @ViewBuilder
+    fileprivate var refreshNote: some View {
+        if let failure = s.error {
+            FailureStrip(failure: failure) { vm.loadStore() }
+                .padding(.horizontal, Space.edge)
+        } else if s.loading {
+            HStack(spacing: Space.small) {
+                ProgressView().tint(Warm.chilli)
+                Text("meals_updating")
+                    .font(.system(size: TypeScale.secondary))
+                    .foregroundStyle(MP.textMuted)
+            }
+            .padding(.horizontal, Space.edge)
+            .padding(.vertical, Space.small)
+        }
+    }
+
+    /// cuisine_strip: tap a cuisine to filter the list by it.
+    @ViewBuilder
+    fileprivate func cuisineStrip(_ section: HomeSection) -> some View {
+        // A cuisine every kitchen serves narrows nothing, so it isn't offered.
+        let total = Int(s.unfilteredCount)
+        let tiles = (section.cuisines ?? []).filter {
+            $0.cuisine == s.cuisine || ($0.kitchens > 0 && (total == 0 || Int($0.kitchens) < total))
+        }
+        if tiles.count > 1 {
+            SectionTitle(text: section.settings.title.map { pick($0, section.settings.titleAr) }
+                ?? NSLocalizedString("meals_cuisines", comment: ""))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Space.small) {
+                    ForEach(tiles, id: \.cuisine) { c in
+                        let on = c.cuisine == s.cuisine
+                        Chip(label: tagLabel(c.cuisine), selected: on) { vm.selectCuisine(cuisine: on ? nil : c.cuisine) }
+                    }
+                }
+                .padding(.horizontal, Space.edge)
+            }
+        }
+    }
+
+    /// A merchandising banner: photo, copy and CTA; the card follows its link.
+    fileprivate func bannerCard(_ b: Banner) -> some View {
+        let link = b.linkUrl.flatMap { $0.isEmpty ? nil : $0 }
+        let cta = b.cta.map { pick($0, b.ctaAr) }
+        return Button { if let link { onLink(link) } } label: {
+            ZStack(alignment: .bottomLeading) {
+                Warm.chilli
+                if let img = b.imageUrl, !img.isEmpty {
+                    FoodPhoto(seed: b.title, imageUrl: img)
+                    LinearGradient(colors: [Color.clear, Color.black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(pick(b.title, b.titleAr)).font(display(TypeScale.heading)).foregroundStyle(Color.white)
+                    if let body = b.body {
+                        Text(pick(body, b.bodyAr))
+                            .font(.system(size: TypeScale.secondary))
+                            .foregroundStyle(Color.white.opacity(0.8))
+                    }
+                    if let cta, link != nil {
+                        Text(cta + " →")
+                            .font(.system(size: TypeScale.body, weight: .semibold))
+                            .foregroundStyle(Warm.saffron)
+                    }
+                }
+                .multilineTextAlignment(.leading)
+                .padding(Space.large)
+            }
+            .frame(width: 300, height: 160)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .disabled(link == nil)
+    }
+}
+
+/// A collection's "See all": its kitchens that deliver to the current point.
+private struct CollectionPage: View {
+    let vm: MealsViewModel
+    let onBack: () -> Void
+    let onKitchen: (String) -> Void
+
+    @State private var current: CollectionUiState?
+    private var s: CollectionUiState { current ?? vm.collection.value }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TopBar(title: s.collection.map { pick($0.title, $0.titleAr) } ?? "", onBack: onBack)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if s.gone {
+                        EmptyBlock(message: NSLocalizedString("meals_collection_gone", comment: ""))
+                    } else if let failure = s.error {
+                        FailureBlock(failure: failure) { vm.retryCollection() }
+                    } else if let c = s.collection {
+                        if let sub = c.subtitle {
+                            Text(pick(sub, c.subtitleAr))
+                                .font(.system(size: TypeScale.secondary))
+                                .foregroundStyle(MP.textMuted)
+                                .padding(.horizontal, Space.edge)
+                        }
+                        if c.kitchens.isEmpty {
+                            EmptyBlock(message: NSLocalizedString("meals_none", comment: ""))
+                        }
+                        ForEach(c.kitchens, id: \.branchId) { k in
+                            Button { onKitchen(k.branchId) } label: { KitchenCard(k: k) }
+                                .buttonStyle(.plain)
+                        }
+                    } else {
+                        LoadingBlock()
+                    }
+                    Color.clear.frame(height: navBarHeight + Space.xl)
+                }
+            }
+        }
+        .task {
+            for await state in vm.collection { current = state }
         }
     }
 }

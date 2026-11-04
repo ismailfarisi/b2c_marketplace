@@ -16,6 +16,8 @@ export interface Place {
 
 const KEY = "meals.place";
 const EVENT = "meals-place";
+/** "Use my current location" from any picker: every hook instance asks again. */
+const LOCATE_EVENT = "meals-locate";
 
 function readPlace(): Place | null {
   try {
@@ -53,23 +55,38 @@ export function useCustomerPoint() {
   const [read, setRead] = useState(false);
   const [gps, setGps] = useState<Point | null>(null);
   const [settled, setSettled] = useState(false);
+  // Why the device gave no fix: the browser blocks location, or it timed out.
+  const [failure, setFailure] = useState<"denied" | "unavailable" | null>(
+    null,
+  );
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const sync = () => setPlace(readPlace());
+    // The header and the page each hold an instance; a locate in either one
+    // must re-ask the device for both.
+    const relocate = () => {
+      setGps(null);
+      setSettled(false);
+      setFailure(null);
+      setAttempt((n) => n + 1);
+    };
     sync();
     setRead(true);
     window.addEventListener(EVENT, sync);
     window.addEventListener("storage", sync);
+    window.addEventListener(LOCATE_EVENT, relocate);
     return () => {
       window.removeEventListener(EVENT, sync);
       window.removeEventListener("storage", sync);
+      window.removeEventListener(LOCATE_EVENT, relocate);
     };
   }, []);
 
   useEffect(() => {
     if (!read || place) return;
     if (!navigator.geolocation) {
+      setFailure("unavailable");
       setSettled(true);
       return;
     }
@@ -78,10 +95,13 @@ export function useCustomerPoint() {
       (pos) => {
         if (!live) return;
         setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setFailure(null);
         setSettled(true);
       },
-      () => {
-        if (live) setSettled(true);
+      (err) => {
+        if (!live) return;
+        setFailure(err.code === 1 ? "denied" : "unavailable");
+        setSettled(true);
       },
       { timeout: 4000, maximumAge: attempt > 0 ? 0 : 300_000 },
     );
@@ -100,13 +120,15 @@ export function useCustomerPoint() {
     placeReady: read,
     precise: place != null || gps != null,
     exact: place?.kind === "address" || (place == null && gps != null),
+    /** The browser blocks location for this site (not just a slow fix). */
+    denied: place == null && failure === "denied",
+    /** The device was asked and gave no fix (blocked or timed out). */
+    locateFailed: place == null && settled && gps == null && failure != null,
     choose: choosePlace,
-    /** Drop any chosen place and ask the device again. */
+    /** Drop any chosen place and ask the device again, in every instance. */
     locate: () => {
-      setGps(null);
-      setSettled(false);
-      setAttempt((n) => n + 1);
       choosePlace(null);
+      window.dispatchEvent(new Event(LOCATE_EVENT));
     },
   };
 }

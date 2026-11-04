@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { KitchenCover } from "@/components/meals/cover";
 import { DishPhoto, dishName, shortMoney } from "@/components/meals/food";
+import { arKitchens, arKitchensDeliver } from "@/components/meals/home-copy";
 import { RatingBadge, SafetyBadge } from "@/components/meals/trust";
 import type { Banner, HomeSection, PublicKitchen } from "@/lib/meals-api";
 
@@ -73,10 +74,11 @@ export const COPY = {
     thisWeek: "هذا الأسبوع",
     empty: "لا يوجد مطبخ يوصل هنا بهذه الخيارات بعد.",
     failed: "تعذر تحميل المطابخ.",
-    count: (n: number) => `${n} مطبخ`,
-    near: (n: number) => `${n} مطبخ يوصل إليك`,
-    nearFallback: (n: number) => `${n} مطبخ يوصل إلى دبي مارينا`,
-    nearPlace: (n: number, place: string) => `${n} مطبخ يوصل إلى ${place}`,
+    count: (n: number) => arKitchens(n),
+    near: (n: number) => arKitchensDeliver(n, "إليك"),
+    nearFallback: (n: number) => arKitchensDeliver(n, "إلى دبي مارينا"),
+    nearPlace: (n: number, place: string) =>
+      arKitchensDeliver(n, `إلى ${place}`),
     noneNear: (place: string) => `لا توجد مطابخ توصل إلى ${place} بعد`,
     noneHelp: "جرّب منطقة قريبة أو استخدم موقعك الحالي.",
     slot: {

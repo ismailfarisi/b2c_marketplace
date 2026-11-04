@@ -92,7 +92,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-private enum class Page { Home, Kitchen, Checkout, Rotation, Paid, Mine, Subscription }
+private enum class Page { Home, Kitchen, Checkout, Rotation, Paid, Mine, Subscription, Collection }
 
 /**
  * The meals tab. Its pages stack inside the tab, so the bottom bar stays put
@@ -129,8 +129,11 @@ fun MealsTab(
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
     fun home(then: Page? = null) { stack.clear(); stack.add(Page.Home); then?.let { stack.add(it) } }
 
-    LaunchedEffect(link) {
-        val l = link ?: return@LaunchedEffect
+    // Links followed from inside the tab (banners), handled like deep links.
+    var innerLink by remember { mutableStateOf<ae.marketplace.mobile.meals.MealsLink?>(null) }
+    val pendingLink = link ?: innerLink
+    LaunchedEffect(pendingLink) {
+        val l = pendingLink ?: return@LaunchedEffect
         val id = l.id
         when (l.page) {
             MealsLinkPage.KITCHEN -> if (id != null) { viewModel.openKitchen(id); home(Page.Kitchen) }
@@ -147,9 +150,10 @@ fun MealsTab(
                     ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ae.marketplace.mobile.android.BuildConfig.WEB_BASE_URL + path)))
                 }
             }
+            MealsLinkPage.COLLECTION -> if (id != null) { viewModel.openCollection(id); home(Page.Collection) }
             MealsLinkPage.HOME -> home()
         }
-        onLinkHandled()
+        if (l === innerLink) innerLink = null else onLinkHandled()
     }
     BackHandler(enabled = stack.size > 1) { back() }
 
@@ -171,7 +175,19 @@ fun MealsTab(
                 onRotation = { requireAccount { viewModel.startRotation(); go(Page.Rotation) } },
                 place = place,
                 onPlace = { place = it; writePlace(prefs, it) },
+                onCollection = { viewModel.openCollection(it); go(Page.Collection) },
+                onLink = { url ->
+                    val parsed = if (url.startsWith("/")) ae.marketplace.mobile.meals.MealsLinks.parse(url) else null
+                    if (parsed != null) {
+                        innerLink = parsed
+                    } else {
+                        val lang = if (ctx.resources.configuration.locales[0].language == "ar") "/ar" else "/en"
+                        val full = if (url.startsWith("/")) ae.marketplace.mobile.android.BuildConfig.WEB_BASE_URL + lang + url else url
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(full))) }
+                    }
+                },
             )
+            Page.Collection -> CollectionPage(viewModel, onBack = ::back, onKitchen = { viewModel.openKitchen(it); go(Page.Kitchen) })
             Page.Kitchen -> KitchenPage(
                 viewModel,
                 onBack = ::back,
@@ -204,6 +220,8 @@ private fun HomePage(
     onRotation: () -> Unit,
     place: ChosenPlace?,
     onPlace: (ChosenPlace?) -> Unit,
+    onCollection: (String) -> Unit = {},
+    onLink: (String) -> Unit = {},
 ) {
     val s by vm.store.collectAsState()
     val arabic = rememberArabic()
@@ -236,10 +254,11 @@ private fun HomePage(
                     horizontalArrangement = Arrangement.spacedBy(Space.Small),
                 ) {
                     Chip(stringResource(R.string.meals_slot_all), s.slot == null, { vm.selectSlot(null) })
-                    listOf("breakfast", "lunch", "dinner").forEach { slot ->
+                    FilterSlots.forEach { slot ->
                         Chip(slotLabel(slot), s.slot == slot, { vm.selectSlot(slot) })
                     }
                 }
+                DiscoveryFilters(s, vm, arabic)
             }
         }
         val failure = s.error
@@ -249,20 +268,29 @@ private fun HomePage(
             else -> {
                 // Kitchens first: the choice is the page. Merchandising follows.
                 val listed = s.kitchens.map { it.branchId }.toSet()
-                item(key = "near") { NearHeader(s.kitchens.size, place, arabic) { picking = true } }
-                if (s.kitchens.isEmpty()) item { EmptyBlock(stringResource(R.string.meals_none)) }
+                val filtering = s.filtering
+                s.sections.firstOrNull { it.type == "cuisine_strip" }?.let { strip ->
+                    item(key = strip.id) { CuisineStrip(strip, s, arabic, vm::selectCuisine) }
+                }
+                item(key = "near") { NearHeader(s.kitchens.size, place, arabic, noMatches = filtering && s.kitchens.isEmpty()) { picking = true } }
+                if (s.loading || failure != null) item(key = "refresh") { StoreRefreshNote(s, vm::loadStore) }
+                if (s.kitchens.isEmpty()) {
+                    item { if (filtering) FilteredEmpty(vm::clearFilters) else EmptyBlock(stringResource(R.string.meals_none)) }
+                }
                 items(s.kitchens.take(3), key = { it.branchId }) { KitchenCard(it, arabic) { onKitchen(it.branchId) } }
-                if (s.slot == null) item(key = "rotation") { RotationPromo(onRotation) }
+                if (!filtering) item(key = "rotation") { RotationPromo(onRotation) }
                 items(s.kitchens.drop(3), key = { it.branchId }) { KitchenCard(it, arabic) { onKitchen(it.branchId) } }
-                s.sections.filter { it.type == "banner_carousel" }
-                    .forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation) } }
-                if (s.dishes.isNotEmpty()) item(key = "dishes") { DishRail(s.dishes, arabic, onKitchen) }
-                // Staff rails skip kitchens the list above already shows.
-                s.sections.filter { it.type == "kitchen_rail" }
-                    .map { it.copy(kitchens = it.kitchens.orEmpty().filterNot { k -> k.branchId in listed }) }
-                    .filter { !it.kitchens.isNullOrEmpty() }
-                    .forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation) } }
-                item(key = "office") { OfficeLink(arabic) }
+                if (!filtering) {
+                    s.sections.filter { it.type == "banner_carousel" }
+                        .forEach { section -> item(key = section.id) { BannerRail(section, arabic, onLink) } }
+                    if (s.dishes.isNotEmpty()) item(key = "dishes") { DishRail(s.dishes, arabic, onKitchen) }
+                    // Staff rails skip kitchens the list above already shows.
+                    s.sections.filter { it.type == "kitchen_rail" }
+                        .map { it.copy(kitchens = it.kitchens.orEmpty().filterNot { k -> k.branchId in listed }) }
+                        .filter { !it.kitchens.isNullOrEmpty() }
+                        .forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation, onCollection) } }
+                    item(key = "office") { OfficeLink(arabic) }
+                }
             }
         }
         item { BottomPad() }
@@ -309,8 +337,9 @@ private fun writePlace(p: android.content.SharedPreferences, c: ChosenPlace?) {
 }
 
 @Composable
-private fun NearHeader(count: Int, place: ChosenPlace?, arabic: Boolean, onChange: () -> Unit) {
+private fun NearHeader(count: Int, place: ChosenPlace?, arabic: Boolean, noMatches: Boolean = false, onChange: () -> Unit) {
     val title = when {
+        noMatches -> stringResource(R.string.meals_no_matches)
         place != null && count == 0 -> stringResource(R.string.meals_none_near, place.name(arabic))
         place != null -> stringResource(R.string.meals_near_place, count, place.name(arabic))
         else -> stringResource(R.string.meals_near_count, count)
@@ -434,14 +463,29 @@ private fun RotationPromo(onClick: () -> Unit) {
 }
 
 @Composable
-private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -> Unit, onRotation: () -> Unit) {
+private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -> Unit, onRotation: () -> Unit, onCollection: (String) -> Unit = {}) {
     val title = section.settings.title?.let { pick(it, section.settings.titleAr, arabic) }
         ?: section.collection?.let { pick(it.title, it.titleAr, arabic) }
     when (section.type) {
         "kitchen_rail" -> {
             val kitchens = section.kitchens.orEmpty()
             if (kitchens.isEmpty()) return
-            title?.let { SectionTitle(it) }
+            val slug = section.collection?.slug
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { title?.let { SectionTitle(it) } }
+                if (slug != null) {
+                    Text(
+                        stringResource(R.string.meals_see_all),
+                        color = M.Chilli,
+                        fontSize = Type.Body,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .semantics { role = Role.Button }
+                            .clickable { onCollection(slug) }
+                            .padding(horizontal = Space.Edge, vertical = 12.dp),
+                    )
+                }
+            }
             LazyRow(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Space.Edge),
                 horizontalArrangement = Arrangement.spacedBy(Space.Medium),
@@ -475,14 +519,13 @@ private fun Section(section: HomeSection, arabic: Boolean, onKitchen: (String) -
                 }
             }
         }
-        // The rotation card already leads the page; the cuisine strip needs the
-        // collection pages, which come with search.
+        // The rotation card already leads the page; HomePage draws the cuisine strip.
         else -> Unit
     }
 }
 
 @Composable
-private fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
+internal fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
     val name = pick(k.name, k.nameAr, arabic)
     val dishPhoto = k.weekDishes.firstOrNull { it.imageUrl != null }?.imageUrl
     Column(

@@ -124,7 +124,17 @@ func (s *Service) Discover(ctx context.Context, f DiscoverFilter) ([]PublicKitch
 		   AND ($2::float8 IS NULL OR (b.service_area IS NOT NULL AND
 		        ST_Intersects(b.service_area, ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography)))
 		   AND ($4 = '' OR b.name ILIKE '%' || $4 || '%' OR v.trade_name ILIKE '%' || $4 || '%'
-		        OR b.name_ar ILIKE '%' || $4 || '%' OR v.trade_name_ar ILIKE '%' || $4 || '%')
+		        OR b.name_ar ILIKE '%' || $4 || '%' OR v.trade_name_ar ILIKE '%' || $4 || '%'
+		        -- The search box promises dishes too: a dish on the kitchen's
+		        -- live menu is a match, in either language.
+		        OR EXISTS (
+		          SELECT 1
+		            FROM menu_cycles c
+		            JOIN menu_cycle_days cd ON cd.cycle_id = c.id
+		            JOIN menu_day_items di ON di.cycle_day_id = cd.id
+		            JOIN menu_items mi ON mi.id = di.menu_item_id AND mi.is_active
+		           WHERE c.branch_id = b.id AND c.is_active
+		             AND (mi.name ILIKE '%' || $4 || '%' OR mi.name_ar ILIKE '%' || $4 || '%')))
 		   AND ($5 = '' OR $5 = ANY (p.slots))
 		   AND ($6 = '' OR $6 = ANY (b.cuisines))
 		   AND ($7 = '' OR $7 = ANY (b.dietary_tags))
