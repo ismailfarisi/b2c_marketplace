@@ -298,6 +298,38 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      tags: [me]
+      operationId: updateCurrentUser
+      summary: Edit the authenticated user's name, email or language
+      description: |
+        Partial update: omitted fields are left alone, an empty string clears
+        display_name or email. A changed email is stored unverified. The phone
+        number is the sign-in identity and is not editable here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                display_name: { type: string, maxLength: 80 }
+                email: { type: string }
+                locale: { $ref: "#/components/schemas/Locale" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: Another live account already uses this email (code email_taken)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [me]
       operationId: deleteCurrentUser
@@ -1927,6 +1959,34 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   /me/addresses/{addressId}:
+    patch:
+      tags: [me]
+      operationId: updateAddress
+      summary: Make a saved address the default
+      description: |
+        Only `is_default: true` is accepted; the previous default is cleared.
+        To move an address, save a new one, so past orders keep pointing at
+        the place they were delivered to.
+      parameters:
+        - { name: addressId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_default]
+              properties:
+                is_default: { type: boolean, const: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Address" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [me]
       operationId: deleteAddress
@@ -3996,6 +4056,30 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   /me/notification-preferences:
+    get:
+      tags: [notifications]
+      operationId: listNotificationPreferences
+      summary: The user's marketing switches, one per channel, in their current position
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [category, channel, allowed, optional]
+                      properties:
+                        category: { type: string, enum: [marketing] }
+                        channel: { type: string, enum: [sms, push, email, whatsapp, in_app] }
+                        allowed: { type: boolean }
+                        optional: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     put:
       tags: [notifications]
       operationId: setNotificationPreference

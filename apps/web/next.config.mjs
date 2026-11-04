@@ -1,3 +1,14 @@
+// Production builds must name the legal entity: the Privacy and Terms pages
+// print it, and a placeholder there is a published legal document with a gap.
+if (process.env.NEXT_PUBLIC_ENV === "production") {
+  const missing = ["NEXT_PUBLIC_LEGAL_ENTITY", "NEXT_PUBLIC_LEGAL_EMAIL"].filter(
+    (k) => !process.env[k]?.trim(),
+  );
+  if (missing.length) {
+    throw new Error(`Production build needs ${missing.join(" and ")} (shown on /privacy and /terms).`);
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,

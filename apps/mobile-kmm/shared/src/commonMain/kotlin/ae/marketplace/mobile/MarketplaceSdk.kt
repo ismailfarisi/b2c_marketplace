@@ -72,6 +72,7 @@ class MarketplaceSdk private constructor(
     private val network: NetworkStatus,
     private val push: PushRegistry,
     private val app: AppConfigApi,
+    private val account: ae.marketplace.mobile.me.AccountApi,
 ) {
     companion object {
         suspend fun create(
@@ -117,6 +118,7 @@ class MarketplaceSdk private constructor(
                 network = networkStatus(context),
                 push = push,
                 app = AppConfigApi(client),
+                account = ae.marketplace.mobile.me.AccountApi(client),
             ).also { it.sessionId = sessionId }
         }
     }
@@ -182,8 +184,15 @@ class MarketplaceSdk private constructor(
      */
     fun createMeViewModel(): MeViewModel = MeViewModel(me)
 
+    /** Profile, saved addresses and notification switches on the Me tab. */
+    fun createAccountViewModel(): ae.marketplace.mobile.me.AccountViewModel =
+        ae.marketplace.mobile.me.AccountViewModel(account)
+
     /** The phone's push token from FCM ("android") or APNs ("ios"). */
     fun registerPushToken(token: String, platform: String) = push.update(token, platform)
+
+    /** Retries a token the server has not acknowledged; call on app foreground. */
+    fun retryPushToken() = push.retryNow()
 
     /**
      * Compares this build ([currentVersion]) with the server's minimum and

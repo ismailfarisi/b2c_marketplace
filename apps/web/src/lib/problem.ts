@@ -27,6 +27,10 @@ const FIELD: Record<string, { en: string; ar: string }> = {
   },
   no_deliveries: { en: "There are no deliveries in those dates.", ar: "لا توجد توصيلات في هذه التواريخ." },
   not_on_menu: { en: "That dish is no longer on the menu.", ar: "هذا الطبق لم يعد في القائمة." },
+  not_optional: {
+    en: "Delivery, account and order messages can't be switched off.",
+    ar: "لا يمكن إيقاف رسائل التوصيل والحساب والطلبات.",
+  },
 };
 
 const REASON: Record<string, { en: string; ar: string }> = {
@@ -62,6 +66,15 @@ const REASON: Record<string, { en: string; ar: string }> = {
   not_live: { en: "Only a running plan can change this.", ar: "لا يمكن تغيير هذا إلا لخطة جارية." },
   not_active: { en: "This subscription is not active.", ar: "هذا الاشتراك غير نشط." },
   not_paid: { en: "Pay for this first.", ar: "ادفع أولًا." },
+  owns_vendor: {
+    en: "You own a business on the marketplace. Contact support to hand it over before deleting your account.",
+    ar: "أنت مالك نشاط تجاري على المنصة. تواصل مع الدعم لنقل ملكيته قبل حذف حسابك.",
+  },
+  order_in_progress: {
+    en: "You have orders still in progress. Try again once they are delivered or cancelled.",
+    ar: "لديك طلبات قيد التنفيذ. حاول مرة أخرى بعد توصيلها أو إلغائها.",
+  },
+  email_taken: { en: "Another account already uses this email.", ar: "هذا البريد الإلكتروني مستخدم في حساب آخر." },
 };
 
 const FALLBACK = {

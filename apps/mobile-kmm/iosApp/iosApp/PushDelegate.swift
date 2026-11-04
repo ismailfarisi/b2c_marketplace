@@ -32,7 +32,7 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("push registration failed: \(error)")
+        Crash.report(error)
     }
 
     /// Shows banners while the app is open too; a delivery update is still news.
@@ -57,7 +57,23 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         completionHandler()
     }
 
-    /// Asked after sign-in, not at launch.
+    /// True only before the person has answered the system prompt; after a
+    /// "Don't Allow" iOS will not show it again, so Me links to Settings.
+    static func shouldAsk() async -> Bool {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined
+    }
+
+    /// Registers again on each sign-in when already allowed, so a rotated
+    /// token reaches the server; never prompts.
+    static func registerIfAllowed() {
+        Task {
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+            await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+        }
+    }
+
+    /// Asked after sign-in and after the in-app explanation, not at launch.
     static func requestPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }

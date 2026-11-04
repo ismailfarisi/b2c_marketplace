@@ -29,6 +29,11 @@ object Push {
     const val FCM_LINK = "link"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** True once [start] succeeded; without it push cannot work, so nothing asks for it. */
+    @Volatile
+    var available: Boolean = false
+        private set
+
     /** False when the build has no Firebase project, in which case push is off. */
     fun start(context: Context): Boolean {
         if (BuildConfig.FIREBASE_APP_ID.isEmpty()) return false
@@ -51,6 +56,7 @@ object Push {
                 NotificationManager.IMPORTANCE_HIGH,
             ),
         )
+        available = true
         return true
     }
 

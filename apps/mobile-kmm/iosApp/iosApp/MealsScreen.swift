@@ -1633,8 +1633,9 @@ private struct CheckoutPage: View {
                 ForEach(s.addresses, id: \.id) { a in
                     Choice(title: a.label, detail: a.line, selected: a.id == s.addressId) { vm.selectAddress(id: a.id) }
                 }
-                AddressForm(startOpen: s.addresses.isEmpty, busy: s.busy, saves: s.addressSaves) { label, building, area, city, pin in
-                    vm.addAddress(label: label, building: building, area: area, city: city, at: pin)
+                AddressForm(startOpen: s.addresses.isEmpty, busy: s.busy,
+                            added: Int(s.addressAdded), failure: s.error) { label, building, area, city, at in
+                    vm.addAddress(label: label, building: building, area: area, city: city, at: at)
                 }
                 FieldLabel(text: tr("meals_days", Int(plan.daysPerWeek)))
                 chips(plan.deliveryWeekdays.map { $0.int32Value }.sorted(), label: { weekday($0) },
@@ -1711,29 +1712,51 @@ private struct CheckoutPage: View {
     }
 }
 
+/// Stays open until the address is saved (the view model bumps `added`), so a
+/// failed save keeps what was typed and shows field errors under each box. The
+/// point is a fresh fix the customer asked for, never the feed's area or a
+/// fallback point, and Save waits for it.
 private struct AddressForm: View {
     let startOpen: Bool
     let busy: Bool
-    let saves: Int32
+    let added: Int
+    let failure: Failure?
     let onSave: (String, String, String, String, LatLng) -> Void
 
-    @StateObject private var locator = CheckoutLocator()
     @State private var open = false
     @State private var label = ""
     @State private var building = ""
     @State private var area = ""
-    @State private var city = "Dubai"
+    @State private var city = ""
+    @State private var pinLat: Double?
+    @State private var pinLng: Double?
+    @State private var locating = false
+    @State private var pinFailed = false
+    @StateObject private var fix = FreshFix()
 
-    var body: some View {
-        // Collapse only once the address is saved; a failed save keeps what was typed.
-        content.onChange(of: saves) { _, _ in
-            open = false
-            label = ""; building = ""; area = ""
-            locator.fix = nil
+    private var fields: [String: String] {
+        guard let failure, case .rejected(let r) = onEnum(of: failure) else { return [:] }
+        return r.fields
+    }
+
+    @ViewBuilder
+    private func fieldError(_ key: String) -> some View {
+        if let e = fields[key] {
+            Text(e).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
         }
     }
 
-    @ViewBuilder private var content: some View {
+    var body: some View {
+        Group { content }
+            .onChange(of: added) { _, _ in
+                open = false
+                label = ""; building = ""; area = ""; city = ""
+                pinLat = nil; pinLng = nil
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if !open && !startOpen {
             Button { open = true } label: {
                 Text("+ " + NSLocalizedString("meals_add_address", comment: ""))
@@ -1748,37 +1771,46 @@ private struct AddressForm: View {
                     .font(.system(size: TypeScale.body, weight: .semibold))
                     .foregroundStyle(MP.text)
                 InputField(placeholder: NSLocalizedString("meals_label", comment: ""), text: $label)
+                fieldError("label")
                 InputField(placeholder: NSLocalizedString("meals_building", comment: ""), text: $building)
                 InputField(placeholder: NSLocalizedString("meals_area", comment: ""), text: $area)
                 InputField(placeholder: NSLocalizedString("meals_city", comment: ""), text: $city)
-                pinRow
+                fieldError("city")
+                Text(pinText)
+                    .font(.system(size: TypeScale.secondary))
+                    .foregroundStyle(MP.textMuted)
+                if pinFailed {
+                    Text("meals_pin_failed").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
+                }
+                fieldError("point")
+                SecondaryButton(label: NSLocalizedString("meals_pin_here", comment: "")) {
+                    guard !locating else { return }
+                    locating = true
+                    pinFailed = false
+                    fix.request { point in
+                        locating = false
+                        pinFailed = point == nil
+                        if let point { pinLat = point.0; pinLng = point.1 }
+                    }
+                }
                 PrimaryButton(
                     label: NSLocalizedString("meals_save_address", comment: ""),
-                    enabled: !busy && !label.isEmpty && !city.isEmpty && locator.fix != nil
+                    enabled: !busy && !label.trimmingCharacters(in: .whitespaces).isEmpty
+                        && !city.trimmingCharacters(in: .whitespaces).isEmpty && pinLat != nil && pinLng != nil
                 ) {
-                    if let c = locator.fix {
-                        onSave(label, building, area, city, LatLng(lat: c.latitude, lng: c.longitude))
-                    }
+                    guard let lat = pinLat, let lng = pinLng else { return }
+                    onSave(label, building, area, city, LatLng(lat: lat, lng: lng))
                 }
             }
         }
     }
 
-    @ViewBuilder private var pinRow: some View {
-        if locator.fix != nil {
-            Text("✓ " + NSLocalizedString("meals_pin_set", comment: ""))
-                .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.leaf)
-        } else {
-            Text(NSLocalizedString("meals_pin_needed", comment: ""))
-                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
-            SecondaryButton(label: NSLocalizedString("meals_use_location", comment: "")) {
-                if locator.status != .locating { locator.locate() }
-            }
+    private var pinText: String {
+        if locating { return NSLocalizedString("meals_pinning", comment: "") }
+        if let lat = pinLat, let lng = pinLng {
+            return tr("meals_pinned", String(format: "%.4f, %.4f", lat, lng))
         }
-        if locator.status == .denied || locator.status == .failed {
-            Text(NSLocalizedString(locator.status == .denied ? "meals_pin_denied" : "meals_pin_failed", comment: ""))
-                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
-        }
+        return NSLocalizedString("meals_pin_needed", comment: "")
     }
 }
 

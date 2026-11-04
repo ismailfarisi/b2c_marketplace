@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.me
 
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import ae.marketplace.mobile.android.NAV_BAR_HEIGHT
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.android.ui.EmptyBlock
@@ -486,9 +487,18 @@ fun MeScreen(
     val inbox by viewModel.inbox.collectAsState()
     val deletion by viewModel.deletion.collectAsState()
     var confirmingDelete by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var account by remember { mutableStateOf<ae.marketplace.mobile.me.AccountViewModel?>(null) }
+    LaunchedEffect(Unit) {
+        val app = context.applicationContext as ae.marketplace.mobile.android.MarketplaceApp
+        account = app.sdk.await().createAccountViewModel().also { it.load() }
+    }
+    val deletedText = stringResource(R.string.account_deleted)
     LaunchedEffect(deletion.done) {
         if (deletion.done) {
             viewModel.clearDeletion()
+            // Survives the jump to the feed, so the person knows it worked.
+            android.widget.Toast.makeText(context, deletedText, android.widget.Toast.LENGTH_LONG).show()
             onSignOut()
         }
     }
@@ -523,46 +533,33 @@ fun MeScreen(
         ScreenTitle(stringResource(R.string.nav_me))
 
         LazyColumn(contentPadding = bottomInset()) {
+            // The account first: most people here are meal customers. Their
+            // classifieds listings show only once they have some.
+            item { account?.let { AccountSections(it) } ?: LoadingBlock(inline = true) }
             item {
                 RowLink(
                     label = stringResource(R.string.me_messages),
                     badge = inbox.items.sumOf { it.unread }.takeIf { it > 0 },
                     onClick = onOpenInbox,
                 )
-                Text(
-                    text = stringResource(R.string.me_your_listings),
-                    color = Palette.Text.copy(alpha = 0.45f),
-                    fontSize = Type.Caption,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(
-                        start = Space.Edge, top = Space.XL, bottom = Space.Tight,
-                    ),
-                )
             }
 
-            when {
-                state.loading && state.items.isEmpty() ->
-                    item { LoadingBlock(inline = true) }
-
-                state.error != null && state.items.isEmpty() ->
-                    item {
-                        FailureBlock(state.error!!, onRetry = { viewModel.loadMyListings(force = true) })
-                    }
-
-                state.items.isEmpty() ->
-                    item {
-                        EmptyBlock(
-                            message = stringResource(R.string.me_no_listings),
-                            hint = stringResource(R.string.me_no_listings_hint),
-                        )
-                    }
-
-                else -> {
-                    state.error?.let {
-                        item { FailureStrip(it, onRetry = { viewModel.loadMyListings(force = true) }) }
-                    }
-                    items(state.items, key = { it.id }) { ListingRow(it) }
+            if (state.items.isNotEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.me_your_listings),
+                        color = Palette.Text.copy(alpha = 0.45f),
+                        fontSize = Type.Caption,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(
+                            start = Space.Edge, top = Space.XL, bottom = Space.Tight,
+                        ),
+                    )
                 }
+                state.error?.let {
+                    item { FailureStrip(it, onRetry = { viewModel.loadMyListings(force = true) }) }
+                }
+                items(state.items, key = { it.id }) { ListingRow(it) }
             }
 
             item {
@@ -584,7 +581,7 @@ fun MeScreen(
                 }
                 deletion.error?.let { err ->
                     Text(
-                        (err as? Failure.Rejected)?.detail ?: err.words(),
+                        deletionWords(err),
                         color = Palette.Bad,
                         fontSize = Type.Secondary,
                         modifier = Modifier.padding(horizontal = Space.Edge),
@@ -736,15 +733,22 @@ private fun RowLink(label: String, badge: Int?, onClick: () -> Unit) {
             )
         }
         Box(Modifier.weight(1f))
-        Text(
-            "›",
-            color = Palette.TextFaint,
-            fontSize = Type.Heading,
-            // Decorative. Announcing "greater-than sign" after the row's own
-            // label is noise.
-            modifier = Modifier.clearAndSetSemantics { },
+        // Auto-mirrored, so it points the reading direction in Arabic too.
+        // Decorative: the row's own label is what gets announced.
+        androidx.compose.material3.Icon(
+            androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = Palette.TextFaint,
         )
     }
+}
+
+/** A refused delete, in the app's language, by the server's reason code. */
+@Composable
+private fun deletionWords(err: Failure): String = when ((err as? Failure.Rejected)?.code) {
+    "owns_vendor" -> stringResource(R.string.me_delete_owns_vendor)
+    "order_in_progress" -> stringResource(R.string.me_delete_order_in_progress)
+    else -> err.words()
 }
 
 /** Thousands separator. Kotlin has no locale-aware formatter in common code. */

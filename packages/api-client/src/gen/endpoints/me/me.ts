@@ -42,6 +42,8 @@ import type {
   RegisterDeviceBody,
   UnauthorizedResponse,
   UnprocessableEntityResponse,
+  UpdateAddressBody,
+  UpdateCurrentUserBody,
   User
 } from '../../models';
 
@@ -119,6 +121,73 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
 
 
 /**
+ * Partial update: omitted fields are left alone, an empty string clears
+display_name or email. A changed email is stored unverified. The phone
+number is the sign-in identity and is not editable here.
+
+ * @summary Edit the authenticated user's name, email or language
+ */
+export const updateCurrentUser = (
+    updateCurrentUserBody: UpdateCurrentUserBody,
+ ) => {
+      
+      
+      return apiFetch<User>(
+      {url: `/me`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateCurrentUserBody
+    },
+      );
+    }
+  
+
+
+export const getUpdateCurrentUserMutationOptions = <TError = UnauthorizedResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCurrentUser>>, TError,{data: UpdateCurrentUserBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateCurrentUser>>, TError,{data: UpdateCurrentUserBody}, TContext> => {
+
+const mutationKey = ['updateCurrentUser'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCurrentUser>>, {data: UpdateCurrentUserBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCurrentUser(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCurrentUserMutationResult = NonNullable<Awaited<ReturnType<typeof updateCurrentUser>>>
+    export type UpdateCurrentUserMutationBody = UpdateCurrentUserBody
+    export type UpdateCurrentUserMutationError = UnauthorizedResponse | Problem | UnprocessableEntityResponse
+
+    /**
+ * @summary Edit the authenticated user's name, email or language
+ */
+export const useUpdateCurrentUser = <TError = UnauthorizedResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCurrentUser>>, TError,{data: UpdateCurrentUserBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCurrentUser>>,
+        TError,
+        {data: UpdateCurrentUserBody},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateCurrentUserMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
  * Cancels running meal plans (unearned money is credited as on any
 cancel), erases name, email, phone, addresses and device tokens, and
 revokes every session. Invoices and ledger entries are retained as the
@@ -382,6 +451,74 @@ export const useCreateAddress = <TError = UnauthorizedResponse | UnprocessableEn
       > => {
 
       const mutationOptions = getCreateAddressMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * Only `is_default: true` is accepted; the previous default is cleared.
+To move an address, save a new one, so past orders keep pointing at
+the place they were delivered to.
+
+ * @summary Make a saved address the default
+ */
+export const updateAddress = (
+    addressId: string,
+    updateAddressBody: UpdateAddressBody,
+ ) => {
+      
+      
+      return apiFetch<Address>(
+      {url: `/me/addresses/${addressId}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateAddressBody
+    },
+      );
+    }
+  
+
+
+export const getUpdateAddressMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAddress>>, TError,{addressId: string;data: UpdateAddressBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateAddress>>, TError,{addressId: string;data: UpdateAddressBody}, TContext> => {
+
+const mutationKey = ['updateAddress'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAddress>>, {addressId: string;data: UpdateAddressBody}> = (props) => {
+          const {addressId,data} = props ?? {};
+
+          return  updateAddress(addressId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAddressMutationResult = NonNullable<Awaited<ReturnType<typeof updateAddress>>>
+    export type UpdateAddressMutationBody = UpdateAddressBody
+    export type UpdateAddressMutationError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary Make a saved address the default
+ */
+export const useUpdateAddress = <TError = UnauthorizedResponse | NotFoundResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAddress>>, TError,{addressId: string;data: UpdateAddressBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAddress>>,
+        TError,
+        {addressId: string;data: UpdateAddressBody},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateAddressMutationOptions(options);
 
       return useMutation(mutationOptions);
     }

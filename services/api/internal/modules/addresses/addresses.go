@@ -63,25 +63,27 @@ type Input struct {
 	IsDefault      bool      `json:"is_default"`
 }
 
-func (in *Input) validate() error {
+// validate trims the input and reports field errors in the caller's language:
+// the apps show errors[].message under the field, on Arabic screens too.
+func (in *Input) validate(locale string) error {
 	var fields []httpx.FieldError
 	in.Label, in.City = strings.TrimSpace(in.Label), strings.TrimSpace(in.City)
 	if in.Label == "" || len(in.Label) > 40 {
-		fields = append(fields, httpx.FieldError{Field: "label", Code: "required", Message: "give the address a short name, like Home"})
+		fields = append(fields, httpx.FieldError{Field: "label", Code: "required", Message: say(locale, "Give the address a short name, like Home.", "أعطِ العنوان اسمًا قصيرًا، مثل المنزل.")})
 	}
 	if in.City == "" || len(in.City) > 80 {
-		fields = append(fields, httpx.FieldError{Field: "city", Code: "required", Message: "city is required"})
+		fields = append(fields, httpx.FieldError{Field: "city", Code: "required", Message: say(locale, "Enter the city.", "أدخل المدينة.")})
 	}
 	if in.Point == nil || in.Point.Lat < -90 || in.Point.Lat > 90 || in.Point.Lng < -180 || in.Point.Lng > 180 ||
 		(in.Point.Lat == 0 && in.Point.Lng == 0) {
-		fields = append(fields, httpx.FieldError{Field: "point", Code: "invalid_point", Message: "pick the location on the map"})
+		fields = append(fields, httpx.FieldError{Field: "point", Code: "invalid_point", Message: say(locale, "Pin the address on the map.", "حدّد موقع العنوان على الخريطة.")})
 	}
 	in.Country = strings.ToUpper(strings.TrimSpace(in.Country))
 	if in.Country == "" {
 		in.Country = "AE"
 	}
 	if len(in.Country) != 2 {
-		fields = append(fields, httpx.FieldError{Field: "country", Code: "invalid", Message: "two-letter country code"})
+		fields = append(fields, httpx.FieldError{Field: "country", Code: "invalid", Message: say(locale, "Use a two-letter country code.", "استخدم رمز الدولة المكوّن من حرفين.")})
 	}
 	for name, v := range map[string]*string{
 		"recipient_name": in.RecipientName, "recipient_phone": in.RecipientPhone,
@@ -89,7 +91,7 @@ func (in *Input) validate() error {
 		"area": in.Area, "emirate": in.Emirate, "notes": in.Notes,
 	} {
 		if v != nil && len(*v) > 300 {
-			fields = append(fields, httpx.FieldError{Field: name, Code: "too_long", Message: "too long"})
+			fields = append(fields, httpx.FieldError{Field: name, Code: "too_long", Message: say(locale, "This is too long.", "هذا النص طويل جدًا.")})
 		}
 	}
 	if len(fields) > 0 {
@@ -130,7 +132,7 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Address, error)
 // Create saves an address. The first one is the default.
 func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Address, error) {
 	var a Address
-	if err := in.validate(); err != nil {
+	if err := in.validate(httpx.LocaleFromContext(ctx)); err != nil {
 		return a, err
 	}
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -176,4 +178,39 @@ func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
 		return httpx.ErrNotFound
 	}
 	return nil
+}
+
+// SetDefault makes one address the one checkout offers first. Someone else's
+// address, or a removed one, is 404.
+func (s *Service) SetDefault(ctx context.Context, userID, id uuid.UUID) (Address, error) {
+	var a Address
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var ok bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM addresses
+			 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL)`, id, userID).Scan(&ok); err != nil {
+			return fmt.Errorf("addresses: find: %w", err)
+		}
+		if !ok {
+			return httpx.ErrNotFound
+		}
+		if _, err := tx.Exec(ctx, `UPDATE addresses SET is_default = false, updated_at = now()
+			 WHERE user_id = $1 AND is_default AND id <> $2`, userID, id); err != nil {
+			return fmt.Errorf("addresses: clear default: %w", err)
+		}
+		var err error
+		a, err = scan(tx.QueryRow(ctx, `UPDATE addresses SET is_default = true, updated_at = now()
+			 WHERE id = $1 AND user_id = $2 RETURNING `+cols, id, userID))
+		if err != nil {
+			return fmt.Errorf("addresses: set default: %w", err)
+		}
+		return nil
+	})
+	return a, err
+}
+
+func say(locale, en, ar string) string {
+	if locale == "ar" {
+		return ar
+	}
+	return en
 }

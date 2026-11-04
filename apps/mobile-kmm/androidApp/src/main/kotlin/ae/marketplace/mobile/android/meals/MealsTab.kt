@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.meals
 
+import kotlin.math.roundToInt
 import ae.marketplace.mobile.meals.MealsLinkPage
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.semantics.selected
@@ -1000,8 +1001,8 @@ private fun CheckoutPage(
             s.addresses.forEach { a ->
                 Choice(a.label, a.line, a.id == s.addressId) { vm.selectAddress(a.id) }
             }
-            AddressForm(s.addresses.isEmpty(), s.busy, s.addressSaves) { label, building, area, city, pin ->
-                vm.addAddress(label, building, area, city, pin)
+            AddressForm(s.addresses.isEmpty(), s.busy, s.addressAdded, s.error) { label, building, area, city, at ->
+                vm.addAddress(label, building, area, city, at)
             }
             Label(stringResource(R.string.meals_days, plan.daysPerWeek))
             FlowRow(Modifier.padding(horizontal = Space.Edge), horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalArrangement = Arrangement.spacedBy(Space.Small)) {
@@ -1066,21 +1067,41 @@ private fun CheckoutPage(
     }
 }
 
+/**
+ * Stays open until the address is actually saved (the view model bumps
+ * [added]), so a failed save keeps what was typed and shows the field errors
+ * under each box. The point is a fresh fix the customer asked for, never the
+ * feed's area or a fallback, and Save waits for it.
+ */
 @Composable
-private fun AddressForm(startOpen: Boolean, busy: Boolean, saves: Int, onSave: (String, String, String, String, LatLng) -> Unit) {
+private fun AddressForm(
+    startOpen: Boolean,
+    busy: Boolean,
+    added: Int,
+    error: Failure?,
+    onSave: (String, String, String, String, LatLng) -> Unit,
+) {
     var open by rememberSaveable { mutableStateOf(startOpen) }
     var label by rememberSaveable { mutableStateOf("") }
     var building by rememberSaveable { mutableStateOf("") }
     var area by rememberSaveable { mutableStateOf("") }
-    var city by rememberSaveable { mutableStateOf("Dubai") }
-    var pin by remember { mutableStateOf<LatLng?>(null) }
-    // Collapse only once the address is saved; a failed save keeps what was typed.
-    val seen = rememberSaveable { mutableStateOf(saves) }
-    LaunchedEffect(saves) {
-        if (saves != seen.value) {
-            seen.value = saves
-            open = false; label = ""; building = ""; area = ""; pin = null
+    var city by rememberSaveable { mutableStateOf("") }
+    var pinLat by rememberSaveable { mutableStateOf<Double?>(null) }
+    var pinLng by rememberSaveable { mutableStateOf<Double?>(null) }
+    var locating by remember { mutableStateOf(false) }
+    var pinFailed by remember { mutableStateOf(false) }
+    var seen by rememberSaveable { mutableStateOf(added) }
+    LaunchedEffect(added) {
+        if (added != seen) {
+            seen = added
+            open = false
+            label = ""; building = ""; area = ""; city = ""; pinLat = null; pinLng = null
         }
+    }
+    val locate = rememberFreshFix { fix ->
+        locating = false
+        pinFailed = fix == null
+        if (fix != null) { pinLat = fix.lat; pinLng = fix.lng }
     }
     if (!open && !startOpen) {
         Text(
@@ -1091,14 +1112,41 @@ private fun AddressForm(startOpen: Boolean, busy: Boolean, saves: Int, onSave: (
         )
         return
     }
+    val fields = (error as? Failure.Rejected)?.fields.orEmpty()
+    @Composable
+    fun FieldError(key: String) {
+        fields[key]?.let { Text(it, color = Palette.Bad, fontSize = Type.Secondary) }
+    }
     Card {
         Text(stringResource(R.string.meals_add_address), color = M.Ink, fontWeight = FontWeight.SemiBold, fontSize = Type.Body)
         Field(label, { label = it }, placeholder = stringResource(R.string.meals_label))
+        FieldError("label")
         Field(building, { building = it }, placeholder = stringResource(R.string.meals_building))
         Field(area, { area = it }, placeholder = stringResource(R.string.meals_area))
         Field(city, { city = it }, placeholder = stringResource(R.string.meals_city))
-        PinRow(pin) { pin = it }
-        PrimaryButton(stringResource(R.string.meals_save_address), { pin?.let { onSave(label, building, area, city, it) } }, enabled = !busy && pin != null)
+        FieldError("city")
+        val lat = pinLat
+        val lng = pinLng
+        Text(
+            when {
+                locating -> stringResource(R.string.meals_pinning)
+                lat != null && lng != null ->
+                    stringResource(R.string.meals_pinned, "${(lat * 10_000).roundToInt() / 10_000.0}, ${(lng * 10_000).roundToInt() / 10_000.0}")
+                else -> stringResource(R.string.meals_pin_needed)
+            },
+            color = M.Muted,
+            fontSize = Type.Secondary,
+        )
+        if (pinFailed) Text(stringResource(R.string.meals_pin_failed), color = Palette.Bad, fontSize = Type.Secondary)
+        FieldError("point")
+        SecondaryButton(stringResource(R.string.meals_pin_here), {
+            if (!locating) { locating = true; pinFailed = false; locate() }
+        })
+        PrimaryButton(
+            stringResource(R.string.meals_save_address),
+            { if (lat != null && lng != null) onSave(label, building, area, city, LatLng(lat, lng)) },
+            enabled = !busy && label.isNotBlank() && city.isNotBlank() && lat != null && lng != null,
+        )
     }
 }
 

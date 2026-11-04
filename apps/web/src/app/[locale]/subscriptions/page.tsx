@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 
+import { LoadError } from "@/components/load-error";
+import { AccountSections } from "@/components/meals/account";
 import {
   CustomerShell,
   STATUS,
@@ -13,6 +15,7 @@ import {
   formatRange,
 } from "@/components/meals/shell";
 import { LoadError } from "@/components/load-error";
+import { problemMessage } from "@/lib/problem";
 import { tokenStore } from "@/lib/token-store";
 import {
   deleteAccount,
@@ -146,9 +149,11 @@ export default function MySubscriptionsPage({
           </ul>
         </section>
       )}
-      {q.isPending ? (
+      {q.isPending || rq.isPending ? (
         <p className="ms-note">{t.loading}</p>
       ) : q.isError || rq.isError ? (
+        // Either list failing means the empty state would be a lie: someone
+        // with only rotations would read "no subscriptions yet".
         <LoadError
           error={q.error ?? rq.error}
           onRetry={() => {
@@ -201,6 +206,7 @@ export default function MySubscriptionsPage({
           </ul>
         </section>
       ) : null}
+      <AccountSections locale={locale} />
       <DeleteAccount locale={locale} />
     </CustomerShell>
   );
@@ -215,6 +221,7 @@ const DELETE = {
     keep: "Keep my account",
     busy: "Deleting…",
     failed: "Your account could not be deleted. Try again.",
+    support: "Contact support",
   },
   ar: {
     title: "حذف الحساب",
@@ -224,6 +231,7 @@ const DELETE = {
     keep: "الإبقاء على حسابي",
     busy: "جارٍ الحذف…",
     failed: "تعذّر حذف حسابك. حاول مرة أخرى.",
+    support: "تواصل مع الدعم",
   },
 };
 
@@ -232,15 +240,18 @@ function DeleteAccount({ locale }: { locale: "en" | "ar" }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsSupport, setNeedsSupport] = useState(false);
   const remove = async () => {
     setBusy(true);
     setError(null);
     try {
       await deleteAccount();
       await tokenStore.clear();
-      window.location.href = `/${locale}`;
+      window.location.href = `/${locale}?deleted=1`;
     } catch (e) {
-      setError(e instanceof ApiError && e.problem?.detail ? e.problem.detail : t.failed);
+      const coded = e instanceof ApiError && e.status === 409;
+      setError(coded ? problemMessage(e, locale) : t.failed);
+      setNeedsSupport(e instanceof ApiError && e.problem?.code === "owns_vendor");
       setBusy(false);
     }
   };
@@ -250,7 +261,8 @@ function DeleteAccount({ locale }: { locale: "en" | "ar" }) {
       <p className="ms-sub">{t.body}</p>
       {error && (
         <p className="ms-error" role="alert">
-          {error}
+          {error}{" "}
+          {needsSupport && <Link href={`/${locale}/support`}>{t.support}</Link>}
         </p>
       )}
       {confirming ? (

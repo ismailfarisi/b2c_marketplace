@@ -4,6 +4,7 @@ import ae.marketplace.mobile.android.BuildConfig
 import ae.marketplace.mobile.android.R
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -23,9 +24,11 @@ import androidx.compose.ui.unit.dp
 fun LegalLinks(color: Color, modifier: Modifier = Modifier, showHelp: Boolean = false) {
     val context = LocalContext.current
     val lang = if (context.resources.configuration.locales[0].language == "ar") "ar" else "en"
-    fun open(page: String) = context.startActivity(
-        Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.WEB_BASE_URL}/$lang/$page")),
-    )
+    val noBrowser = stringResource(R.string.legal_no_browser)
+    // A kiosk or work profile can have no browser; that must not crash.
+    fun open(page: String) = runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.WEB_BASE_URL}/$lang/$page")))
+    }.onFailure { Toast.makeText(context, noBrowser, Toast.LENGTH_SHORT).show() }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         val pages = listOfNotNull(
             if (showHelp) R.string.legal_help to "support" else null,
