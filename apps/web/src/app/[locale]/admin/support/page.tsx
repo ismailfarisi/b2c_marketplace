@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { messageOf } from "@/components/admin/detail";
 import { QueuePanel, Tag, since, useQueueData } from "@/components/admin/table";
 import {
   getSupportQueue,
@@ -17,7 +18,7 @@ import {
  * a reply marks the ticket answered and pushes the customer.
  */
 export default function SupportQueue() {
-  const { data, isPending, error } = useQueueData("support", () =>
+  const { data, isPending, error, refetch } = useQueueData("support", () =>
     getSupportQueue(),
   );
   const rows = data?.items ?? [];
@@ -40,6 +41,8 @@ export default function SupportQueue() {
         rows={rows}
         isPending={isPending}
         error={error}
+        perm="commerce.contact"
+        onRetry={() => void refetch()}
         empty="No open tickets."
         rowKey={(t) => t.id}
         renderRow={(t) => (
@@ -122,7 +125,14 @@ function Ticket({
           onChange={(e) => setBody(e.target.value)}
         />
         {reply.error ? (
-          <p className="console-error">{reply.error.message}</p>
+          <p className="console-error" role="alert">
+            Not sent — try again. {messageOf(reply.error)}
+          </p>
+        ) : null}
+        {close.error ? (
+          <p className="console-error" role="alert">
+            Ticket not closed — try again. {messageOf(close.error)}
+          </p>
         ) : null}
         <button type="submit" disabled={reply.isPending || !body.trim()}>
           Send reply

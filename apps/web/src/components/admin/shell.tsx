@@ -11,7 +11,7 @@ import {
   type QueueDepth,
   type SearchHit,
 } from "@/lib/admin-api";
-import { SessionMenu } from "@/components/admin/session";
+import { SessionMenu, useWhoami } from "@/components/admin/session";
 
 /**
  * The console frame.
@@ -30,30 +30,31 @@ import { SessionMenu } from "@/components/admin/session";
  * every reviewer scan past six things that are not their job.
  */
 
-type Section = { href: string; label: string; queues: string[] };
+/** `perm` is what the section's endpoints check; items the account lacks are greyed out. */
+type Section = { href: string; label: string; queues: string[]; perm?: string };
 
 const GROUPS: Array<{ title: string; items: Section[] }> = [
   {
     title: "Content",
     items: [
-      { href: "/reels", label: "Reels", queues: ["reel"] },
-      { href: "/comments", label: "Comments", queues: ["comment"] },
-      { href: "/messages", label: "Messages", queues: ["message"] },
-      { href: "/appeals", label: "Appeals", queues: ["appeal"] },
+      { href: "/reels", label: "Reels", queues: ["reel"], perm: "content.review" },
+      { href: "/comments", label: "Comments", queues: ["comment"], perm: "content.review" },
+      { href: "/messages", label: "Messages", queues: ["message"], perm: "content.review" },
+      { href: "/appeals", label: "Appeals", queues: ["appeal"], perm: "content.review" },
     ],
   },
   {
     title: "Meals",
     items: [
-      { href: "/meals/kitchens", label: "Kitchens", queues: [] },
-      { href: "/meals/subscriptions", label: "Subscriptions", queues: [] },
-      { href: "/meals/layout", label: "Home layout", queues: [] },
-      { href: "/meals/collections", label: "Collections", queues: [] },
-      { href: "/meals/banners", label: "Banners", queues: [] },
-      { href: "/meals/promos", label: "Promos & trials", queues: [] },
-      { href: "/meals/referrals", label: "Referrals", queues: [] },
-      { href: "/meals/reviews", label: "Reviews", queues: [] },
-      { href: "/meals/companies", label: "Office lunches", queues: [] },
+      { href: "/meals/kitchens", label: "Kitchens", queues: [], perm: "commerce.read" },
+      { href: "/meals/subscriptions", label: "Subscriptions", queues: [], perm: "commerce.read" },
+      { href: "/meals/layout", label: "Home layout", queues: [], perm: "commerce.read" },
+      { href: "/meals/collections", label: "Collections", queues: [], perm: "commerce.read" },
+      { href: "/meals/banners", label: "Banners", queues: [], perm: "commerce.read" },
+      { href: "/meals/promos", label: "Promos & trials", queues: [], perm: "commerce.read" },
+      { href: "/meals/referrals", label: "Referrals", queues: [], perm: "commerce.read" },
+      { href: "/meals/reviews", label: "Reviews", queues: [], perm: "commerce.read" },
+      { href: "/meals/companies", label: "Office lunches", queues: [], perm: "commerce.read" },
     ],
   },
   {
@@ -63,27 +64,27 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
       // car" and a fraud signal asks "should this seller keep selling", and a
       // reviewer holding one without the other approves a car from someone with
       // two confirmed rollbacks.
-      { href: "/listings", label: "Listings", queues: ["listing", "fraud"] },
+      { href: "/listings", label: "Listings", queues: ["listing", "fraud"], perm: "content.review" },
       { href: "/campaigns", label: "Campaigns", queues: ["boost"] },
-      { href: "/supply", label: "Supply", queues: [] },
-      { href: "/feed", label: "Feed inspector", queues: [] },
+      { href: "/supply", label: "Supply", queues: [], perm: "content.review" },
+      { href: "/feed", label: "Feed inspector", queues: [], perm: "health.read" },
     ],
   },
   {
     title: "Money & trust",
     items: [
-      { href: "/kyc", label: "KYC", queues: ["kyc", "payout_account"] },
+      { href: "/kyc", label: "KYC", queues: ["kyc", "payout_account"], perm: "identity.review" },
       { href: "/disputes", label: "Disputes", queues: ["dispute"] },
       // These four have no queue behind them, and the empty badge is honest:
       // there is no backlog to clear on a ledger. They are here rather than in
       // their own group because "money & trust" is one person's job, and the
       // person checking KYC in the morning is the person who checks the trial
       // balance.
-      { href: "/ledger", label: "Ledger", queues: [] },
-      { href: "/payouts", label: "Payouts", queues: [] },
-      { href: "/cash", label: "Cash", queues: [] },
-      { href: "/refunds", label: "Refunds", queues: [] },
-      { href: "/support", label: "Support tickets", queues: [] },
+      { href: "/ledger", label: "Ledger", queues: [], perm: "money.read" },
+      { href: "/payouts", label: "Payouts", queues: [], perm: "money.read" },
+      { href: "/cash", label: "Cash", queues: [], perm: "money.read" },
+      { href: "/refunds", label: "Refunds", queues: [], perm: "money.read" },
+      { href: "/support", label: "Support tickets", queues: [], perm: "commerce.contact" },
     ],
   },
   {
@@ -92,9 +93,9 @@ const GROUPS: Array<{ title: string; items: Section[] }> = [
     // which are checked every few minutes — below the fold on a laptop.
     title: "Platform",
     items: [
-      { href: "/health", label: "Health", queues: [] },
-      { href: "/config", label: "Configuration", queues: [] },
-      { href: "/templates", label: "Rates & messages", queues: [] },
+      { href: "/health", label: "Health", queues: [], perm: "health.read" },
+      { href: "/config", label: "Configuration", queues: [], perm: "health.read" },
+      { href: "/templates", label: "Rates & messages", queues: [], perm: "health.read" },
     ],
   },
 ];
@@ -285,6 +286,7 @@ export function ConsoleShell({
     placeholderData: (previous) => previous,
   });
   const depths = data?.queues ?? [];
+  const perms = useWhoami().data?.permissions;
 
   return (
     <div className="console">
@@ -307,17 +309,21 @@ export function ConsoleShell({
         {GROUPS.map((group) => (
           <div key={group.title}>
             <div className="console-group">{group.title}</div>
-            {group.items.map((item) => (
+            {group.items.map((item) => {
+              const locked = Boolean(item.perm && perms && !perms.includes(item.perm));
+              return (
               <Link
                 key={item.href}
                 href={`${base}${item.href}`}
-                className={`console-link ${section === item.href ? "active" : ""}`}
-                title={item.label}
+                className={`console-link ${section === item.href ? "active" : ""} ${locked ? "locked" : ""}`}
+                title={locked ? `${item.label} — needs ${item.perm}` : item.label}
+                aria-disabled={locked || undefined}
               >
                 <span className="label">{item.label}</span>
                 <Badge depths={depths} queues={item.queues} />
               </Link>
-            ))}
+              );
+            })}
           </div>
         ))}
       </nav>

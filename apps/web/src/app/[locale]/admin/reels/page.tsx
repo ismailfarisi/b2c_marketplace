@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { useParams } from "next/navigation";
+
 import { decideReel, getReelQueue } from "@/lib/admin-api";
 import { CardState, Decide, Tag, useQueueData, waited } from "@/components/admin/table";
 
@@ -16,15 +19,12 @@ import { CardState, Decide, Tag, useQueueData, waited } from "@/components/admin
  * publish SLA on it: an author whose video is stuck is a supply problem, and
  * supply is the existential risk this product actually has.
  *
- * **The video is not playable here, and neither is the poster visible.**
- * `poster_key` is an object-storage key and there is no endpoint that turns one
- * into a URL a browser can load, so the key is rendered as text. A moderator
- * cannot watch what they are judging — which means this screen is not yet
- * sufficient for the decision it asks for. Stated here rather than hidden behind
- * a grey box that looks like a loading image. See PHASE-10 §7.3.
+ * The card shows the caption and storage keys; the video itself plays on the
+ * reel's detail page (signed URL from `getReelMedia`), linked as "Watch".
  */
 export default function ReelQueue() {
-  const { data, isPending, error } = useQueueData("reels", getReelQueue);
+  const { locale } = useParams<{ locale: string }>();
+  const { data, isPending, error, refetch } = useQueueData("reels", getReelQueue);
   const items = data?.items ?? [];
 
   return (
@@ -37,6 +37,8 @@ export default function ReelQueue() {
       <CardState
         isPending={isPending}
         error={error}
+        perm="content.review"
+        onRetry={() => void refetch()}
         count={items.length}
         empty="Nothing waiting. Every submitted reel has been decided."
       />
@@ -81,10 +83,11 @@ export default function ReelQueue() {
               <span className="mono">{it.reel_id}</span>
             </p>
 
-            <p className="note danger">
-              The video cannot be played here yet — there is no signed-URL
-              endpoint, so this shows the storage key. Judging a reel without
-              watching it is not a decision this screen can support.
+            <p className="note">
+              <Link className="btn" href={`/${locale}/admin/reels/${it.reel_id}`}>
+                Watch
+              </Link>{" "}
+              Plays the video on the reel&rsquo;s page before you decide.
             </p>
           </div>
 

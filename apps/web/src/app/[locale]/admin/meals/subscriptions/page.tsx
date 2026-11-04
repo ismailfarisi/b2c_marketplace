@@ -5,6 +5,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 
 import { Panel, plural } from "@/components/admin/detail";
+import { ConsoleError } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
 import { SUBSCRIPTION_STATUSES, getMealSubscriptions, statusTone } from "@/lib/admin-api";
 
@@ -19,17 +20,16 @@ export default function MealSubscriptionsPage({
   const branch = use(searchParams).branch ?? "";
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "meals", "subscriptions", q, status, branch],
     queryFn: () => getMealSubscriptions({ q, status, branch_id: branch }),
   });
 
   if (error) {
     return (
-      <p className="danger">
-        Subscriptions could not be loaded. If this reads &ldquo;forbidden&rdquo;, the account is missing
-        <span className="mono"> commerce.read</span>.
-      </p>
+      <div className="panel">
+        <ConsoleError error={error} what="subscriptions" perm="commerce.read" onRetry={() => void refetch()} />
+      </div>
     );
   }
   const rows = data?.items ?? [];

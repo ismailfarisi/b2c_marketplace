@@ -5,6 +5,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 
 import { Panel, plural } from "@/components/admin/detail";
+import { ConsoleError } from "@/components/admin/errors";
 import { Tag } from "@/components/admin/table";
 import { getMealKitchens } from "@/lib/admin-api";
 
@@ -13,17 +14,16 @@ export default function MealKitchensPage({ params }: { params: Promise<{ locale:
   const { locale } = use(params);
   const [q, setQ] = useState("");
   const [rotation, setRotation] = useState(false);
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "meals", "kitchens", q, rotation],
     queryFn: () => getMealKitchens({ q, rotation }),
   });
 
   if (error) {
     return (
-      <p className="danger">
-        Kitchens could not be loaded. If this reads &ldquo;forbidden&rdquo;, the account is missing
-        <span className="mono"> commerce.read</span>.
-      </p>
+      <div className="panel">
+        <ConsoleError error={error} what="kitchens" perm="commerce.read" onRetry={() => void refetch()} />
+      </div>
     );
   }
   const rows = data?.items ?? [];

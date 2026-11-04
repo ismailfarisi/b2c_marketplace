@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState, type ReactNode } from "react";
 
+import { ConsoleError } from "@/components/admin/errors";
 import { POLL_MS } from "@/components/admin/shell";
+import { messageOf } from "@/components/admin/detail";
 
 /**
  * Table primitives for the queues that are read rather than watched.
@@ -85,6 +87,8 @@ export function QueuePanel<T>({
   rowKey,
   renderRow,
   renderDetail,
+  onRetry,
+  perm,
 }: {
   title: string;
   hint?: string;
@@ -97,6 +101,9 @@ export function QueuePanel<T>({
   renderRow: (row: T) => ReactNode;
   /** The decision form, expanded inside the table. */
   renderDetail: (row: T, close: () => void) => ReactNode;
+  onRetry?: () => void;
+  /** The permission the queue's endpoint checks, for the 403 copy. */
+  perm?: string;
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
 
@@ -114,11 +121,7 @@ export function QueuePanel<T>({
       </div>
 
       {error ? (
-        <div className="state error">
-          <div className="headline">Could not load this queue.</div>
-          This account may not have staff access — every queue checks{" "}
-          <code>platform_admins</code> on the server, on every call.
-        </div>
+        <ConsoleError error={error} what="this queue" perm={perm} onRetry={onRetry} />
       ) : isPending ? (
         <SkeletonRows columns={columns.length} />
       ) : rows.length === 0 ? (
@@ -244,7 +247,7 @@ export function Decide({
       void queryClient.invalidateQueries({ queryKey: ["admin"] });
       onDone?.();
     },
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Failed"),
+    onError: (e: unknown) => setError(messageOf(e)),
   });
 
   const rejectBlocked = reasonRequired && reason.trim().length === 0;
@@ -301,19 +304,20 @@ export function CardState({
   error,
   count,
   empty,
+  onRetry,
+  perm,
 }: {
   isPending: boolean;
   error: unknown;
   count: number;
   empty: string;
+  onRetry?: () => void;
+  perm?: string;
 }) {
   if (error) {
     return (
       <div className="panel">
-        <div className="state error">
-          <div className="headline">Could not load this queue.</div>
-          This account may not have staff access.
-        </div>
+        <ConsoleError error={error} what="this queue" perm={perm} onRetry={onRetry} />
       </div>
     );
   }

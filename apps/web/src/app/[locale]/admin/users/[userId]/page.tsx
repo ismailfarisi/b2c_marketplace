@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 
 import { Action, Detail, Facts, Panel, Ref, TimelinePanel, plural } from "@/components/admin/detail";
+import { DetailError, useCan } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
 import {
   changePhone,
@@ -49,18 +50,31 @@ export default function CustomerPage({
   const [survivor, setSurvivor] = useState("");
   const [merged, setMerged] = useState<MergeResult | null>(null);
   const [session, setSession] = useState<ViewAsSession | null>(null);
+  const can = useCan();
+  // Disabled up front rather than refused after a reason has been typed.
+  const noIdentity = can("identity.review") === false;
+  const noContact = can("commerce.contact") === false;
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin", "customer", userId] });
     void queryClient.invalidateQueries({ queryKey: ["admin", "customer", userId, "timeline"] });
   };
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "customer", userId],
     queryFn: () => getCustomerDetail(userId),
   });
 
-  if (error) return <p className="danger">This customer could not be loaded.</p>;
+  if (error)
+    return (
+      <DetailError
+        error={error}
+        what="this customer"
+        perm="commerce.read"
+        onRetry={() => void refetch()}
+        back={{ href: `/${locale}/admin`, label: "Back to overview" }}
+      />
+    );
   if (isLoading || !data) return <p className="muted">Loading customer…</p>;
 
   const spend = data.orders
@@ -87,6 +101,8 @@ export default function CustomerPage({
         <div className="detail-actions">
           <Action
             label="View as"
+            disabled={noContact}
+            disabledReason="Needs commerce.contact"
             verb="Open a read-only session"
             hint="Fifteen minutes, read-only, and recorded against your name. Every write is refused by the server, not hidden in the interface — if something needs doing on their behalf, do it from here with your own name on it."
             onConfirm={async (reason) => {
@@ -95,9 +111,11 @@ export default function CustomerPage({
           />
           <Action
             label="Change number"
+            disabled={noIdentity}
+            disabledReason="Needs identity.review"
             verb="Change it"
             hint="The new number is unverified until they sign in with it, and every existing session is revoked — they will be signed out on every device."
-            extra={(busy) => (
+            extra={(busy, fields) => (
               <label className="field">
                 <span>New number, international format</span>
                 <input
@@ -106,7 +124,9 @@ export default function CustomerPage({
                   placeholder="+9715XXXXXXXX"
                   disabled={busy}
                   className="mono"
+                  aria-invalid={fields.phone ? true : undefined}
                 />
+                {fields.phone ? <span className="danger">{fields.phone}</span> : null}
               </label>
             )}
             onConfirm={async (reason) => {
@@ -117,10 +137,12 @@ export default function CustomerPage({
           />
           <Action
             label="Merge away"
+            disabled={noIdentity}
+            disabledReason="Needs identity.review"
             verb="Merge this account into the other"
             danger
             hint="This account is the one that stops. Orders and invoices stay with it — only addresses, favourites and saved searches move."
-            extra={(busy) => (
+            extra={(busy, fields) => (
               <label className="field">
                 <span>Surviving account id</span>
                 <input
@@ -129,7 +151,9 @@ export default function CustomerPage({
                   placeholder="the account that keeps going"
                   disabled={busy}
                   className="mono"
+                  aria-invalid={fields.survivor_id ? true : undefined}
                 />
+                {fields.survivor_id ? <span className="danger">{fields.survivor_id}</span> : null}
               </label>
             )}
             onConfirm={async (reason) => {
@@ -140,6 +164,8 @@ export default function CustomerPage({
           />
           <Action
             label="Erase"
+            disabled={noIdentity}
+            disabledReason="Needs identity.review"
             verb="Erase this person"
             danger
             hint="Name, email, phone, addresses and device tokens go and cannot be recovered. Invoices and ledger entries are retained as the law requires, attached to a subject that no longer resolves to a person."
