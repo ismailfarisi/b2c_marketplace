@@ -415,4 +415,8 @@
     <string name="update_action">تحديث</string>
     <string name="update_later">لاحقًا</string>
     <string name="legal_help">المساعدة</string>
+    <string name="meals_company_paid_by">على حساب %1$s</string>
+    <string name="meals_company_unpaid">لم تتمكن %1$s من تغطية هذه الدفعة. لا داعي للدفع: تواصل مع مسؤول الغداء في شركتك.</string>
+    <string name="meals_company_covers">تغطي %1$s غداء مكتبك. احجزه حاليًا عبر الموقع واختر الدفع على حساب شركتك.</string>
+    <string name="meals_company_book_web">احجز غداء المكتب عبر الموقع</string>
 </resources>
