@@ -22,6 +22,7 @@ Conventions:
 import type { MealOption } from './mealOption';
 import type { UpcomingMealChosenDishId } from './upcomingMealChosenDishId';
 import type { UpcomingMealChosenBy } from './upcomingMealChosenBy';
+import type { UpcomingMealDeliveryStatus } from './upcomingMealDeliveryStatus';
 
 export interface UpcomingMeal {
   date: string;
@@ -38,4 +39,8 @@ export interface UpcomingMeal {
   chosen_by: UpcomingMealChosenBy;
   cutoff_at: string;
   locked: boolean;
+  /** Set once the delivery for this meal is scheduled. */
+  delivery_status?: UpcomingMealDeliveryStatus;
+  /** True for an entry in `skipped` */
+  skipped?: boolean;
 }

@@ -233,6 +233,46 @@ func (h *SubscriptionHandlers) Skip(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"status": "skipped"})
 }
 
+// Unskip puts a skipped meal back before its cutoff.
+func (h *SubscriptionHandlers) Unskip(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	var body skipBody
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	day, err := time.Parse("2006-01-02", body.Date)
+	if err != nil {
+		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "date", Code: "invalid_date", Message: "expected YYYY-MM-DD",
+		}}})
+		return
+	}
+	if err := h.Service.Unskip(r.Context(), userID, subID, day, body.Slot, time.Now()); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"status": "scheduled"})
+}
+
+// Resume ends the current or next pause early, from the first day still
+// before its cutoff.
+func (h *SubscriptionHandlers) Resume(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	out, err := h.Service.Resume(r.Context(), userID, subID, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", out)
+}
+
 func (h *SubscriptionHandlers) Cancel(w http.ResponseWriter, r *http.Request) {
 	userID, subID, ok := userAndSubscription(w, r)
 	if !ok {

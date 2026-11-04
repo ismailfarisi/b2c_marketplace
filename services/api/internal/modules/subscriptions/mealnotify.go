@@ -145,7 +145,7 @@ func (s *Service) remindOne(ctx context.Context, tx pgx.Tx, subID uuid.UUID, now
 		return nil
 	}
 	today := dayIn(now, live.Location)
-	meals, err := s.upcoming(ctx, tx, live, today, today.AddDate(0, 0, 2), now)
+	meals, _, err := s.upcoming(ctx, tx, live, today, today.AddDate(0, 0, 2), now)
 	if err != nil || len(meals) == 0 {
 		return err
 	}
