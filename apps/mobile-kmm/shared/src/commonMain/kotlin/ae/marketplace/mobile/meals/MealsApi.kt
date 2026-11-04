@@ -100,8 +100,16 @@ class MealsApi(private val client: HttpClient) {
     suspend fun previewRotation(input: RotationInput): Rotation =
         client.post("rotations/preview") { json(input) }.body()
 
-    suspend fun createRotation(input: RotationInput): Rotation =
-        client.post("rotations") { json(input) }.body()
+    /** [idempotencyKey] is one UUID per builder draft, so a retried create is not a second rotation. */
+    suspend fun createRotation(input: RotationInput, idempotencyKey: String): Rotation =
+        client.post("rotations") {
+            header("Idempotency-Key", idempotencyKey)
+            json(input)
+        }.body()
+
+    /** Prepares the next rotation (same kitchens, next four weeks), unpaid. */
+    suspend fun renewRotation(id: String): Rotation =
+        client.post("rotations/$id/renew") { json(Empty()) }.body()
 
     suspend fun payRotation(id: String): PaymentIntent =
         client.post("rotations/$id/payment-intent") {

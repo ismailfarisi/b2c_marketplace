@@ -431,6 +431,9 @@
     <string name="meals_renew">Renew with this kitchen</string>
     <string name="meals_cancel">Cancel subscription</string>
     <string name="meals_cancel_rotation">Cancel rotation</string>
+    <string name="meals_renew_rotation">Renew rotation</string>
+    <string name="meals_rotation_few">Kitchens that deliver here: %1$d of the 4 a rotation needs. Change your location on Meals home to see more.</string>
+    <string name="meals_change_location">Change location</string>
     <string name="meals_paid">Payment received. Your meals are scheduled.</string>
     <string name="meals_view_subs">View my meals</string>
     <string name="meals_status_active">Active</string>

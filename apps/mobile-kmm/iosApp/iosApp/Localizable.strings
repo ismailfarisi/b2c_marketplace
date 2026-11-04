@@ -257,6 +257,9 @@
 "meals_renew" = "Renew with this kitchen";
 "meals_cancel" = "Cancel subscription";
 "meals_cancel_rotation" = "Cancel rotation";
+"meals_renew_rotation" = "Renew rotation";
+"meals_rotation_few" = "Kitchens that deliver here: %lld of the 4 a rotation needs. Change your location on Meals home to see more.";
+"meals_change_location" = "Change location";
 "meals_paid" = "Payment received. Your meals are scheduled.";
 "meals_view_subs" = "View my meals";
 "meals_status_active" = "Active";

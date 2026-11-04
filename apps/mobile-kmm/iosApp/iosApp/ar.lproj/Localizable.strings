@@ -257,6 +257,9 @@
 "meals_renew" = "جدّد مع هذا المطبخ";
 "meals_cancel" = "إلغاء الاشتراك";
 "meals_cancel_rotation" = "إلغاء التناوب";
+"meals_renew_rotation" = "جدّد التناوب";
+"meals_rotation_few" = "المطابخ التي توصل إلى هنا: %lld من أصل ٤ يحتاجها التناوب. غيّر موقعك من صفحة الوجبات لرؤية المزيد.";
+"meals_change_location" = "غيّر الموقع";
 "meals_paid" = "تم الدفع. وجباتك مجدولة.";
 "meals_view_subs" = "عرض وجباتي";
 "meals_status_active" = "نشط";

@@ -187,7 +187,7 @@ fun MealsTab(
             Page.Checkout -> CheckoutPage(viewModel, location, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Rotation -> RotationPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Paid -> PaidPage(redirected, onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
-            Page.Mine -> MinePage(viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) })
+            Page.Mine -> MinePage(viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) }, openPayment = openPayment)
             Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
         }
     }
@@ -252,7 +252,7 @@ private fun HomePage(
                 item(key = "near") { NearHeader(s.kitchens.size, place, arabic) { picking = true } }
                 if (s.kitchens.isEmpty()) item { EmptyBlock(stringResource(R.string.meals_none)) }
                 items(s.kitchens.take(3), key = { it.branchId }) { KitchenCard(it, arabic) { onKitchen(it.branchId) } }
-                if (s.slot == null) item(key = "rotation") { RotationPromo(onRotation) }
+                if (s.slot == null && s.rotationAvailable) item(key = "rotation") { RotationPromo(onRotation) }
                 items(s.kitchens.drop(3), key = { it.branchId }) { KitchenCard(it, arabic) { onKitchen(it.branchId) } }
                 s.sections.filter { it.type == "banner_carousel" }
                     .forEach { section -> item(key = section.id) { Section(section, arabic, onKitchen, onRotation) } }
@@ -1053,9 +1053,9 @@ private fun Field(value: String, onChange: (String) -> Unit, modifier: Modifier 
 private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> Unit, openPayment: (String) -> Unit) {
     val s by vm.rotation.collectAsState()
     val arabic = rememberArabic()
-    LaunchedEffect(s.paymentUrl, s.rotationId) {
+    LaunchedEffect(s.paymentUrl, s.paid) {
         s.paymentUrl?.let(openPayment)
-        if (s.rotationId != null) onPaid()
+        if (s.paid) onPaid()
     }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.meals_rotation), onBack)
@@ -1072,6 +1072,15 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
                     k.branchId in s.picked,
                 ) { vm.togglePick(k.branchId) }
             }
+            if (s.tooFewKitchens) {
+                Text(
+                    stringResource(R.string.meals_rotation_few, s.candidates.size),
+                    color = M.Muted,
+                    fontSize = Type.Secondary,
+                    modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
+                )
+                SecondaryButton(stringResource(R.string.meals_change_location), onBack, Modifier.padding(horizontal = Space.Edge))
+            }
             s.quote?.let { q ->
                 Spacer(Modifier.height(Space.Medium))
                 Card {
@@ -1086,7 +1095,8 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
                     Line(stringResource(R.string.meals_total), money(q.amountMinor, q.currency), strong = true)
                 }
             }
-            s.error?.let { FailureStrip(it, onRetry = null) }
+            // Before the kitchens load, retry loads them; after, the pay button is the retry.
+            s.error?.let { FailureStrip(it, onRetry = if (s.candidatesLoaded) null else vm::startRotation) }
         }
         Box(Modifier.padding(Space.Edge)) {
             PrimaryButton(
@@ -1117,12 +1127,14 @@ private fun PaidPage(redirected: Boolean, onMine: () -> Unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit) {
+private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit, openPayment: (String) -> Unit) {
     val s by vm.mine.collectAsState()
     val arabic = rememberArabic()
     LaunchedEffect(Unit) { vm.loadMine() }
+    LaunchedEffect(s.paymentUrl) { s.paymentUrl?.let(openPayment) }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.meals_my), onBack)
+        if (s.loaded) s.actionError?.let { FailureStrip(it, onRetry = null) }
         val failure = s.error
         when {
             failure != null && !s.loaded -> FailureBlock(failure, onRetry = { vm.loadMine(force = true) })
@@ -1131,7 +1143,7 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 if (s.rotations.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_rotations)) }
-                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen) }
+                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, busy = r.id in s.busy) }
                 }
                 if (s.subscriptions.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_subscriptions)) }
@@ -1144,7 +1156,7 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
 }
 
 @Composable
-private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit) {
+private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit, busy: Boolean) {
     var confirming by remember { mutableStateOf(false) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1167,18 +1179,24 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
                 Text("›", color = M.Faint, fontSize = Type.Heading)
             }
         }
-        if (r.status == "active" || r.status == "pending") {
+        if (r.awaitingPayment) {
+            PrimaryButton(stringResource(R.string.meals_pay_due), { vm.payPendingRotation(r.id) }, enabled = !busy, modifier = Modifier.padding(top = Space.Small))
+        }
+        if (r.live) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.meals_auto_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
-                RenewSwitch(r.autoRenew) { vm.setRotationRenewal(r.id, it) }
+                RenewSwitch(r.autoRenew, enabled = !busy) { vm.setRotationRenewal(r.id, it) }
             }
             Text(
                 stringResource(R.string.meals_cancel_rotation),
-                color = Palette.Bad,
+                color = if (busy) M.Faint else Palette.Bad,
                 fontSize = Type.Secondary,
-                modifier = Modifier.clickable { confirming = true }.padding(vertical = Space.Small),
+                modifier = Modifier.clickable(enabled = !busy) { confirming = true }.padding(vertical = Space.Small),
             )
             if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancelRotation(r.id) }, onDismiss = { confirming = false })
+        }
+        if (r.renewable) {
+            SecondaryButton(stringResource(R.string.meals_renew_rotation), { if (!busy) vm.renewRotation(r.id) }, Modifier.padding(top = Space.Small))
         }
     }
 }
@@ -1223,10 +1241,11 @@ private fun StatusPill(status: String) {
 }
 
 @Composable
-private fun RenewSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun RenewSwitch(checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Switch(
         checked = checked,
         onCheckedChange = onChange,
+        enabled = enabled,
         colors = SwitchDefaults.colors(checkedTrackColor = M.Chilli, checkedThumbColor = M.OnAccent),
     )
 }

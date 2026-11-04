@@ -110,3 +110,19 @@ func TestNormaliseCuisineImages(t *testing.T) {
 		t.Error("http cuisine image accepted")
 	}
 }
+
+func TestEnoughForRotation(t *testing.T) {
+	price := int64(15000)
+	rot := func(n byte) kitchen.PublicKitchen {
+		kk := k(n, 50000)
+		kk.RotationWeekPriceMinor = &price
+		return kk
+	}
+	three := []kitchen.PublicKitchen{rot(1), rot(2), rot(3), k(4, 50000), k(5, 50000)}
+	if enoughForRotation(three) {
+		t.Error("three rotation kitchens plus two without a rotation plan should not be enough")
+	}
+	if !enoughForRotation(append(three, rot(6))) {
+		t.Error("four rotation kitchens should be enough")
+	}
+}

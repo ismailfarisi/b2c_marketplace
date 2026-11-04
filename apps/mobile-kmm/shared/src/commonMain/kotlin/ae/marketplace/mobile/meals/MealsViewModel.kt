@@ -19,7 +19,11 @@ import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.network.toFailure
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +36,8 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 data class StorefrontUiState(
     val at: LatLng? = null,
@@ -44,7 +50,11 @@ data class StorefrontUiState(
     val addresses: List<Address> = emptyList(),
     val loading: Boolean = false,
     val error: Failure? = null,
-)
+) {
+    /** Enough rotation kitchens deliver here for the rotation promo to lead somewhere. */
+    val rotationAvailable: Boolean
+        get() = kitchens.count { it.rotationWeekPriceMinor != null } >= MealsViewModel.ROTATION_KITCHENS
+}
 
 data class KitchenUiState(
     val branchId: String = "",
@@ -88,8 +98,21 @@ data class RotationUiState(
     val busy: Boolean = false,
     val error: Failure? = null,
     val paymentUrl: String? = null,
+    /** Set once the rotation is created; a retried payment pays this one instead of creating another. */
     val rotationId: String? = null,
-)
+    /** Sent with the create, one per draft, so a create retried after a timeout is not a second rotation. */
+    val idempotencyKey: String = newIdempotencyKey(),
+    val candidatesLoaded: Boolean = false,
+    /** The rotation is created and its payment went through (or was handed to the provider). */
+    val paid: Boolean = false,
+) {
+    /** Fewer kitchens deliver here than a rotation needs. */
+    val tooFewKitchens: Boolean
+        get() = candidatesLoaded && candidates.size < MealsViewModel.ROTATION_KITCHENS
+}
+
+@OptIn(ExperimentalUuidApi::class)
+private fun newIdempotencyKey(): String = Uuid.random().toString()
 
 data class MyMealsUiState(
     val subscriptions: List<MySubscription> = emptyList(),
@@ -97,6 +120,11 @@ data class MyMealsUiState(
     val loading: Boolean = false,
     val loaded: Boolean = false,
     val error: Failure? = null,
+    /** Rotations with a cancel, renewal or payment call in flight; their controls are disabled. */
+    val busy: Set<String> = emptySet(),
+    /** Why the last rotation action failed; shown over the loaded list. */
+    val actionError: Failure? = null,
+    val paymentUrl: String? = null,
 )
 
 data class SubscriptionUiState(
@@ -332,6 +360,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _checkout.update { it.copy(paymentUrl = null) }
         _rotation.update { it.copy(paymentUrl = null) }
         _sub.update { it.copy(paymentUrl = null) }
+        _mine.update { it.copy(paymentUrl = null) }
     }
 
     // ── Rotation ────────────────────────────────────────────────────────────
@@ -342,10 +371,30 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         viewModelScope.launch {
             try {
                 val kitchens = api.kitchens(at, rotation = true).items
-                val plans = kitchens.associate { k ->
-                    k.branchId to api.kitchen(k.branchId, at).plans.firstOrNull { it.rotationEnabled }
-                }.filterValues { it != null }.mapValues { it.value!! }
-                _rotation.update { it.copy(candidates = kitchens.filter { k -> k.branchId in plans }, plans = plans, busy = false) }
+                // One kitchen that fails to load is left out rather than failing the list.
+                val found = coroutineScope {
+                    kitchens.map { k ->
+                        async {
+                            try {
+                                Result.success(api.kitchen(k.branchId, at).plans.firstOrNull { it.rotationEnabled }?.let { k.branchId to it })
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Throwable) {
+                                Result.failure(e)
+                            }
+                        }
+                    }.awaitAll()
+                }
+                if (kitchens.isNotEmpty() && found.all { it.isFailure }) throw found.first().exceptionOrNull()!!
+                val plans = found.mapNotNull { it.getOrNull() }.toMap()
+                _rotation.update {
+                    it.copy(
+                        candidates = kitchens.filter { k -> k.branchId in plans },
+                        plans = plans,
+                        busy = false,
+                        candidatesLoaded = true,
+                    )
+                }
             } catch (e: Throwable) {
                 _rotation.update { it.copy(busy = false, error = e.toFailure()) }
             }
@@ -357,12 +406,15 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _rotation.update { s ->
             val next = if (branchId in s.picked) s.picked - branchId
             else if (s.picked.size < ROTATION_KITCHENS) s.picked + branchId else s.picked
-            s.copy(picked = next, quote = null)
+            s.copy(picked = next, quote = null).newDraft()
         }
         quoteRotation()
     }
 
-    fun selectRotationAddress(id: String) { _rotation.update { it.copy(addressId = id, quote = null) }; quoteRotation() }
+    fun selectRotationAddress(id: String) { _rotation.update { it.copy(addressId = id, quote = null).newDraft() }; quoteRotation() }
+
+    /** A changed pick is a different rotation: it gets its own create. */
+    private fun RotationUiState.newDraft(): RotationUiState = copy(rotationId = null, idempotencyKey = newIdempotencyKey())
 
     private fun rotationInput(s: RotationUiState): RotationInput? {
         if (s.picked.size != ROTATION_KITCHENS) return null
@@ -396,14 +448,18 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     }
 
     fun payRotation() {
-        val input = rotationInput(_rotation.value) ?: return
+        val draft = _rotation.value
+        if (draft.busy) return
+        val input = rotationInput(draft) ?: return
         viewModelScope.launch {
             _rotation.update { it.copy(busy = true, error = null) }
             try {
-                val r = api.createRotation(input)
-                val intent = api.payRotation(r.id)
-                _rotation.update { it.copy(busy = false, paymentUrl = intent.redirectUrl, rotationId = r.id) }
+                // Created on an earlier try whose payment failed: pay that one.
+                val id = draft.rotationId ?: api.createRotation(input, draft.idempotencyKey).id
+                _rotation.update { it.copy(rotationId = id) }
                 _mine.update { it.copy(loaded = false) }
+                val intent = api.payRotation(id)
+                _rotation.update { it.copy(busy = false, paymentUrl = intent.redirectUrl, paid = true) }
             } catch (e: Throwable) {
                 _rotation.update { it.copy(busy = false, error = e.toFailure()) }
             }
@@ -481,19 +537,50 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         api.payOrder(next.orderId).redirectUrl?.let { url -> _sub.update { s -> s.copy(paymentUrl = url) } }
     }
 
-    fun cancelRotation(id: String) {
+    /** Runs one card action; the card's controls are disabled until it settles, then the list reloads. */
+    private fun rotationAction(id: String, onFailure: () -> Unit = {}, block: suspend () -> Unit) {
+        if (id in _mine.value.busy) return
+        _mine.update { it.copy(busy = it.busy + id, actionError = null) }
         viewModelScope.launch {
-            try { api.cancelRotation(id, "customer_request"); loadMine(force = true) }
-            catch (e: Throwable) { _mine.update { it.copy(error = e.toFailure()) } }
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                onFailure()
+                _mine.update { it.copy(actionError = e.toFailure()) }
+            } finally {
+                _mine.update { it.copy(busy = it.busy - id) }
+            }
+            loadMine(force = true)
         }
     }
 
-    fun setRotationRenewal(id: String, auto: Boolean) {
-        viewModelScope.launch {
-            try { api.setRotationRenewal(id, auto); loadMine(force = true) }
-            catch (e: Throwable) { _mine.update { it.copy(error = e.toFailure()) } }
-        }
+    private fun setLocalRenewal(id: String, auto: Boolean) = _mine.update { s ->
+        s.copy(rotations = s.rotations.map { if (it.id == id) it.copy(autoRenew = auto) else it })
     }
+
+    fun cancelRotation(id: String) = rotationAction(id) { api.cancelRotation(id, "customer_request") }
+
+    /** Flips the switch now and puts it back if the server refuses. */
+    fun setRotationRenewal(id: String, auto: Boolean) {
+        if (id in _mine.value.busy) return
+        setLocalRenewal(id, auto)
+        rotationAction(id, onFailure = { setLocalRenewal(id, !auto) }) { api.setRotationRenewal(id, auto) }
+    }
+
+    /** Pays a rotation that is awaiting payment: one whose first payment failed, or a prepared renewal. */
+    fun payPendingRotation(id: String) = rotationAction(id) {
+        api.payRotation(id).redirectUrl?.let { url -> _mine.update { it.copy(paymentUrl = url) } }
+    }
+
+    /** Prepares the next rotation and pays for it; if paying fails it waits on its card with Pay now. */
+    fun renewRotation(id: String) = rotationAction(id) {
+        val next = api.renewRotation(id)
+        api.payRotation(next.id).redirectUrl?.let { url -> _mine.update { it.copy(paymentUrl = url) } }
+    }
+
+    fun dismissRotationError() = _mine.update { it.copy(actionError = null) }
 
     /** Drops the account's own data when the session ends. */
     fun forget() {
