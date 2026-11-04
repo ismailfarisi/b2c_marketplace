@@ -43,6 +43,10 @@ data class DishThumb(
     val name: String,
     @SerialName("name_ar") val nameAr: String? = null,
     @SerialName("image_url") val imageUrl: String? = null,
+    val cta: String? = null,
+    @SerialName("cta_ar") val ctaAr: String? = null,
+    /** A site path (`/kitchens/…`, opened in-app via MealsLinks) or a full URL. */
+    @SerialName("link_url") val linkUrl: String? = null,
 )
 
 /** A dish on the next delivery day, from a kitchen that delivers to the customer. */
@@ -164,6 +168,8 @@ data class HomeSection(
     val collection: Collection? = null,
     val kitchens: List<Kitchen>? = null,
     val banners: List<Banner>? = null,
+    /** cuisine_strip: the cuisines served near the customer. */
+    val cuisines: List<CuisineTile>? = null,
 )
 
 @Serializable
@@ -177,6 +183,8 @@ data class Collection(
     val slug: String,
     val title: String,
     @SerialName("title_ar") val titleAr: String? = null,
+    val subtitle: String? = null,
+    @SerialName("subtitle_ar") val subtitleAr: String? = null,
 )
 
 @Serializable
@@ -187,6 +195,9 @@ data class Banner(
     val body: String? = null,
     @SerialName("body_ar") val bodyAr: String? = null,
     @SerialName("image_url") val imageUrl: String? = null,
+    val cta: String? = null,
+    @SerialName("cta_ar") val ctaAr: String? = null,
+    @SerialName("link_url") val linkUrl: String? = null,
 )
 
 @Serializable

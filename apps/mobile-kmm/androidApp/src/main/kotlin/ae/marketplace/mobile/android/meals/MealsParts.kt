@@ -114,6 +114,8 @@ internal fun slotLabel(slot: String): String = when (slot) {
     "breakfast" -> stringResource(R.string.meals_slot_breakfast)
     "lunch" -> stringResource(R.string.meals_slot_lunch)
     "dinner" -> stringResource(R.string.meals_slot_dinner)
+    "suhoor" -> stringResource(R.string.meals_slot_suhoor)
+    "iftar" -> stringResource(R.string.meals_slot_iftar)
     else -> slot
 }
 

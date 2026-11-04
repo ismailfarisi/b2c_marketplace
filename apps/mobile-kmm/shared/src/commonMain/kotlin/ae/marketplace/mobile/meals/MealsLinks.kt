@@ -6,6 +6,8 @@ enum class MealsLinkPage {
     ROTATION_DETAIL,
     /** Help: the ticket list, or one ticket when [MealsLink.id] is set. Web-only today. */
     SUPPORT,
+    /** A merchandised collection (`/collections/{slug}`). */
+    COLLECTION,
 }
 
 /** A screen in the meals tab that a web URL or push `link` points at. */
@@ -34,6 +36,7 @@ object MealsLinks {
             "subscriptions" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.SUBSCRIPTION, id)
             "rotations" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.ROTATION_DETAIL, id)
             "support" -> MealsLink(MealsLinkPage.SUPPORT, id)
+            "collections" -> id?.let { MealsLink(MealsLinkPage.COLLECTION, it) } ?: MealsLink(MealsLinkPage.HOME)
             "rotation" -> MealsLink(MealsLinkPage.ROTATION)
             else -> null
         }

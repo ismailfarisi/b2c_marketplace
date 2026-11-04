@@ -3,6 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { use } from "react";
 
+import { ApiError } from "@marketplace/api-client";
+
+import { LoadError } from "@/components/load-error";
 import { COPY, KitchenCard } from "@/components/meals/kitchen-card";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
@@ -36,10 +39,25 @@ export default function CollectionPage({
 
   return (
     <CustomerShell locale={locale}>
-      {!point || c.isPending ? (
+      {c.fetchStatus === "paused" && !c.data ? (
+        <LoadError
+          error={new TypeError("offline")}
+          onRetry={() => void c.refetch()}
+          locale={locale}
+        />
+      ) : !point || c.isPending ? (
         <p className="ms-note">{t.locating}</p>
       ) : c.isError ? (
-        <p className="ms-empty">{GONE[locale]}</p>
+        // Only a 404 means the collection is gone; anything else is a hiccup.
+        c.error instanceof ApiError && c.error.status === 404 ? (
+          <p className="ms-empty">{GONE[locale]}</p>
+        ) : (
+          <LoadError
+            error={c.error}
+            onRetry={() => void c.refetch()}
+            locale={locale}
+          />
+        )
       ) : (
         <>
           <section className="ms-home-head ms-home-solo">

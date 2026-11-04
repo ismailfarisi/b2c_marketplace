@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.meals
 
+import ae.marketplace.mobile.model.CollectionKitchens
 import ae.marketplace.mobile.model.DayDish
 import ae.marketplace.mobile.model.Address
 import ae.marketplace.mobile.model.AddressInput
@@ -19,7 +20,12 @@ import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.network.toFailure
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,7 +50,45 @@ data class StorefrontUiState(
     val addresses: List<Address> = emptyList(),
     val loading: Boolean = false,
     val error: Failure? = null,
-)
+    /** Kitchen or dish search, sent as `q`. */
+    val query: String = "",
+    val cuisine: String? = null,
+    val rotationOnly: Boolean = false,
+    /** Kitchens near [at] before any filter, so the cuisine strip stays put while filtering. */
+    val unfilteredCount: Int = 0,
+    /** The place and filters [kitchens] were loaded for; null when nothing is shown. */
+    val loadedFor: StoreQuery? = null,
+) {
+    val filtering: Boolean
+        get() = slot != null || query.isNotBlank() || cuisine != null || rotationOnly
+
+    /** The list on screen is for an earlier place or filter (a refetch is running or failed). */
+    val stale: Boolean
+        get() = loadedFor != null && at != null && loadedFor != StoreQuery.of(this)
+}
+
+/** What one storefront list was fetched for. */
+data class StoreQuery(
+    val at: LatLng,
+    val slot: String?,
+    val query: String,
+    val cuisine: String?,
+    val rotationOnly: Boolean,
+) {
+    companion object {
+        fun of(s: StorefrontUiState) = s.at?.let { StoreQuery(it, s.slot, s.query.trim(), s.cuisine, s.rotationOnly) }
+    }
+}
+
+data class CollectionUiState(
+    val slug: String = "",
+    val collection: CollectionKitchens? = null,
+    val loading: Boolean = false,
+    val error: Failure? = null,
+) {
+    /** The collection ended or never existed; retrying won't change that. */
+    val gone: Boolean get() = error == Failure.NotFound
+}
 
 data class KitchenUiState(
     val branchId: String = "",
@@ -133,6 +177,9 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     private val _sub = MutableStateFlow(SubscriptionUiState())
     val sub: StateFlow<SubscriptionUiState> = _sub.asStateFlow()
 
+    private val _collection = MutableStateFlow(CollectionUiState())
+    val collection: StateFlow<CollectionUiState> = _collection.asStateFlow()
+
     private var storeJob: Job? = null
     private var previewJob: Job? = null
 
@@ -150,29 +197,119 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         loadStore()
     }
 
-    fun loadStore() {
-        val at = _store.value.at ?: return
-        val slot = _store.value.slot
+    /** Search as you type: the list follows once typing pauses. */
+    fun setQuery(query: String) {
+        if (_store.value.query == query) return
+        _store.update { it.copy(query = query) }
+        load(debounceMillis = 300)
+    }
+
+    fun selectCuisine(cuisine: String?) {
+        _store.update { it.copy(cuisine = cuisine) }
+        loadStore()
+    }
+
+    fun setRotationOnly(on: Boolean) {
+        _store.update { it.copy(rotationOnly = on) }
+        loadStore()
+    }
+
+    fun clearFilters() {
+        _store.update { it.copy(slot = null, query = "", cuisine = null, rotationOnly = false) }
+        loadStore()
+    }
+
+    /**
+     * Kitchens are the page, so only their failure fails it. Merchandising and
+     * tomorrow's dishes are best-effort extras fetched alongside: when they
+     * fail the plain list still shows, as on web.
+     */
+    fun loadStore() = load(debounceMillis = 0)
+
+    private fun load(debounceMillis: Long) {
+        val s0 = _store.value
+        val key = StoreQuery.of(s0) ?: return
+        val at = key.at
         storeJob?.cancel()
         storeJob = viewModelScope.launch {
+            if (debounceMillis > 0) delay(debounceMillis)
             _store.update { it.copy(loading = true, error = null) }
+            val unfiltered = !s0.filtering
+            // Rails and banners are hidden while filtering, but the cuisine strip
+            // stays, so sections are kept per place rather than per filter.
+            val needHome = unfiltered || s0.loadedFor?.at != at
             try {
-                val sections = if (slot == null) {
-                    api.home(at).sections.orEmpty().filter { it.enabled && it.type != "all_kitchens" }
-                } else {
-                    emptyList()
+                coroutineScope {
+                    val home: Deferred<List<HomeSection>?>? = if (needHome) {
+                        async {
+                            runCatching {
+                                api.home(at).sections.orEmpty().filter { it.enabled && it.type != "all_kitchens" }
+                            }.getOrNull()
+                        }
+                    } else {
+                        null
+                    }
+                    val dishes: Deferred<List<DayDish>>? = if (unfiltered) {
+                        async { runCatching { api.tomorrowDishes(at).items }.getOrDefault(emptyList()) }
+                    } else {
+                        null
+                    }
+                    val kitchens = api.kitchens(at, key.slot, key.rotationOnly, key.query, key.cuisine).items
+                    val sections = home?.await()
+                    val day = dishes?.await()
+                    _store.update {
+                        val samePlace = it.loadedFor?.at == at
+                        it.copy(
+                            sections = sections ?: if (samePlace) it.sections else emptyList(),
+                            kitchens = kitchens,
+                            dishes = day ?: if (samePlace) it.dishes else emptyList(),
+                            unfilteredCount = if (unfiltered) kitchens.size else if (samePlace) it.unfilteredCount else 0,
+                            loadedFor = key,
+                            loading = false,
+                        )
+                    }
                 }
-                val kitchens = api.kitchens(at, slot).items
-                val dishes = if (slot == null) {
-                    runCatching { api.tomorrowDishes(at).items }.getOrDefault(emptyList())
-                } else {
-                    emptyList()
-                }
-                _store.update { it.copy(sections = sections, kitchens = kitchens, dishes = dishes, loading = false) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
-                _store.update { it.copy(loading = false, error = e.toFailure()) }
+                val failure = e.toFailure()
+                _store.update {
+                    // A list for another place or filter must not pass as the
+                    // answer for this one: drop it, keep only a same-query retry.
+                    if (it.loadedFor == key) {
+                        it.copy(loading = false, error = failure)
+                    } else {
+                        it.copy(
+                            loading = false,
+                            error = failure,
+                            kitchens = emptyList(),
+                            sections = if (it.loadedFor?.at == at) it.sections else emptyList(),
+                            dishes = emptyList(),
+                            loadedFor = null,
+                        )
+                    }
+                }
             }
         }
+    }
+
+    /** A merchandised collection: only its kitchens that deliver to the current point. */
+    fun openCollection(slug: String) {
+        val at = _store.value.at ?: return
+        _collection.value = CollectionUiState(slug = slug, loading = true)
+        viewModelScope.launch {
+            try {
+                val c = api.collection(slug, at)
+                _collection.update { if (it.slug == slug) it.copy(collection = c, loading = false) else it }
+            } catch (e: Throwable) {
+                val failure = e.toFailure()
+                _collection.update { if (it.slug == slug) it.copy(loading = false, error = failure) else it }
+            }
+        }
+    }
+
+    fun retryCollection() {
+        _collection.value.slug.takeIf { it.isNotEmpty() }?.let(::openCollection)
     }
 
     // ── Kitchen ─────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Fragment, use, useEffect, useRef, useState } from "react";
 
@@ -10,7 +10,10 @@ import {
   FOOD_COPY,
   HomeHero,
 } from "@/components/meals/food";
+import { HOME_COPY } from "@/components/meals/home-copy";
+import { LoadError } from "@/components/load-error";
 import { useCustomerPoint } from "@/components/meals/location";
+import { useDebounced } from "@/components/meals/use-debounced";
 import { LocationPicker, placeLabel } from "@/components/meals/location-picker";
 import {
   BannerCarousel,
@@ -55,7 +58,9 @@ export default function MealsHome({
 }) {
   const locale = use(params).locale === "ar" ? "ar" : "en";
   const t = COPY[locale];
-  const { point, precise, place, choose, locate } = useCustomerPoint();
+  const { point, precise, place, choose, locate, denied, locateFailed } =
+    useCustomerPoint();
+  const h = HOME_COPY[locale];
   const [q, setQ] = useState("");
   // The search box is in the header; it reports here and in ?q=.
   useEffect(() => {
@@ -64,6 +69,8 @@ export default function MealsHome({
     window.addEventListener(SEARCH_EVENT, on);
     return () => window.removeEventListener(SEARCH_EVENT, on);
   }, []);
+  // Typing doesn't refetch per keystroke; the list follows once typing pauses.
+  const query = useDebounced(q.trim(), 250);
   const [slot, setSlot] = useState("");
   const [rotation, setRotation] = useState(false);
 
@@ -88,14 +95,19 @@ export default function MealsHome({
       "meal-kitchens",
       point?.lat,
       point?.lng,
-      q,
+      query,
       slot,
       rotation,
       cuisine,
     ],
-    queryFn: () => getMealKitchens({ point, q, slot, rotation, cuisine }),
+    queryFn: () =>
+      getMealKitchens({ point, q: query, slot, rotation, cuisine }),
     enabled: point != null && showList,
+    // A new search or filter keeps the last results up until the new ones land.
+    placeholderData: keepPreviousData,
   });
+  // React Query pauses (rather than fails) a fetch while the browser is offline.
+  const offline = list.fetchStatus === "paused";
 
   const tomorrow = useQuery({
     queryKey: ["meal-dishes-next", point?.lat, point?.lng],
@@ -177,7 +189,7 @@ export default function MealsHome({
     </aside>
   );
 
-  const filtering = q !== "" || slot !== "" || rotation || cuisine !== "";
+  const filtering = query !== "" || slot !== "" || rotation || cuisine !== "";
   const showPromo =
     sections == null || sections.some((s) => s.type === "rotation_promo");
   // Promo follows the first two rows of kitchens (or the whole list when
@@ -226,16 +238,32 @@ export default function MealsHome({
     </div>
   );
 
+  const offlineNote = (
+    <LoadError
+      error={new TypeError("offline")}
+      onRetry={() => void list.refetch()}
+      locale={locale}
+    />
+  );
   const kitchenList =
-    !point || list.isPending ? (
+    offline && !list.data ? (
+      offlineNote
+    ) : !point || list.isPending ? (
       <p className="ms-note">{t.locating}</p>
     ) : list.isError ? (
-      <p className="ms-note ms-bad">{t.failed}</p>
+      <LoadError
+        error={list.error}
+        onRetry={() => void list.refetch()}
+        locale={locale}
+      />
     ) : (
-      <section className="ms-all-list">
+      <section className="ms-all-list" aria-busy={list.isPlaceholderData}>
+        {offline && offlineNote}
         <div className="ms-count">
           <h2>
-            {list.data.items.length === 0 && place && !filtering
+            {list.data.items.length === 0 && filtering
+              ? h.noMatches
+              : list.data.items.length === 0 && place
               ? t.noneNear(placeLabel(place, locale))
               : place
                 ? t.nearPlace(list.data.items.length, placeLabel(place, locale))
@@ -248,8 +276,14 @@ export default function MealsHome({
             current={place}
             onChoose={choose}
             onLocate={locate}
+            blocked={denied}
           />
         </div>
+        {!precise && (
+          <p className="ms-note">
+            {denied ? h.blocked : locateFailed ? h.noFix : t.fallback}
+          </p>
+        )}
         {list.data.items.length === 0 && (
           <p className="ms-empty">{filtering ? t.empty : t.noneHelp}</p>
         )}
@@ -273,7 +307,9 @@ export default function MealsHome({
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  if (!point || home.isPending) {
+  // Offline, the merchandising call is paused, not pending: show the list's
+  // offline state instead of waiting on it.
+  if (!point || (home.isPending && home.fetchStatus !== "paused")) {
     return (
       <CustomerShell locale={locale}>
         {intro}
@@ -294,7 +330,8 @@ export default function MealsHome({
   }
 
   const cuisineStrip = sections.find((s) => s.type === "cuisine_strip");
-  if (!filtering && list.data) unfiltered.current = list.data.items.length;
+  if (!filtering && list.data && !list.isPlaceholderData)
+    unfiltered.current = list.data.items.length;
   // A cuisine every kitchen serves narrows nothing, so it isn't offered.
   const cuisines = (cuisineStrip?.cuisines ?? []).filter(
     (c) =>
