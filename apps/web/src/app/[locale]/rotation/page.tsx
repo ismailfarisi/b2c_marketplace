@@ -27,6 +27,7 @@ import { offerLabel } from "@/components/meals/offers";
 import { getMealKitchen, getMealKitchens } from "@/lib/meals-api";
 import type { Plan } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
+import { LoadError } from "@/components/load-error";
 
 const COPY = {
   en: {
@@ -286,7 +287,14 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   });
 
   if (addresses.isPending) return <p className="ms-note">{t.loading}</p>;
-  if (addresses.isError) return <p className="ms-empty">{t.failed}</p>;
+  if (addresses.isError)
+    return (
+      <LoadError
+        error={addresses.error}
+        onRetry={() => addresses.refetch()}
+        locale={locale}
+      />
+    );
 
   const currency = plans[0]?.currency ?? kitchens.data?.items[0]?.currency;
   const money = (n: number) =>
@@ -371,7 +379,11 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
             {kitchens.isPending ? (
               <p className="ms-note">{t.loading}</p>
             ) : kitchens.isError ? (
-              <p className="ms-bad">{t.failed}</p>
+              <LoadError
+                error={kitchens.error}
+                onRetry={() => kitchens.refetch()}
+                locale={locale}
+              />
             ) : list.length === 0 ? (
               <p className="ms-sub">{t.none}</p>
             ) : (

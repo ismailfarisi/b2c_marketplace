@@ -5,6 +5,9 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 enum class UpdateNeed {
     UP_TO_DATE, RECOMMENDED, REQUIRED;
@@ -51,12 +54,29 @@ object AppVersions {
         trim().substringBefore('-').split('.').map { p -> p.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 }
 }
 
-internal class AppConfigApi(private val client: HttpClient) {
+internal class AppConfigApi(
+    private val client: HttpClient,
+    private val clock: TimeSource = TimeSource.Monotonic,
+) {
+    /**
+     * The last answer the server gave. The apps re-check on every return to
+     * the foreground, and this keeps that to one request per [FRESH] — the
+     * same 300s the server caches the config for. A failure is not kept, so an
+     * offline launch is retried on the next resume.
+     */
+    private var last: Pair<TimeMark, AppReleases>? = null
+
     /** Never throws: an unreachable or unconfigured server means up to date. */
     suspend fun check(platform: String, current: String): AppUpdate {
-        val all = runCatching { client.get("app/config").body<AppReleases>() }.getOrNull()
+        val all = last?.takeIf { it.first.elapsedNow() < FRESH }?.second
+            ?: runCatching { client.get("app/config").body<AppReleases>() }.getOrNull()
+                ?.also { last = clock.markNow() to it }
             ?: return AppUpdate(UpdateNeed.UP_TO_DATE, "")
         val r = if (platform == "ios") all.ios else all.android
         return AppUpdate(AppVersions.need(current, r.minVersion, r.latestVersion), r.storeUrl)
+    }
+
+    private companion object {
+        val FRESH = 300.seconds
     }
 }

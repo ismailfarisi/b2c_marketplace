@@ -19,6 +19,7 @@ import {
   listMyRotations,
   listMySubscriptions,
 } from "@/lib/customer-api";
+import { LoadError } from "@/components/load-error";
 
 const COPY = {
   en: {
@@ -148,7 +149,7 @@ export default function MySubscriptionsPage({
       {q.isPending ? (
         <p className="ms-note">{t.loading}</p>
       ) : q.isError ? (
-        <p className="ms-empty">{t.failed}</p>
+        <LoadError error={q.error} onRetry={() => q.refetch()} locale={locale} />
       ) : items.length === 0 && rotations.length === 0 ? (
         <div className="ms-empty">
           <p>{t.empty}</p>

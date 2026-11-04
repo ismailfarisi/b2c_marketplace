@@ -82,14 +82,42 @@ class MainActivity : ComponentActivity() {
     /** A push `link` or App Link URL waiting for the meals tab to open it. */
     private val pendingLink = mutableStateOf<String?>(null)
 
+    /**
+     * Whether [pendingLink] came from a push rather than an App Link. Only a
+     * push link the app can't show goes to the browser: an App Link URL is one
+     * Android already routed here, and handing it back would loop.
+     */
+    private var pendingFromPush = false
+
     // A foreground push is posted by our service with EXTRA_LINK. A push that
     // arrived while the app was in the background was drawn by the system tray,
     // which hands the FCM data map to the launcher intent as plain extras — so
     // the same value arrives under "link".
-    private fun linkOf(intent: android.content.Intent?): String? =
+    private fun pushLinkOf(intent: android.content.Intent?): String? =
         intent?.getStringExtra(ae.marketplace.mobile.android.push.Push.EXTRA_LINK)
             ?: intent?.getStringExtra(ae.marketplace.mobile.android.push.Push.FCM_LINK)
-            ?: intent?.dataString
+
+    private fun linkOf(intent: android.content.Intent?): String? {
+        pendingFromPush = pushLinkOf(intent) != null
+        return pushLinkOf(intent) ?: intent?.dataString
+    }
+
+    /**
+     * A link the app has no screen for (an invoice, a collection, a page added
+     * after this build) opens in the browser instead of being dropped. Push
+     * links are bare paths, so they are resolved against the web app. Only
+     * http(s) is opened: anything else came from somewhere we don't trust.
+     */
+    private fun openOnWeb(link: String) {
+        val url = when {
+            link.startsWith("/") -> BuildConfig.WEB_BASE_URL.trimEnd('/') + link
+            link.startsWith("https://") || link.startsWith("http://") -> link
+            else -> return
+        }
+        runCatching {
+            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        }
+    }
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
@@ -223,18 +251,31 @@ class MainActivity : ComponentActivity() {
                 var route by remember { mutableStateOf(Route.None) }
                 val linkTarget = pendingLink.value?.let { ae.marketplace.mobile.meals.MealsLinks.parse(it) }
                 LaunchedEffect(pendingLink.value) {
-                    if (pendingLink.value == null) return@LaunchedEffect
-                    if (linkTarget == null) pendingLink.value = null
-                    else { route = Route.None; destination = Destination.Meals }
+                    val raw = pendingLink.value ?: return@LaunchedEffect
+                    if (linkTarget == null) {
+                        pendingLink.value = null
+                        if (pendingFromPush) openOnWeb(raw)
+                    } else { route = Route.None; destination = Destination.Meals }
                 }
 
                 var update by remember { mutableStateOf<ae.marketplace.mobile.app.AppUpdate?>(null) }
+                var laterChosen by remember { mutableStateOf(false) }
+                // Every return to the foreground, not just launch: an app left
+                // in the background for days must still see a raised minimum,
+                // and a check that failed offline gets another go. The SDK
+                // keeps the answer for 300s, so this is not a request per resume.
                 LaunchedEffect(Unit) {
                     val sdk = (application as MarketplaceApp).sdk.await()
-                    update = sdk.checkForUpdate("android", BuildConfig.VERSION_NAME)
-                        .takeIf { it.need != ae.marketplace.mobile.app.UpdateNeed.UP_TO_DATE }
+                    lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        val found = sdk.checkForUpdate("android", BuildConfig.VERSION_NAME)
+                        update = when (found.need) {
+                            ae.marketplace.mobile.app.UpdateNeed.REQUIRED -> found
+                            ae.marketplace.mobile.app.UpdateNeed.RECOMMENDED -> found.takeUnless { laterChosen }
+                            ae.marketplace.mobile.app.UpdateNeed.UP_TO_DATE -> null
+                        }
+                    }
                 }
-                update?.let { u -> UpdatePrompt(u, onLater = { update = null }) }
+                update?.let { u -> UpdatePrompt(u, onLater = { laterChosen = true; update = null }) }
 
                 LaunchedEffect(Unit) {
                     val sdk = (application as MarketplaceApp).sdk.await()

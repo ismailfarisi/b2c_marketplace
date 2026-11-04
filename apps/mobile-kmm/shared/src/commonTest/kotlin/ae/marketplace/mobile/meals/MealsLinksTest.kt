@@ -2,6 +2,7 @@ package ae.marketplace.mobile.meals
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class MealsLinksTest {
@@ -36,4 +37,17 @@ class MealsLinksTest {
     @Test fun supportTicket() = assertEquals(MealsLink(MealsLinkPage.SUPPORT, "t3"), MealsLinks.parse("/en/support/t3"))
 
     @Test fun supportList() = assertEquals(MealsLink(MealsLinkPage.SUPPORT), MealsLinks.parse("/support"))
+
+    /**
+     * One sample per App Link / Universal Link path (AndroidManifest.xml
+     * prefixes and the AASA route's PATHS). Each must open a screen, or the
+     * OS hands the app a link it then drops.
+     */
+    @Test fun appLinkPathsOpenAScreen() {
+        listOf(
+            "/en/kitchens/b1", "/ar/kitchens/b1",
+            "/en/subscriptions", "/ar/subscriptions/s1",
+            "/en/rotation", "/ar/rotations", "/en/rotations/r1",
+        ).forEach { assertNotNull(MealsLinks.parse("https://meals.example$it"), it) }
+    }
 }

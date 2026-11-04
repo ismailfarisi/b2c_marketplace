@@ -1643,13 +1643,19 @@ private struct SubscriptionPage: View {
     private var s: SubscriptionUiState { current ?? vm.sub.value }
     @State private var confirming = false
 
+    /// Re-opens the same subscription after a failed load (offline push tap).
+    private var retry: (() -> Void)? {
+        guard let id = s.id else { return nil }
+        return { vm.openSubscription(id: id) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             TopBar(title: s.subscription.map { pick($0.kitchenName, $0.kitchenNameAr) } ?? "", onBack: onBack)
             if let sub = s.subscription {
                 content(sub)
             } else if let failure = s.error {
-                FailureBlock(failure: failure)
+                FailureBlock(failure: failure, onRetry: retry)
                 Spacer()
             } else {
                 LoadingBlock()

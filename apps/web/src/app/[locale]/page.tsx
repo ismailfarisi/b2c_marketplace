@@ -33,6 +33,7 @@ import {
   getTomorrowDishes,
   type HomeSection,
 } from "@/lib/meals-api";
+import { LoadError } from "@/components/load-error";
 
 /** Tomorrow's date in Asia/Dubai as YYYY-MM-DD. */
 function dubaiTomorrow() {
@@ -230,7 +231,7 @@ export default function MealsHome({
     !point || list.isPending ? (
       <p className="ms-note">{t.locating}</p>
     ) : list.isError ? (
-      <p className="ms-note ms-bad">{t.failed}</p>
+      <LoadError error={list.error} onRetry={() => list.refetch()} locale={locale} />
     ) : (
       <section className="ms-all-list">
         <div className="ms-count">

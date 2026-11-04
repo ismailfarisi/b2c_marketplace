@@ -1241,7 +1241,7 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
         TopBar(sub?.let { pick(it.kitchenName, it.kitchenNameAr, arabic) } ?: "", onBack)
         val failure = s.error
         when {
-            sub == null && failure != null -> FailureBlock(failure, onRetry = null)
+            sub == null && failure != null -> FailureBlock(failure, onRetry = s.id?.let { id -> { vm.openSubscription(id) } })
             sub == null -> LoadingBlock()
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 item {

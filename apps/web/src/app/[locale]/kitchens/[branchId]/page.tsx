@@ -19,6 +19,7 @@ import {
 } from "@/lib/meals-api";
 import type { MenuChoice } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
+import { LoadError } from "@/components/load-error";
 
 const COPY = {
   en: {
@@ -314,13 +315,12 @@ export default function KitchenPage({
   let body;
   if (!point || q.isPending) body = <p className="ms-note">{t.loading}</p>;
   else if (q.isError)
-    body = (
-      <p className="ms-empty">
-        {q.error instanceof ApiError && q.error.status === 404
-          ? t.notFound
-          : t.failed}
-      </p>
-    );
+    body =
+      q.error instanceof ApiError && q.error.status === 404 ? (
+        <p className="ms-empty">{t.notFound}</p>
+      ) : (
+        <LoadError error={q.error} onRetry={() => q.refetch()} locale={locale} />
+      );
   else {
     const k = q.data;
     const name = (locale === "ar" && k.name_ar) || k.name;
