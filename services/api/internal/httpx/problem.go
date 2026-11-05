@@ -152,6 +152,7 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 		p.Status = http.StatusUnprocessableEntity
 		p.Title = "Idempotency key reused"
 		p.Detail = "This Idempotency-Key was already used with a different request body."
+		p.Code = "idempotency_key_reused"
 
 	case errors.Is(err, ErrConflict):
 		p.Status = http.StatusConflict

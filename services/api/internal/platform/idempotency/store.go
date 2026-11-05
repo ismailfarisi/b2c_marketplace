@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -30,8 +31,19 @@ func New(pool *pgxpool.Pool) *Store {
 // work is done would be a lie. The client retries in a moment.
 //
 // It wraps httpx.ErrConflict so the boundary maps it without httpx needing to
-// import this package — the dependency only runs one way.
-var ErrInFlight = fmt.Errorf("%w: idempotent request already in flight", httpx.ErrConflict)
+// import this package — the dependency only runs one way. The code lets
+// clients say "still working on it" in the reader's language.
+var ErrInFlight = &httpx.RetryAfter{
+	Err: httpx.Coded(httpx.ErrConflict, "idempotency_in_flight",
+		"This request is still being processed. Try again in a moment."),
+	After: time.Second,
+}
+
+// StaleAfter is how long an in-flight claim is honoured. It is longer than
+// the API's write timeout, so a claim this old belongs to a request that can
+// no longer answer (a crashed process, a lost release) and the next attempt
+// may take it over instead of being refused until the row expires.
+const StaleAfter = 2 * time.Minute
 
 // Begin claims the key, or reports what has already happened with it.
 //
@@ -69,12 +81,17 @@ func (s *Store) Begin(
 		state      string
 		status     *int32
 		body       []byte
+		createdAt  time.Time
+		stale      bool
+		expired    bool
 	)
 	err = s.pool.QueryRow(ctx, `
-		SELECT request_hash, user_id, state, response_status, response_body
+		SELECT request_hash, user_id, state, response_status, response_body,
+		       created_at, created_at < now() - make_interval(secs => $3), expires_at < now()
 		  FROM idempotency_keys
 		 WHERE key = $1 AND endpoint = $2`,
-		key, endpoint).Scan(&storedHash, &storedUser, &state, &status, &body)
+		key, endpoint, StaleAfter.Seconds()).Scan(&storedHash, &storedUser, &state, &status, &body,
+		&createdAt, &stale, &expired)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The row was reaped between the INSERT and this SELECT. Treating
@@ -85,17 +102,44 @@ func (s *Store) Begin(
 		return nil, fmt.Errorf("read idempotency key: %w", err)
 	}
 
-	// A key belonging to someone else must never return their response. In
-	// practice this means a guessed or leaked key leaks nothing.
-	if !sameOwner(storedUser, ownerID) {
-		return nil, httpx.ErrIdempotencyMismatch
+	// Past its TTL the row means nothing, whoever wrote it and with whatever
+	// body; it simply hasn't been reaped yet.
+	if !expired {
+		// A key belonging to someone else must never return their response.
+		// In practice this means a guessed or leaked key leaks nothing.
+		if !sameOwner(storedUser, ownerID) {
+			return nil, httpx.ErrIdempotencyMismatch
+		}
+		if storedHash != requestHash {
+			return nil, httpx.ErrIdempotencyMismatch
+		}
 	}
 
-	if storedHash != requestHash {
-		return nil, httpx.ErrIdempotencyMismatch
-	}
-
-	if state == "in_flight" {
+	if state == "in_flight" || expired {
+		if !expired && !stale {
+			return nil, ErrInFlight
+		}
+		// Take over a claim whose request died, or a key past its TTL that
+		// the reaper hasn't reached. The compare on created_at makes this a
+		// single winner when two retries race for the same stale row.
+		tag, err := s.pool.Exec(ctx, `
+			UPDATE idempotency_keys
+			   SET state = 'in_flight',
+			       user_id = $4,
+			       request_hash = $5,
+			       response_status = NULL,
+			       response_body = NULL,
+			       completed_at = NULL,
+			       created_at = now(),
+			       expires_at = now() + interval '24 hours'
+			 WHERE key = $1 AND endpoint = $2 AND created_at = $3`,
+			key, endpoint, createdAt, ownerID, requestHash)
+		if err != nil {
+			return nil, fmt.Errorf("reclaim idempotency key: %w", err)
+		}
+		if tag.RowsAffected() == 1 {
+			return nil, nil
+		}
 		return nil, ErrInFlight
 	}
 
@@ -120,6 +164,18 @@ func (s *Store) Complete(ctx context.Context, key uuid.UUID, endpoint string, st
 			return fmt.Errorf("complete idempotency key (%s): %w", pgErr.Code, err)
 		}
 		return fmt.Errorf("complete idempotency key: %w", err)
+	}
+	return nil
+}
+
+// Release drops an in-flight claim so the key can be used again. A completed
+// row is left alone: its response is what a replay must return.
+func (s *Store) Release(ctx context.Context, key uuid.UUID, endpoint string) error {
+	if _, err := s.pool.Exec(ctx, `
+		DELETE FROM idempotency_keys
+		 WHERE key = $1 AND endpoint = $2 AND state = 'in_flight'`,
+		key, endpoint); err != nil {
+		return fmt.Errorf("release idempotency key: %w", err)
 	}
 	return nil
 }

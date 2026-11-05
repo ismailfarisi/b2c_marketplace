@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 /**
  * One `Idempotency-Key` per draft.
@@ -12,7 +12,12 @@ import { useCallback, useRef } from "react";
  * draft the same request to the server. Call `reset()` once the draft has
  * succeeded or its inputs change.
  *
+ * The returned object and its functions are stable across renders, so they
+ * are safe in effect dependency lists. A request the server refused (4xx/5xx)
+ * releases its key there, so retrying with the same key re-executes it.
+ *
  *   const idem = useIdempotencyKey();
+ *   useEffect(() => idem.reset(), [draftKey, idem]);
  *   subscribe(input, { headers: idem.headers() });
  */
 export function useIdempotencyKey() {
@@ -25,5 +30,5 @@ export function useIdempotencyKey() {
     ref.current = null;
   }, []);
   const headers = useCallback(() => ({ "Idempotency-Key": key() }), [key]);
-  return { key, reset, headers };
+  return useMemo(() => ({ key, reset, headers }), [key, reset, headers]);
 }
