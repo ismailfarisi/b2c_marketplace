@@ -205,7 +205,16 @@ struct RootView: View {
             return
         }
         if target.page == .support {
-            openHelp(target.id)
+            if authorised {
+                openHelp(target.id)
+            } else {
+                // Same "sign in to get help" gate as the Meals banner.
+                let id = target.id
+                route = .none
+                destinationRaw = Destination.meals.rawValue
+                pendingMealsHelp = true
+                pendingMeals = { openHelp(id, switchToMe: false) }
+            }
             return
         }
         route = .none

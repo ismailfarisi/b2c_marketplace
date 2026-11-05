@@ -137,13 +137,13 @@ func (s *Service) RebuildBatch(ctx context.Context, since time.Time, limit int) 
 func (s *Service) activeViewers(ctx context.Context, since time.Time, limit int) ([]string, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT viewer_key FROM (
-		    SELECT viewer_key FROM client_events
-		     WHERE viewer_key IS NOT NULL AND occurred_at > $1
-		     LIMIT $2 * 20
+		    (SELECT viewer_key FROM client_events
+		      WHERE viewer_key IS NOT NULL AND occurred_at > $1
+		      LIMIT $2 * 20)
 		    UNION
-		    SELECT viewer_key FROM action_clicks
-		     WHERE clicked_at > $1
-		     LIMIT $2 * 20
+		    (SELECT viewer_key FROM action_clicks
+		      WHERE clicked_at > $1
+		      LIMIT $2 * 20)
 		) v
 		LIMIT $2`, since, limit)
 	if err != nil {

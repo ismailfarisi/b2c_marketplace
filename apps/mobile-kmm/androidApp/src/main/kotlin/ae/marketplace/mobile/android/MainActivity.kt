@@ -320,18 +320,6 @@ class MainActivity : ComponentActivity() {
                     route = if (ticketId != null) { supportVm?.openTicket(ticketId); Route.HelpTicket } else Route.Help
                 }
                 val linkTarget = pendingLink.value?.let { ae.marketplace.mobile.meals.MealsLinks.parse(it) }
-                LaunchedEffect(pendingLink.value) {
-                    val raw = pendingLink.value ?: return@LaunchedEffect
-                    if (linkTarget == null) {
-                        pendingLink.value = null
-                        if (pendingFromPush) openOnWeb(raw)
-                    } else if (linkTarget.page == MealsLinkPage.SUPPORT) {
-                        // Help is native: open the ticket on the app's own session.
-                        val id = linkTarget.id
-                        pendingLink.value = null
-                        openHelp(id)
-                    } else { route = Route.None; destination = Destination.Meals }
-                }
 
                 var update by remember { mutableStateOf<ae.marketplace.mobile.app.AppUpdate?>(null) }
                 var laterChosen by remember { mutableStateOf(false) }
@@ -378,6 +366,27 @@ class MainActivity : ComponentActivity() {
                 }
                 LaunchedEffect(authorised) {
                     if (authorised) pendingFeed?.let { run -> pendingFeed = null; destination = Destination.Feed; run() }
+                }
+                LaunchedEffect(pendingLink.value, sessionState.isSettled) {
+                    val raw = pendingLink.value ?: return@LaunchedEffect
+                    if (linkTarget == null) {
+                        pendingLink.value = null
+                        if (pendingFromPush) openOnWeb(raw)
+                    } else if (linkTarget.page == MealsLinkPage.SUPPORT) {
+                        // Wait for the token store, or a returning viewer is gated.
+                        if (!sessionState.isSettled) return@LaunchedEffect
+                        val id = linkTarget.id
+                        pendingLink.value = null
+                        if (authorised) {
+                            openHelp(id)
+                        } else {
+                            // Same "sign in to get help" gate as the Meals banner.
+                            route = Route.None
+                            destination = Destination.Meals
+                            pendingMealsHelp = true
+                            pendingMeals = { openHelp(id, switchToMe = false) }
+                        }
+                    } else { route = Route.None; destination = Destination.Meals }
                 }
                 val context = LocalContext.current
                 ae.marketplace.mobile.android.push.PushPrompt(authorised)
@@ -844,6 +853,7 @@ private fun UpdatePrompt(update: ae.marketplace.mobile.app.AppUpdate, onLater: (
     val res = androidx.compose.ui.res.stringResource(if (required) R.string.update_required_body else R.string.update_body)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = { if (!required) onLater() },
+        containerColor = Palette.Surface,
         properties = androidx.compose.ui.window.DialogProperties(
             dismissOnBackPress = !required,
             dismissOnClickOutside = !required,
