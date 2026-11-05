@@ -39,7 +39,8 @@ export default function InquirePage({
         actionId: q.get("action"),
       });
     },
-    onSuccess: (r) => router.replace(`/${locale}/messages/${r.conversation_id}`),
+    onSuccess: (r) =>
+      router.replace(`/${locale}/messages/${r.conversation_id}`),
   });
 
   useEffect(() => {
@@ -59,15 +60,23 @@ export default function InquirePage({
     err instanceof ApiError && (err.status === 409 || err.status === 404);
 
   return (
-    <CustomerShell locale={locale} back={{ href: `/${locale}/feed`, label: t.backToFeed }}>
+    <CustomerShell
+      locale={locale}
+      back={{ href: `/${locale}/feed`, label: t.backToFeed }}
+    >
       <div className="ms-support">
         <h1>{t.inquireTitle}</h1>
         {unavailable ? (
           <p className="ms-empty" role="alert">
-            {t.listingUnavailable} <Link href={`/${locale}/feed`}>{t.backToFeed}</Link>
+            {t.listingUnavailable}{" "}
+            <Link href={`/${locale}/feed`}>{t.backToFeed}</Link>
           </p>
         ) : err ? (
-          <LoadError error={err} onRetry={() => inquire.mutate()} locale={locale} />
+          <LoadError
+            error={err}
+            onRetry={() => inquire.mutate()}
+            locale={locale}
+          />
         ) : (
           <p className="ms-note" aria-busy="true" role="status">
             {t.opening}

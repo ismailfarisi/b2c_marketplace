@@ -20,4 +20,5 @@ export function hrefFor(
 }
 
 /** Pages that need an account; a signed-out tap goes to sign-in first. */
-export const NEEDS_ACCOUNT = /^\/(en|ar)\/(listings\/[^/]+\/inquire|messages)(\/|\?|$)/;
+export const NEEDS_ACCOUNT =
+  /^\/(en|ar)\/(listings\/[^/]+\/inquire|messages)(\/|\?|$)/;

@@ -8,7 +8,11 @@ import { use, useEffect, useState } from "react";
 import { LoadError } from "@/components/load-error";
 import { CustomerShell, asLocale, signInHref } from "@/components/meals/shell";
 import { CHAT_COPY } from "@/components/chat-copy";
-import { listMessages, markConversationRead, sendMessage } from "@/lib/chat-api";
+import {
+  listMessages,
+  markConversationRead,
+  sendMessage,
+} from "@/lib/chat-api";
 import { problemMessage } from "@/lib/problem";
 
 /** One buyer ↔ seller conversation. The draft survives a failed send. */
@@ -31,7 +35,8 @@ export default function ConversationPage({
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (q.data) void markConversationRead(p.conversationId).catch(() => undefined);
+    if (q.data)
+      void markConversationRead(p.conversationId).catch(() => undefined);
   }, [q.data, p.conversationId]);
 
   const send = useMutation({
@@ -39,7 +44,11 @@ export default function ConversationPage({
     onSuccess: (m) => {
       setBody("");
       setNotice(
-        m.state === "held" ? t.held : m.state === "redacted" ? t.redacted : null,
+        m.state === "held"
+          ? t.held
+          : m.state === "redacted"
+            ? t.redacted
+            : null,
       );
       void qc.invalidateQueries({ queryKey: key });
     },
@@ -51,7 +60,10 @@ export default function ConversationPage({
   const items = q.data?.items ?? [];
 
   return (
-    <CustomerShell locale={locale} back={{ href: `/${locale}/feed`, label: t.backToFeed }}>
+    <CustomerShell
+      locale={locale}
+      back={{ href: `/${locale}/feed`, label: t.backToFeed }}
+    >
       <div className="ms-support">
         <h1>{t.threadTitle}</h1>
         {signedOut ? (
@@ -65,7 +77,11 @@ export default function ConversationPage({
             {t.notFound}
           </p>
         ) : q.isError ? (
-          <LoadError error={q.error} onRetry={() => void q.refetch()} locale={locale} />
+          <LoadError
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            locale={locale}
+          />
         ) : q.isPending ? (
           <p className="ms-note" aria-busy="true">
             {t.loading}
@@ -115,7 +131,11 @@ export default function ConversationPage({
                   {notice}
                 </p>
               ) : null}
-              <button className="ms-btn" type="submit" disabled={send.isPending || !body.trim()}>
+              <button
+                className="ms-btn"
+                type="submit"
+                disabled={send.isPending || !body.trim()}
+              >
                 {send.isPending ? t.sending : t.send}
               </button>
             </form>
