@@ -245,10 +245,13 @@ func credit(ctx context.Context, q querier, companyID uuid.UUID, limit int64) (C
 	var c Credit
 	err := q.QueryRow(ctx, `
 		SELECT coalesce(sum(ch.amount_minor) FILTER (WHERE ch.statement_id IS NULL), 0),
-		       (SELECT coalesce(sum(s.total_minor), 0) + coalesce(sum(a.amount_minor), 0)
+		       (SELECT coalesce(sum(s.total_minor), 0)
 		          FROM company_statements s
-		          LEFT JOIN company_charges a ON a.statement_id = s.id AND a.applied_at IS NOT NULL
-		         WHERE s.company_id = $1 AND s.status = 'issued'),
+		         WHERE s.company_id = $1 AND s.status = 'issued')
+		     + (SELECT coalesce(sum(a.amount_minor), 0)
+		          FROM company_charges a
+		          JOIN company_statements s ON s.id = a.statement_id
+		         WHERE s.company_id = $1 AND s.status = 'issued' AND a.applied_at IS NOT NULL),
 		       coalesce(sum(ch.amount_minor) FILTER (WHERE ch.created_at >= date_trunc('month', now())), 0),
 		       (SELECT count(*) FROM company_statements
 		         WHERE company_id = $1 AND status = 'issued' AND due_on < CURRENT_DATE)

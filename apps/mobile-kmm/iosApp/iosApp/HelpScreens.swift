@@ -49,8 +49,9 @@ private func rejectedFields(_ failure: Failure?) -> [String: String]? {
 /// A send failure in words, plus that the text is still there.
 private struct SendFailure: View {
     let failure: Failure
+    var draftKept = true
     var body: some View {
-        let kept = rejectedFields(failure) == nil ? " " + String(localized: "help_kept") : ""
+        let kept = rejectedFields(failure) == nil && draftKept ? " " + String(localized: "help_kept") : ""
         Text(failure.words + kept)
             .font(.system(size: TypeScale.secondary))
             .foregroundStyle(Palette.bad)
@@ -156,7 +157,7 @@ struct HelpScreen: View {
                             .listRowBackground(Palette.ink)
                         }
                         if let failure = s.error, !s.tickets.isEmpty {
-                            SendFailure(failure: failure).listRowBackground(Palette.ink)
+                            SendFailure(failure: failure, draftKept: false).listRowBackground(Palette.ink)
                         }
                     } header: {
                         Text("help_mine")
@@ -356,7 +357,7 @@ struct InvoicesScreen: View {
                 }
                 // A failed refresh or older page with the list still showing.
                 if let failure = s.error, !s.items.isEmpty {
-                    SendFailure(failure: failure).listRowBackground(Palette.ink)
+                    SendFailure(failure: failure, draftKept: false).listRowBackground(Palette.ink)
                 }
             }
             .listStyle(.plain)

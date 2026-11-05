@@ -739,7 +739,10 @@ internal fun StepScaffold(
         }
 
         footer?.let {
-            Box(Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp)) { it() }
+            Column(
+                Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) { it() }
         }
     }
 }

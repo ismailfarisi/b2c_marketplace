@@ -127,9 +127,9 @@ private fun Field(value: String, hint: String, onChange: (String) -> Unit, lines
 
 /** A send failure in words, plus that the text is still there. */
 @Composable
-private fun SendFailure(f: Failure) {
+private fun SendFailure(f: Failure, draftKept: Boolean = true) {
     val words = (f as? Failure.Rejected)?.detail?.takeIf { !arabic() } ?: f.words()
-    val kept = if (f is Failure.Rejected) "" else " " + stringResource(R.string.help_kept)
+    val kept = if (f is Failure.Rejected || !draftKept) "" else " " + stringResource(R.string.help_kept)
     Text(
         words + kept,
         color = Palette.Bad,
@@ -242,7 +242,7 @@ fun HelpScreen(viewModel: SupportViewModel, onBack: () -> Unit, onOpenTicket: (S
                     }
                 }
                 if (s.nextCursor != null) item { MoreButton(s.loadingMore) { viewModel.loadOlderTickets() } }
-                if (s.error != null && s.tickets.isNotEmpty()) item { SendFailure(s.error!!) }
+                if (s.error != null && s.tickets.isNotEmpty()) item { SendFailure(s.error!!, draftKept = false) }
             }
             item { Box(Modifier.navigationBarsPadding().padding(bottom = Space.XL)) }
         }
@@ -382,7 +382,7 @@ fun InvoicesScreen(viewModel: SupportViewModel, onBack: () -> Unit, onOpenInvoic
                 }
                 if (s.nextCursor != null) item { MoreButton(s.loadingMore) { viewModel.loadOlderInvoices() } }
                 // A failed refresh or older page with the list still showing.
-                if (s.error != null && s.items.isNotEmpty()) item { SendFailure(s.error!!) }
+                if (s.error != null && s.items.isNotEmpty()) item { SendFailure(s.error!!, draftKept = false) }
                 item { Box(Modifier.navigationBarsPadding().padding(bottom = Space.XL)) }
             }
         }

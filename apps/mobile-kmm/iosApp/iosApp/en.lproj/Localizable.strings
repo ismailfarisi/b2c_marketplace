@@ -418,6 +418,9 @@
 "account_phone" = "Signed in as %@";
 "account_name" = "Name";
 "account_email" = "Email";
+"account_name_too_long" = "Use 80 characters or fewer.";
+"account_email_invalid" = "Enter an email like name@example.com.";
+"account_field_check" = "Check this field.";
 "account_edit" = "Edit";
 "account_save" = "Save";
 "account_cancel" = "Cancel";

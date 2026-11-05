@@ -210,13 +210,13 @@ struct ProfileEditor: View {
                 Section {
                     TextField(String(localized: "account_name"), text: $name)
                         .textContentType(.name)
-                    if let e = fields["display_name"] { Text(e).foregroundStyle(Palette.bad) }
+                    if let e = fields["display_name"] { Text(profileFieldWords(e)).foregroundStyle(Palette.bad) }
                     TextField(String(localized: "account_email"), text: $email)
                         .keyboardType(.emailAddress)
                         .textContentType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    if let e = fields["email"] { Text(e).foregroundStyle(Palette.bad) }
+                    if let e = fields["email"] { Text(profileFieldWords(e)).foregroundStyle(Palette.bad) }
                 } footer: {
                     Text("account_phone_note")
                 }
@@ -241,5 +241,14 @@ struct ProfileEditor: View {
             email = profile.email ?? ""
             vm.clearProfileError()
         }
+    }
+}
+
+/// Words for a profile field's reason code; the server sends codes, not copy.
+private func profileFieldWords(_ code: String) -> String {
+    switch code {
+    case "too_long": return String(localized: "account_name_too_long")
+    case "invalid": return String(localized: "account_email_invalid")
+    default: return String(localized: "account_field_check")
     }
 }

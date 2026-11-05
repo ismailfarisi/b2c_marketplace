@@ -132,14 +132,14 @@ private fun ProfileEditor(vm: AccountViewModel, onClose: () -> Unit) {
                     value = name, onValueChange = { name = it }, singleLine = true,
                     label = { Text(stringResource(R.string.account_name)) },
                     isError = rejected?.fields?.containsKey("display_name") == true,
-                    supportingText = rejected?.fields?.get("display_name")?.let { { Text(it) } },
+                    supportingText = rejected?.fields?.get("display_name")?.let { { Text(stringResource(profileFieldWords(it))) } },
                 )
                 OutlinedTextField(
                     value = email, onValueChange = { email = it }, singleLine = true,
                     label = { Text(stringResource(R.string.account_email)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     isError = rejected?.fields?.containsKey("email") == true,
-                    supportingText = rejected?.fields?.get("email")?.let { { Text(it) } },
+                    supportingText = rejected?.fields?.get("email")?.let { { Text(stringResource(profileFieldWords(it))) } },
                 )
                 Text(stringResource(R.string.account_phone_note), color = Palette.TextMuted, fontSize = Type.Secondary)
                 val other = s.profileError?.takeIf { rejected == null || rejected.fields.isEmpty() }
@@ -337,4 +337,11 @@ private fun Language() {
             },
         )
     }
+}
+
+/** Words for a profile field's reason code; the server sends codes, not copy. */
+private fun profileFieldWords(code: String): Int = when (code) {
+    "too_long" -> R.string.account_name_too_long
+    "invalid" -> R.string.account_email_invalid
+    else -> R.string.account_field_check
 }

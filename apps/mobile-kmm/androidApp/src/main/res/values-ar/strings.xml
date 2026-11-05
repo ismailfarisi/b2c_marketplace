@@ -540,6 +540,9 @@
     <string name="account_phone">مسجّل الدخول برقم %1$s</string>
     <string name="account_name">الاسم</string>
     <string name="account_email">البريد الإلكتروني</string>
+    <string name="account_name_too_long">استخدم ٨٠ حرفًا أو أقل.</string>
+    <string name="account_email_invalid">أدخل بريدًا إلكترونيًا مثل name@example.com.</string>
+    <string name="account_field_check">تحقق من هذا الحقل.</string>
     <string name="account_edit">تعديل</string>
     <string name="account_save">حفظ</string>
     <string name="account_cancel">إلغاء</string>

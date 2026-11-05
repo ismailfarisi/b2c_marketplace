@@ -418,6 +418,9 @@
 "account_phone" = "مسجّل الدخول برقم %@";
 "account_name" = "الاسم";
 "account_email" = "البريد الإلكتروني";
+"account_name_too_long" = "استخدم ٨٠ حرفًا أو أقل.";
+"account_email_invalid" = "أدخل بريدًا إلكترونيًا مثل name@example.com.";
+"account_field_check" = "تحقق من هذا الحقل.";
 "account_edit" = "تعديل";
 "account_save" = "حفظ";
 "account_cancel" = "إلغاء";

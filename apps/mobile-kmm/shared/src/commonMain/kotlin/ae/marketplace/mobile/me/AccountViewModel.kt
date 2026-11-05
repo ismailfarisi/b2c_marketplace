@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 data class AccountUiState(
@@ -85,6 +86,15 @@ class AccountViewModel(private val api: AccountApi) : ViewModel() {
     fun removeAddress(id: String) = addressAction(id) {
         api.deleteAddress(id)
         _state.update { s -> s.copy(addresses = s.addresses.filterNot { it.id == id }) }
+        // Removing the default promotes another address on the server.
+        val fresh = try {
+            api.addresses().items
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            null
+        }
+        fresh?.let { list -> _state.update { it.copy(addresses = list.sortedByDescending { a -> a.isDefault }) } }
     }
 
     private fun addressAction(id: String, block: suspend () -> Unit) {

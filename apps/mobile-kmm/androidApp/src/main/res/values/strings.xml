@@ -602,6 +602,9 @@
     <string name="account_phone">Signed in as %1$s</string>
     <string name="account_name">Name</string>
     <string name="account_email">Email</string>
+    <string name="account_name_too_long">Use 80 characters or fewer.</string>
+    <string name="account_email_invalid">Enter an email like name@example.com.</string>
+    <string name="account_field_check">Check this field.</string>
     <string name="account_edit">Edit</string>
     <string name="account_save">Save</string>
     <string name="account_cancel">Cancel</string>

@@ -101,6 +101,7 @@ func TestRefundCreditAppliesToOpenStatement(t *testing.T) {
 	employee, _ := newUser(t, pool)
 	a := newBilledLunch(t, pool, c.ID, employee, 100_000)
 	b := newBilledLunch(t, pool, c.ID, employee, 50_000)
+	x := newBilledLunch(t, pool, c.ID, employee, 10_000)
 	stID, err := svc.IssueStatement(ctx, admin, c.ID, time.Now())
 	if err != nil {
 		t.Fatalf("issue: %v", err)
@@ -113,33 +114,43 @@ func TestRefundCreditAppliesToOpenStatement(t *testing.T) {
 		}
 		return st
 	}
-	if st := statement(); st.TotalMinor != 150_000 || st.AmountDueMinor != 150_000 || st.AdjustmentMinor != 0 {
+	if st := statement(); st.TotalMinor != 160_000 || st.AmountDueMinor != 160_000 || st.AdjustmentMinor != 0 {
 		t.Fatalf("issued statement = %+v", st)
 	}
 
 	// Part refund of lunch A: comes straight off the open statement.
 	refund(t, pool, c.ID, employee, a, 40_000)
 	st := statement()
-	if st.Status != "issued" || st.TotalMinor != 150_000 || st.AdjustmentMinor != -40_000 || st.AmountDueMinor != 110_000 {
+	if st.Status != "issued" || st.TotalMinor != 160_000 || st.AdjustmentMinor != -40_000 || st.AmountDueMinor != 120_000 {
 		t.Fatalf("after part refund: %+v", st)
 	}
 	last := st.Lines[len(st.Lines)-1]
-	if !last.Adjustment || last.Kind != "credit" || last.AmountMinor != -40_000 || len(st.Lines) != 3 {
+	if !last.Adjustment || last.Kind != "credit" || last.AmountMinor != -40_000 || len(st.Lines) != 4 {
 		t.Fatalf("adjustment line = %+v (of %d)", last, len(st.Lines))
 	}
 	d, err := svc.AdminDetail(ctx, c.ID)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
-	if d.Credit.UnbilledMinor != 0 || d.Credit.OutstandingMinor != 110_000 || len(d.Unbilled) != 0 {
+	if d.Credit.UnbilledMinor != 0 || d.Credit.OutstandingMinor != 120_000 || len(d.Unbilled) != 0 {
 		t.Fatalf("credit after part refund = %+v, unbilled %d", d.Credit, len(d.Unbilled))
+	}
+
+	// A second adjustment on the same statement must not count its total twice.
+	refund(t, pool, c.ID, employee, x, 10_000)
+	d, err = svc.AdminDetail(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	if d.Credit.OutstandingMinor != 110_000 {
+		t.Fatalf("credit after two refunds = %+v", d.Credit)
 	}
 
 	// A refund larger than what is left: the statement is settled, and only
 	// the excess carries forward as unbilled credit.
 	refund(t, pool, c.ID, employee, b, 150_000)
 	st = statement()
-	if st.Status != "paid" || st.AmountDueMinor != 0 || st.AdjustmentMinor != -150_000 {
+	if st.Status != "paid" || st.AmountDueMinor != 0 || st.AdjustmentMinor != -160_000 {
 		t.Fatalf("after big refund: %+v", st)
 	}
 	d, err = svc.AdminDetail(ctx, c.ID)
