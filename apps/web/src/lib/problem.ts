@@ -90,6 +90,37 @@ const FALLBACK = {
   ar: { rejected: "تعذر تنفيذ ذلك.", generic: "حدث خطأ ما. حاول مرة أخرى." },
 };
 
+const NETWORK = {
+  en: {
+    offline: "You're offline. Check your connection and try again.",
+    unreachable: "Can't reach the server right now. Try again in a moment.",
+  },
+  ar: {
+    offline: "أنت غير متصل بالإنترنت. تحقق من الاتصال وحاول مرة أخرى.",
+    unreachable: "تعذر الوصول إلى الخادم حالياً. حاول مرة أخرى بعد قليل.",
+  },
+};
+
+export type NetworkKind = "offline" | "unreachable";
+
+/**
+ * Why a request got no answer at all, or null if it did (an ApiError) or there
+ * is no error. fetch rejects with a TypeError both offline and when the server
+ * is down; navigator.onLine tells the two apart, as LoadError does.
+ */
+export function networkKind(err: unknown): NetworkKind | null {
+  if (!err || err instanceof ApiError) return null;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
+  if (err instanceof TypeError) return "unreachable";
+  return null;
+}
+
+/** "You're offline" / "Can't reach the server", or null for any other error. */
+export function networkMessage(err: unknown, locale: Locale): string | null {
+  const kind = networkKind(err);
+  return kind ? NETWORK[locale][kind] : null;
+}
+
 /** Field key → localized message, for rendering under each input. */
 export function problemFields(err: unknown, locale: Locale): Record<string, string> {
   const out: Record<string, string> = {};
@@ -114,5 +145,5 @@ export function problemMessage(err: unknown, locale: Locale): string {
     if (locale === "en" && err.problem?.detail) return err.problem.detail;
     return err.status >= 500 ? FALLBACK[locale].generic : FALLBACK[locale].rejected;
   }
-  return FALLBACK[locale].generic;
+  return networkMessage(err, locale) ?? FALLBACK[locale].generic;
 }

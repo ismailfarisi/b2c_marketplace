@@ -1,6 +1,6 @@
 import { ApiError } from "@marketplace/api-client";
 
-import { problemMessage } from "@/lib/problem";
+import { networkMessage, problemMessage } from "@/lib/problem";
 
 type Locale = "en" | "ar";
 
@@ -81,7 +81,7 @@ const ROTATION: Record<string, { en: string; ar: string }> = {
 
 /** One sentence for a failed rotation call, in the reader's language. */
 export function rotationProblem(err: unknown, locale: Locale, fallback: string): string {
-  if (!(err instanceof ApiError)) return fallback;
+  if (!(err instanceof ApiError)) return networkMessage(err, locale) ?? fallback;
   const codes = [
     ...(err.problem?.errors ?? []).map((e) => e.code),
     err.problem?.code,

@@ -28,6 +28,30 @@ export const officeInput = (o: OfficeDraft) => ({
   lng: o.lng === "" ? 0 : Number(o.lng),
 });
 
+/**
+ * What the server would reject, checked before sending so the form can use
+ * noValidate and say it in the reader's language. Keys carry the server's
+ * field prefix, so the same map feeds OfficeFields' `errors`.
+ */
+export function officeErrors(o: OfficeDraft, prefix: string, t: Copy): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!o.label.trim()) out[`${prefix}label`] = t.officeRequired;
+  if (!o.city.trim()) out[`${prefix}city`] = t.cityRequired;
+  const lat = Number(o.lat);
+  const lng = Number(o.lng);
+  if (
+    o.lat.trim() === "" ||
+    o.lng.trim() === "" ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lng) > 180 ||
+    (lat === 0 && lng === 0)
+  )
+    out[`${prefix}location`] = t.locationRequired;
+  return out;
+}
+
 /** Office name, address and location; location from an area, the device, or typed. */
 export function OfficeFields({
   value,
@@ -70,7 +94,6 @@ export function OfficeFields({
         step="any"
         min={-max}
         max={max}
-        required
         value={value[k]}
         aria-invalid={err("location") ? true : undefined}
         onChange={(e) => onChange({ ...value, [k]: e.target.value })}

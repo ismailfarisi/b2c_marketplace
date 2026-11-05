@@ -3,7 +3,7 @@
 import { ApiError } from "@marketplace/api-client";
 import Link from "next/link";
 
-import { problemFields, problemMessage } from "@/lib/problem";
+import { networkKind, problemFields, problemMessage } from "@/lib/problem";
 
 import { SUPPORT_COPY } from "./copy";
 
@@ -23,11 +23,8 @@ export function SendError({
   fields?: string[];
 }) {
   const t = SUPPORT_COPY[locale];
-  const offline =
-    paused ||
-    error instanceof TypeError ||
-    (!!error && typeof navigator !== "undefined" && navigator.onLine === false);
-  if (offline) return <p className="ms-error" role="alert">{t.offline}</p>;
+  const network = paused ? "offline" : networkKind(error);
+  if (network) return <p className="ms-error" role="alert">{t[network]}</p>;
   if (!error) return null;
   if (error instanceof ApiError && error.status === 401) {
     return (

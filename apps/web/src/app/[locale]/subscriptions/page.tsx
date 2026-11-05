@@ -14,7 +14,7 @@ import {
   formatDay,
   formatRange,
 } from "@/components/meals/shell";
-import { problemMessage } from "@/lib/problem";
+import { networkMessage, problemMessage } from "@/lib/problem";
 import { tokenStore } from "@/lib/token-store";
 import {
   deleteAccount,
@@ -249,7 +249,7 @@ function DeleteAccount({ locale }: { locale: "en" | "ar" }) {
       window.location.href = `/${locale}?deleted=1`;
     } catch (e) {
       const coded = e instanceof ApiError && e.status === 409;
-      setError(coded ? problemMessage(e, locale) : t.failed);
+      setError(coded ? problemMessage(e, locale) : (networkMessage(e, locale) ?? t.failed));
       setNeedsSupport(e instanceof ApiError && e.problem?.code === "owns_vendor");
       setBusy(false);
     }

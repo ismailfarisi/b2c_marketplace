@@ -3,9 +3,9 @@
 import { ApiError, formatMoney } from "@marketplace/api-client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { use, useState, type FormEvent } from "react";
+import { use, useRef, useState, type FormEvent } from "react";
 
-import { LoadError } from "@/components/load-error";
+import { LoadError, RefreshFailed } from "@/components/load-error";
 import { CustomerShell, asLocale, signInHref, type Locale } from "@/components/meals/shell";
 import { companyFields, companyMessage } from "@/lib/company-problem";
 import {
@@ -24,7 +24,7 @@ import {
 } from "@/lib/customer-api";
 
 import { COPY, WEEKDAYS, type Copy } from "./copy";
-import { OfficeFields, emptyOffice, officeInput, type OfficeDraft } from "./office-fields";
+import { OfficeFields, emptyOffice, officeErrors, officeInput, type OfficeDraft } from "./office-fields";
 
 function Loading({ t }: { t: Copy }) {
   return (
@@ -45,6 +45,9 @@ export default function BusinessPage({ params }: { params: Promise<{ locale: str
       <section className="ms-biz">
         <h1>{t.title}</h1>
         <p className="ms-sub">{t.intro}</p>
+        {mine.isError && mine.data !== undefined && (
+          <RefreshFailed error={mine.error} onRetry={() => mine.refetch()} locale={locale} />
+        )}
         {signedOut ? (
           <p>
             <Link className="ms-cta" href={signInHref(locale, `/${locale}/business`)}>
@@ -53,7 +56,7 @@ export default function BusinessPage({ params }: { params: Promise<{ locale: str
           </p>
         ) : mine.isPending ? (
           <Loading t={t} />
-        ) : mine.isError ? (
+        ) : mine.data === undefined ? (
           <LoadError error={mine.error} onRetry={() => mine.refetch()} locale={locale} />
         ) : items.length === 0 ? (
           <Register locale={locale} t={t} />
@@ -84,6 +87,7 @@ function Register({ locale, t }: { locale: Locale; t: Copy }) {
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const field = (k: keyof typeof f, label: string, type = "text", required = false) => (
     <label className="ms-field">
       <span>{label}</span>
@@ -101,7 +105,8 @@ function Register({ locale, t }: { locale: Locale; t: Copy }) {
   );
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     setFields({});
@@ -113,6 +118,7 @@ function Register({ locale, t }: { locale: Locale; t: Copy }) {
       setFields(byField);
       setError(Object.keys(byField).length ? null : companyMessage(err, locale));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
@@ -134,12 +140,15 @@ function Manage({ id, locale, t }: { id: string; locale: Locale; t: Copy }) {
   const q = useQuery({ queryKey: ["company", id], queryFn: () => getCompany(id) });
   const reload = () => qc.invalidateQueries({ queryKey: ["company", id] });
   if (q.isPending) return <Loading t={t} />;
-  if (q.isError) return <LoadError error={q.error} onRetry={() => q.refetch()} locale={locale} />;
+  // Only a dashboard that never loaded is replaced by the error. A failed
+  // refetch (after a save, or on focus) keeps it, and the drafts in it.
+  if (q.data === undefined) return <LoadError error={q.error} onRetry={() => q.refetch()} locale={locale} />;
   const d = q.data;
   const money = (n: number) => formatMoney({ amount: n, currency: d.company.currency }, locale);
   const c = d.company;
   return (
     <div className="ms-biz-grid">
+      {q.isError && <RefreshFailed error={q.error} onRetry={() => q.refetch()} locale={locale} />}
       <div className="ms-panel">
         <h2 dir="auto">{c.name}</h2>
         <p className="ms-sub" dir="auto">{c.legal_name}{c.trn ? ` · TRN ${c.trn}` : ""}</p>
@@ -239,8 +248,9 @@ function Policy({ d, locale, t, onSaved }: { d: CompanyDashboard; locale: Locale
   const [msg, setMsg] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   async function save() {
-    if (busy) return;
+    if (inFlight.current) return;
     setMsg(null);
     const capValue = Number(cap);
     const local: Record<string, string> = {};
@@ -248,6 +258,7 @@ function Policy({ d, locale, t, onSaved }: { d: CompanyDashboard; locale: Locale
     if (days.length === 0) local.weekdays = t.daysRequired;
     setFields(local);
     if (Object.keys(local).length) return;
+    inFlight.current = true;
     setBusy(true);
     try {
       await setCompanyPolicy(d.company.id, {
@@ -262,6 +273,7 @@ function Policy({ d, locale, t, onSaved }: { d: CompanyDashboard; locale: Locale
       setFields(byField);
       setMsg(Object.keys(byField).length ? null : companyMessage(err, locale));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
@@ -301,11 +313,18 @@ function People({ d, locale, t, onChange }: { d: CompanyDashboard; locale: Local
   const [fields, setFields] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  // A ref, not the state: a double-click submits twice before `adding` renders.
+  const busy = useRef(false);
   async function add(e: FormEvent) {
     e.preventDefault();
-    if (adding) return;
-    setAdding(true);
+    if (busy.current) return;
     setError(null);
+    if (!phone.trim()) {
+      setFields({ phone: t.mobileRequired });
+      return;
+    }
+    busy.current = true;
+    setAdding(true);
     setFields({});
     try {
       await addCompanyMember(d.company.id, { phone, name, role: admin ? "admin" : "employee" });
@@ -318,6 +337,7 @@ function People({ d, locale, t, onChange }: { d: CompanyDashboard; locale: Local
       setFields(byField);
       setError(Object.keys(byField).length ? null : companyMessage(err, locale));
     } finally {
+      busy.current = false;
       setAdding(false);
     }
   }
@@ -350,12 +370,12 @@ function People({ d, locale, t, onChange }: { d: CompanyDashboard; locale: Local
           </li>
         ))}
       </ul>
-      <form onSubmit={add}>
+      <form onSubmit={add} noValidate>
         <h3>{t.invite}</h3>
         <div className="ms-row">
           <label className="ms-field">
             <span>{t.mobile}</span>
-            <input type="tel" dir="ltr" required value={phone} placeholder="+971 5…"
+            <input type="tel" dir="ltr" aria-required="true" value={phone} placeholder="+971 5…"
               aria-invalid={fields.phone ? true : undefined} aria-describedby={`phone-hint-${d.company.id}`}
               onChange={(e) => setPhone(e.target.value)} />
             <small className="ms-sub" id={`phone-hint-${d.company.id}`}>{t.mobileHint}</small>
@@ -381,12 +401,16 @@ function Offices({ d, locale, t, onChange }: { d: CompanyDashboard; locale: Loca
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const busy = useRef(false);
   async function add(e: FormEvent) {
     e.preventDefault();
-    if (adding) return;
-    setAdding(true);
+    if (busy.current) return;
     setError(null);
-    setFields({});
+    const local = officeErrors(draft, "office.", t);
+    setFields(local);
+    if (Object.keys(local).length) return;
+    busy.current = true;
+    setAdding(true);
     try {
       await addCompanyOffice(d.company.id, officeInput(draft));
       setDraft(emptyOffice);
@@ -396,6 +420,7 @@ function Offices({ d, locale, t, onChange }: { d: CompanyDashboard; locale: Loca
       setFields(byField);
       setError(Object.keys(byField).length ? null : companyMessage(err, locale));
     } finally {
+      busy.current = false;
       setAdding(false);
     }
   }
@@ -428,7 +453,7 @@ function Offices({ d, locale, t, onChange }: { d: CompanyDashboard; locale: Loca
           </li>
         ))}
       </ul>
-      <form onSubmit={add}>
+      <form onSubmit={add} noValidate>
         <h3>{t.addOffice}</h3>
         <OfficeFields value={draft} onChange={setDraft} errors={fields} prefix="office." locale={locale} t={t} />
         {error && <p className="ms-bad" role="alert">{error}</p>}

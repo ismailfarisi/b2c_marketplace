@@ -97,25 +97,27 @@ function Ticket({
   const [body, setBody] = useState("");
   const idem = useIdempotencyKey();
   const busy = useRef(false);
-  const reply = useMutation({
-    networkMode: "always",
-    mutationFn: () => replySupportTicket(ticket.id, body.trim(), idem.headers()),
-    onSuccess: (thread) => {
-      idem.reset();
-      setBody("");
-      qc.setQueryData(key, thread);
-      void qc.invalidateQueries({ queryKey: ["admin", "support"], exact: true });
-    },
-    onSettled: () => {
-      busy.current = false;
-    },
-  });
   const status = useMutation({
     networkMode: "always",
     mutationFn: (to: "open" | "closed") => setSupportStatus(ticket.id, to),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin"] });
       onClose();
+    },
+  });
+  const reply = useMutation({
+    networkMode: "always",
+    mutationFn: () => replySupportTicket(ticket.id, body.trim(), idem.headers()),
+    onSuccess: (thread) => {
+      idem.reset();
+      setBody("");
+      // An earlier failed Close/Reopen is stale once the thread has moved on.
+      status.reset();
+      qc.setQueryData(key, thread);
+      void qc.invalidateQueries({ queryKey: ["admin", "support"], exact: true });
+    },
+    onSettled: () => {
+      busy.current = false;
     },
   });
   const closed = (q.data?.status ?? ticket.status) === "closed";

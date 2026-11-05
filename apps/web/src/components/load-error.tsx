@@ -14,6 +14,8 @@ const COPY = {
     generic: "This didn't load. Try again.",
     retry: "Try again",
     ref: "Reference",
+    stale: "Couldn't refresh. Showing what loaded last.",
+    staleOffline: "You're offline. Showing what loaded last.",
   },
   ar: {
     offline: "أنت غير متصل بالإنترنت. تحقق من الاتصال وحاول مرة أخرى.",
@@ -24,6 +26,8 @@ const COPY = {
     generic: "تعذر التحميل. حاول مرة أخرى.",
     retry: "حاول مرة أخرى",
     ref: "المرجع",
+    stale: "تعذر التحديث. نعرض آخر ما تم تحميله.",
+    staleOffline: "أنت غير متصل بالإنترنت. نعرض آخر ما تم تحميله.",
   },
 };
 
@@ -90,6 +94,33 @@ export function LoadError({
       ) : null}
       {onRetry && retryable ? (
         <button type="button" className="ms-btn" onClick={onRetry}>
+          {t.retry}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A refetch failed but earlier data is still on screen: say so in one line and
+ * offer Try again, instead of swapping the page (and any half-typed drafts)
+ * for a LoadError.
+ */
+export function RefreshFailed({
+  error,
+  onRetry,
+  locale,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+  locale: Locale;
+}) {
+  const t = COPY[locale];
+  return (
+    <div className="ms-refresh-failed" role="status">
+      <span>{loadErrorKind(error) === "offline" ? t.staleOffline : t.stale}</span>
+      {onRetry ? (
+        <button type="button" className="ms-link" onClick={onRetry}>
           {t.retry}
         </button>
       ) : null}

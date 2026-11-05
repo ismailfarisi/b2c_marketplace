@@ -20,6 +20,7 @@ import {
   phoneCountry,
   phoneProblem,
 } from "@/lib/phone";
+import { networkMessage } from "@/lib/problem";
 
 const IS_DEV = (process.env.NEXT_PUBLIC_ENV ?? "dev") !== "production";
 
@@ -114,7 +115,7 @@ const isRateLimited = (err: ApiError) =>
   err.status === 429 || err.problem?.code === "otp_rate_limited";
 
 function requestFailure(err: unknown, t: Copy, locale: Locale, country: string): string {
-  if (!(err instanceof ApiError)) return t.offline;
+  if (!(err instanceof ApiError)) return networkMessage(err, locale) ?? t.offline;
   if (isRateLimited(err)) return t.tooMany;
   if (err.status === 422) {
     const c = phoneCountry(country);
@@ -227,7 +228,7 @@ function Form({ locale }: { locale: Locale }) {
       router.replace(next);
     } catch (err) {
       if (!(err instanceof ApiError)) {
-        setError(t.offline);
+        setError(networkMessage(err, locale) ?? t.offline);
       } else if (err.status === 401 && STALE_CODES.has(err.problem?.code ?? "")) {
         setChallenge(null);
         setCode("");

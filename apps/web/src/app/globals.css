@@ -2126,6 +2126,17 @@ a.ms-offer:focus-visible {
 .ms-biz-form {
   max-inline-size: 44rem;
 }
+.ms-refresh-failed {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--ms-line);
+  border-radius: var(--ms-radius);
+  color: var(--ms-muted);
+}
 .ms-list {
   list-style: none;
   margin: 0;

@@ -3,7 +3,7 @@
 import { ApiError } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 
 import { LoadError } from "@/components/load-error";
 import { CustomerShell, asLocale, signInHref } from "@/components/meals/shell";
@@ -13,7 +13,7 @@ import {
   markConversationRead,
   sendMessage,
 } from "@/lib/chat-api";
-import { problemMessage } from "@/lib/problem";
+import { networkKind, problemMessage } from "@/lib/problem";
 
 /** One buyer ↔ seller conversation. The draft survives a failed send. */
 export default function ConversationPage({
@@ -33,6 +33,9 @@ export default function ConversationPage({
   });
   const [body, setBody] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  // isPending only disables the button after a re-render, so a double-click
+  // would post the message twice; the ref closes that gap synchronously.
+  const busy = useRef(false);
 
   useEffect(() => {
     if (q.data)
@@ -40,6 +43,9 @@ export default function ConversationPage({
   }, [q.data, p.conversationId]);
 
   const send = useMutation({
+    // Fail fast offline instead of pausing and posting later, after the
+    // person has given up and typed it again.
+    networkMode: "always",
     mutationFn: () => sendMessage(p.conversationId, body.trim()),
     onSuccess: (m) => {
       setBody("");
@@ -52,7 +58,11 @@ export default function ConversationPage({
       );
       void qc.invalidateQueries({ queryKey: key });
     },
+    onSettled: () => {
+      busy.current = false;
+    },
   });
+  const network = networkKind(send.error);
 
   const here = `/${locale}/messages/${p.conversationId}`;
   const signedOut = q.error instanceof ApiError && q.error.status === 401;
@@ -106,7 +116,8 @@ export default function ConversationPage({
               noValidate
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!body.trim() || send.isPending) return;
+                if (busy.current || !body.trim()) return;
+                busy.current = true;
                 send.mutate();
               }}
             >
@@ -121,9 +132,11 @@ export default function ConversationPage({
               </label>
               {send.error ? (
                 <p className="ms-error" role="alert">
-                  {send.error instanceof ApiError && send.error.status < 500
-                    ? problemMessage(send.error, locale)
-                    : t.sendFailed}
+                  {network
+                    ? t[network]
+                    : send.error instanceof ApiError && send.error.status < 500
+                      ? problemMessage(send.error, locale)
+                      : t.sendFailed}
                 </p>
               ) : null}
               {notice ? (

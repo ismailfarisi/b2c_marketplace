@@ -15,6 +15,8 @@ export const CHAT_COPY = {
     send: "Send",
     sending: "Sending…",
     sendFailed: "Could not send. Your message is kept; try again.",
+    offline: "You're offline. Your message is kept; send it again once you're back online.",
+    unreachable: "Can't reach the server right now. Your message is kept; try again in a moment.",
     held: "This message is being reviewed and has not been delivered yet.",
     heldShort: "in review",
     redacted:
@@ -36,6 +38,8 @@ export const CHAT_COPY = {
     send: "إرسال",
     sending: "جارٍ الإرسال…",
     sendFailed: "تعذّر الإرسال. رسالتك محفوظة؛ حاول مرة أخرى.",
+    offline: "أنت غير متصل بالإنترنت. رسالتك محفوظة؛ أرسلها مرة أخرى عند عودة الاتصال.",
+    unreachable: "تعذر الوصول إلى الخادم حالياً. رسالتك محفوظة؛ حاول مرة أخرى بعد قليل.",
     held: "هذه الرسالة قيد المراجعة ولم تُسلَّم بعد.",
     heldShort: "قيد المراجعة",
     redacted:

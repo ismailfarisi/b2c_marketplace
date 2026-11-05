@@ -1,8 +1,9 @@
 "use client";
 
+import { ApiError } from "@marketplace/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import "./account.css";
 
@@ -29,6 +30,7 @@ const COPY = {
     profile: "Your details",
     name: "Name",
     email: "Email",
+    emailInvalid: "Enter an email like name@example.com.",
     phone: "Signed in as",
     noName: "Add your name",
     noEmail: "No email",
@@ -61,6 +63,7 @@ const COPY = {
     profile: "بياناتك",
     name: "الاسم",
     email: "البريد الإلكتروني",
+    emailInvalid: "أدخل بريدًا إلكترونيًا مثل name@example.com.",
     phone: "مسجّل الدخول برقم",
     noName: "أضف اسمك",
     noEmail: "لا يوجد بريد إلكتروني",
@@ -109,14 +112,23 @@ function ProfileSection({ locale }: { locale: Locale }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const busy = useRef(false);
   const save = useMutation({
     mutationFn: () => updateProfile({ display_name: name, email }),
     onSuccess: (p) => {
       qc.setQueryData(["me", "profile"], p);
       setEditing(false);
     },
+    onSettled: () => {
+      busy.current = false;
+    },
   });
   const fields = save.error ? problemFields(save.error, locale) : {};
+  if (
+    save.error instanceof ApiError &&
+    save.error.problem?.errors?.some((e) => e.field === "email" && e.code === "invalid")
+  )
+    fields.email = t.emailInvalid;
   const p = q.data;
   return (
     <section aria-labelledby="ms-profile-title">
@@ -125,8 +137,11 @@ function ProfileSection({ locale }: { locale: Locale }) {
         <LoadError error={q.error} onRetry={() => q.refetch()} locale={locale} />
       ) : p && editing ? (
         <form
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
+            if (busy.current) return;
+            busy.current = true;
             save.mutate();
           }}
         >
@@ -214,14 +229,39 @@ function AddressesSection({ locale }: { locale: Locale }) {
   const q = useQuery({ queryKey: ["me", "addresses"], queryFn: listAddresses });
   const [confirming, setConfirming] = useState<string | null>(null);
   const done = () => qc.invalidateQueries({ queryKey: ["me", "addresses"] });
-  const makeDefault = useMutation({ mutationFn: setDefaultAddress, onSuccess: done });
+  // Set synchronously on click: a double-click lands before isPending
+  // re-renders the buttons disabled, and would otherwise fire twice.
+  const inFlight = useRef(false);
+  const release = () => {
+    inFlight.current = false;
+  };
+  const makeDefault = useMutation({
+    mutationFn: setDefaultAddress,
+    onSuccess: done,
+    onSettled: release,
+  });
   const remove = useMutation({
-    mutationFn: deleteAddress,
+    mutationFn: async (id: string) => {
+      try {
+        await deleteAddress(id);
+      } catch (err) {
+        // Already gone (another tab, or a retry after a lost response): the
+        // person wanted it removed, and it is.
+        if (err instanceof ApiError && err.status === 404) return;
+        throw err;
+      }
+    },
     onSuccess: () => {
       setConfirming(null);
       return done();
     },
+    onSettled: release,
   });
+  const run = (m: { mutate: (id: string) => void }, id: string) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    m.mutate(id);
+  };
   const failed = makeDefault.error ?? remove.error;
   const busy = makeDefault.isPending || remove.isPending;
   const items = q.data?.items ?? [];
@@ -258,7 +298,7 @@ function AddressesSection({ locale }: { locale: Locale }) {
                       type="button"
                       className="ms-cta ms-cta-danger"
                       disabled={busy}
-                      onClick={() => remove.mutate(a.id)}
+                      onClick={() => run(remove, a.id)}
                     >
                       {t.yesRemove}
                     </button>
@@ -278,7 +318,7 @@ function AddressesSection({ locale }: { locale: Locale }) {
                         type="button"
                         className="ms-link"
                         disabled={busy}
-                        onClick={() => makeDefault.mutate(a.id)}
+                        onClick={() => run(makeDefault, a.id)}
                       >
                         {t.makeDefault}
                       </button>

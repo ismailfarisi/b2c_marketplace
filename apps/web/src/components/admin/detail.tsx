@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import type { TimelineEntry } from "@/lib/admin-api";
 
@@ -216,6 +216,7 @@ export function Action({
   danger,
   hint,
   extra,
+  fields = [],
   onConfirm,
   disabled,
   disabledReason,
@@ -228,6 +229,8 @@ export function Action({
   hint?: ReactNode;
   /** Optional inputs above the reason, e.g. a partial refund amount. */
   extra?: (busy: boolean, fieldErrors: Record<string, string>) => ReactNode;
+  /** Fields `extra` renders its own error under; not repeated in the summary. */
+  fields?: string[];
   onConfirm: (reason: string) => Promise<unknown>;
   disabled?: boolean;
   disabledReason?: string;
@@ -238,6 +241,7 @@ export function Action({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [done, setDone] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   if (done) return <span className="action-done">{done}</span>;
 
@@ -260,6 +264,8 @@ export function Action({
       className={`action ${danger ? "danger" : ""}`}
       onSubmit={async (event) => {
         event.preventDefault();
+        if (inFlight.current) return;
+        inFlight.current = true;
         setBusy(true);
         setError(null);
         setFieldErrors({});
@@ -270,9 +276,10 @@ export function Action({
           // The server's sentence, not a generic failure. Conflicts here say
           // things like "void the authorization instead" — which is the whole
           // answer, and hiding it behind "something went wrong" wastes it.
-          setError(messageOf(err));
+          setError(messageOf(err, ["reason", ...fields]) || null);
           setFieldErrors(fieldErrorsOf(err));
         } finally {
+          inFlight.current = false;
           setBusy(false);
         }
       }}
@@ -288,7 +295,9 @@ export function Action({
           rows={2}
           placeholder="Why is this being done? Recorded against your name."
           disabled={busy}
+          aria-invalid={fieldErrors.reason ? true : undefined}
         />
+        {fieldErrors.reason ? <span className="danger">{fieldErrors.reason}</span> : null}
       </label>
       {error ? <p className="danger">{error}</p> : null}
       <div className="action-buttons">
@@ -328,8 +337,12 @@ export function fieldErrorsOf(err: unknown): Record<string, string> {
   return out;
 }
 
-/** Pulls the sentence out of an RFC 7807 problem, falling back sensibly. */
-export function messageOf(err: unknown): string {
+/**
+ * Pulls the sentence out of an RFC 7807 problem, falling back sensibly.
+ * Field errors for `placed` fields are left out (they are shown under their
+ * inputs); if every field error was placed, the result is "".
+ */
+export function messageOf(err: unknown, placed: readonly string[] = []): string {
   const status = (err as { status?: number })?.status;
   if (status === 403) {
     // The server's sentence names the permission ("this needs identity.review;
@@ -342,8 +355,10 @@ export function messageOf(err: unknown): string {
   // ApiError carries the RFC 7807 body as `problem`; there is no `body`.
   const body = (err as { problem?: { detail?: string; errors?: Array<{ message?: string; field?: string; code?: string }>; title?: string } | null })
     ?.problem;
-  if (body?.errors?.length)
-    return body.errors.map((e) => e.message || (e.field ? `${e.field}: ${e.code}` : e.code)).filter(Boolean).join("; ");
+  if (body?.errors?.length) {
+    const rest = body.errors.filter((e) => !(e.field && placed.includes(e.field)));
+    return rest.map((e) => e.message || (e.field ? `${e.field}: ${e.code}` : e.code)).filter(Boolean).join("; ");
+  }
   if (body?.detail) return body.detail;
   if (body?.title) return body.title;
   return err instanceof Error ? err.message : "Request failed.";

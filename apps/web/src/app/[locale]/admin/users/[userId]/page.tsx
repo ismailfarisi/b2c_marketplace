@@ -115,6 +115,7 @@ export default function CustomerPage({
             disabledReason="Needs identity.review"
             verb="Change it"
             hint="The new number is unverified until they sign in with it, and every existing session is revoked — they will be signed out on every device."
+            fields={["phone"]}
             extra={(busy, fields) => (
               <label className="field">
                 <span>New number, international format</span>
@@ -142,6 +143,7 @@ export default function CustomerPage({
             verb="Merge this account into the other"
             danger
             hint="This account is the one that stops. Orders and invoices stay with it — only addresses, favourites and saved searches move."
+            fields={["survivor_id"]}
             extra={(busy, fields) => (
               <label className="field">
                 <span>Surviving account id</span>
