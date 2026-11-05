@@ -593,10 +593,10 @@ private struct FieldInput: View {
         case "Invalid": return String(localized: "sell_field_invalid")
         case "TooSmall":
             return String(format: String(localized: "sell_field_min"),
-                          issue.bound.map { "\($0)" } ?? "", localised(field.unit, field.unitAr))
+                          SellValidation.shared.boundText(field: field, issue: issue), localised(field.unit, field.unitAr))
         case "TooLarge":
             return String(format: String(localized: "sell_field_max"),
-                          issue.bound.map { "\($0)" } ?? "", localised(field.unit, field.unitAr))
+                          SellValidation.shared.boundText(field: field, issue: issue), localised(field.unit, field.unitAr))
         default: return String(localized: "sell_field_required")
         }
     }

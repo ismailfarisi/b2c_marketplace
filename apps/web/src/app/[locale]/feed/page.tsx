@@ -7,7 +7,10 @@ import { use, useEffect, useState } from "react";
 
 import { clickAction, getFeed, type FeedAction, type FeedItem } from "@/lib/feed-api";
 import { LoadError } from "@/components/load-error";
+import { signInHref } from "@/components/meals/shell";
 import { problemMessage } from "@/lib/problem";
+import { NEEDS_ACCOUNT, hrefFor } from "@/lib/feed-routes";
+import { tokenStore } from "@/lib/token-store";
 
 /**
  * The front door.
@@ -106,14 +109,17 @@ function useViewerLocation() {
 
 type Copy = (typeof COPY)[keyof typeof COPY];
 
-/** Where a resolved route goes on the web: absolute URLs as-is, paths under the reader's locale. */
-function hrefFor(route: string, locale: "en" | "ar"): string {
-  if (/^https?:\/\//.test(route)) return route;
-  if (/^\/(en|ar)(\/|$)/.test(route)) return route.replace(/^\/(en|ar)/, `/${locale}`);
-  return `/${locale}${route.startsWith("/") ? route : `/${route}`}`;
-}
-
-function Cta({ action, t, locale }: { action: FeedAction; t: Copy; locale: "en" | "ar" }) {
+function Cta({
+  action,
+  reelId,
+  t,
+  locale,
+}: {
+  action: FeedAction;
+  reelId: string;
+  t: Copy;
+  locale: "en" | "ar";
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -130,11 +136,18 @@ function Cta({ action, t, locale }: { action: FeedAction; t: Copy; locale: "en" 
           try {
             const r = await clickAction(action.id);
             if (!r.available || !r.route) {
-              setNote(r.reason ?? t.unavailable);
+              // The server's reason is English-only; Arabic readers get ours.
+              setNote(locale === "en" && r.reason ? r.reason : t.unavailable);
               return;
             }
-            const href = hrefFor(r.route, locale);
+            const href = hrefFor(r.route, locale, { reelId, actionId: action.id });
             if (href.startsWith("http")) window.open(href, "_blank", "noopener");
+            else if (
+              NEEDS_ACCOUNT.test(href) &&
+              !tokenStore.getAccessToken() &&
+              !tokenStore.getRefreshToken()
+            )
+              router.push(signInHref(locale, href));
             else router.push(href);
           } catch (err) {
             setNote(problemMessage(err, locale));
@@ -181,7 +194,7 @@ function Card({ item, t, locale }: { item: FeedItem; t: Copy; locale: "en" | "ar
       {item.actions.length > 0 && (
         <div className="row">
           {item.actions.map((a) => (
-            <Cta key={a.id} action={a} t={t} locale={locale} />
+            <Cta key={a.id} action={a} reelId={item.id} t={t} locale={locale} />
           ))}
         </div>
       )}

@@ -248,7 +248,13 @@ struct RootView: View {
                 }
 
                 if route != .none {
+                    // Opaque to touch: an Inbox/Thread area with no control
+                    // (header gaps, a short list) must not pass the tap to
+                    // the feed's Sell/Search icons underneath.
                     messaging(me: me)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Palette.ink.ignoresSafeArea())
+                        .contentShape(Rectangle())
                 }
             } else {
                 ProgressView().tint(.white)

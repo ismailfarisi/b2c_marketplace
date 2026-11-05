@@ -296,6 +296,19 @@ func (s *Service) Get(ctx context.Context, q Query) (*Page, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A viewer who has already seen everything here still gets a feed. The
+	// seen-set is marked at serve time and keyed per view for seven days, so in
+	// a thin district two reels watched once emptied the feed on the next
+	// launch while an anonymous request got both — "nothing is available here"
+	// was a false statement about supply. When the seen-set alone emptied the
+	// page, rewind to the cursor's exclusions: re-showing a reel beats claiming
+	// there are none, and paging within this session still never repeats.
+	if rewind, ok := rewindExclusion(len(candidates), seenIDs, q.Cursor.Excluded); ok {
+		candidates, err = s.retrieve(ctx, q, rewind, weights)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	items := s.rank(candidates, q, weights)
 	items = s.injectSponsored(ctx, q, items)
@@ -1007,6 +1020,17 @@ func capPerAuthor(items []Item, n int) []Item {
 }
 
 // union merges the two exclusion sources, deduplicated.
+// rewindExclusion says whether a page should be retried without the seen-set,
+// and with what exclusions. Only when the seen-set actually excluded something
+// and nothing was left: an empty district stays empty, and a page with any
+// unseen reel is served as is.
+func rewindExclusion(found int, seen, cursorExcluded []uuid.UUID) ([]uuid.UUID, bool) {
+	if found > 0 || len(seen) == 0 {
+		return nil, false
+	}
+	return union(nil, cursorExcluded), true
+}
+
 func union(a, b []uuid.UUID) []uuid.UUID {
 	seen := make(map[uuid.UUID]bool, len(a)+len(b))
 	out := make([]uuid.UUID, 0, len(a)+len(b))

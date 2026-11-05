@@ -62,11 +62,12 @@ class SellValidationTest {
         // every vertical's limits, which is the leak in a different file.
         val f = form(SellField(key = "n", label = "N", kind = "money", min = 100_000, max = 900_000))
 
-        val low = SellValidation.check(f, mapOf("n" to "50000")).single()
+        // Typed in major units: 500 AED is 50,000 fils, under the 1,000 AED floor.
+        val low = SellValidation.check(f, mapOf("n" to "500")).single()
         assertEquals(FieldProblem.TooSmall, low.problem)
         assertEquals(100_000L, low.bound)
 
-        val high = SellValidation.check(f, mapOf("n" to "1000000")).single()
+        val high = SellValidation.check(f, mapOf("n" to "10000")).single()
         assertEquals(FieldProblem.TooLarge, high.problem)
         assertEquals(900_000L, high.bound)
     }
@@ -166,11 +167,64 @@ class SellValidationTest {
     }
 
     @Test
-    fun a_decimal_price_is_not_silently_truncated() {
-        // Money is minor units on the wire. "1890.50" is a client that has not
-        // converted, and accepting it by dropping the fraction would list the
-        // car at eighteen dirhams ninety.
+    fun a_decimal_integer_is_not_silently_truncated() {
+        // parseNumber is for whole numbers; dropping the fraction of "1890.50"
+        // would quietly change what the seller typed.
         assertNull(SellValidation.parseNumber("1890.50"))
+    }
+
+    @Test
+    fun a_money_answer_is_typed_in_major_units_and_checked_in_minor() {
+        // The live bug: a 1,000 AED floor (100,000 fils) rejected a 2,500 AED
+        // car because the typed 2500 was compared to the bound as fils.
+        val f = form(SellField(key = "price", label = "Price", kind = "money", required = true, min = 100_000))
+        assertTrue(SellValidation.check(f, mapOf("price" to "2500")).isEmpty())
+        assertTrue(SellValidation.check(f, mapOf("price" to "1,000")).isEmpty())
+        val low = SellValidation.check(f, mapOf("price" to "999.99")).single()
+        assertEquals(FieldProblem.TooSmall, low.problem)
+        assertEquals("1,000", SellValidation.boundText(f.fields.single(), low))
+    }
+
+    @Test
+    fun money_is_posted_in_minor_units() {
+        // The live bug: 150,000 AED was posted verbatim and stored as 1,500 AED.
+        val f = form(
+            SellField(key = "price", label = "Price", kind = "money", required = true),
+            SellField(key = "km", label = "KM", kind = "integer"),
+            SellField(key = "spec", label = "Spec", kind = "text"),
+        )
+        val wire = SellValidation.toWire(
+            f, mapOf("price" to "150,000", "km" to "64,000", "spec" to "gcc"),
+        )
+        assertEquals("15000000", wire["price"])
+        assertEquals("64,000", wire["km"])
+        assertEquals("gcc", wire["spec"])
+    }
+
+    @Test
+    fun money_conversion_handles_fils_and_refuses_what_is_not_a_price() {
+        assertEquals(189_050L, SellValidation.moneyToMinor("1890.5"))
+        assertEquals(189_005L, SellValidation.moneyToMinor("1,890.05"))
+        assertEquals(150_000_00L, SellValidation.moneyToMinor(" 150 000 "))
+        assertEquals(-50_000L, SellValidation.moneyToMinor("-500"))
+        assertNull(SellValidation.moneyToMinor("1890.505"))
+        assertNull(SellValidation.moneyToMinor("1.2.3"))
+        assertNull(SellValidation.moneyToMinor("abc"))
+        assertNull(SellValidation.moneyToMinor("."))
+        assertNull(SellValidation.moneyToMinor("99999999999999999999"))
+        assertEquals("NotANumber", SellValidation.check(
+            form(SellField(key = "p", label = "P", kind = "money")), mapOf("p" to "12.345"),
+        ).single().problem.code)
+    }
+
+    @Test
+    fun minor_units_display_as_major() {
+        assertEquals("1,500", SellValidation.minorToMajor(150_000))
+        assertEquals("150,000", SellValidation.minorToMajor(15_000_000))
+        assertEquals("1,890.50", SellValidation.minorToMajor(189_050))
+        assertEquals("0.05", SellValidation.minorToMajor(5))
+        val km = SellField(key = "km", label = "KM", kind = "integer")
+        assertEquals("2,000,000", SellValidation.boundText(km, FieldIssue("km", FieldProblem.TooLarge, 2_000_000)))
     }
 
     @Test

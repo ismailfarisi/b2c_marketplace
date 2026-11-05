@@ -14,6 +14,7 @@ import ae.marketplace.mobile.sell.FieldProblem
 import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.network.isRetryable
 import ae.marketplace.mobile.sell.SellUiState
+import ae.marketplace.mobile.sell.SellValidation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -385,8 +386,8 @@ private fun FieldInput(
 @Composable
 private fun TextRow(field: SellField, value: String, onValue: (String) -> Unit) {
     // The keyboard follows the kind. A numeric field that opens a QWERTY is a
-    // field people mistype, and money in this flow is minor units — a decimal
-    // point would be a value the server rejects.
+    // field people mistype. Money is typed in dirhams (the shared view model
+    // converts to minor units before validating and posting).
     val keyboard = when (field.kind) {
         "integer", "money" -> KeyboardType.Number
         else -> KeyboardType.Text
@@ -527,26 +528,14 @@ private fun issueText(field: SellField, issue: FieldIssue): String = when (issue
     FieldProblem.NotANumber -> stringResource(R.string.sell_field_number)
     FieldProblem.NotAnOption -> stringResource(R.string.sell_field_option)
     FieldProblem.Invalid -> stringResource(R.string.sell_field_invalid)
-    // Money is minor units on the wire. Dividing here rather than in shared code
-    // for the same reason the sentence lives here: it is a presentation decision,
-    // and the field already told us which kind it is.
+    // The bound is minor units for money; shared code turns it into what the
+    // seller typed against (dirhams), so Android and iOS cannot disagree.
     FieldProblem.TooSmall -> stringResource(
-        R.string.sell_field_min, major(field, issue.bound), field.unit,
+        R.string.sell_field_min, SellValidation.boundText(field, issue), field.unit,
     )
     FieldProblem.TooLarge -> stringResource(
-        R.string.sell_field_max, major(field, issue.bound), field.unit,
+        R.string.sell_field_max, SellValidation.boundText(field, issue), field.unit,
     )
-}
-
-private fun major(field: SellField, bound: Long?): String {
-    val n = bound ?: return ""
-    return if (field.kind == "money") group(n / 100) else group(n)
-}
-
-private fun group(n: Long): String {
-    val s = n.toString()
-    if (s.length <= 3) return s
-    return s.reversed().chunked(3).joinToString(",").reversed()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

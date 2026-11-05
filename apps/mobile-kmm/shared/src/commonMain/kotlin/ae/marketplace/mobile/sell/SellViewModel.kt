@@ -374,7 +374,8 @@ class SellViewModel(private val api: SellApi) : ViewModel() {
                 api.createDraft(
                     SellDraftRequest(
                         subjectType = vertical.key,
-                        values = s.values,
+                        // Money is typed in dirhams and posted in fils.
+                        values = s.form?.let { SellValidation.toWire(it, s.values) } ?: s.values,
                         clock = s.activeClock?.key.orEmpty(),
                         lat = s.lat,
                         lng = s.lng,
