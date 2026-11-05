@@ -114,7 +114,7 @@ function ResolveForm({ disputeId, onDone }: { disputeId: string; onDone: () => v
 }
 
 export default function DisputeQueue() {
-  const { data, isPending, error } = useQueueData("disputes", getDisputeQueue);
+  const { data, error, refetch } = useQueueData("disputes", getDisputeQueue);
   const rows = data?.items ?? [];
 
   return (
@@ -136,8 +136,10 @@ export default function DisputeQueue() {
           { label: "Due", className: "num" },
         ]}
         rows={rows}
-        isPending={isPending}
+        loaded={data !== undefined}
         error={error}
+        perm="the ops role"
+        onRetry={() => void refetch()}
         empty="No open disputes."
         rowKey={(d) => d.id}
         renderRow={(d) => (

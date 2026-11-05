@@ -26,7 +26,7 @@ import {
  * a deal.
  */
 export default function MessageQueue() {
-  const { data, isPending, error } = useQueueData("messages", getMessageQueue);
+  const { data, error, refetch } = useQueueData("messages", getMessageQueue);
   const rows = data?.items ?? [];
 
   return (
@@ -46,8 +46,10 @@ export default function MessageQueue() {
           { label: "Waiting", className: "num" },
         ]}
         rows={rows}
-        isPending={isPending}
+        loaded={data !== undefined}
         error={error}
+        perm="content.review"
+        onRetry={() => void refetch()}
         empty="Nothing held."
         rowKey={(m) => m.id}
         renderRow={(m) => (

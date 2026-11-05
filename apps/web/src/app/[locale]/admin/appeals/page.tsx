@@ -31,7 +31,7 @@ import {
  * therefore needs no encouragement from the layout.
  */
 export default function AppealQueue() {
-  const { data, isPending, error } = useQueueData("appeals", getAppealQueue);
+  const { data, error, refetch } = useQueueData("appeals", getAppealQueue);
   const rows = data?.items ?? [];
 
   return (
@@ -52,8 +52,10 @@ export default function AppealQueue() {
           { label: "Overdue by", className: "num" },
         ]}
         rows={rows}
-        isPending={isPending}
+        loaded={data !== undefined}
         error={error}
+        perm="content.review"
+        onRetry={() => void refetch()}
         empty="No appeal is past its deadline. Open appeals within SLA are not listed here — this queue exists to surface the ones nobody has reached."
         rowKey={(a) => a.id}
         renderRow={(a) => (

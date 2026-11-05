@@ -5,7 +5,7 @@ import Link from "next/link";
 import { use } from "react";
 
 import { Action, Detail, Facts, Panel, Ref, plural } from "@/components/admin/detail";
-import { DetailError } from "@/components/admin/errors";
+import { DetailError, RefreshFailed, useCan } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
 import { getMealKitchen, setMealPlanActive } from "@/lib/admin-api";
 import { SLOTS, WEEKDAYS } from "@/lib/vendor-api";
@@ -24,10 +24,13 @@ export default function MealKitchenPage({
 }) {
   const { locale, branchId } = use(params);
   const qc = useQueryClient();
+  const can = useCan();
+  const noWrite = can("commerce.write") === false;
   const key = ["admin", "meals", "kitchen", branchId];
   const { data, isLoading, error, refetch } = useQuery({ queryKey: key, queryFn: () => getMealKitchen(branchId) });
 
-  if (error)
+  // A failed background refetch keeps the page (and a half-typed reason).
+  if (error && !data)
     return (
       <DetailError
         error={error}
@@ -72,6 +75,7 @@ export default function MealKitchenPage({
         </Panel>
       }
     >
+      {error ? <RefreshFailed error={error} onRetry={() => void refetch()} /> : null}
       <FoodSafetyPanel branchId={branchId} />
 
       <Panel title="Ready to sell" note={overview.profile_complete && profile.has_service_area ? undefined : "not yet"}>
@@ -128,6 +132,8 @@ export default function MealKitchenPage({
                       label={p.is_active ? "Withdraw" : "Put back on sale"}
                       verb={p.is_active ? "Withdraw plan" : "Restore plan"}
                       danger={p.is_active}
+                      disabled={noWrite}
+                      disabledReason="Needs commerce.write."
                       hint={
                         p.is_active
                           ? "Stops new sign-ups. Current subscribers keep their meals until they cancel."

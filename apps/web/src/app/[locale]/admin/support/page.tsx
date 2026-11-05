@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { messageOf } from "@/components/admin/detail";
+import { RefreshFailed } from "@/components/admin/errors";
 import { QueuePanel, Tag, since, useQueueData } from "@/components/admin/table";
 import {
   getSupportQueue,
@@ -20,7 +21,7 @@ import { useIdempotencyKey } from "@/lib/use-idempotency-key";
  */
 export default function SupportQueue() {
   const [filter, setFilter] = useState<"" | "closed">("");
-  const { data, isPending, error, refetch } = useQueueData(
+  const { data, error, refetch } = useQueueData(
     filter ? `support-${filter}` : "support",
     () => getSupportQueue(filter),
   );
@@ -54,7 +55,7 @@ export default function SupportQueue() {
           { label: "Updated", className: "num" },
         ]}
         rows={rows}
-        isPending={isPending}
+        loaded={data !== undefined}
         error={error}
         perm="commerce.contact"
         onRetry={() => void refetch()}
@@ -126,7 +127,9 @@ function Ticket({
       </div>
     );
   }
-  if (q.isError) {
+  // Only a thread that never loaded is replaced by the error; a failed
+  // refetch keeps the messages and the half-typed reply on screen.
+  if (q.data === undefined) {
     return (
       <div className="console-thread">
         <div className="state error" role="alert">
@@ -142,6 +145,9 @@ function Ticket({
 
   return (
     <div className="console-thread">
+      {q.isError ? (
+        <RefreshFailed error={q.error} onRetry={() => void q.refetch()} />
+      ) : null}
       {q.data.messages.map((m) => (
         <div
           key={m.id}

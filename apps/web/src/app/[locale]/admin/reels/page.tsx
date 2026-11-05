@@ -24,7 +24,7 @@ import { CardState, Decide, Tag, useQueueData, waited } from "@/components/admin
  */
 export default function ReelQueue() {
   const { locale } = useParams<{ locale: string }>();
-  const { data, isPending, error, refetch } = useQueueData("reels", getReelQueue);
+  const { data, error, refetch } = useQueueData("reels", getReelQueue);
   const items = data?.items ?? [];
 
   return (
@@ -35,7 +35,7 @@ export default function ReelQueue() {
       </p>
 
       <CardState
-        isPending={isPending}
+        loaded={data !== undefined}
         error={error}
         perm="content.review"
         onRetry={() => void refetch()}

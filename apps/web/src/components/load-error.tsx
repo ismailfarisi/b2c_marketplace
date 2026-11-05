@@ -7,6 +7,7 @@ type Locale = "en" | "ar";
 const COPY = {
   en: {
     offline: "You're offline. Check your connection and try again.",
+    unreachable: "Can't reach the server right now. Try again in a moment.",
     server: "Something went wrong on our side. Try again shortly.",
     notFound: "We couldn't find that. It may have been removed.",
     forbidden: "You don't have access to this.",
@@ -16,6 +17,7 @@ const COPY = {
   },
   ar: {
     offline: "أنت غير متصل بالإنترنت. تحقق من الاتصال وحاول مرة أخرى.",
+    unreachable: "تعذر الوصول إلى الخادم حالياً. حاول مرة أخرى بعد قليل.",
     server: "حدث خطأ من جهتنا. حاول مرة أخرى بعد قليل.",
     notFound: "لم نعثر على هذا. ربما تمت إزالته.",
     forbidden: "ليس لديك صلاحية للوصول إلى هذا.",
@@ -25,12 +27,29 @@ const COPY = {
   },
 };
 
-type Kind = "offline" | "server" | "notFound" | "forbidden" | "generic";
+type Kind =
+  | "offline"
+  | "unreachable"
+  | "server"
+  | "notFound"
+  | "forbidden"
+  | "generic";
+
+/** A query React Query paused because the browser reports no connection. */
+export class OfflineError extends Error {
+  constructor() {
+    super("offline");
+    this.name = "OfflineError";
+  }
+}
 
 export function loadErrorKind(error: unknown): Kind {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
-  // fetch rejects with a TypeError when the request never got a response.
-  if (error instanceof TypeError) return "offline";
+  if (error instanceof OfflineError) return "offline";
+  // fetch rejects with a TypeError when the request never got a response (or
+  // timed out). The browser says it is online, so it is the server (or the
+  // path to it) that is down, not the reader's connection.
+  if (error instanceof TypeError) return "unreachable";
   if (error instanceof ApiError) {
     if (error.status === 404) return "notFound";
     if (error.status === 403) return "forbidden";

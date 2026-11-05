@@ -748,6 +748,19 @@ table.data .nowrap {
   color: var(--a-danger);
 }
 
+/* A failed background refresh, above data that is still shown. */
+.refresh-failed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px;
+  padding: 6px 10px;
+  border-radius: var(--a-radius-sm);
+  background: var(--a-warn-soft);
+  color: var(--a-warn);
+  font-size: 13px;
+}
+
 .state .headline {
   font-weight: 600;
   color: var(--a-text);

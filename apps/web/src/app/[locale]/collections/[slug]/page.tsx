@@ -5,7 +5,7 @@ import { use } from "react";
 
 import { ApiError } from "@marketplace/api-client";
 
-import { LoadError } from "@/components/load-error";
+import { LoadError, OfflineError } from "@/components/load-error";
 import { COPY, KitchenCard } from "@/components/meals/kitchen-card";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
@@ -41,7 +41,7 @@ export default function CollectionPage({
     <CustomerShell locale={locale}>
       {c.fetchStatus === "paused" && !c.data ? (
         <LoadError
-          error={new TypeError("offline")}
+          error={new OfflineError()}
           onRetry={() => void c.refetch()}
           locale={locale}
         />
