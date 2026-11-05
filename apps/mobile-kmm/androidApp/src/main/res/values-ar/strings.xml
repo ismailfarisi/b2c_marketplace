@@ -112,7 +112,14 @@
 
     <string name="signin_title">سجّل الدخول للعرض</string>
     <string name="signin_why">إعلانك مرتبط بحساب، والمشترون يراسلونك من هنا. رقمك لا يظهر لهم أبداً.</string>
-    <string name="signin_phone_hint">+971 50 000 0000</string>
+    <string name="signin_phone_hint">اختر رمز الدولة، ثم اكتب الرقم كما تكتبه محلياً.</string>
+    <string name="signin_country">رمز الدولة</string>
+    <string name="signin_country_ae">الإمارات</string>
+    <string name="signin_country_sa">السعودية</string>
+    <string name="signin_country_qa">قطر</string>
+    <string name="signin_country_kw">الكويت</string>
+    <string name="signin_country_bh">البحرين</string>
+    <string name="signin_country_om">عُمان</string>
     <string name="signin_send_code">أرسل الرمز</string>
     <string name="signin_code_hint">رمز من ٦ أرقام</string>
     <string name="signin_verify">تأكيد</string>
@@ -125,6 +132,12 @@
     <string name="signin_err_code">الرمز غير صحيح. راجع الرسالة وحاول مرة أخرى.</string>
     <string name="signin_err_stale">انتهت صلاحية الرمز. اطلب رمزاً جديداً.</string>
     <string name="signin_err_too_many">محاولات كثيرة. انتظر دقيقة ثم حاول مجدداً.</string>
+    <string name="signin_err_too_many_wait">محاولات كثيرة. حاول مجدداً بعد %1$s.</string>
+    <string name="signin_err_phone_length">هذا ليس رقم جوال في %1$s. تحقق من رمز الدولة.</string>
+    <string name="signin_err_superseded">أرسلنا رمزاً أحدث. استخدم الرمز من آخر رسالة.</string>
+    <string name="signin_err_resend_too_many_wait">طلبت رموزاً كثيرة. حاول مجدداً بعد %1$s؛ رمزك السابق ما زال صالحاً حتى تنتهي مدته.</string>
+    <string name="signin_wait_seconds">%1$d ث</string>
+    <string name="signin_wait_minutes">%1$d د</string>
     <string name="signin_err_offline">لا يوجد اتصال. تحقق من الشبكة وحاول مجدداً.</string>
     <string name="signin_err_unknown">تسجيل الدخول لا يعمل الآن. حاول بعد قليل.</string>
     <string name="signin_err_blocked">لا يمكن لهذا الحساب تسجيل الدخول حالياً. تواصل مع الدعم للمساعدة.</string>

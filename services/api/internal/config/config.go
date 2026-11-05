@@ -69,7 +69,8 @@ type Config struct {
 
 	// TrustedProxies (TRUSTED_PROXIES) is a comma-separated list of IPs/CIDRs
 	// of the load balancers in front of the API. X-Forwarded-For is honoured
-	// only from these; empty means the socket address is the client.
+	// only from these; empty means the socket address is the client. Required
+	// in production, where "none" opts out for an API exposed directly.
 	TrustedProxies string
 
 	S3Endpoint string
@@ -274,6 +275,16 @@ func Load() (Config, error) {
 		}
 		if cfg.OTPDevEcho {
 			problems = append(problems, "OTP_DEV_ECHO must be false in production")
+		}
+		// Behind a load balancer every request arrives from the balancer's
+		// address, so with no trusted proxies the per-IP OTP limit (20/hour) is
+		// one bucket for the whole country. An explicit "none" says the API
+		// really is exposed directly; an unset variable is never that decision.
+		if strings.TrimSpace(cfg.TrustedProxies) == "" {
+			problems = append(problems,
+				"TRUSTED_PROXIES is required in production — set the load balancer "+
+					"IPs/CIDRs (e.g. 10.0.0.0/16), or \"none\" if clients connect directly; "+
+					"unset, every client shares the balancer's OTP rate limit")
 		}
 		if len(cfg.JWTSigningKey) < 32 {
 			problems = append(problems, "JWT_SIGNING_KEY must be at least 32 bytes in production")

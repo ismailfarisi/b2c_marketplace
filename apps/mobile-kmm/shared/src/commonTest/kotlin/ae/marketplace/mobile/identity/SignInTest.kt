@@ -26,6 +26,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SignInTest {
@@ -167,5 +168,86 @@ class SignInTest {
         vm.settle()
         assertEquals(SignInProblem.AccountBlocked, vm.state.value.error)
         assertEquals("c1", vm.state.value.challengeId)
+    }
+
+    @Test
+    fun thePickedCountryIsSentWithTheNumber() = runTest {
+        val tokens = InMemoryTokenStore()
+        var body = ""
+        val client = client(tokens) { req ->
+            body = (req.body as io.ktor.http.content.TextContent).text
+            respond("""{"challenge_id":"c1","resend_after_seconds":60}""", HttpStatusCode.Accepted, json)
+        }
+        val vm = SignInViewModel(SignInApi(client, tokens), Session(tokens))
+        assertEquals(PhoneCountry.AE, vm.state.value.country)
+        vm.onCountry(PhoneCountry.SA)
+        vm.onPhone("0551230003")
+        vm.sendCode(0)
+        vm.settle()
+        assertTrue(""""country":"SA"""" in body, body)
+        assertTrue(""""phone":"0551230003"""" in body, body)
+        assertEquals("+966 551230003", vm.state.value.sentTo)
+    }
+
+    @Test
+    fun wrongLengthForTheCountryIsItsOwnProblem() = runTest {
+        val tokens = InMemoryTokenStore()
+        val client = client(tokens) {
+            respond(
+                """{"type":"about:blank","title":"x","status":422,"errors":[{"field":"phone","code":"wrong_length"}]}""",
+                HttpStatusCode.UnprocessableEntity,
+                headersOf(HttpHeaders.ContentType, "application/problem+json"),
+            )
+        }
+        val vm = SignInViewModel(SignInApi(client, tokens), Session(tokens))
+        vm.onCountry(PhoneCountry.QA)
+        vm.onPhone("0551230003")
+        vm.sendCode(0)
+        vm.settle()
+        assertEquals(SignInProblem.WrongLength, vm.state.value.error)
+    }
+
+    @Test
+    fun rateLimitCarriesRetryAfter() = runTest {
+        val tokens = InMemoryTokenStore()
+        val client = client(tokens) {
+            respond(
+                """{"type":"about:blank","title":"x","status":429,"code":"otp_rate_limited"}""",
+                HttpStatusCode.TooManyRequests,
+                headersOf(
+                    HttpHeaders.ContentType to listOf("application/problem+json"),
+                    HttpHeaders.RetryAfter to listOf("1500"),
+                ),
+            )
+        }
+        val vm = SignInViewModel(SignInApi(client, tokens), Session(tokens))
+        vm.onPhone("+971501234567")
+        vm.sendCode(0)
+        vm.settle()
+        assertEquals(SignInProblem.TooMany, vm.state.value.error)
+        assertEquals(1500, vm.state.value.retryAfterSeconds)
+        assertEquals(25, vm.state.value.retryAfterMinutes)
+    }
+
+    @Test
+    fun aRetiredCodeSendsTheViewerToTheLatestMessage() = runTest {
+        val tokens = InMemoryTokenStore()
+        var calls = 0
+        val client = client(tokens) {
+            if (calls++ == 0) {
+                respond("""{"challenge_id":"c1","resend_after_seconds":60}""", HttpStatusCode.Accepted, json)
+            } else {
+                problem(401, "otp_superseded")
+            }
+        }
+        val vm = SignInViewModel(SignInApi(client, tokens), Session(tokens))
+        vm.onPhone("+971501234567")
+        vm.sendCode(0)
+        vm.settle()
+        vm.onCode("123456")
+        vm.verify()
+        vm.settle()
+        assertEquals(SignInProblem.Superseded, vm.state.value.error)
+        assertEquals("", vm.state.value.challengeId)
     }
 }

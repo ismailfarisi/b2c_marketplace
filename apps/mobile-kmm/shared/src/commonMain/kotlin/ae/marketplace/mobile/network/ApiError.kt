@@ -39,6 +39,8 @@ class ApiException(
     val status: Int,
     val problem: Problem?,
     val requestId: String?,
+    /** The `Retry-After` header in seconds, on a 429 that sent one. */
+    val retryAfterSeconds: Int? = null,
 ) : Exception(problem?.title ?: "Request failed with status $status") {
 
     /** The server's reason code, when it gave one. */

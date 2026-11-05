@@ -51,11 +51,11 @@ export interface TokenPair {
  * endpoint is public, and one that answered differently would be a free
  * membership oracle for any list of phone numbers.
  */
-export const requestOtp = (phone: string, locale: string) =>
+export const requestOtp = (phone: string, country: string, locale: string) =>
   apiFetch<OtpChallenge>({
     url: "/auth/otp/request",
     method: "POST",
-    data: { phone, purpose: "login", locale },
+    data: { phone, country, purpose: "login", locale },
   });
 
 /**

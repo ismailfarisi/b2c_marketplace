@@ -460,6 +460,7 @@ export * from './orderNotes';
 export * from './orderStatus';
 export * from './otpChallenge';
 export * from './otpRequest';
+export * from './otpRequestCountry';
 export * from './otpRequestPurpose';
 export * from './otpVerification';
 export * from './otpVerificationDevice';
