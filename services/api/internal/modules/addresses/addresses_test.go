@@ -1,7 +1,10 @@
 package addresses
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/marketplace/api/internal/httpx"
@@ -30,6 +33,28 @@ func TestValidateSpeaksTheCallersLanguage(t *testing.T) {
 		}
 		if tc.locale == "ar" && (got["city"].Message != "أدخل المدينة." || got["point"].Message != "حدّد موقع العنوان على الخريطة.") {
 			t.Errorf("ar messages not localized: %+v", got)
+		}
+	}
+}
+
+func TestDefaultOnlySpeaksTheCallersLanguage(t *testing.T) {
+	for _, tc := range []struct{ header, want string }{
+		{"", "To change your default address, choose another address as the default."},
+		{"ar-AE", "لتغيير عنوانك الافتراضي، اختر عنوانًا آخر ليكون الافتراضي."},
+	} {
+		var ctx context.Context
+		h := httpx.Locale(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { ctx = r.Context() }))
+		req := httptest.NewRequest(http.MethodPatch, "/me/addresses/x", nil)
+		if tc.header != "" {
+			req.Header.Set("Accept-Language", tc.header)
+		}
+		h.ServeHTTP(httptest.NewRecorder(), req)
+		var v *httpx.ValidationError
+		if !errors.As(DefaultOnly(ctx), &v) || len(v.Fields) != 1 {
+			t.Fatalf("%q: want one field error", tc.header)
+		}
+		if f := v.Fields[0]; f.Field != "is_default" || f.Code != "invalid" || f.Message != tc.want {
+			t.Errorf("%q: got %+v", tc.header, f)
 		}
 	}
 }

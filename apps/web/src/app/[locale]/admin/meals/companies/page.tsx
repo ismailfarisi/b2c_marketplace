@@ -168,16 +168,18 @@ function Detail({ id }: { id: string }) {
           <button className="btn primary" disabled={busy} onClick={() => act(() => issueCompanyStatement(id, periodEnd), "Statement issued.")}>Issue statement</button>
         </div>
         <table className="money-table">
-          <thead><tr><th>No.</th><th>Period end</th><th>Total</th><th>Due</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>No.</th><th>Period end</th><th>Total</th><th>Refund adjustment</th><th>Amount due</th><th>Due</th><th>Status</th><th /></tr></thead>
           <tbody>
-            {(d.data.statements ?? []).length === 0 && <tr><td colSpan={6} className="muted">No statements yet.</td></tr>}
+            {(d.data.statements ?? []).length === 0 && <tr><td colSpan={8} className="muted">No statements yet.</td></tr>}
             {(d.data.statements ?? []).map((s) => (
               <tr key={s.id}>
                 <td><button className="btn link" onClick={() => setOpenSt(s.id)}>{s.statement_no}</button></td>
                 <td>{s.period_end}</td>
                 <td>{money(s.total_minor)}</td>
+                <td>{s.adjustment_minor !== 0 ? money(s.adjustment_minor) : "—"}</td>
+                <td><strong>{money(s.amount_due_minor)}</strong></td>
                 <td>{s.due_on}</td>
-                <td>{s.status === "paid" ? `paid · ${s.paid_reference}` : s.status}</td>
+                <td>{s.status === "paid" ? (s.paid_reference ? `paid · ${s.paid_reference}` : "settled by refund credit") : s.status}</td>
                 <td>
                   {s.status === "issued" && (
                     <span className="merch-actions">
@@ -201,7 +203,7 @@ function Detail({ id }: { id: string }) {
             <thead><tr><th colSpan={4}>{st.data.statement_no} lines</th></tr></thead>
             <tbody>
               {(st.data.lines ?? []).map((l) => (
-                <tr key={l.id}><td>{l.subscription_no}</td><td>{l.employee}</td><td>{l.kitchen}</td><td>{l.kind === "credit" ? "Credit " : ""}{money(l.amount_minor)}</td></tr>
+                <tr key={l.id}><td>{l.subscription_no}</td><td>{l.employee}</td><td>{l.kitchen}</td><td>{l.adjustment ? "Refund adjustment " : l.kind === "credit" ? "Credit " : ""}{money(l.amount_minor)}</td></tr>
               ))}
             </tbody>
           </table>

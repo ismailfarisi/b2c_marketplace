@@ -26,7 +26,12 @@ export interface CompanyStatement {
   id?: string;
   statement_no?: string;
   period_end?: string;
+  /** As issued */
   total_minor?: number;
+  /** Refund credits applied after issue; zero or negative */
+  adjustment_minor?: number;
+  /** What the statement asks for now */
+  amount_due_minor?: number;
   currency?: string;
   status?: CompanyStatementStatus;
   issued_at?: string;

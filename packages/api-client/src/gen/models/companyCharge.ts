@@ -31,5 +31,7 @@ export interface CompanyCharge {
   /** Negative for credits */
   amount_minor?: number;
   currency?: string;
+  /** A refund credit applied to this already-issued statement */
+  adjustment?: boolean;
   created_at?: string;
 }

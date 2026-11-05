@@ -84,6 +84,9 @@ export const COPY = {
     hide: "Hide",
     lines: "Lines",
     credit_line: "Credit",
+    adjustment_line: "Refund adjustment",
+    adjusted: (total: string, adjustment: string) => `Issued ${total} · refund adjustment ${adjustment}`,
+    settled: "Settled by refund credit",
     transfer: (no: string, due: string) =>
       `Pay by bank transfer by ${due} and quote ${no} as the transfer reference.`,
     paidRef: (ref: string) => `Paid · reference ${ref}`,
@@ -172,6 +175,9 @@ export const COPY = {
     hide: "إخفاء",
     lines: "البنود",
     credit_line: "رصيد مُعاد",
+    adjustment_line: "تسوية استرداد",
+    adjusted: (total: string, adjustment: string) => `صدر بمبلغ ${total} · تسوية استرداد ${adjustment}`,
+    settled: "سُوّي برصيد الاسترداد",
     transfer: (no: string, due: string) =>
       `ادفع بتحويل بنكي قبل ${due} واذكر ${no} كمرجع للتحويل.`,
     paidRef: (ref: string) => `مدفوع · المرجع ${ref}`,

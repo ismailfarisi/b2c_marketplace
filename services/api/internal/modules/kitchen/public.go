@@ -123,8 +123,12 @@ func (s *Service) Discover(ctx context.Context, f DiscoverFilter) ([]PublicKitch
 		   AND v.deleted_at IS NULL AND v.status = 'active'
 		   AND ($2::float8 IS NULL OR (b.service_area IS NOT NULL AND
 		        ST_Intersects(b.service_area, ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography)))
+		   -- Arabic names compare through search_fold (migration 000060), so a
+		   -- query typed with or without tashkeel, tatweel or another alef /
+		   -- yaa / taa marbuta form still finds the dish or kitchen.
 		   AND ($4 = '' OR b.name ILIKE '%' || $4 || '%' OR v.trade_name ILIKE '%' || $4 || '%'
-		        OR b.name_ar ILIKE '%' || $4 || '%' OR v.trade_name_ar ILIKE '%' || $4 || '%'
+		        OR search_fold(b.name_ar) LIKE '%' || search_fold($4) || '%'
+		        OR search_fold(v.trade_name_ar) LIKE '%' || search_fold($4) || '%'
 		        -- The search box promises dishes too: a dish on the kitchen's
 		        -- live menu is a match, in either language.
 		        OR EXISTS (
@@ -134,7 +138,7 @@ func (s *Service) Discover(ctx context.Context, f DiscoverFilter) ([]PublicKitch
 		            JOIN menu_day_items di ON di.cycle_day_id = cd.id
 		            JOIN menu_items mi ON mi.id = di.menu_item_id AND mi.is_active
 		           WHERE c.branch_id = b.id AND c.is_active
-		             AND (mi.name ILIKE '%' || $4 || '%' OR mi.name_ar ILIKE '%' || $4 || '%')))
+		             AND (mi.name ILIKE '%' || $4 || '%' OR search_fold(mi.name_ar) LIKE '%' || search_fold($4) || '%')))
 		   AND ($5 = '' OR $5 = ANY (p.slots))
 		   AND ($6 = '' OR $6 = ANY (b.cuisines))
 		   AND ($7 = '' OR $7 = ANY (b.dietary_tags))

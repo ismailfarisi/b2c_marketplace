@@ -206,7 +206,10 @@ function StatementRow({
   });
   return (
     <li>
-      <strong dir="ltr">{s.statement_no}</strong> · {money(s.total_minor)}
+      <strong dir="ltr">{s.statement_no}</strong> · {money(s.amount_due_minor)}
+      {s.adjustment_minor !== 0 && (
+        <span className="ms-sub"> · {t.adjusted(money(s.total_minor), money(s.adjustment_minor))}</span>
+      )}
       <span className="ms-sub"> · {s.status === "paid" ? t.paid : `${t.issued} · ${t.due} ${s.due_on}`}</span>{" "}
       <button type="button" className="ms-link" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? t.hide : t.view}
@@ -214,7 +217,7 @@ function StatementRow({
       {open && (
         <div className="ms-panel">
           {s.status === "paid" ? (
-            <p className="ms-sub">{t.paidRef(s.paid_reference)}</p>
+            <p className="ms-sub">{s.paid_reference ? t.paidRef(s.paid_reference) : t.settled}</p>
           ) : (
             <p>{t.transfer(s.statement_no, s.due_on)}</p>
           )}
@@ -230,7 +233,7 @@ function StatementRow({
                   <li key={l.id}>
                     <span dir="ltr">{l.subscription_no}</span> · <span dir="auto">{l.employee}</span> ·{" "}
                     <span dir="auto">{l.kitchen}</span>
-                    {l.kind === "credit" ? ` · ${t.credit_line}` : ""} · <strong>{money(l.amount_minor)}</strong>
+                    {l.adjustment ? ` · ${t.adjustment_line}` : l.kind === "credit" ? ` · ${t.credit_line}` : ""} · <strong>{money(l.amount_minor)}</strong>
                   </li>
                 ))}
               </ul>

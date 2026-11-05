@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/company/credits"
 	"github.com/marketplace/api/internal/platform/postgres"
 )
 
@@ -135,6 +136,11 @@ func (s *Service) IssueStatement(ctx context.Context, actorID, companyID uuid.UU
 			if errors.Is(err, pgx.ErrNoRows) {
 				return httpx.ErrNotFound
 			}
+			return err
+		}
+		// Catch up on any refund for an already-billed lunch that found no open
+		// statement when it was written, before netting the rest.
+		if err := credits.Apply(ctx, tx, companyID); err != nil {
 			return err
 		}
 		cutoff := time.Date(periodEnd.Year(), periodEnd.Month(), periodEnd.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, 1)

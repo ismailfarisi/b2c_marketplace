@@ -525,6 +525,7 @@ export interface CompanyCharge {
   kitchen: string;
   amount_minor: number;
   currency: string;
+  adjustment: boolean;
   created_at: string;
 }
 
@@ -533,6 +534,8 @@ export interface CompanyStatement {
   statement_no: string;
   period_end: string;
   total_minor: number;
+  adjustment_minor: number;
+  amount_due_minor: number;
   currency: string;
   status: "issued" | "paid" | "void";
   issued_at: string;
