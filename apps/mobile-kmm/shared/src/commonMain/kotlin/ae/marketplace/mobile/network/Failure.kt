@@ -169,5 +169,28 @@ val Failure.isRetryable: Boolean
     get() = when (this) {
         Failure.Offline, Failure.Timeout, is Failure.Server, Failure.Unknown -> true
         is Failure.RateLimited -> true
-        Failure.Unauthorized, Failure.Forbidden, Failure.NotFound, is Failure.Rejected -> false
+        // The first copy of this request is still running; the same key will
+        // get its answer in a moment. Every other refusal is final.
+        is Failure.Rejected -> code == IDEMPOTENCY_IN_FLIGHT
+        Failure.Unauthorized, Failure.Forbidden, Failure.NotFound -> false
+    }
+
+/** 409: a request with this Idempotency-Key is still being processed. */
+const val IDEMPOTENCY_IN_FLIGHT = "idempotency_in_flight"
+
+/** 422: this Idempotency-Key was already used with a different body. */
+const val IDEMPOTENCY_KEY_REUSED = "idempotency_key_reused"
+
+/**
+ * [runCatching] for optional parts of a load: any failure becomes null, but a
+ * [CancellationException] is rethrown so a cancelled load stops instead of
+ * carrying on with half its data.
+ */
+suspend inline fun <T> orNullUnlessCancelled(block: suspend () -> T): T? =
+    try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Throwable) {
+        null
     }

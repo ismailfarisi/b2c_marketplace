@@ -344,8 +344,13 @@ private fun ActionRow(actions: List<ResolvedAction>, onAction: (ResolvedAction) 
                 // Always shown when a CTA is unavailable. A greyed-out button
                 // with no explanation reads as a broken app, and the vendor gets
                 // blamed for a platform decision.
-                action.reason?.takeIf { !action.available }?.let {
-                    Text(it, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
+                //
+                // The server's reason is English-only, so an Arabic viewer gets
+                // the client's own sentence instead (the web does the same).
+                if (!action.available) {
+                    val reason = action.reason?.takeIf { !arabic && it.isNotBlank() }
+                        ?: stringResource(R.string.feed_cta_unavailable)
+                    Text(reason, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
                 }
             }
         }

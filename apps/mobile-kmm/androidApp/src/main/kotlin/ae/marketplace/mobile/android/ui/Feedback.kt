@@ -58,7 +58,14 @@ fun Failure.words(): String = when (this) {
     // than anything a client could invent — "This offer has ended", "Outside
     // this kitchen's delivery area" — and throwing it away to show "Invalid
     // request" would be discarding the most useful string in the response.
-    is Failure.Rejected -> detail ?: stringResource(R.string.err_rejected)
+    //
+    // Except the idempotency refusals: their detail is English, and the reader
+    // needs words in their own language for "still working on it".
+    is Failure.Rejected -> when (code) {
+        "idempotency_in_flight" -> stringResource(R.string.err_in_flight)
+        "idempotency_key_reused" -> stringResource(R.string.err_request_changed)
+        else -> detail ?: stringResource(R.string.err_rejected)
+    }
     is Failure.Server -> stringResource(R.string.err_server)
     Failure.Unknown -> stringResource(R.string.err_unknown)
 }

@@ -31,7 +31,17 @@ extension Failure {
             // client could invent — "This offer has ended", "Outside this
             // kitchen's delivery area" — and discarding it for "Invalid
             // request" would throw away the most useful string in the response.
-            return rejected.detail ?? String(localized: "err_rejected")
+            //
+            // Except the idempotency refusals: their detail is English, and the
+            // reader needs "still working on it" in their own language.
+            switch rejected.code {
+            case "idempotency_in_flight":
+                return String(localized: "err_in_flight")
+            case "idempotency_key_reused":
+                return String(localized: "err_request_changed")
+            default:
+                return rejected.detail ?? String(localized: "err_rejected")
+            }
         case .server:
             return String(localized: "err_server")
         case .unknown:

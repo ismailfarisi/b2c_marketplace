@@ -294,7 +294,7 @@ private struct ActionRow: View {
                         onAction(action)
                     } label: {
                         // Rendered exactly as the vertical's handler gave it.
-                        Text(action.label)
+                        Text(localised(action.label, action.labelAr))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity)
                     }
@@ -305,8 +305,11 @@ private struct ActionRow: View {
                     // Always shown when a CTA is unavailable. A greyed-out
                     // button with no explanation reads as a broken app, and the
                     // vendor gets blamed for a platform decision.
-                    if !action.available, let reason = action.reason {
-                        Text(reason)
+                    //
+                    // The server's reason is English-only, so an Arabic viewer
+                    // gets the client's own sentence instead (as on the web).
+                    if !action.available {
+                        Text(unavailableReason(action))
                             .foregroundStyle(.white.opacity(0.6))
                             .font(.caption2)
                     }
@@ -315,4 +318,12 @@ private struct ActionRow: View {
         }
         .padding(.top, 6)
     }
+}
+
+/// Why a CTA is greyed out, in the viewer's language.
+private func unavailableReason(_ action: ResolvedAction) -> String {
+    if !isArabicLocale, let reason = action.reason, !reason.trimmingCharacters(in: .whitespaces).isEmpty {
+        return reason
+    }
+    return String(localized: "feed_cta_unavailable")
 }
