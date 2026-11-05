@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/company/credits"
 	"github.com/marketplace/api/internal/modules/ledger"
 	"github.com/marketplace/api/internal/modules/promo"
 	"github.com/marketplace/api/internal/platform/postgres"
@@ -838,6 +839,13 @@ func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUU
 					c.ID); err != nil {
 					return fmt.Errorf("subscriptions: close cycle: %w", err)
 				}
+			}
+		}
+		// A refund for a lunch already on an issued statement comes off that
+		// statement rather than waiting, negative, for the next one.
+		if companyID != nil {
+			if err := credits.Apply(ctx, tx, *companyID); err != nil {
+				return err
 			}
 		}
 

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/addresses"
 	"github.com/marketplace/api/internal/modules/identity"
 )
 
@@ -65,9 +66,7 @@ func (h *AddressHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.IsDefault == nil || !*body.IsDefault {
-		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
-			Field: "is_default", Code: "invalid", Message: "set is_default to true; choose another address to move the default",
-		}}})
+		httpx.WriteProblem(w, r, addresses.DefaultOnly(r.Context()))
 		return
 	}
 	a, err := h.Addresses.SetDefault(r.Context(), userID, id)

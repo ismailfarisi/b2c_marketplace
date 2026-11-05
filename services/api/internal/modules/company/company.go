@@ -63,17 +63,21 @@ type Office struct {
 }
 
 type Statement struct {
-	ID            uuid.UUID  `json:"id"`
-	StatementNo   string     `json:"statement_no"`
-	PeriodEnd     string     `json:"period_end"`
-	TotalMinor    int64      `json:"total_minor"`
-	Currency      string     `json:"currency"`
-	Status        string     `json:"status"`
-	IssuedAt      time.Time  `json:"issued_at"`
-	DueOn         string     `json:"due_on"`
-	PaidAt        *time.Time `json:"paid_at"`
-	PaidReference string     `json:"paid_reference"`
-	Lines         []Charge   `json:"lines,omitempty"`
+	ID          uuid.UUID `json:"id"`
+	StatementNo string    `json:"statement_no"`
+	PeriodEnd   string    `json:"period_end"`
+	TotalMinor  int64     `json:"total_minor"`
+	// AdjustmentMinor (zero or negative) is the refund credit applied after
+	// the statement was issued; AmountDueMinor is what it asks for now.
+	AdjustmentMinor int64      `json:"adjustment_minor"`
+	AmountDueMinor  int64      `json:"amount_due_minor"`
+	Currency        string     `json:"currency"`
+	Status          string     `json:"status"`
+	IssuedAt        time.Time  `json:"issued_at"`
+	DueOn           string     `json:"due_on"`
+	PaidAt          *time.Time `json:"paid_at"`
+	PaidReference   string     `json:"paid_reference"`
+	Lines           []Charge   `json:"lines,omitempty"`
 }
 
 type Charge struct {
@@ -86,6 +90,9 @@ type Charge struct {
 	AmountMinor    int64     `json:"amount_minor"`
 	Currency       string    `json:"currency"`
 	CreatedAt      time.Time `json:"created_at"`
+	// Adjustment marks a refund credit applied to the statement after it was
+	// issued, reducing its amount due.
+	Adjustment bool `json:"adjustment"`
 }
 
 type Lunch struct {

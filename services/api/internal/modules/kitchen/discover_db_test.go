@@ -89,6 +89,34 @@ func TestDiscoverMatchesMenuDishes(t *testing.T) {
 	if !found(nameAr) {
 		t.Fatal("Arabic dish name did not find its kitchen")
 	}
+
+	// Arabic is typed with or without tashkeel and tatweel, and with any of
+	// the alef / yaa / taa marbuta spellings; all of them are the same dish.
+	voweled := "مَنْسَفُ إِبْراهيمَ بالدجاجة على الأرز" + tag
+	if _, err := pool.Exec(ctx, `UPDATE menu_items SET name_ar = $2 WHERE id = $1`, itemID, voweled); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		voweled,
+		"منسف ابراهيم بالدجاجه علي الارز" + tag,
+		"إبراهيم بالدجاجة" + " على الأرز" + tag,
+		"بالدجـــاجة علي آلارز" + tag,
+		"مَنْسَف",
+	} {
+		if !found(q) {
+			t.Errorf("Arabic query %q did not find the voweled dish", q)
+		}
+	}
+	plain := "منسف ابراهيم بالدجاجه" + tag
+	if _, err := pool.Exec(ctx, `UPDATE menu_items SET name_ar = $2 WHERE id = $1`, itemID, plain); err != nil {
+		t.Fatal(err)
+	}
+	if !found("مَنْسَفُ إِبْراهيمَ بالدجاجة" + tag) {
+		t.Error("voweled query did not find the plain dish")
+	}
+	if found("منسف لحم" + tag) {
+		t.Error("a different Arabic dish matched")
+	}
 	if found("Nodish" + tag) {
 		t.Fatal("unrelated query matched")
 	}

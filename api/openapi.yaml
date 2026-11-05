@@ -5134,6 +5134,7 @@ components:
         kitchen: { type: string }
         amount_minor: { type: integer, format: int64, description: Negative for credits }
         currency: { type: string }
+        adjustment: { type: boolean, description: A refund credit applied to this already-issued statement }
         created_at: { type: string, format: date-time }
     CompanyStatement:
       type: object
@@ -5141,7 +5142,9 @@ components:
         id: { type: string, format: uuid }
         statement_no: { type: string }
         period_end: { type: string, format: date }
-        total_minor: { type: integer, format: int64 }
+        total_minor: { type: integer, format: int64, description: As issued }
+        adjustment_minor: { type: integer, format: int64, description: Refund credits applied after issue; zero or negative }
+        amount_due_minor: { type: integer, format: int64, description: What the statement asks for now, total plus adjustments }
         currency: { type: string }
         status: { type: string, enum: [issued, paid, void] }
         issued_at: { type: string, format: date-time }

@@ -66,3 +66,74 @@ func TestSetDefaultMovesTheDefault(t *testing.T) {
 		t.Fatalf("removed address: want 404, got %v", err)
 	}
 }
+
+// Removing the default must not leave the customer without one: the most
+// recently saved address left takes over. Removing a non-default keeps it.
+func TestDeletePromotesNewestRemaining(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	var user uuid.UUID
+	if err := pool.QueryRow(ctx, `INSERT INTO users (phone) VALUES ($1) RETURNING id`,
+		fmt.Sprintf("+97157%07d", rand.IntN(10_000_000))).Scan(&user); err != nil {
+		t.Fatalf("user: %v", err)
+	}
+	s := NewService(pool)
+	add := func(label string) Address {
+		a, err := s.Create(ctx, user, Input{Label: label, City: "Dubai", Point: &GeoPoint{Lat: 25.2, Lng: 55.3}})
+		if err != nil {
+			t.Fatalf("create %s: %v", label, err)
+		}
+		return a
+	}
+	home, gym, office := add("Home"), add("Gym"), add("Office")
+	defaultOf := func() (uuid.UUID, int) {
+		t.Helper()
+		list, err := s.List(ctx, user)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		var id uuid.UUID
+		n := 0
+		for _, a := range list {
+			if a.IsDefault {
+				id, n = a.ID, n+1
+			}
+		}
+		return id, n
+	}
+	if id, n := defaultOf(); id != home.ID || n != 1 {
+		t.Fatalf("default = %v (%d), want home", id, n)
+	}
+
+	if err := s.Delete(ctx, user, gym.ID); err != nil {
+		t.Fatalf("delete gym: %v", err)
+	}
+	if id, n := defaultOf(); id != home.ID || n != 1 {
+		t.Fatalf("after removing a non-default: default = %v (%d), want home", id, n)
+	}
+
+	if err := s.Delete(ctx, user, home.ID); err != nil {
+		t.Fatalf("delete home: %v", err)
+	}
+	if id, n := defaultOf(); id != office.ID || n != 1 {
+		t.Fatalf("after removing the default: default = %v (%d), want office", id, n)
+	}
+
+	if err := s.Delete(ctx, user, office.ID); err != nil {
+		t.Fatalf("delete office: %v", err)
+	}
+	if _, n := defaultOf(); n != 0 {
+		t.Fatalf("no addresses left but %d defaults", n)
+	}
+	if err := s.Delete(ctx, user, office.ID); !errors.Is(err, httpx.ErrNotFound) {
+		t.Fatalf("second delete: want 404, got %v", err)
+	}
+}

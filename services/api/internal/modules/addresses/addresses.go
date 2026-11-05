@@ -6,6 +6,7 @@ package addresses
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -166,18 +167,47 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Addre
 }
 
 // Delete soft-deletes so subscriptions and past orders that point at the
-// address keep resolving. Someone else's address is 404.
+// address keep resolving. Someone else's address is 404. Removing the default
+// hands it to the most recently saved address left, so checkout always has
+// one to offer first.
 func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE addresses
-		   SET deleted_at = now(), is_default = false, updated_at = now()
-		 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`, id, userID)
-	if err != nil {
-		return fmt.Errorf("addresses: delete: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return httpx.ErrNotFound
-	}
-	return nil
+	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var wasDefault bool
+		err := tx.QueryRow(ctx, `SELECT is_default FROM addresses
+			 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL FOR UPDATE`, id, userID).Scan(&wasDefault)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return httpx.ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("addresses: find: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE addresses
+			   SET deleted_at = now(), is_default = false, updated_at = now()
+			 WHERE id = $1`, id); err != nil {
+			return fmt.Errorf("addresses: delete: %w", err)
+		}
+		if !wasDefault {
+			return nil
+		}
+		if _, err := tx.Exec(ctx, `UPDATE addresses SET is_default = true, updated_at = now()
+			 WHERE id = (SELECT id FROM addresses
+			              WHERE user_id = $1 AND deleted_at IS NULL
+			              ORDER BY created_at DESC, id DESC LIMIT 1)`, userID); err != nil {
+			return fmt.Errorf("addresses: promote default: %w", err)
+		}
+		return nil
+	})
+}
+
+// DefaultOnly is the 422 for PATCH is_default:false: the default moves by
+// choosing another address, never by clearing it.
+func DefaultOnly(ctx context.Context) error {
+	return &httpx.ValidationError{Fields: []httpx.FieldError{{
+		Field: "is_default", Code: "invalid",
+		Message: say(httpx.LocaleFromContext(ctx),
+			"To change your default address, choose another address as the default.",
+			"لتغيير عنوانك الافتراضي، اختر عنوانًا آخر ليكون الافتراضي."),
+	}}}
 }
 
 // SetDefault makes one address the one checkout offers first. Someone else's

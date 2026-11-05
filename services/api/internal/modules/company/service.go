@@ -245,8 +245,10 @@ func credit(ctx context.Context, q querier, companyID uuid.UUID, limit int64) (C
 	var c Credit
 	err := q.QueryRow(ctx, `
 		SELECT coalesce(sum(ch.amount_minor) FILTER (WHERE ch.statement_id IS NULL), 0),
-		       (SELECT coalesce(sum(total_minor), 0) FROM company_statements
-		         WHERE company_id = $1 AND status = 'issued'),
+		       (SELECT coalesce(sum(s.total_minor), 0) + coalesce(sum(a.amount_minor), 0)
+		          FROM company_statements s
+		          LEFT JOIN company_charges a ON a.statement_id = s.id AND a.applied_at IS NOT NULL
+		         WHERE s.company_id = $1 AND s.status = 'issued'),
 		       coalesce(sum(ch.amount_minor) FILTER (WHERE ch.created_at >= date_trunc('month', now())), 0),
 		       (SELECT count(*) FROM company_statements
 		         WHERE company_id = $1 AND status = 'issued' AND due_on < CURRENT_DATE)
@@ -364,9 +366,12 @@ func (s *Service) lunches(ctx context.Context, companyID uuid.UUID) ([]Lunch, er
 
 func (s *Service) statements(ctx context.Context, companyID uuid.UUID) ([]Statement, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, statement_no, to_char(period_end, 'YYYY-MM-DD'), total_minor, currency, status,
-		       issued_at, to_char(due_on, 'YYYY-MM-DD'), paid_at, coalesce(paid_reference, '')
-		  FROM company_statements WHERE company_id = $1 ORDER BY issued_at DESC LIMIT 60`, companyID)
+		SELECT s.id, s.statement_no, to_char(s.period_end, 'YYYY-MM-DD'), s.total_minor,
+		       coalesce((SELECT sum(a.amount_minor) FROM company_charges a
+		                  WHERE a.statement_id = s.id AND a.applied_at IS NOT NULL), 0),
+		       s.currency, s.status,
+		       s.issued_at, to_char(s.due_on, 'YYYY-MM-DD'), s.paid_at, coalesce(s.paid_reference, '')
+		  FROM company_statements s WHERE s.company_id = $1 ORDER BY s.issued_at DESC LIMIT 60`, companyID)
 	if err != nil {
 		return nil, fmt.Errorf("company: statements: %w", err)
 	}
@@ -374,10 +379,11 @@ func (s *Service) statements(ctx context.Context, companyID uuid.UUID) ([]Statem
 	out := []Statement{}
 	for rows.Next() {
 		var st Statement
-		if err := rows.Scan(&st.ID, &st.StatementNo, &st.PeriodEnd, &st.TotalMinor, &st.Currency, &st.Status,
-			&st.IssuedAt, &st.DueOn, &st.PaidAt, &st.PaidReference); err != nil {
+		if err := rows.Scan(&st.ID, &st.StatementNo, &st.PeriodEnd, &st.TotalMinor, &st.AdjustmentMinor,
+			&st.Currency, &st.Status, &st.IssuedAt, &st.DueOn, &st.PaidAt, &st.PaidReference); err != nil {
 			return nil, err
 		}
+		st.AmountDueMinor = max(st.TotalMinor+st.AdjustmentMinor, 0)
 		out = append(out, st)
 	}
 	return out, rows.Err()
@@ -386,13 +392,13 @@ func (s *Service) statements(ctx context.Context, companyID uuid.UUID) ([]Statem
 func (s *Service) charges(ctx context.Context, where string, arg uuid.UUID) ([]Charge, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT ch.id, ch.kind, ch.subscription_id, s.subscription_no, coalesce(u.display_name, u.phone),
-		       b.name, ch.amount_minor, ch.currency, ch.created_at
+		       b.name, ch.amount_minor, ch.currency, ch.created_at, ch.applied_at IS NOT NULL
 		  FROM company_charges ch
 		  JOIN subscriptions s ON s.id = ch.subscription_id
 		  JOIN users u ON u.id = ch.user_id
 		  JOIN vendor_branches b ON b.id = s.branch_id
 		 WHERE `+where+`
-		 ORDER BY ch.created_at`, arg)
+		 ORDER BY ch.applied_at NULLS FIRST, ch.created_at`, arg)
 	if err != nil {
 		return nil, fmt.Errorf("company: charges: %w", err)
 	}
@@ -401,7 +407,7 @@ func (s *Service) charges(ctx context.Context, where string, arg uuid.UUID) ([]C
 	for rows.Next() {
 		var c Charge
 		if err := rows.Scan(&c.ID, &c.Kind, &c.SubscriptionID, &c.SubscriptionNo, &c.Employee,
-			&c.Kitchen, &c.AmountMinor, &c.Currency, &c.CreatedAt); err != nil {
+			&c.Kitchen, &c.AmountMinor, &c.Currency, &c.CreatedAt, &c.Adjustment); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
