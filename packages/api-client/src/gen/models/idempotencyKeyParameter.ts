@@ -22,7 +22,11 @@ Conventions:
 
 /**
  * Client-generated UUID. Replaying a key with an identical request body returns
-the original response; replaying it with a different body is a 422.
+the original 2xx response; replaying it with a different body is a 422
+(`code: idempotency_key_reused`). Only successes are stored: a 4xx or 5xx
+releases the key, so a retry with the same key executes again. While the
+first request is still running a twin gets 409 `idempotency_in_flight`
+with `Retry-After`; a claim older than two minutes is taken over.
 
  */
 export type IdempotencyKeyParameter = string;
