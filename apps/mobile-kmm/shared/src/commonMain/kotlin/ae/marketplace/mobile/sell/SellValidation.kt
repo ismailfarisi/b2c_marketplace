@@ -30,7 +30,8 @@ enum class FieldProblem {
 /**
  * [bound] carries the number the message needs — the min for [FieldProblem.TooSmall],
  * the max for [FieldProblem.TooLarge], null otherwise. In *minor* units for a
- * money field, exactly as the field declared it.
+ * money field, exactly as the field declared it; show it with
+ * [SellValidation.boundText].
  */
 data class FieldIssue(
     val key: String,
@@ -117,7 +118,11 @@ object SellValidation {
             }
 
             "integer", "money" -> {
-                val number = parseNumber(value)
+                // A money box holds what the seller typed — dirhams — while the
+                // bounds are minor units, exactly as the wire carries them.
+                // Comparing the two directly rejected a 2,500 AED car against a
+                // 1,000 AED floor, so the answer is converted first.
+                val number = (if (field.kind == "money") moneyToMinor(value) else parseNumber(value))
                     ?: return FieldIssue(field.key, FieldProblem.NotANumber)
                 field.min?.let { if (number < it) return FieldIssue(field.key, FieldProblem.TooSmall, it) }
                 field.max?.let { if (number > it) return FieldIssue(field.key, FieldProblem.TooLarge, it) }
@@ -150,5 +155,72 @@ object SellValidation {
             }
         }
         return cleaned.toLongOrNull()
+    }
+
+    /**
+     * A typed money answer — major units, as on screen — in minor units.
+     *
+     * Up to two decimals are accepted ("1890.5" is 189,050 fils); more than
+     * that is not a price and is refused rather than rounded. Grouping is
+     * stripped like [parseNumber]. Null when it is not a number or overflows.
+     */
+    fun moneyToMinor(raw: String): Long? {
+        val cleaned = buildString {
+            for (c in raw.trim()) {
+                when (c) {
+                    ',', ' ', ' ' -> Unit
+                    else -> append(c)
+                }
+            }
+        }
+        val parts = cleaned.split('.')
+        if (parts.size > 2) return null
+        val whole = parts[0]
+        val fraction = parts.getOrNull(1) ?: ""
+        if (fraction.length > 2 || fraction.any { !it.isDigit() }) return null
+        if (whole.isEmpty() && fraction.isEmpty()) return null
+        val major = if (whole.isEmpty() || whole == "-") 0L else whole.toLongOrNull() ?: return null
+        if (major > Long.MAX_VALUE / 100 || major < Long.MIN_VALUE / 100) return null
+        val fils = fraction.padEnd(2, '0').toLong()
+        val negative = whole.startsWith("-")
+        return major * 100 + if (negative) -fils else fils
+    }
+
+    /** Minor units as the seller reads them: "1,500", or "1,500.50" when there are fils. */
+    fun minorToMajor(minor: Long): String {
+        val negative = minor < 0
+        val abs = if (negative) -minor else minor
+        val whole = group(abs / 100)
+        val fils = abs % 100
+        val text = if (fils == 0L) whole else "$whole.${fils.toString().padStart(2, '0')}"
+        return if (negative) "-$text" else text
+    }
+
+    /**
+     * The number an issue's sentence needs, ready to show: a money bound in
+     * major units, any other bound grouped. Empty when the issue has none.
+     */
+    fun boundText(field: SellField, issue: FieldIssue): String {
+        val bound = issue.bound ?: return ""
+        return if (field.kind == "money") minorToMajor(bound) else group(bound)
+    }
+
+    /**
+     * The answers as the server expects them: every money field converted from
+     * the major units the seller typed to minor units. Posting the typed value
+     * verbatim stored 150,000 AED as 1,500 AED. Answers that do not parse are
+     * passed through untouched so the server names the field.
+     */
+    fun toWire(form: SellForm, values: Map<String, String>): Map<String, String> {
+        val money = form.fields.filter { it.kind == "money" }.map { it.key }.toSet()
+        return values.mapValues { (key, value) ->
+            if (key in money && value.isNotBlank()) moneyToMinor(value)?.toString() ?: value else value
+        }
+    }
+
+    private fun group(n: Long): String {
+        val s = if (n < 0) (-n).toString() else n.toString()
+        val grouped = if (s.length <= 3) s else s.reversed().chunked(3).joinToString(",").reversed()
+        return if (n < 0) "-$grouped" else grouped
     }
 }

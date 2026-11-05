@@ -367,3 +367,33 @@ func TestBackfillCannotExtendBeyondWhatExists(t *testing.T) {
 		t.Fatalf("got %d items from an empty candidate set", len(got))
 	}
 }
+
+// The live bug: a signed-in viewer who had watched both seeded reels got
+// "nothing is available at this location" on relaunch while an anonymous
+// request returned both. The seen-set had exhausted the district.
+func TestASeenOutFeedRewindsToTheCursorAlone(t *testing.T) {
+	seen := []uuid.UUID{author(1), author(2)}
+	got, ok := rewindExclusion(0, seen, nil)
+	if !ok {
+		t.Fatal("an empty page caused only by the seen-set must rewind")
+	}
+	if got == nil || len(got) != 0 {
+		t.Fatalf("rewind exclusion = %v, want an empty non-nil list (usable as a SQL array)", got)
+	}
+
+	// Within a session paging still never repeats: the cursor's exclusions stay.
+	page1 := []uuid.UUID{author(3)}
+	got, ok = rewindExclusion(0, seen, page1)
+	if !ok || len(got) != 1 || got[0] != page1[0] {
+		t.Fatalf("rewind kept %v, want the cursor's exclusions %v", got, page1)
+	}
+}
+
+func TestRewindOnlyWhenTheSeenSetEmptiedThePage(t *testing.T) {
+	if _, ok := rewindExclusion(1, []uuid.UUID{author(1)}, nil); ok {
+		t.Fatal("a page with an unseen reel must be served as is")
+	}
+	if _, ok := rewindExclusion(0, nil, []uuid.UUID{author(1)}); ok {
+		t.Fatal("an empty district (nothing seen) must stay empty, not rewind")
+	}
+}

@@ -64,6 +64,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.Lifecycle
@@ -716,8 +718,12 @@ class MainActivity : ComponentActivity() {
                             onClose = {},
                         )
 
-                        // Messaging, over everything.
+                        // Messaging, over everything. The wrapper takes every
+                        // touch the screens inside leave unconsumed: without it a
+                        // tap on the header's empty space fell through to the
+                        // feed underneath and started Sell from the icon there.
                         if (me != null && route != Route.None) {
+                            Box(Modifier.fillMaxSize().consumeAllPointers()) {
                             when (route) {
                                 Route.Inbox -> InboxScreen(
                                     viewModel = me,
@@ -753,6 +759,7 @@ class MainActivity : ComponentActivity() {
                                     InvoicesScreen(viewModel = vm, onBack = { route = Route.None })
                                 }
                                 Route.None -> Unit
+                            }
                             }
                         }
 
@@ -838,4 +845,17 @@ private fun UpdatePrompt(update: ae.marketplace.mobile.app.AppUpdate, onLater: (
             }
         },
     )
+}
+
+/**
+ * Makes an overlay opaque to touch. Runs on the Final pass, so the overlay's
+ * own buttons and lists still get every event first, and whatever they left is
+ * consumed here rather than reaching a sibling drawn underneath.
+ */
+private fun Modifier.consumeAllPointers(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            awaitPointerEvent(PointerEventPass.Final).changes.forEach { it.consume() }
+        }
+    }
 }

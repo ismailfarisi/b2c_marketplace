@@ -47,7 +47,7 @@ configureApiClient({
       return;
     }
     const customer =
-      /^\/(en|ar)\/(subscriptions|rotations?|kitchens\/[^/]+\/subscribe|support|invoices|business)(\/|$)/.exec(
+      /^\/(en|ar)\/(subscriptions|rotations?|kitchens\/[^/]+\/subscribe|support|invoices|business|messages|listings\/[^/]+\/inquire)(\/|$)/.exec(
         path,
       );
     if (customer) {
