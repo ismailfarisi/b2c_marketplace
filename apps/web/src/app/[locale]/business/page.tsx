@@ -117,7 +117,7 @@ function Register({ locale, t }: { locale: Locale; t: Copy }) {
     }
   }
   return (
-    <form className="ms-panel ms-biz-form" onSubmit={onSubmit} lang={locale} noValidate={false}>
+    <form className="ms-panel ms-biz-form" onSubmit={onSubmit} lang={locale} noValidate>
       <h2>{t.register}</h2>
       <div className="ms-row">{field("name", t.name, "text", true)}{field("legal_name", t.legal, "text", true)}</div>
       <div className="ms-row">{field("trn", t.trn)}{field("billing_email", t.email, "email", true)}</div>

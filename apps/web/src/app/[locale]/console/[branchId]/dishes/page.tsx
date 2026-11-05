@@ -73,9 +73,9 @@ export default function DishesPage() {
       setEditing(null);
       refresh();
     },
-    // A rejected draft will be corrected and sent again as a different body,
-    // which must not collide with the key of the one the server refused.
-    onError: () => idem.reset(),
+    // No reset on error: a refused create releases its key on the server, so
+    // a corrected draft can reuse it, and a dropped response retried with the
+    // same key returns the dish instead of creating a second one.
   });
   // Archive/restore from the list is its own mutation, so it never closes (or
   // discards the input of) a dish form that is open for a different dish.

@@ -29,6 +29,9 @@ type IdempotencyStore interface {
 	// Endpoint is part of the key: the same client UUID sent to two endpoints
 	// is two independent operations.
 	Complete(ctx context.Context, key uuid.UUID, endpoint string, status int, body []byte) error
+	// Release gives up an in-flight claim without recording an outcome, so the
+	// next request with this key executes afresh.
+	Release(ctx context.Context, key uuid.UUID, endpoint string) error
 }
 
 type StoredResponse struct {
@@ -95,13 +98,31 @@ func Idempotency(store IdempotencyStore) func(http.Handler) http.Handler {
 
 			buf := &bytes.Buffer{}
 			rec := &capturingWriter{ResponseWriter: w, buf: buf}
+			// The claim must not outlive the request: a client that hangs up or
+			// a handler that panics would otherwise leave the key in flight and
+			// every retry would be refused until the row expires.
+			settleCtx := context.WithoutCancel(r.Context())
+			settled := false
+			defer func() {
+				if !settled {
+					release(settleCtx, store, key, endpoint)
+				}
+			}()
+
 			next.ServeHTTP(rec, r)
 
-			// Only successful outcomes are worth replaying. Storing a 500 would
-			// pin a transient failure to the key forever — the client should be
-			// allowed to retry into a healthy process.
-			if rec.status >= 200 && rec.status < 400 {
-				if err := store.Complete(r.Context(), key, endpoint, rec.status, buf.Bytes()); err != nil {
+			// Only successful outcomes are replayed. A 4xx is a business answer
+			// to this attempt ("over the credit limit", "too soon") that the
+			// client may fix and retry; a 5xx is transient. Pinning either to
+			// the key would turn every retry into the same refusal, so the key
+			// is released and the next attempt re-executes.
+			settled = true
+			status := rec.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			if status >= 200 && status < 300 {
+				if err := store.Complete(settleCtx, key, endpoint, status, buf.Bytes()); err != nil {
 					// The response is already on the wire; surfacing this now
 					// would corrupt it. Log and move on — the cost is that one
 					// replay re-executes, which the handlers tolerate.
@@ -110,9 +131,23 @@ func Idempotency(store IdempotencyStore) func(http.Handler) http.Handler {
 						"key", key,
 						"request_id", RequestIDFromContext(r.Context()),
 					)
+					release(settleCtx, store, key, endpoint)
 				}
+				return
 			}
+			release(settleCtx, store, key, endpoint)
 		})
+	}
+}
+
+func release(ctx context.Context, store IdempotencyStore, key uuid.UUID, endpoint string) {
+	if err := store.Release(ctx, key, endpoint); err != nil {
+		// Not fatal: the claim goes stale and Begin reclaims it.
+		slog.ErrorContext(ctx, "failed to release idempotency key",
+			"error", err,
+			"key", key,
+			"request_id", RequestIDFromContext(ctx),
+		)
 	}
 }
 

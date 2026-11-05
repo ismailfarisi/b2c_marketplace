@@ -59,7 +59,6 @@ function ReviewRow({ r, branchId }: { r: BranchReview; branchId: string }) {
       idem.reset();
       qc.invalidateQueries({ queryKey: ["vendor", "reviews", branchId] });
     },
-    onError: () => idem.reset(),
   });
   return (
     <li>

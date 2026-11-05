@@ -247,7 +247,6 @@ function PlanForm({
       idem.reset();
       onDone();
     },
-    onError: () => idem.reset(),
     onSettled: () => {
       submitting.current = false;
     },

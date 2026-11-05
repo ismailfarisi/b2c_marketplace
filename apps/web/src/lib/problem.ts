@@ -74,6 +74,14 @@ const REASON: Record<string, { en: string; ar: string }> = {
     en: "You have orders still in progress. Try again once they are delivered or cancelled.",
     ar: "لديك طلبات قيد التنفيذ. حاول مرة أخرى بعد توصيلها أو إلغائها.",
   },
+  idempotency_in_flight: {
+    en: "We're still working on your last request. Try again in a moment.",
+    ar: "ما زلنا ننفذ طلبك السابق. حاول مرة أخرى بعد قليل.",
+  },
+  idempotency_key_reused: {
+    en: "This changed since you last sent it. Check the details and send again.",
+    ar: "تغيّر هذا منذ إرساله آخر مرة. راجع التفاصيل وأرسل مجددًا.",
+  },
   email_taken: { en: "Another account already uses this email.", ar: "هذا البريد الإلكتروني مستخدم في حساب آخر." },
 };
 

@@ -317,7 +317,8 @@ function Checkout({
   // same request to the server, so it cannot open a second subscription.
   const idem = useIdempotencyKey();
   const draftKey = JSON.stringify(input);
-  useEffect(() => idem.reset(), [draftKey, idem]);
+  const resetKey = idem.reset;
+  useEffect(() => resetKey(), [draftKey, resetKey]);
   // A changed draft is a different request: a new key, so it isn't refused
   // as a replay with another body.
   const lunchDraft = JSON.stringify([companyId, lunch]);

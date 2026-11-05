@@ -47,6 +47,7 @@ import (
 	"github.com/marketplace/api/internal/modules/timesignal"
 	"github.com/marketplace/api/internal/modules/trust"
 	"github.com/marketplace/api/internal/modules/vehicles"
+	"github.com/marketplace/api/internal/platform/idempotency"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/platform/redisx"
 )
@@ -230,7 +231,10 @@ func sweep(ctx context.Context, pool *pgxpool.Pool) {
 	}
 
 	if _, err := pool.Exec(ctx,
-		`DELETE FROM idempotency_keys WHERE expires_at < now()`); err != nil {
+		`DELETE FROM idempotency_keys
+		  WHERE expires_at < now()
+		     OR (state = 'in_flight' AND created_at < now() - make_interval(secs => $1))`,
+		idempotency.StaleAfter.Seconds()); err != nil {
 		slog.ErrorContext(ctx, "idempotency reap failed", "error", err)
 	}
 }
