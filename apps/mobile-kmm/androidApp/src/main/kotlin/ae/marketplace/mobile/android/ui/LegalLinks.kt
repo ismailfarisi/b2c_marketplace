@@ -20,10 +20,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 
-/** Terms and Privacy policy (and Help, on Me), opened on the web in the app's language. */
+/** Terms and Privacy policy (and Help or the kitchen portal, on Me), opened on the web in the app's language. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LegalLinks(color: Color, modifier: Modifier = Modifier, showHelp: Boolean = false) {
+fun LegalLinks(
+    color: Color,
+    modifier: Modifier = Modifier,
+    showHelp: Boolean = false,
+    /** The kitchen console link; Me shows it to every signed-in viewer. */
+    showKitchen: Boolean = showHelp,
+) {
     val context = LocalContext.current
     val lang = if (context.resources.configuration.locales[0].language == "ar") "ar" else "en"
     val noBrowser = stringResource(R.string.legal_no_browser)
@@ -35,7 +41,7 @@ fun LegalLinks(color: Color, modifier: Modifier = Modifier, showHelp: Boolean = 
         val pages = listOfNotNull(
             if (showHelp) R.string.legal_help to "support" else null,
             // The kitchen console is web-only; vendors reach it from here.
-            if (showHelp) R.string.legal_kitchen to "console" else null,
+            if (showKitchen) R.string.legal_kitchen to "console" else null,
             R.string.legal_terms to "terms",
             R.string.legal_privacy to "privacy",
         )

@@ -66,6 +66,58 @@ data class InvoicePage(
     @SerialName("next_cursor") val nextCursor: String? = null,
 )
 
+@Serializable
+data class InvoiceParty(val name: String = "", val trn: String = "", val address: String = "")
+
+@Serializable
+data class InvoiceLine(
+    val description: String,
+    @SerialName("description_ar") val descriptionAr: String = "",
+    val quantity: Double,
+    @SerialName("unit_net_minor") val unitNetMinor: Long,
+    @SerialName("net_minor") val netMinor: Long,
+    @SerialName("tax_rate_bp") val taxRateBp: Int,
+    @SerialName("tax_minor") val taxMinor: Long,
+    @SerialName("gross_minor") val grossMinor: Long,
+) {
+    /** The description in the viewer's language; English when there is no Arabic. */
+    fun label(arabic: Boolean): String = if (arabic && descriptionAr.isNotBlank()) descriptionAr else description
+
+    /** 500 basis points → "5", 1250 → "12.5". */
+    val ratePercent: String
+        get() = if (taxRateBp % 100 == 0) (taxRateBp / 100).toString()
+        else (taxRateBp / 100.0).toString().trimEnd('0').trimEnd('.')
+
+    /** 2 → "2", 1.5 → "1.5". */
+    val quantityText: String
+        get() = if (quantity % 1.0 == 0.0) quantity.toLong().toString() else quantity.toString()
+}
+
+/**
+ * One issued invoice as stored (`GET /me/invoices/{id}`): the snapshot the
+ * printable copy reproduces, never re-derived from live rows.
+ */
+@Serializable
+data class InvoiceDocument(
+    val id: String,
+    val number: String,
+    /** tax_invoice | simplified | credit_note */
+    val kind: String,
+    /** issued | cancelled | superseded */
+    val status: String,
+    val country: String = "",
+    val currency: String,
+    val supplier: InvoiceParty = InvoiceParty(),
+    val buyer: InvoiceParty = InvoiceParty(),
+    @SerialName("supply_date") val supplyDate: String,
+    @SerialName("issued_at") val issuedAt: String,
+    @SerialName("corrects_number") val correctsNumber: String? = null,
+    @SerialName("net_minor") val netMinor: Long,
+    @SerialName("tax_minor") val taxMinor: Long,
+    @SerialName("gross_minor") val grossMinor: Long,
+    val lines: List<InvoiceLine> = emptyList(),
+)
+
 /**
  * Help tickets and tax invoices for the signed-in customer, the same
  * `/me/support/tickets` and `/me/invoices` the web uses.
@@ -97,6 +149,9 @@ class SupportApi(private val client: HttpClient) {
 
     suspend fun invoices(cursor: String? = null): InvoicePage =
         client.get("me/invoices") { cursor?.let { parameter("cursor", it) } }.body()
+
+    /** Someone else's invoice is a 404, like one that does not exist. */
+    suspend fun invoice(id: String): InvoiceDocument = client.get("me/invoices/$id").body()
 }
 
 @Serializable private data class OpenBody(val subject: String, val body: String)

@@ -41,11 +41,19 @@ final class AppEnvironment: ObservableObject {
 
 enum Config {
     /// From Info.plist `ApiBaseUrl` (= $(API_BASE_URL), set per configuration in
-    /// Config.xcconfig). The localhost default is the simulator, which reaches
-    /// the host directly, unlike Android's 10.0.2.2.
-    static let apiBaseUrl = value("ApiBaseUrl", fallback: "http://localhost:8080/v1")
+    /// Debug.xcconfig / Release.xcconfig). The Debug default is the simulator,
+    /// which reaches the host directly, unlike Android's 10.0.2.2.
+    static let apiBaseUrl = checked("ApiBaseUrl", value("ApiBaseUrl", fallback: defaultApi))
     /// The web app, for pages the app links out to. Info.plist `WebBaseUrl`.
-    static let webBaseUrl = value("WebBaseUrl", fallback: "http://localhost:3000")
+    static let webBaseUrl = checked("WebBaseUrl", value("WebBaseUrl", fallback: defaultWeb))
+
+    #if DEBUG
+    private static let defaultApi = "http://localhost:8080/v1"
+    private static let defaultWeb = "http://localhost:3000"
+    #else
+    private static let defaultApi = "https://api.switeaz.com/v1"
+    private static let defaultWeb = "https://switeaz.com"
+    #endif
 
     /// An unset build setting arrives as an empty string or the literal
     /// `$(NAME)`; both mean "not configured".
@@ -53,6 +61,24 @@ enum Config {
         guard let s = Bundle.main.object(forInfoDictionaryKey: key) as? String,
               !s.isEmpty, !s.hasPrefix("$(") else { return fallback }
         return s
+    }
+
+    /// True for a URL a phone cannot reach: no host, or the build machine itself.
+    static func isLocal(_ url: String) -> Bool {
+        guard let host = URL(string: url)?.host?.lowercased(), !host.isEmpty else { return true }
+        return host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1"
+            || host.hasSuffix(".localhost")
+    }
+
+    /// A release build pointing at localhost works on the simulator and is dead
+    /// on every customer's phone, so it stops at launch instead of shipping.
+    private static func checked(_ key: String, _ url: String) -> String {
+        #if !DEBUG
+        if isLocal(url) {
+            fatalError("\(key) is \(url) in a release build. Set API_BASE_URL/WEB_BASE_URL in iosApp/Release.xcconfig.")
+        }
+        #endif
+        return url
     }
 }
 
@@ -77,7 +103,7 @@ struct MarketplaceApp: App {
 /// Messaging is not a destination. It is reached from the Me screen and from a
 /// CTA press three swipes into the feed, and making it a sixth tab would turn
 /// the second into a context switch out of the reel the viewer is watching.
-private enum Route: Equatable { case none, inbox, thread, help, helpTicket, invoices }
+private enum Route: Equatable { case none, inbox, thread, help, helpTicket, invoices, invoiceDetail }
 
 /// The tab host.
 ///
@@ -177,19 +203,23 @@ struct RootView: View {
             return
         }
         if target.page == .support {
-            // Help is native: open the ticket on the app's own session.
-            destinationRaw = Destination.me.rawValue
-            if let id = target.id {
-                supportViewModel?.openTicket(id: id)
-                route = .helpTicket
-            } else {
-                route = .help
-            }
+            openHelp(target.id)
             return
         }
         route = .none
         destinationRaw = Destination.meals.rawValue
         link = target
+    }
+
+    /// Help is native: a ticket (or the Help list) on the app's own session.
+    private func openHelp(_ ticketId: String?) {
+        destinationRaw = Destination.me.rawValue
+        if let ticketId {
+            supportViewModel?.openTicket(id: ticketId)
+            route = .helpTicket
+        } else {
+            route = .help
+        }
     }
 
     private func openOnWeb(_ target: String) {
@@ -421,7 +451,8 @@ struct RootView: View {
                             },
                             startOnMine: destination == .myMeals,
                             link: link,
-                            onLinkHandled: { link = nil }
+                            onLinkHandled: { link = nil },
+                            onOpenHelp: { ticketId in openHelp(ticketId) }
                         )
                         .id(destination)
                         if pendingMeals != nil && !authorised, let gate = signInViewModel {
@@ -531,7 +562,14 @@ struct RootView: View {
             }
         case .invoices:
             if let support = supportViewModel {
-                InvoicesScreen(viewModel: support, onBack: { route = .none })
+                InvoicesScreen(viewModel: support, onBack: { route = .none }, onOpenInvoice: { id in
+                    support.openInvoice(id: id)
+                    route = .invoiceDetail
+                })
+            }
+        case .invoiceDetail:
+            if let support = supportViewModel {
+                InvoiceDetailScreen(viewModel: support, onBack: { route = .invoices })
             }
         case .none:
             EmptyView()

@@ -52,6 +52,7 @@ apps/mobile-kmm/local.properties
 apps/mobile-kmm/.kotlin/
 apps/mobile-kmm/iosApp/*.xcodeproj/xcuserdata/
 apps/mobile-kmm/iosApp/Pods/
+apps/mobile-kmm/iosApp/Release.local.xcconfig
 
 # Playwright MCP scratch output — snapshots and console logs from browser checks.
 .playwright-mcp/

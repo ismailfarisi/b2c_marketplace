@@ -607,6 +607,8 @@ fun MeScreen(
                     color = Palette.Text.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = Space.Edge),
                     showHelp = onOpenHelp == null,
+                    // Me is only drawn signed in; vendors reach the console from here.
+                    showKitchen = true,
                 )
             }
         }

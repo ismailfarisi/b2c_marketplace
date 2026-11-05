@@ -647,6 +647,26 @@
     <string name="help_kept">Your message is kept; try again.</string>
     <string name="invoices_empty">No invoices yet. An invoice is issued once a paid order is delivered.</string>
     <string name="invoices_credit">Credit note</string>
-    <string name="invoices_print_hint">Tap an invoice to open the printable copy on the web.</string>
+    <string name="invoices_print_hint">Tap an invoice to see it in full and share it. Pull down to refresh.</string>
     <string name="legal_kitchen">Kitchen portal</string>
+    <string name="invoice_title">Invoice</string>
+    <string name="invoice_tax_invoice">Tax invoice</string>
+    <string name="invoice_simplified">Simplified tax invoice</string>
+    <string name="invoice_credit_note">Credit note</string>
+    <string name="invoice_number">Invoice no.</string>
+    <string name="invoice_issued">Date of issue</string>
+    <string name="invoice_supply">Date of supply</string>
+    <string name="invoice_corrects">Corrects invoice</string>
+    <string name="invoice_supplier">Supplier</string>
+    <string name="invoice_buyer">Customer</string>
+    <string name="invoice_trn">TRN</string>
+    <string name="invoice_net">Net</string>
+    <string name="invoice_line_total">Total</string>
+    <string name="invoice_subtotal">Total excluding VAT</string>
+    <string name="invoice_vat_total">VAT</string>
+    <string name="invoice_grand">Total including VAT</string>
+    <string name="invoice_cancelled">Cancelled</string>
+    <string name="invoice_superseded">Superseded</string>
+    <string name="invoice_share">Share</string>
+    <string name="invoice_not_found">This invoice isn\'t on your account.</string>
 </resources>

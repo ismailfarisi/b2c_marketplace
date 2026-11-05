@@ -1,9 +1,6 @@
-// Per-configuration endpoints, read by Config in MarketplaceApp.swift through
-// the Info.plist keys ApiBaseUrl = $(API_BASE_URL) and WebBaseUrl = $(WEB_BASE_URL).
-// "//" starts a comment in xcconfig, hence the $() between the slashes.
-// Unset, the app falls back to localhost (the simulator).
-API_BASE_URL = http:/$()/localhost:8080/v1
-WEB_BASE_URL = http:/$()/localhost:3000
+// Settings shared by every configuration. The endpoints live in
+// Debug.xcconfig and Release.xcconfig, which include this file; set the app
+// target's Debug and Release configurations to those two, not to this one.
 
 // Checkout pins a new delivery address at the device's current fix.
 INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = Pins your delivery address at the door so the kitchen's driver can find you.

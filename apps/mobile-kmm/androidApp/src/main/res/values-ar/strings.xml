@@ -577,6 +577,26 @@
     <string name="help_kept">رسالتك محفوظة؛ حاول مرة أخرى.</string>
     <string name="invoices_empty">لا توجد فواتير بعد. تصدر الفاتورة بعد توصيل الطلب المدفوع.</string>
     <string name="invoices_credit">إشعار دائن</string>
-    <string name="invoices_print_hint">اضغط على فاتورة لفتح النسخة القابلة للطباعة على الويب.</string>
+    <string name="invoices_print_hint">اضغط على فاتورة لعرضها كاملة ومشاركتها. اسحب للأسفل للتحديث.</string>
     <string name="legal_kitchen">بوابة المطبخ</string>
+    <string name="invoice_title">الفاتورة</string>
+    <string name="invoice_tax_invoice">فاتورة ضريبية</string>
+    <string name="invoice_simplified">فاتورة ضريبية مبسطة</string>
+    <string name="invoice_credit_note">إشعار دائن</string>
+    <string name="invoice_number">رقم الفاتورة</string>
+    <string name="invoice_issued">تاريخ الإصدار</string>
+    <string name="invoice_supply">تاريخ التوريد</string>
+    <string name="invoice_corrects">تصحيح للفاتورة</string>
+    <string name="invoice_supplier">المورد</string>
+    <string name="invoice_buyer">العميل</string>
+    <string name="invoice_trn">الرقم الضريبي</string>
+    <string name="invoice_net">الصافي</string>
+    <string name="invoice_line_total">الإجمالي</string>
+    <string name="invoice_subtotal">الإجمالي غير شامل الضريبة</string>
+    <string name="invoice_vat_total">ضريبة القيمة المضافة</string>
+    <string name="invoice_grand">الإجمالي شامل الضريبة</string>
+    <string name="invoice_cancelled">ملغاة</string>
+    <string name="invoice_superseded">مستبدلة</string>
+    <string name="invoice_share">مشاركة</string>
+    <string name="invoice_not_found">هذه الفاتورة ليست في حسابك.</string>
 </resources>

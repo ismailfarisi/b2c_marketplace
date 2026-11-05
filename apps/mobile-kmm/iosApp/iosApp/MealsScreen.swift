@@ -154,6 +154,8 @@ struct MealsScreen: View {
     /// A deep link or push tap to open, then report handled.
     var link: MealsLink? = nil
     var onLinkHandled: () -> Void = {}
+    /// Native Help: a ticket id, or nil for the Help list.
+    var onOpenHelp: (String?) -> Void = { _ in }
 
     @State private var stack: [MealsPage] = [.home]
     @AppStorage("meals.place") private var placeRaw = ""
@@ -177,9 +179,10 @@ struct MealsScreen: View {
             // No native rotation screen yet; rotations are listed on My meals.
             requireAccount { viewModel.loadMine(force: false); stack = [.home, .mine] }
         case .support:
-            // Help is web-only for now.
-            let path = (isArabicLocale ? "/ar/support" : "/en/support") + (l.id.map { "/" + $0 } ?? "")
-            if let url = URL(string: Config.webBaseUrl + path) { openURL(url) }
+            // Help is native, on the app's session (a banner to /support must
+            // not open the web, which has no session and asks for a new code).
+            let ticketId = l.id
+            requireAccount { onOpenHelp(ticketId) }
             stack = [.home]
         case .collection:
             if let id = l.id { viewModel.openCollection(slug: id); stack = [.home, .collection] }

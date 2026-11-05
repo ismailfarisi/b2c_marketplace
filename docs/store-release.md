@@ -13,7 +13,9 @@ What the repo provides, and what each store submission still needs from you.
 | Store-review sign-in (fixed code, no SMS) | API `OTP_REVIEW_PHONE` + `OTP_REVIEW_CODE` |
 | Privacy policy / terms (EN, AR) | `https://<web>/en/privacy`, `/en/terms` (legal review pending) |
 | In-app account deletion | Me → Delete account; web: My subscriptions → Delete account |
-| Help / support | `https://<web>/en/support` |
+| Help / support | Native in the app (Me → Help); web `https://<web>/en/support` |
+| Tax invoices | Native in the app (Me → Invoices → invoice, shares as text); printable PDF on the web `https://<web>/en/invoices/<id>` |
+| iOS endpoints per configuration | `iosApp/Debug.xcconfig`, `iosApp/Release.xcconfig` (shared keys in `iosApp/Config.xcconfig`) |
 
 ## Android release build
 
@@ -41,8 +43,26 @@ There is no Xcode project in the repo yet (CI only typechecks Swift). To ship:
 3. Capabilities: Push Notifications, Associated Domains (`applinks:<web-domain>`).
 4. Info.plist: `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`
    (Sell video recording), `NSPhotoLibraryUsageDescription` (picking photos),
-   `NSLocationWhenInUseUsageDescription` (kitchens near you, pinning a delivery address), `SentryDSN`, and the API/web base URLs.
+   `NSLocationWhenInUseUsageDescription` (kitchens near you, pinning a delivery address), `SentryDSN`, and the API/web base URLs
+   (`ApiBaseUrl` = `$(API_BASE_URL)`, `WebBaseUrl` = `$(WEB_BASE_URL)`).
 5. Add the `sentry-cocoa` package (see `docs/crash-reporting.md`).
+
+### Base URLs (Debug vs Release)
+
+Set the app target's **Debug** configuration to `iosApp/Debug.xcconfig` and **Release**
+to `iosApp/Release.xcconfig` (both include `Config.xcconfig`; don't base a configuration on that one directly).
+
+- Debug: `http://localhost:8080/v1` and `http://localhost:3000` (the simulator reaches the host).
+- Release: `https://api.switeaz.com/v1` and `https://switeaz.com`. These are placeholders while
+  switeaz.com still serves Kerf (see Listing copy). To use other hosts without editing the
+  tracked file, put `API_BASE_URL` / `WEB_BASE_URL` in `iosApp/Release.local.xcconfig`
+  (gitignored, included last by `Release.xcconfig`).
+- Guards: `Config` in `MarketplaceApp.swift` calls `fatalError` at launch in a non-DEBUG build whose
+  API or web URL host is `localhost`/`127.0.0.1` (or missing), so a mis-set archive fails on its first
+  TestFlight launch instead of on customers' phones. CI's iOS job runs
+  `apps/mobile-kmm/tools/check-ios-release-config.sh`, which fails when `Release.xcconfig` (or a file it
+  includes) names a local host or sets either URL to anything but https.
+  A gitignored `Release.local.xcconfig` is not seen by CI, so check the archive's URLs yourself when you use one.
 
 ## Listing copy
 

@@ -204,6 +204,12 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
 
+      # A Release build that reads localhost works on the simulator and is dead
+      # on every phone; Config.swift also stops such a build at launch.
+      - name: Release config must not point at localhost
+        working-directory: apps/mobile-kmm
+        run: ./tools/check-ios-release-config.sh
+
       - name: Link the shared framework
         working-directory: apps/mobile-kmm
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64

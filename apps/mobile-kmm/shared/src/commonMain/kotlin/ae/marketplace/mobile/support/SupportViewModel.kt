@@ -44,6 +44,15 @@ data class InvoicesUiState(
     val loading: Boolean = false,
     val loadingMore: Boolean = false,
     val loaded: Boolean = false,
+    /** Re-fetching the first page with the list still on screen (pull to refresh, re-entry). */
+    val refreshing: Boolean = false,
+    val error: Failure? = null,
+)
+
+data class InvoiceUiState(
+    val invoiceId: String = "",
+    val invoice: InvoiceDocument? = null,
+    val loading: Boolean = false,
     val error: Failure? = null,
 )
 
@@ -66,6 +75,9 @@ class SupportViewModel(private val api: SupportApi) : ViewModel() {
     private val _invoices = MutableStateFlow(InvoicesUiState())
     val invoices: StateFlow<InvoicesUiState> = _invoices.asStateFlow()
 
+    private val _invoice = MutableStateFlow(InvoiceUiState())
+    val invoice: StateFlow<InvoiceUiState> = _invoice.asStateFlow()
+
     private var openKey: String? = null
     private var replyKey: String? = null
 
@@ -76,6 +88,7 @@ class SupportViewModel(private val api: SupportApi) : ViewModel() {
         _help.value = HelpUiState()
         _ticket.value = HelpTicketUiState()
         _invoices.value = InvoicesUiState()
+        _invoice.value = InvoiceUiState()
         openKey = null
         replyKey = null
     }
@@ -199,14 +212,21 @@ class SupportViewModel(private val api: SupportApi) : ViewModel() {
 
     // ── Invoices ─────────────────────────────────────────────────────────────
 
+    /**
+     * The first page. Once loaded, [force] re-fetches it with the list kept on
+     * screen ([InvoicesUiState.refreshing]), so an invoice issued while the app
+     * was open shows up on pull-to-refresh or the next visit.
+     */
     fun loadInvoices(force: Boolean = false) {
         val s = _invoices.value
-        if (s.loading || (s.loaded && !force)) return
-        _invoices.value = s.copy(loading = true, error = null)
+        if (s.loading || s.refreshing || (s.loaded && !force)) return
+        _invoices.value = if (s.loaded) s.copy(refreshing = true, error = null) else s.copy(loading = true, error = null)
         viewModelScope.launch {
             runCatching { api.invoices() }
                 .onSuccess { p -> _invoices.value = InvoicesUiState(items = p.items, nextCursor = p.nextCursor, loaded = true) }
-                .onFailure { e -> _invoices.value = _invoices.value.copy(loading = false, error = e.toFailure()) }
+                .onFailure { e ->
+                    _invoices.value = _invoices.value.copy(loading = false, refreshing = false, error = e.toFailure())
+                }
         }
     }
 
@@ -226,5 +246,20 @@ class SupportViewModel(private val api: SupportApi) : ViewModel() {
                 }
                 .onFailure { e -> _invoices.value = _invoices.value.copy(loadingMore = false, error = e.toFailure()) }
         }
+    }
+
+    /** Opens one invoice; a second open of the same one keeps it on screen while it re-fetches. */
+    fun openInvoice(id: String) {
+        val keep = _invoice.value.takeIf { it.invoiceId == id }
+        _invoice.value = (keep ?: InvoiceUiState(invoiceId = id)).copy(loading = keep?.invoice == null, error = null)
+        viewModelScope.launch {
+            runCatching { api.invoice(id) }
+                .onSuccess { d -> if (_invoice.value.invoiceId == id) _invoice.value = _invoice.value.copy(invoice = d, loading = false) }
+                .onFailure { e -> if (_invoice.value.invoiceId == id) _invoice.value = _invoice.value.copy(loading = false, error = e.toFailure()) }
+        }
+    }
+
+    fun retryInvoice() {
+        _invoice.value.invoiceId.takeIf { it.isNotEmpty() }?.let(::openInvoice)
     }
 }

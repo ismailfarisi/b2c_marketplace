@@ -113,6 +113,8 @@ fun MealsTab(
     /** A deep link or push tap to open, then report handled. */
     link: ae.marketplace.mobile.meals.MealsLink? = null,
     onLinkHandled: () -> Unit = {},
+    /** Native Help: a ticket id, or null for the Help list. */
+    onOpenHelp: (String?) -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("meals", android.content.Context.MODE_PRIVATE) }
@@ -143,14 +145,9 @@ fun MealsTab(
             MealsLinkPage.ROTATION -> requireAccount { viewModel.startRotation(); home(Page.Rotation) }
             // No native rotation screen yet; rotations are listed on My meals.
             MealsLinkPage.ROTATION_DETAIL -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
-            // Help is web-only for now; open it in the viewer's language.
-            MealsLinkPage.SUPPORT -> {
-                val lang = if (ctx.resources.configuration.locales[0].language == "ar") "ar" else "en"
-                val path = "/$lang/support" + (id?.let { "/$it" } ?: "")
-                runCatching {
-                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ae.marketplace.mobile.android.BuildConfig.WEB_BASE_URL + path)))
-                }
-            }
+            // Help is native, on the app's session (a banner to /support must not
+            // open the web, which has no session and asks for a new code).
+            MealsLinkPage.SUPPORT -> requireAccount { onOpenHelp(id) }
             MealsLinkPage.COLLECTION -> if (id != null) { viewModel.openCollection(id); home(Page.Collection) }
             MealsLinkPage.HOME -> home()
         }
