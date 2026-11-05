@@ -17,6 +17,7 @@ import { requestOtp, verifyOtp } from "@/lib/auth-api";
 import {
   DEFAULT_PHONE_COUNTRY,
   displayPhone,
+  ltr,
   phoneCountry,
   phoneProblem,
 } from "@/lib/phone";
@@ -72,7 +73,7 @@ const COPY = {
       `اختر الدولة ثم اكتب الرقم كما يُكتب محليًا، مثل ‎${example} في ${country}.`,
     send: "أرسل الرمز",
     sending: "جارٍ الإرسال…",
-    sentTo: (p: string) => `أرسلنا الرمز إلى ${p}.`,
+    sentTo: (p: string) => `أرسلنا الرمز إلى ${ltr(p)}.`,
     code: "الرمز المكون من ستة أرقام",
     verify: "متابعة",
     checking: "جارٍ التحقق…",

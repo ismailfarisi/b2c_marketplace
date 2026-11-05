@@ -131,6 +131,7 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test --workspace @marketplace/web
       - run: npm run build:web
 
   # The mobile app was not built by CI at all, and the Makefile has said so in a
