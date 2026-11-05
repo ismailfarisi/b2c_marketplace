@@ -181,7 +181,7 @@ function LoginForm({ locale }: { locale: string }) {
       <Frame>
         <form onSubmit={onVerify} className="console-login-form">
           <p className="muted">
-            Code sent to <span className="mono">{step.phone}</span>.
+            Code sent to <span className="mono" dir="ltr">{step.phone}</span>.
           </p>
 
           <label className="console-login-field">

@@ -250,4 +250,44 @@ class SignInTest {
         assertEquals(SignInProblem.Superseded, vm.state.value.error)
         assertEquals("", vm.state.value.challengeId)
     }
+
+    @Test
+    fun verifySendsTheDeviceBlock() = runTest {
+        val tokens = InMemoryTokenStore()
+        var body = ""
+        val client = client(tokens) { req ->
+            body = (req.body as io.ktor.http.content.TextContent).text
+            respond("""{"access_token":"a","refresh_token":"r"}""", HttpStatusCode.OK, json)
+        }
+        SignInApi(client, tokens, SignInDevice(platform = "android", name = "Pixel 8")).verify("c1", "123456")
+        assertTrue(""""device":{"platform":"android","name":"Pixel 8"}""" in body, body)
+    }
+
+    @Test
+    fun theCooldownOnlyHoldsForTheSameNumber() = runTest {
+        val tokens = InMemoryTokenStore()
+        val sent = mutableListOf<String>()
+        val client = client(tokens) { req ->
+            sent += (req.body as io.ktor.http.content.TextContent).text
+            respond("""{"challenge_id":"c${sent.size}","resend_after_seconds":60}""", HttpStatusCode.Accepted, json)
+        }
+        val vm = SignInViewModel(SignInApi(client, tokens), Session(tokens))
+        vm.onPhone("0501234567")
+        vm.sendCode(nowMillis = 1_000)
+        vm.settle()
+        vm.changeNumber()
+
+        // Same number, typed differently: still cooling down.
+        vm.onPhone("971501234567")
+        vm.sendCode(nowMillis = 2_000)
+        vm.settle()
+        assertEquals(1, sent.size)
+
+        vm.onPhone("0509999999")
+        vm.sendCode(nowMillis = 3_000)
+        vm.settle()
+        assertEquals(2, sent.size)
+        assertEquals("c2", vm.state.value.challengeId)
+        assertEquals(63_000, vm.state.value.resendAtMillis)
+    }
 }

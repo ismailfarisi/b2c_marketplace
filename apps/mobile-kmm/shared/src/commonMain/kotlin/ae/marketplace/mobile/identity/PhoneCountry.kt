@@ -30,16 +30,45 @@ enum class PhoneCountry(
     val dialCode: String get() = "+$dial"
 
     /**
-     * The number as it will be texted, for "We sent a code to …". Display only:
-     * the server normalises for real and refuses what it cannot read.
+     * The number as it will be texted, for "We sent a code to …": the server's
+     * E.164 with a space after a GCC dial code, so a number typed with its
+     * country code but no plus does not show the code twice. Falls back to the
+     * typed text when the server would refuse it anyway.
      */
     fun display(raw: String): String {
-        val typed = raw.trim()
-        if (typed.startsWith("+")) return typed
-        if (typed.startsWith("00")) return "+" + typed.drop(2)
-        val digits = typed.filter { it.isDigit() }
-        val national = if (trunk && digits.startsWith("0")) digits.drop(1) else digits
-        return "$dialCode $national"
+        val e164 = normalize(raw) ?: return raw.trim()
+        val c = entries.firstOrNull { e164.startsWith("+" + it.dial) } ?: return e164
+        return "${c.dialCode} ${e164.drop(1 + c.dial.length)}"
+    }
+
+    /**
+     * What the server's `NormalizePhone` (services/api identity/phone.go) makes
+     * of [raw] read in this country: E.164, or null where it would refuse it.
+     */
+    fun normalize(raw: String): String? {
+        val b = StringBuilder()
+        for (ch in raw.trim()) {
+            if (ch == '+' && b.isEmpty()) b.append(ch) else if (ch in '0'..'9') b.append(ch)
+        }
+        var out = b.toString()
+        when {
+            out.startsWith("+") -> Unit
+            out.startsWith("00") -> out = "+" + out.drop(2)
+            out.startsWith(dial) && out.length == dial.length + nsn -> out = "+$out"
+            else -> {
+                val digits = if (trunk && out.startsWith("0")) out.drop(1) else out
+                if (digits.length != nsn || digits.startsWith("0")) return null
+                out = "+$dial$digits"
+            }
+        }
+        val c = entries.firstOrNull { out.startsWith("+" + it.dial) }
+        if (c != null) {
+            var rest = out.drop(1 + c.dial.length)
+            if (c.trunk && rest.length == c.nsn + 1 && rest.startsWith("0")) rest = rest.drop(1)
+            if (rest.length != c.nsn || rest.startsWith("0")) return null
+            out = "+${c.dial}$rest"
+        }
+        return if (E164.matches(out)) out else null
     }
 
     /**
@@ -55,6 +84,8 @@ enum class PhoneCountry(
     }
 
     companion object {
+        private val E164 = Regex("""^\+[1-9]\d{7,14}$""")
+
         val Default: PhoneCountry = AE
 
         /** Picker order, for Swift, which cannot iterate a Kotlin enum directly. */

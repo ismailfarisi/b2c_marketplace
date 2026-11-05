@@ -51,7 +51,7 @@ struct SignInGate: View {
                 .foregroundStyle(ink)
 
             Text(onCodeStep
-                 ? String(format: String(localized: "signin_sent_to"), state.sentTo)
+                 ? String(format: String(localized: "signin_sent_to"), "\u{2066}\(state.sentTo)\u{2069}")
                  : NSLocalizedString(whyKey, comment: ""))
                 .font(.system(size: TypeScale.secondary))
                 .foregroundStyle(light ? Warm.muted : Palette.text.opacity(0.55))

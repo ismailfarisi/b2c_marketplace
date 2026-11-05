@@ -145,7 +145,8 @@ fun SignInGate(
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = if (onCode) stringResource(R.string.signin_sent_to, state.sentTo)
+            // The number is isolated so "+971 50…" keeps its order inside Arabic.
+            text = if (onCode) stringResource(R.string.signin_sent_to, "\u2066${state.sentTo}\u2069")
             else stringResource(why),
             color = if (light) MealsMuted else Color.White.copy(alpha = 0.55f),
             fontSize = 13.sp,

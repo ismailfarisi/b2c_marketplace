@@ -31,7 +31,12 @@ import kotlinx.serialization.Serializable
  * anonymous, because a listing belongs to someone and a buyer has to be able to
  * message them.
  */
-class SignInApi(private val client: HttpClient, private val tokens: TokenStore) {
+class SignInApi(
+    private val client: HttpClient,
+    private val tokens: TokenStore,
+    /** Sent with verify so "Signed-in devices" can name this session. */
+    private val device: SignInDevice = signInDevice(),
+) {
 
     /**
      * Asks for a code. [country] is how the server reads a national number; a
@@ -49,7 +54,7 @@ class SignInApi(private val client: HttpClient, private val tokens: TokenStore) 
     suspend fun verify(challengeId: String, code: String) {
         val res: TokenPair = client.post("auth/otp/verify") {
             contentType(ContentType.Application.Json)
-            setBody(OtpVerify(challengeId = challengeId, code = code))
+            setBody(OtpVerify(challengeId = challengeId, code = code, device = device))
         }.body()
         tokens.save(Tokens(res.accessToken, res.refreshToken))
         // Ktor keeps the last bearer it loaded until told otherwise, so without
@@ -83,7 +88,15 @@ private const val DEFAULT_RESEND_SECONDS = 60
 private data class OtpVerify(
     @SerialName("challenge_id") val challengeId: String,
     val code: String,
+    val device: SignInDevice,
 )
+
+/** The `device` block of `POST /auth/otp/verify`: platform is `android` or `ios`, name the model. */
+@Serializable
+data class SignInDevice(val platform: String, val name: String)
+
+/** This phone, as the session row should describe it. */
+expect fun signInDevice(): SignInDevice
 
 @Serializable
 private data class TokenPair(
@@ -111,6 +124,12 @@ data class SignInUiState(
      */
     val resendAtMillis: Long = 0,
     /**
+     * The number (country plus what was typed, normalised) [resendAtMillis]
+     * applies to. The cooldown protects one number's codes, so after "Change
+     * number" a different number can be sent at once.
+     */
+    val resendFor: String = "",
+    /**
      * The server's `Retry-After` for a [SignInProblem.TooMany] or
      * [SignInProblem.ResendTooMany], so the copy can say how long rather than
      * "a minute" for a limit that lasts an hour. Null when it did not say.
@@ -119,6 +138,9 @@ data class SignInUiState(
 ) {
     /** The number as it will be texted, with its country code. */
     val sentTo: String get() = country.display(phone)
+
+    /** The key [resendFor] is compared with. */
+    internal val sendKey: String get() = country.normalize(phone) ?: "${country.iso}:${phone.trim()}"
 
     /** Whether Send should be enabled. */
     val canSend: Boolean get() = !busy && country.plausible(phone)
@@ -234,7 +256,7 @@ class SignInViewModel(
         val s = _state.value
         val phone = s.phone.trim()
         if (phone.isEmpty() || s.busy) return
-        if (nowMillis < s.resendAtMillis) return
+        if (nowMillis < s.resendAtMillis && s.sendKey == s.resendFor) return
 
         val resending = s.challengeId.isNotEmpty()
         _state.value = s.copy(busy = true, error = null, retryAfterSeconds = null)
@@ -246,6 +268,7 @@ class SignInViewModel(
                         challengeId = it.challengeId,
                         code = "",
                         resendAtMillis = nowMillis + it.resendAfterSeconds * 1000L,
+                        resendFor = s.sendKey,
                     )
                 }
                 .onFailure { e ->
