@@ -5,7 +5,7 @@ import Link from "next/link";
 import { use } from "react";
 
 import { Action, Detail, Facts, Panel, Ref, plural } from "@/components/admin/detail";
-import { DetailError } from "@/components/admin/errors";
+import { DetailError, RefreshFailed, useCan } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
 import { cancelMealSubscription, getMealSubscription, statusTone } from "@/lib/admin-api";
 
@@ -24,10 +24,13 @@ export default function MealSubscriptionPage({
 }) {
   const { locale, subscriptionId } = use(params);
   const qc = useQueryClient();
+  const can = useCan();
+  const noWrite = can("commerce.write") === false;
   const key = ["admin", "meals", "subscription", subscriptionId];
   const { data, isLoading, error, refetch } = useQuery({ queryKey: key, queryFn: () => getMealSubscription(subscriptionId) });
 
-  if (error)
+  // A failed background refetch keeps the page (and a half-typed reason).
+  if (error && !data)
     return (
       <DetailError
         error={error}
@@ -52,8 +55,8 @@ export default function MealSubscriptionPage({
             label="Cancel subscription"
             verb="Cancel subscription"
             danger
-            disabled={closed}
-            disabledReason={`Already ${data.status}.`}
+            disabled={closed || noWrite}
+            disabledReason={closed ? `Already ${data.status}.` : "Needs commerce.write."}
             hint="Stops future deliveries and credits the unearned part of the paid cycle. Delivered meals stay delivered. No card refund is issued."
             onConfirm={async (reason) => {
               await cancelMealSubscription(subscriptionId, reason);
@@ -63,6 +66,7 @@ export default function MealSubscriptionPage({
         </Panel>
       }
     >
+      {error ? <RefreshFailed error={error} onRetry={() => void refetch()} /> : null}
       <Panel title="Subscription">
         <Facts
           rows={[

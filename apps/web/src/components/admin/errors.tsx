@@ -104,6 +104,40 @@ export function ConsoleError({
   );
 }
 
+/**
+ * A background refresh failed while the last good data is still on screen.
+ *
+ * Small and non-blocking on purpose: replacing the table with the error would
+ * unmount an expanded row and the reply or reason typed into it.
+ */
+export function RefreshFailed({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry?: (() => void) | undefined;
+}) {
+  const kind = consoleErrorKind(error);
+  const why =
+    kind === "offline"
+      ? "the API did not answer"
+      : kind === "forbidden"
+        ? "this account no longer has access"
+        : "the API returned an error";
+  return (
+    <div className="refresh-failed" role="status">
+      <span>
+        Couldn&rsquo;t refresh ({why}). Showing what loaded last.
+      </span>
+      {onRetry ? (
+        <button type="button" className="btn link" onClick={onRetry}>
+          Retry
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** A detail page that did not load: the error, and always a way back to its list. */
 export function DetailError(props: {
   error: unknown;

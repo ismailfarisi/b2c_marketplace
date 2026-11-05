@@ -21,7 +21,7 @@ import {
  * fewer item on screen and one more scroll between decisions.
  */
 export default function CommentQueue() {
-  const { data, isPending, error } = useQueueData("comments", getCommentQueue);
+  const { data, error, refetch } = useQueueData("comments", getCommentQueue);
   const rows = data?.items ?? [];
 
   return (
@@ -42,8 +42,10 @@ export default function CommentQueue() {
           { label: "Waiting", className: "num" },
         ]}
         rows={rows}
-        isPending={isPending}
+        loaded={data !== undefined}
         error={error}
+        perm="content.review"
+        onRetry={() => void refetch()}
         empty="Nothing held."
         rowKey={(c) => c.id}
         renderRow={(c) => (

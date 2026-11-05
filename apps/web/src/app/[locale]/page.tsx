@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Fragment, use, useEffect, useRef, useState } from "react";
 
@@ -11,7 +11,7 @@ import {
   HomeHero,
 } from "@/components/meals/food";
 import { HOME_COPY } from "@/components/meals/home-copy";
-import { LoadError } from "@/components/load-error";
+import { LoadError, OfflineError } from "@/components/load-error";
 import { useCustomerPoint } from "@/components/meals/location";
 import { useDebounced } from "@/components/meals/use-debounced";
 import { LocationPicker, placeLabel } from "@/components/meals/location-picker";
@@ -103,8 +103,15 @@ export default function MealsHome({
     queryFn: () =>
       getMealKitchens({ point, q: query, slot, rotation, cuisine }),
     enabled: point != null && showList,
-    // A new search or filter keeps the last results up until the new ones land.
-    placeholderData: keepPreviousData,
+    // A new search or filter keeps the last results up until the new ones
+    // land, but only for the same place: another place's kitchens under this
+    // place's name would be wrong, so a place change shows the loading state
+    // (or, offline, the offline error) instead.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === point?.lat &&
+      previousQuery?.queryKey[2] === point?.lng
+        ? previous
+        : undefined,
   });
   // React Query pauses (rather than fails) a fetch while the browser is offline.
   const offline = list.fetchStatus === "paused";
@@ -248,7 +255,7 @@ export default function MealsHome({
 
   const offlineNote = (
     <LoadError
-      error={new TypeError("offline")}
+      error={new OfflineError()}
       onRetry={() => void list.refetch()}
       locale={locale}
     />

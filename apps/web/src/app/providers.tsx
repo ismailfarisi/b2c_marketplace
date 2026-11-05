@@ -78,10 +78,17 @@ export function Providers({
             staleTime: 30_000,
             retry: (failureCount, error) => {
               // Retrying a 4xx just burns the user's battery — the request is
-              // not going to start succeeding. 5xx and network errors are worth
-              // one or two attempts.
-              if (error instanceof ApiError && error.status < 500) return false;
-              return failureCount < 2;
+              // not going to start succeeding. A 5xx answers fast and is worth
+              // two more attempts.
+              if (error instanceof ApiError)
+                return error.status >= 500 && failureCount < 2;
+              // A timeout has already waited REQUEST_TIMEOUT_MS (15s); retrying
+              // it would keep the reader looking at a spinner for 45s before
+              // saying anything. Other network failures (refused, reset) fail
+              // fast, so one retry rides out a blip and still answers in ~15s.
+              if (error instanceof TypeError && error.message === "Request timed out")
+                return false;
+              return failureCount < 1;
             },
           },
           mutations: {

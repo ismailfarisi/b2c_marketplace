@@ -26,7 +26,7 @@ import {
  * rejection, because a rejection at least gets refunded.
  */
 export default function CampaignQueue() {
-  const { data, isPending, error } = useQueueData("campaigns", getCampaignQueue);
+  const { data, error, refetch } = useQueueData("campaigns", getCampaignQueue);
   const rows = data?.items ?? [];
 
   return (
@@ -49,8 +49,10 @@ export default function CampaignQueue() {
           { label: "Waiting", className: "num" },
         ]}
         rows={rows}
-        isPending={isPending}
+        loaded={data !== undefined}
         error={error}
+        perm="ops staff access"
+        onRetry={() => void refetch()}
         empty="No campaigns awaiting review."
         rowKey={(c) => c.id}
         renderRow={(c) => (

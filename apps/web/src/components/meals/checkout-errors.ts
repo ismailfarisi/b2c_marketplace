@@ -90,6 +90,11 @@ const LUNCH: Record<string, Pair> = {
   },
 };
 
+const UNREACHABLE: Pair = {
+  en: "Can't reach the server right now. Try again in a moment. Nothing was charged twice.",
+  ar: "تعذر الوصول إلى الخادم حالياً. حاول مرة أخرى بعد قليل. لن يتم الخصم مرتين.",
+};
+
 const OFFLINE: Pair = {
   en: "You're offline. Check your connection and try again. Nothing was charged twice.",
   ar: "أنت غير متصل بالإنترنت. تحقق من الاتصال وحاول مرة أخرى. لن يتم الخصم مرتين.",
@@ -119,6 +124,8 @@ export function checkoutProblem(err: unknown, locale: Locale): string {
     if (code && LUNCH[code]) return LUNCH[code][locale];
   } else if (loadErrorKind(err) === "offline") {
     return OFFLINE[locale];
+  } else if (loadErrorKind(err) === "unreachable") {
+    return UNREACHABLE[locale];
   }
   return problemMessage(err, locale);
 }

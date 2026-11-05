@@ -60,8 +60,10 @@ export default function ListingQueue() {
           { label: "Waiting", className: "num" },
         ]}
         rows={listings.data?.items ?? []}
-        isPending={listings.isPending}
+        loaded={listings.data !== undefined}
         error={listings.error}
+        perm="content.review"
+        onRetry={() => void listings.refetch()}
         empty="No listings awaiting review."
         rowKey={(l) => l.id}
         renderRow={(l) => (
@@ -130,8 +132,10 @@ export default function ListingQueue() {
           { label: "Raised", className: "num" },
         ]}
         rows={fraud.data?.items ?? []}
-        isPending={fraud.isPending}
+        loaded={fraud.data !== undefined}
         error={fraud.error}
+        perm="content.review"
+        onRetry={() => void fraud.refetch()}
         empty="No open signals."
         rowKey={(s) => `${s.subject_type}:${s.subject_id}:${s.kind}`}
         renderRow={(s) => (

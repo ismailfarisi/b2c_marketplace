@@ -55,8 +55,10 @@ export default function KycQueue() {
       </p>
 
       <CardState
-        isPending={cases.isPending}
+        loaded={cases.data !== undefined}
         error={cases.error}
+        perm="identity.review"
+        onRetry={() => void cases.refetch()}
         count={caseItems.length}
         empty="No cases awaiting review."
       />
@@ -153,8 +155,10 @@ export default function KycQueue() {
           { label: "Waiting", className: "num" },
         ]}
         rows={accounts.data?.items ?? []}
-        isPending={accounts.isPending}
+        loaded={accounts.data !== undefined}
         error={accounts.error}
+        perm="identity.review"
+        onRetry={() => void accounts.refetch()}
         empty="No accounts awaiting verification."
         rowKey={(a) => a.id}
         renderRow={(a) => (

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState, type ReactNode } from "react";
 
 import { messageOf } from "@/components/admin/detail";
-import { ConsoleError } from "@/components/admin/errors";
+import { ConsoleError, RefreshFailed } from "@/components/admin/errors";
 import { POLL_MS } from "@/components/admin/shell";
 
 /**
@@ -69,7 +69,9 @@ export function Tag({
 
 /**
  * A panel with a sticky-headed table inside it, and the three states a queue can
- * be in.
+ * be in. A refetch that fails after rows have loaded keeps the rows (and any
+ * expanded row with a half-typed decision) and only adds a notice; the full
+ * error is for a queue that never loaded.
  *
  * The empty state says the queue is empty rather than rendering nothing. A blank
  * panel is indistinguishable from a failed fetch, and the difference between
@@ -81,7 +83,7 @@ export function QueuePanel<T>({
   hint,
   columns,
   rows,
-  isPending,
+  loaded,
   error,
   empty,
   rowKey,
@@ -94,7 +96,8 @@ export function QueuePanel<T>({
   hint?: string;
   columns: Array<{ label: string; className?: string }>;
   rows: T[];
-  isPending: boolean;
+  /** The query has data (possibly from before a failed refetch). */
+  loaded: boolean;
   error: unknown;
   empty: string;
   rowKey: (row: T) => string;
@@ -113,16 +116,17 @@ export function QueuePanel<T>({
         <h2>{title}</h2>
         {hint && <span className="hint">{hint}</span>}
         <div style={{ flex: 1 }} />
-        {!isPending && !error && (
+        {loaded && (
           <span className="hint">
             {rows.length} {rows.length === 1 ? "item" : "items"}
           </span>
         )}
       </div>
 
-      {error ? (
+      {loaded && error ? <RefreshFailed error={error} onRetry={onRetry} /> : null}
+      {!loaded && error ? (
         <ConsoleError error={error} what="this queue" perm={perm} onRetry={onRetry} />
-      ) : isPending ? (
+      ) : !loaded ? (
         <SkeletonRows columns={columns.length} />
       ) : rows.length === 0 ? (
         <div className="state">{empty}</div>
@@ -300,28 +304,29 @@ export function Evidence({ rows }: { rows: Array<[string, ReactNode]> }) {
 
 /** Card-shaped states, for the two screens that are not tables. */
 export function CardState({
-  isPending,
+  loaded,
   error,
   count,
   empty,
   onRetry,
   perm,
 }: {
-  isPending: boolean;
+  /** The query has data (possibly from before a failed refetch). */
+  loaded: boolean;
   error: unknown;
   count: number;
   empty: string;
   onRetry?: () => void;
   perm?: string;
 }) {
-  if (error) {
+  if (!loaded && error) {
     return (
       <div className="panel">
         <ConsoleError error={error} what="this queue" perm={perm} onRetry={onRetry} />
       </div>
     );
   }
-  if (isPending) {
+  if (!loaded) {
     return (
       <div className="panel">
         <div className="panel-body">
@@ -330,10 +335,13 @@ export function CardState({
       </div>
     );
   }
-  if (count === 0) {
+  // Loaded: the cards stay rendered by the caller; a failed refresh only
+  // adds a notice above them.
+  if (count === 0 || error) {
     return (
       <div className="panel">
-        <div className="state">{empty}</div>
+        {error ? <RefreshFailed error={error} onRetry={onRetry} /> : null}
+        {count === 0 ? <div className="state">{empty}</div> : null}
       </div>
     );
   }
