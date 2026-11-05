@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { listMyBranches } from "@/lib/vendor-api";
+import { PhoneInput } from "@/components/phone-input";
 import { logout, requestOtp, verifyOtp } from "@/lib/auth-api";
+import { DEFAULT_PHONE_COUNTRY, displayPhone } from "@/lib/phone";
 import { consoleCopy, type ConsoleCopy } from "@/components/kitchen/copy";
 import { BRANCHES_KEY } from "@/components/kitchen/portal";
 
@@ -52,6 +54,7 @@ function LoginForm({ locale }: { locale: string }) {
 
   const [step, setStep] = useState<Step>({ phase: "phone" });
   const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState<string>(DEFAULT_PHONE_COUNTRY);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,12 +85,12 @@ function LoginForm({ locale }: { locale: string }) {
     setBusy(true);
     setError(null);
     try {
-      const challenge = await requestOtp(phone.trim(), locale);
+      const challenge = await requestOtp(phone.trim(), country, locale);
       setCode("");
       setStep({
         phase: "code",
         challengeId: challenge.challenge_id,
-        phone: phone.trim(),
+        phone: displayPhone(phone, country),
         resendAt: Date.now() + challenge.resend_after_seconds * 1000,
       });
     } catch (err) {
@@ -214,17 +217,16 @@ function LoginForm({ locale }: { locale: string }) {
       <form onSubmit={onRequestCode} className="console-login-form">
         <label className="console-login-field">
           <span>{t.login.phoneLabel}</span>
-          <input
-            className="field"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="+971501234567"
-            dir="ltr"
-            autoFocus
-            required
+          <PhoneInput
+            className="console-login-phone"
+            selectClassName="field"
+            inputClassName="field"
+            country={country}
+            onCountry={setCountry}
+            phone={phone}
+            onPhone={setPhone}
+            locale={locale === "ar" ? "ar" : "en"}
+            countryLabel={t.login.countryLabel}
           />
         </label>
 

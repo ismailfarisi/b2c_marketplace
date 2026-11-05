@@ -109,7 +109,9 @@ type Handlers struct {
 // --- auth -------------------------------------------------------------------
 
 type otpRequestBody struct {
-	Phone   string `json:"phone"`
+	Phone string `json:"phone"`
+	// Country is the ISO code of the sign-in picker; needed for national numbers.
+	Country string `json:"country"`
 	Purpose string `json:"purpose"`
 	Locale  string `json:"locale"`
 }
@@ -121,7 +123,7 @@ func (h *Handlers) RequestOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	challenge, err := h.Identity.RequestOTP(r.Context(), body.Phone, body.Purpose, clientIP(r))
+	challenge, err := h.Identity.RequestOTP(r.Context(), body.Phone, body.Country, body.Purpose, clientIP(r))
 	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
@@ -506,8 +508,13 @@ func nullable(s string) any {
 // once at boot from TRUSTED_PROXIES; empty means XFF is ignored entirely.
 var trustedProxies []netip.Prefix
 
-// SetTrustedProxies parses a comma-separated list of IPs or CIDRs.
+// SetTrustedProxies parses a comma-separated list of IPs or CIDRs. "none" is
+// the explicit empty list config.Load accepts in production.
 func SetTrustedProxies(list string) error {
+	if strings.EqualFold(strings.TrimSpace(list), "none") {
+		trustedProxies = nil
+		return nil
+	}
 	var out []netip.Prefix
 	for _, raw := range strings.Split(list, ",") {
 		raw = strings.TrimSpace(raw)

@@ -19,12 +19,15 @@ Conventions:
 
  * OpenAPI spec version: 0.1.0
  */
+import type { OtpRequestCountry } from './otpRequestCountry';
 import type { OtpRequestPurpose } from './otpRequestPurpose';
 import type { Locale } from './locale';
 
 export interface OtpRequest {
-  /** E.164 with country code, or a UAE national number (0501234567) or 00-prefixed international number, which the server normalises to E.164 before validating. */
+  /** E.164 with country code (+971501234567), a 00-prefixed international number, or a national number (0501234567 or 501234567) read in the selected `country`. A national number without `country` is refused with 422 `country_required` rather than guessed; a number of the wrong length for its country is 422 `wrong_length`. */
   phone: string;
+  /** ISO 3166 code of the country picked on the sign-in form. Only used to read a national number; ignored when `phone` is already E.164. */
+  country?: OtpRequestCountry;
   purpose?: OtpRequestPurpose;
   locale?: Locale;
 }

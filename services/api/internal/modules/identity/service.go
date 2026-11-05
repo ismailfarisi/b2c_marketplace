@@ -47,7 +47,10 @@ type Service struct {
 // SetReviewAccount enables a fixed code for one phone number, for Apple and
 // Google reviewers who cannot receive our SMS. Called once at boot.
 func (s *Service) SetReviewAccount(phone, code string) {
-	s.reviewPhone, s.reviewCode = normalizePhone(phone), code
+	if e, bad := NormalizePhone(phone, ""); bad == "" {
+		phone = e
+	}
+	s.reviewPhone, s.reviewCode = phone, code
 }
 
 // OTPSender queues a sign-in code for delivery inside the transaction that
@@ -70,17 +73,16 @@ type Challenge struct {
 	ResendAfterSeconds int
 }
 
-// RequestOTP issues a code.
+// RequestOTP issues a code. country is the ISO code the sign-in screen's picker
+// was set to; it is only needed for a national number (see NormalizePhone).
 //
 // The response is identical whether or not the number has an account. Anything
 // else turns this endpoint into a user-enumeration oracle, which for a
 // phone-first product means confirming whether a given person is a customer.
-func (s *Service) RequestOTP(ctx context.Context, phone, purpose, requestIP string) (*Challenge, error) {
-	phone = normalizePhone(phone)
-	if !e164.MatchString(phone) {
-		return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
-			Field: "phone", Code: "invalid", Message: "must be E.164, e.g. +971501234567",
-		}}}
+func (s *Service) RequestOTP(ctx context.Context, phone, country, purpose, requestIP string) (*Challenge, error) {
+	phone, bad := NormalizePhone(phone, country)
+	if bad != "" {
+		return nil, phoneError(httpx.LocaleFromContext(ctx), bad)
 	}
 	if purpose == "" {
 		purpose = "login"
@@ -110,6 +112,17 @@ func (s *Service) RequestOTP(ctx context.Context, phone, purpose, requestIP stri
 		return nil, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
+	// A new code retires every live one for this number, so "Resend" means
+	// what the screen says: only the newest SMS works. In the same transaction
+	// as the insert, so a resend that fails to queue leaves the earlier code
+	// usable — which is what the apps tell the viewer in that case.
+	if _, err := tx.Exec(ctx, `
+		UPDATE otp_codes SET superseded_at = now()
+		 WHERE phone = $1 AND purpose = $2
+		   AND consumed_at IS NULL AND superseded_at IS NULL AND expires_at > now()`,
+		phone, purpose); err != nil {
+		return nil, fmt.Errorf("supersede otp: %w", err)
+	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO otp_codes (phone, purpose, code_hash, request_ip, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
@@ -170,6 +183,9 @@ const (
 	CodeChallengeSpent   = "otp_already_used"
 	CodeTooManyAttempts  = "otp_too_many_attempts"
 	CodeUnknownChallenge = "otp_unknown_challenge"
+	// CodeChallengeSuperseded: a later RequestOTP for the same number retired
+	// this challenge. Clients treat it like the other dead-challenge codes.
+	CodeChallengeSuperseded = "otp_superseded"
 )
 
 // VerifyOTP exchanges a code for a session, creating the user on first login.
@@ -187,6 +203,7 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code str
 			attempts    int
 			maxAttempts int
 			consumedAt  *time.Time
+			superseded  *time.Time
 			expiresAt   time.Time
 		)
 
@@ -194,9 +211,9 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code str
 		// Without it, N parallel requests each read attempts=0 and the limit
 		// never bites — which is exactly how a 6-digit code gets brute-forced.
 		err := tx.QueryRow(ctx, `
-			SELECT phone, code_hash, attempts, max_attempts, consumed_at, expires_at
+			SELECT phone, code_hash, attempts, max_attempts, consumed_at, superseded_at, expires_at
 			  FROM otp_codes WHERE id = $1 FOR UPDATE`, challengeID,
-		).Scan(&phone, &codeHash, &attempts, &maxAttempts, &consumedAt, &expiresAt)
+		).Scan(&phone, &codeHash, &attempts, &maxAttempts, &consumedAt, &superseded, &expiresAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// A challenge id that never existed, or one old enough to have been
 			// swept. Same remedy as an expired one from the caller's point of
@@ -225,6 +242,10 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID uuid.UUID, code str
 		if consumedAt != nil {
 			return httpx.Coded(httpx.ErrUnauthorized, CodeChallengeSpent,
 				"That code has already been used. Ask for a new one.")
+		}
+		if superseded != nil {
+			return httpx.Coded(httpx.ErrUnauthorized, CodeChallengeSuperseded,
+				"A newer code was sent to this number. Use the latest one.")
 		}
 		if time.Now().After(expiresAt) {
 			return httpx.Coded(httpx.ErrUnauthorized, CodeChallengeExpired,
@@ -306,13 +327,15 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string, device Devic
 			revokedAt *time.Time
 			rotatedTo *uuid.UUID
 			expiresAt time.Time
+			platform  *string
+			name      *string
 		)
 
 		err := tx.QueryRow(ctx, `
-			SELECT id, user_id, revoked_at, rotated_to, expires_at
+			SELECT id, user_id, revoked_at, rotated_to, expires_at, device_platform, device_name
 			  FROM sessions WHERE refresh_token_hash = $1 FOR UPDATE`,
 			auth.HashToken(refreshToken),
-		).Scan(&sessionID, &userID, &revokedAt, &rotatedTo, &expiresAt)
+		).Scan(&sessionID, &userID, &revokedAt, &rotatedTo, &expiresAt, &platform, &name)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.ErrUnauthorized
 		}
@@ -342,6 +365,16 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string, device Devic
 		user, err := loadUser(ctx, tx, userID)
 		if err != nil {
 			return err
+		}
+
+		// The refresh call carries no device block from most clients, and the
+		// new row is the one "Signed-in devices" and push routing read. Inherit
+		// what the session was created with unless the caller says otherwise.
+		if device.Platform == "" && platform != nil {
+			device.Platform = *platform
+		}
+		if device.Name == "" && name != nil {
+			device.Name = *name
 		}
 
 		session, err = s.issueSession(ctx, tx, user, device)
@@ -542,29 +575,6 @@ func generateCode() (string, error) {
 		return "", fmt.Errorf("generate otp: %w", err)
 	}
 	return fmt.Sprintf("%06d", n.Int64()), nil
-}
-
-// normalizePhone strips formatting and accepts the two ways UAE numbers are
-// usually typed besides E.164: the national form (0501234567, leading 0 and nine
-// digits) and the 00 international prefix (00971501234567). The result is still
-// checked against e164 by the caller.
-func normalizePhone(raw string) string {
-	var b strings.Builder
-	for _, r := range strings.TrimSpace(raw) {
-		if r == '+' && b.Len() == 0 {
-			b.WriteRune(r)
-		} else if r >= '0' && r <= '9' {
-			b.WriteRune(r)
-		}
-	}
-	out := b.String()
-	switch {
-	case strings.HasPrefix(out, "00"):
-		return "+" + out[2:]
-	case len(out) == 10 && out[0] == '0' && out[1] != '0':
-		return "+971" + out[1:]
-	}
-	return out
 }
 
 // SetPushToken attaches this device's push token to its session. The token is

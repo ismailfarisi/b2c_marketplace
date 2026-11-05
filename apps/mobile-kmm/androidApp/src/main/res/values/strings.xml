@@ -137,7 +137,14 @@
     -->
     <string name="signin_title">Sign in to list</string>
     <string name="signin_why">Your listing belongs to an account, and buyers message you here. Your number is never shown to them.</string>
-    <string name="signin_phone_hint">+971 50 000 0000</string>
+    <string name="signin_phone_hint">Choose the country code, then type the number as you would at home.</string>
+    <string name="signin_country">Country code</string>
+    <string name="signin_country_ae">UAE</string>
+    <string name="signin_country_sa">Saudi Arabia</string>
+    <string name="signin_country_qa">Qatar</string>
+    <string name="signin_country_kw">Kuwait</string>
+    <string name="signin_country_bh">Bahrain</string>
+    <string name="signin_country_om">Oman</string>
     <string name="signin_send_code">Send code</string>
     <string name="signin_code_hint">6-digit code</string>
     <string name="signin_verify">Verify</string>
@@ -160,6 +167,12 @@
     <string name="signin_err_code">That code is not right. Check the message and try again.</string>
     <string name="signin_err_stale">That code has expired. Ask for a new one.</string>
     <string name="signin_err_too_many">Too many attempts. Wait a minute, then try again.</string>
+    <string name="signin_err_too_many_wait">Too many attempts. Try again in %1$s.</string>
+    <string name="signin_err_phone_length">That isn\'t a %1$s mobile number. Check the country code.</string>
+    <string name="signin_err_superseded">A newer code was sent. Use the code from the latest message.</string>
+    <string name="signin_err_resend_too_many_wait">Too many codes requested. Try again in %1$s; your previous code still works until it expires.</string>
+    <string name="signin_wait_seconds">%1$d s</string>
+    <string name="signin_wait_minutes">%1$d min</string>
     <string name="signin_err_offline">No connection. Check your network and try again.</string>
     <string name="signin_err_unknown">Sign-in is not working right now. Try again shortly.</string>
     <string name="signin_err_blocked">This account can\'t sign in right now. Contact support for help.</string>

@@ -30,6 +30,7 @@ func prodEnv() map[string]string {
 		// there is no value for this that boots in production today.
 		"TRANSCODE_VENDOR":  "ffmpeg",
 		"ANTHROPIC_API_KEY": "sk-ant-not-a-real-key",
+		"TRUSTED_PROXIES":   "10.0.0.0/16",
 	}
 }
 
@@ -112,6 +113,14 @@ func TestProductionRefusals(t *testing.T) {
 			why:   "reels publish with playlists that point at nothing",
 		},
 		{
+			name:  "no trusted proxies are named",
+			key:   "TRUSTED_PROXIES",
+			value: "",
+			want:  "TRUSTED_PROXIES",
+			why: "behind a load balancer every client shares its address, so " +
+				"the per-IP OTP limit becomes one limit for everyone",
+		},
+		{
 			name:  "the public endpoint is auto",
 			key:   "S3_PUBLIC_ENDPOINT",
 			value: AutoHost,
@@ -149,6 +158,14 @@ func TestProductionRefusals(t *testing.T) {
 					"got: %v", tc.want, err)
 			}
 		})
+	}
+}
+
+func TestTrustedProxiesNoneOptsOut(t *testing.T) {
+	env := prodEnv()
+	env["TRUSTED_PROXIES"] = "none"
+	if _, err := load(t, env); err != nil {
+		t.Fatalf("an explicit none must boot, got: %v", err)
 	}
 }
 

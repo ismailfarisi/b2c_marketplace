@@ -51,8 +51,7 @@ struct SignInGate: View {
                 .foregroundStyle(ink)
 
             Text(onCodeStep
-                 ? String(format: String(localized: "signin_sent_to"),
-                          phone.trimmingCharacters(in: .whitespaces))
+                 ? String(format: String(localized: "signin_sent_to"), state.sentTo)
                  : NSLocalizedString(whyKey, comment: ""))
                 .font(.system(size: TypeScale.secondary))
                 .foregroundStyle(light ? Warm.muted : Palette.text.opacity(0.55))
@@ -98,11 +97,22 @@ struct SignInGate: View {
                 }
                 .padding(.top, Space.large)
             } else {
-                field($phone, placeholder: "signin_phone_hint", keyboard: .phonePad)
-                    .onChange(of: phone) { _, new in viewModel.onPhone(value: new) }
+                // Country code then number, left to right in Arabic too: the
+                // pair reads as one number, and "+971" reversed is not one.
+                HStack(spacing: Space.small) {
+                    countryPicker
+                    field($phone, placeholder: LocalizedStringKey(state.country.example), keyboard: .phonePad)
+                        .onChange(of: phone) { _, new in viewModel.onPhone(value: new) }
+                }
+                .environment(\.layoutDirection, .leftToRight)
+
+                Text("signin_phone_hint")
+                    .font(.system(size: 12))
+                    .foregroundStyle(light ? Warm.muted : Palette.text.opacity(0.55))
+                    .padding(.top, Space.small)
 
                 primaryButton("signin_send_code", busyKey: "signin_sending", busy: state.busy,
-                              enabled: !phone.trimmingCharacters(in: .whitespaces).isEmpty && !state.busy) {
+                              enabled: state.canSend) {
                     viewModel.sendCode(nowMillis: Self.millis())
                 }
                 Text("legal_agree")
@@ -112,7 +122,7 @@ struct SignInGate: View {
             }
 
             if let problem = state.error {
-                Text(Self.words(problem))
+                Text(Self.words(problem, state))
                     .font(.system(size: 12))
                     .foregroundStyle(accent)
                     .padding(.top, 14)
@@ -142,6 +152,32 @@ struct SignInGate: View {
             }
         }
         .onChange(of: onCodeStep) { _, _ in focused = true }
+    }
+
+    /// The calling-code chip in front of the number, opening the six GCC countries.
+    private var countryPicker: some View {
+        Menu {
+            ForEach(PhoneCountry.companion.all, id: \.iso) { c in
+                Button("\(c.dialCode)  \(Self.countryName(c))") { viewModel.onCountry(country: c) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(state.country.dialCode)
+                    .font(.system(size: 16).weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12))
+            }
+            .foregroundStyle(ink)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 8).fill(light ? Color.white : Color.clear))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(light ? Warm.line : Palette.line, lineWidth: 1))
+        }
+        .accessibilityLabel(Text("signin_country"))
+        .accessibilityValue(Text("\(Self.countryName(state.country)) \(state.country.dialCode)"))
+    }
+
+    private static func countryName(_ c: PhoneCountry) -> String {
+        NSLocalizedString("signin_country_\(c.iso.lowercased())", comment: "")
     }
 
     private func field(
@@ -194,9 +230,25 @@ struct SignInGate: View {
     /// Every one ends in an instruction. "Something went wrong" was the message
     /// this screen used to show for all of them, and it is the one message that
     /// cannot be acted on.
-    private static func words(_ problem: SignInProblem) -> String {
+    private static func words(_ problem: SignInProblem, _ state: SignInUiState) -> String {
+        // The server's Retry-After, so a limit that lasts an hour does not say
+        // "wait a minute".
+        var wait: String?
+        if let seconds = state.retryAfterSeconds?.intValue {
+            wait = seconds < 60
+                ? String(format: String(localized: "signin_wait_seconds"), max(1, seconds))
+                : String(format: String(localized: "signin_wait_minutes"),
+                         state.retryAfterMinutes?.intValue ?? 1)
+        }
         switch problem.code {
         case "BadPhone": return String(localized: "signin_err_phone")
+        case "WrongLength":
+            return String(format: String(localized: "signin_err_phone_length"), countryName(state.country))
+        case "Superseded": return String(localized: "signin_err_superseded")
+        case "TooMany" where wait != nil:
+            return String(format: String(localized: "signin_err_too_many_wait"), wait!)
+        case "ResendTooMany" where wait != nil:
+            return String(format: String(localized: "signin_err_resend_too_many_wait"), wait!)
         case "WrongCode": return String(localized: "signin_err_code")
         case "NeedsNewCode": return String(localized: "signin_err_stale")
         case "TooMany": return String(localized: "signin_err_too_many")

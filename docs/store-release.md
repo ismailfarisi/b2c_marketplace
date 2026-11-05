@@ -81,3 +81,18 @@ Reviewers cannot receive our SMS. Set `OTP_REVIEW_PHONE` (a number you own and
 never give to anyone else) and `OTP_REVIEW_CODE` (6 digits) on the production API,
 and enter both in the review notes. That number always accepts that code and is
 never texted. Remove them after approval if you prefer.
+
+## Production API before release
+
+The apps sign in with phone OTP, and the API limits code requests per phone and
+per client IP. Behind a load balancer the client IP is only right if the API
+trusts the balancer's `X-Forwarded-For`, so `TRUSTED_PROXIES` is required when
+`APP_ENV=production` and the API refuses to start without it:
+
+| Deployment | `TRUSTED_PROXIES` |
+|---|---|
+| Behind an ALB / nginx / Cloudflare | The proxy subnets, comma-separated, e.g. `10.0.0.0/16` |
+| Clients connect straight to the API | `none` |
+
+Left empty, every customer would share the balancer's address and with it a
+single 20-requests-per-hour OTP limit, locking the whole country out of sign-in.

@@ -119,11 +119,11 @@ func TestRequestOTPRateLimitIs429WithRetryAfter(t *testing.T) {
 	phone := testPhone()
 
 	for i := 0; i < otpPerPhone; i++ {
-		if _, err := svc.RequestOTP(ctx, phone, "login", ""); err != nil {
+		if _, err := svc.RequestOTP(ctx, phone, "", "login", ""); err != nil {
 			t.Fatalf("request %d: %v", i+1, err)
 		}
 	}
-	_, err := svc.RequestOTP(ctx, phone, "login", "")
+	_, err := svc.RequestOTP(ctx, phone, "", "login", "")
 	if !errors.Is(err, httpx.ErrRateLimited) {
 		t.Fatalf("6th request: want ErrRateLimited, got %v", err)
 	}
@@ -136,19 +136,84 @@ func TestRequestOTPRateLimitIs429WithRetryAfter(t *testing.T) {
 	}
 }
 
-func TestRequestOTPAcceptsUAENationalFormat(t *testing.T) {
+func TestRequestOTPNationalNumberFollowsTheCountry(t *testing.T) {
 	svc, pool := testService(t)
 	ctx := context.Background()
-	national := fmt.Sprintf("058%07d", rand.IntN(10_000_000))
-	ch, err := svc.RequestOTP(ctx, national, "login", "")
-	if err != nil {
-		t.Fatalf("RequestOTP(%s): %v", national, err)
+	national := fmt.Sprintf("055%07d", rand.IntN(10_000_000))
+	stored := func(id uuid.UUID) string {
+		var p string
+		if err := pool.QueryRow(ctx, `SELECT phone FROM otp_codes WHERE id = $1`, id).Scan(&p); err != nil {
+			t.Fatal(err)
+		}
+		return p
 	}
-	var stored string
-	if err := pool.QueryRow(ctx, `SELECT phone FROM otp_codes WHERE id = $1`, ch.ID).Scan(&stored); err != nil {
+
+	if _, err := svc.RequestOTP(ctx, national, "", "login", ""); err == nil {
+		t.Fatalf("a national number with no country must be refused, not guessed")
+	} else {
+		var ve *httpx.ValidationError
+		if !errors.As(err, &ve) || ve.Fields[0].Code != PhoneCountryRequired {
+			t.Fatalf("want 422 %s, got %v", PhoneCountryRequired, err)
+		}
+	}
+	sa, err := svc.RequestOTP(ctx, national, "SA", "login", "")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if stored != "+971"+national[1:] {
-		t.Fatalf("stored phone = %q", stored)
+	if got := stored(sa.ID); got != "+966"+national[1:] {
+		t.Fatalf("SA stored phone = %q", got)
+	}
+	ae, err := svc.RequestOTP(ctx, national, "AE", "login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stored(ae.ID); got != "+971"+national[1:] {
+		t.Fatalf("AE stored phone = %q", got)
+	}
+}
+
+func TestResendRetiresEarlierCodes(t *testing.T) {
+	svc, pool := testService(t)
+	ctx := context.Background()
+	phone := testPhone()
+	first := newChallenge(t, pool, phone, "111111")
+
+	second, err := svc.RequestOTP(ctx, phone, "", "login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.VerifyOTP(ctx, first, "111111", DeviceInfo{})
+	if got := problemCode(err); got != CodeChallengeSuperseded {
+		t.Fatalf("earlier code after a resend: want %s, got %v", CodeChallengeSuperseded, err)
+	}
+	var superseded *time.Time
+	if err := pool.QueryRow(ctx, `SELECT superseded_at FROM otp_codes WHERE id = $1`, second.ID).Scan(&superseded); err != nil {
+		t.Fatal(err)
+	}
+	if superseded != nil {
+		t.Fatal("the newest challenge must stay live")
+	}
+}
+
+func TestRefreshKeepsTheDevice(t *testing.T) {
+	svc, pool := testService(t)
+	ctx := context.Background()
+	phone := testPhone()
+	ch := newChallenge(t, pool, phone, "222222")
+	first, err := svc.VerifyOTP(ctx, ch, "222222", DeviceInfo{Platform: "ios", Name: "Layla's iPhone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.Refresh(ctx, first.RefreshToken, DeviceInfo{IP: "192.0.2.7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var platform, name *string
+	if err := pool.QueryRow(ctx, `SELECT device_platform, device_name FROM sessions WHERE id = $1`,
+		second.sessionID).Scan(&platform, &name); err != nil {
+		t.Fatal(err)
+	}
+	if platform == nil || *platform != "ios" || name == nil || *name != "Layla's iPhone" {
+		t.Fatalf("rotated session lost its device: platform=%v name=%v", platform, name)
 	}
 }

@@ -37,6 +37,18 @@ func TestClientIPTakesRightmostUntrustedHop(t *testing.T) {
 	}
 }
 
+func TestTrustedProxiesNoneTrustsNobody(t *testing.T) {
+	if err := SetTrustedProxies("none"); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("POST", "/v1/auth/otp/request", nil)
+	r.RemoteAddr = "10.0.0.5:4000"
+	r.Header.Set("X-Forwarded-For", "198.51.100.9")
+	if got := clientIP(r); got != "10.0.0.5" {
+		t.Fatalf("clientIP = %q, want the socket address", got)
+	}
+}
+
 func TestSetTrustedProxiesRejectsGarbage(t *testing.T) {
 	if err := SetTrustedProxies("not-an-ip"); err == nil {
 		t.Fatal("want an error")

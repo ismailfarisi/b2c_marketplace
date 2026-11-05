@@ -1669,6 +1669,19 @@ details.ms-danger[open] > summary {
 .ms-auth .ms-form input {
   inline-size: 100%;
 }
+/* Country code + number: one control to the eye, always LTR. */
+.ms-phone {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.ms-auth .ms-phone select {
+  font-weight: 600;
+  max-inline-size: 11rem;
+}
+.ms-auth .ms-form label > small {
+  font-weight: 400;
+}
 
 /* ---- Merchandised home: banners, kitchen rails, cuisine strip ---------- */
 

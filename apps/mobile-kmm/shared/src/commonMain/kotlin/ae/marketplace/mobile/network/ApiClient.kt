@@ -223,7 +223,13 @@ object ApiClientFactory {
  */
 private suspend fun HttpResponse.toApiException(): ApiException {
     val problem = runCatching { body<Problem>() }.getOrNull()
-    return ApiException(status.value, problem, headers["X-Request-Id"])
+    return ApiException(
+        status.value,
+        problem,
+        headers["X-Request-Id"],
+        // Delta-seconds only: the API never sends the HTTP-date form.
+        retryAfterSeconds = headers["Retry-After"]?.trim()?.toIntOrNull()?.takeIf { it >= 0 },
+    )
 }
 
 @Serializable

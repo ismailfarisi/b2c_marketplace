@@ -154,7 +154,7 @@ private fun ApiException.fromStatus(): Failure = when (status) {
         detail = problem?.detail,
         fieldCodes = problem?.errors.orEmpty().associate { it.field to it.code },
     )
-    429 -> Failure.RateLimited()
+    429 -> Failure.RateLimited(retryAfterSeconds)
     in 500..599 -> Failure.Server(status, requestId)
     else -> Failure.Unknown
 }

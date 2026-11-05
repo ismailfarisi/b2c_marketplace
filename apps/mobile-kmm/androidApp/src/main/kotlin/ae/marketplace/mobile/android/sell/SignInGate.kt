@@ -2,7 +2,9 @@ package ae.marketplace.mobile.android.sell
 
 import androidx.annotation.StringRes
 import ae.marketplace.mobile.android.R
+import ae.marketplace.mobile.identity.PhoneCountry
 import ae.marketplace.mobile.identity.SignInProblem
+import ae.marketplace.mobile.identity.SignInUiState
 import ae.marketplace.mobile.identity.SignInViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +25,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -139,7 +145,7 @@ fun SignInGate(
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = if (onCode) stringResource(R.string.signin_sent_to, state.phone.trim())
+            text = if (onCode) stringResource(R.string.signin_sent_to, state.sentTo)
             else stringResource(why),
             color = if (light) MealsMuted else Color.White.copy(alpha = 0.55f),
             fontSize = 13.sp,
@@ -147,22 +153,43 @@ fun SignInGate(
         )
 
         if (!onCode) {
-            Field(
-                value = state.phone,
-                onValue = viewModel::onPhone,
-                placeholder = stringResource(R.string.signin_phone_hint),
-                keyboard = KeyboardType.Phone,
-                imeAction = ImeAction.Send,
-                onImeAction = { viewModel.sendCode(currentMillis()) },
-                focusRequester = focus,
-                light = light,
+            // Country code then number, left to right in Arabic too: the pair
+            // reads as one number, and "+971" reversed is not one.
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CountryPicker(
+                        selected = state.country,
+                        onSelect = viewModel::onCountry,
+                        light = light,
+                    )
+                    Box(Modifier.width(8.dp))
+                    Field(
+                        value = state.phone,
+                        onValue = viewModel::onPhone,
+                        placeholder = state.country.example,
+                        keyboard = KeyboardType.Phone,
+                        imeAction = ImeAction.Send,
+                        onImeAction = { viewModel.sendCode(currentMillis()) },
+                        focusRequester = focus,
+                        light = light,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Text(
+                text = stringResource(R.string.signin_phone_hint),
+                color = if (light) MealsMuted else Color.White.copy(alpha = 0.55f),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp),
             )
             Box(Modifier.padding(top = 16.dp)) {
                 BusyButton(
                     label = stringResource(R.string.signin_send_code),
                     busyLabel = stringResource(R.string.signin_sending),
                     busy = state.busy,
-                    enabled = state.phone.isNotBlank() && !state.busy,
+                    enabled = state.canSend,
                     onClick = { viewModel.sendCode(currentMillis()) },
                     fill = accent,
                 )
@@ -237,7 +264,7 @@ fun SignInGate(
 
         state.error?.let { problem ->
             Text(
-                text = stringResource(problem.stringRes()),
+                text = problemText(problem, state),
                 color = accent,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 14.dp),
@@ -305,8 +332,74 @@ private val MealsChilli = Color(0xFFC43B16)
  * message this screen used to show for all of them, and it is the one message
  * that cannot be acted on.
  */
+@Composable
+private fun problemText(problem: SignInProblem, state: SignInUiState): String {
+    val wait = state.retryAfterSeconds?.let { seconds ->
+        if (seconds < 60) stringResource(R.string.signin_wait_seconds, seconds.coerceAtLeast(1))
+        else stringResource(R.string.signin_wait_minutes, state.retryAfterMinutes ?: 1)
+    }
+    return when {
+        problem == SignInProblem.WrongLength ->
+            stringResource(R.string.signin_err_phone_length, stringResource(state.country.nameRes()))
+        problem == SignInProblem.TooMany && wait != null ->
+            stringResource(R.string.signin_err_too_many_wait, wait)
+        problem == SignInProblem.ResendTooMany && wait != null ->
+            stringResource(R.string.signin_err_resend_too_many_wait, wait)
+        else -> stringResource(problem.stringRes())
+    }
+}
+
+private fun PhoneCountry.nameRes(): Int = when (this) {
+    PhoneCountry.AE -> R.string.signin_country_ae
+    PhoneCountry.SA -> R.string.signin_country_sa
+    PhoneCountry.QA -> R.string.signin_country_qa
+    PhoneCountry.KW -> R.string.signin_country_kw
+    PhoneCountry.BH -> R.string.signin_country_bh
+    PhoneCountry.OM -> R.string.signin_country_om
+}
+
+/** The calling-code chip in front of the number, opening the six GCC countries. */
+@Composable
+private fun CountryPicker(
+    selected: PhoneCountry,
+    onSelect: (PhoneCountry) -> Unit,
+    light: Boolean,
+) {
+    val ink = if (light) MealsInk else Color.White
+    var open by remember { mutableStateOf(false) }
+    val label = stringResource(R.string.signin_country)
+    val name = stringResource(selected.nameRes())
+    Box {
+        Row(
+            Modifier
+                .then(if (light) Modifier.background(Color.White, RoundedCornerShape(8.dp)) else Modifier)
+                .border(1.dp, if (light) MealsLine else Line, RoundedCornerShape(8.dp))
+                .clickable { open = true }
+                .semantics { contentDescription = "$label: $name ${selected.dialCode}" }
+                .padding(start = 12.dp, end = 6.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(selected.dialCode, color = ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = ink, modifier = Modifier.size(20.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            PhoneCountry.entries.forEach { c ->
+                DropdownMenuItem(
+                    text = { Text("${c.dialCode}  ${stringResource(c.nameRes())}") },
+                    onClick = {
+                        onSelect(c)
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
 private fun SignInProblem.stringRes(): Int = when (this) {
     SignInProblem.BadPhone -> R.string.signin_err_phone
+    SignInProblem.WrongLength -> R.string.signin_err_phone
+    SignInProblem.Superseded -> R.string.signin_err_superseded
     SignInProblem.WrongCode -> R.string.signin_err_code
     SignInProblem.NeedsNewCode -> R.string.signin_err_stale
     SignInProblem.TooMany -> R.string.signin_err_too_many
@@ -329,10 +422,11 @@ private fun Field(
     onImeAction: () -> Unit,
     focusRequester: FocusRequester,
     light: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val ink = if (light) MealsInk else Color.White
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .then(if (light) Modifier.background(Color.White, RoundedCornerShape(8.dp)) else Modifier)
             .border(1.dp, if (light) MealsLine else Line, RoundedCornerShape(8.dp))

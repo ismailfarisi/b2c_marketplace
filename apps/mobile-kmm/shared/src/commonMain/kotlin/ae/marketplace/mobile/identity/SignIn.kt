@@ -33,10 +33,15 @@ import kotlinx.serialization.Serializable
  */
 class SignInApi(private val client: HttpClient, private val tokens: TokenStore) {
 
-    suspend fun requestCode(phone: String): CodeSent {
+    /**
+     * Asks for a code. [country] is how the server reads a national number; a
+     * number typed with + carries its own and the country is ignored. A new
+     * code retires every earlier one for this number on the server.
+     */
+    suspend fun requestCode(phone: String, country: PhoneCountry = PhoneCountry.Default): CodeSent {
         val res: OtpChallenge = client.post("auth/otp/request") {
             contentType(ContentType.Application.Json)
-            setBody(OtpRequest(phone = phone, purpose = "login"))
+            setBody(OtpRequest(phone = phone, country = country.iso, purpose = "login"))
         }.body()
         return CodeSent(res.challengeId, res.resendAfterSeconds)
     }
@@ -64,7 +69,7 @@ class SignInApi(private val client: HttpClient, private val tokens: TokenStore) 
 data class CodeSent(val challengeId: String, val resendAfterSeconds: Int)
 
 @Serializable
-private data class OtpRequest(val phone: String, val purpose: String)
+internal data class OtpRequest(val phone: String, val country: String, val purpose: String)
 
 @Serializable
 private data class OtpChallenge(
@@ -88,6 +93,8 @@ private data class TokenPair(
 
 data class SignInUiState(
     val phone: String = "",
+    /** The picker's country, which is how a national number is read. */
+    val country: PhoneCountry = PhoneCountry.Default,
     val code: String = "",
     /** Non-empty once a code has been sent — which is what switches the screen. */
     val challengeId: String = "",
@@ -103,7 +110,22 @@ data class SignInUiState(
      * the three codes already sitting in their messages.
      */
     val resendAtMillis: Long = 0,
-)
+    /**
+     * The server's `Retry-After` for a [SignInProblem.TooMany] or
+     * [SignInProblem.ResendTooMany], so the copy can say how long rather than
+     * "a minute" for a limit that lasts an hour. Null when it did not say.
+     */
+    val retryAfterSeconds: Int? = null,
+) {
+    /** The number as it will be texted, with its country code. */
+    val sentTo: String get() = country.display(phone)
+
+    /** Whether Send should be enabled. */
+    val canSend: Boolean get() = !busy && country.plausible(phone)
+
+    /** [retryAfterSeconds] rounded up to whole minutes, for waits of a minute or more. */
+    val retryAfterMinutes: Int? get() = retryAfterSeconds?.let { (it + 59) / 60 }
+}
 
 /**
  * What went wrong, as a code rather than a sentence.
@@ -116,6 +138,19 @@ data class SignInUiState(
 enum class SignInProblem {
     /** The number is not a shape the server will accept. */
     BadPhone,
+
+    /**
+     * The digits are the wrong length for the picked country (server code
+     * `wrong_length`) — usually the country is wrong, so the copy names it.
+     */
+    WrongLength,
+
+    /**
+     * A newer code was sent to this number, which retired this one (server
+     * `otp_superseded`). Like [NeedsNewCode] the challenge is dead, but the
+     * fix is to read the latest message rather than to ask again.
+     */
+    Superseded,
 
     /** Six digits that were not the right six. Retype them. */
     WrongCode,
@@ -140,9 +175,10 @@ enum class SignInProblem {
     AccountBlocked,
 
     /**
-     * A resend failed while a code is already out. The earlier code still
-     * works until it expires, and the screen says so rather than implying the
-     * typed code is at fault.
+     * A resend failed while a code is already out. A failed request retires
+     * nothing on the server — only a successful one does — so the earlier code
+     * still works until it expires, and the screen says so rather than implying
+     * the typed code is at fault.
      */
     ResendFailed,
 
@@ -182,6 +218,10 @@ class SignInViewModel(
         _state.value = _state.value.copy(phone = value, error = null)
     }
 
+    fun onCountry(country: PhoneCountry) {
+        _state.value = _state.value.copy(country = country, error = null)
+    }
+
     fun onCode(value: String) {
         // Digits only, capped at six. A pasted "Your code is 483920" should
         // become 483920 rather than being refused, because copying the whole SMS
@@ -197,9 +237,9 @@ class SignInViewModel(
         if (nowMillis < s.resendAtMillis) return
 
         val resending = s.challengeId.isNotEmpty()
-        _state.value = s.copy(busy = true, error = null)
+        _state.value = s.copy(busy = true, error = null, retryAfterSeconds = null)
         viewModelScope.launch {
-            runCatching { api.requestCode(phone) }
+            runCatching { api.requestCode(phone, s.country) }
                 .onSuccess {
                     _state.value = _state.value.copy(
                         busy = false,
@@ -210,10 +250,12 @@ class SignInViewModel(
                 }
                 .onFailure { e ->
                     val problem = classify(e)
-                    // A resend keeps the challenge that is already out: that
-                    // code still works, and the copy says so.
+                    // A failed resend keeps the challenge that is already out:
+                    // the server only retires earlier codes when it sends a new
+                    // one, so that code still works, and the copy says so.
                     _state.value = _state.value.copy(
                         busy = false,
+                        retryAfterSeconds = e.retryAfter(),
                         error = if (!resending) problem
                         else if (problem == SignInProblem.TooMany) SignInProblem.ResendTooMany
                         else SignInProblem.ResendFailed,
@@ -225,7 +267,7 @@ class SignInViewModel(
     fun verify() {
         val s = _state.value
         if (s.challengeId.isEmpty() || s.code.length < CODE_LENGTH || s.busy) return
-        _state.value = s.copy(busy = true, error = null)
+        _state.value = s.copy(busy = true, error = null, retryAfterSeconds = null)
         viewModelScope.launch {
             runCatching { api.verify(s.challengeId, s.code.trim()) }
                 .onSuccess {
@@ -236,10 +278,11 @@ class SignInViewModel(
                 }
                 .onFailure { e ->
                     val problem = classify(e)
-                    val dead = problem == SignInProblem.NeedsNewCode
+                    val dead = problem == SignInProblem.NeedsNewCode || problem == SignInProblem.Superseded
                     _state.value = _state.value.copy(
                         busy = false,
                         error = problem,
+                        retryAfterSeconds = e.retryAfter(),
                         // A dead challenge cannot be retried with another guess,
                         // so the screen goes back to asking for a code rather
                         // than leaving six digits under a message telling the
@@ -263,8 +306,10 @@ class SignInViewModel(
 
     /** Back to the phone step, for a number typed wrong. */
     fun changeNumber() {
-        _state.value = _state.value.copy(challengeId = "", code = "", error = null)
+        _state.value = _state.value.copy(challengeId = "", code = "", error = null, retryAfterSeconds = null)
     }
+
+    private fun Throwable.retryAfter(): Int? = (toFailure() as? Failure.RateLimited)?.retryAfterSeconds
 
     /**
      * Branches on the server's reason code, falling back to the status.
@@ -280,6 +325,7 @@ class SignInViewModel(
         is Failure.RateLimited -> SignInProblem.TooMany
         Failure.Unauthorized -> when ((e as? ApiException)?.code) {
             OTP_EXPIRED, OTP_ALREADY_USED, OTP_TOO_MANY, OTP_UNKNOWN -> SignInProblem.NeedsNewCode
+            OTP_SUPERSEDED -> SignInProblem.Superseded
             else -> SignInProblem.WrongCode
         }
         Failure.Forbidden -> SignInProblem.AccountBlocked
@@ -287,6 +333,7 @@ class SignInViewModel(
         // validation error means the number itself is wrong.
         is Failure.Rejected -> when {
             f.code == OTP_RATE_LIMITED -> SignInProblem.TooMany
+            f.fieldCodes["phone"] == PHONE_WRONG_LENGTH -> SignInProblem.WrongLength
             (e as? ApiException)?.status == 422 -> SignInProblem.BadPhone
             (e as? ApiException)?.status == 409 -> SignInProblem.TooMany
             else -> SignInProblem.Unknown
@@ -305,5 +352,9 @@ class SignInViewModel(
         const val OTP_TOO_MANY = "otp_too_many_attempts"
         const val OTP_UNKNOWN = "otp_unknown_challenge"
         const val OTP_RATE_LIMITED = "otp_rate_limited"
+        const val OTP_SUPERSEDED = "otp_superseded"
+
+        // `identity.Phone*` field codes.
+        const val PHONE_WRONG_LENGTH = "wrong_length"
     }
 }
