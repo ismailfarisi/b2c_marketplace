@@ -1,0 +1,13 @@
+// Release (TestFlight / App Store) endpoints. Never localhost: CI fails the
+// build if this file names one, and Config in MarketplaceApp.swift stops a
+// non-DEBUG build at launch if the URL it reads is local.
+//
+// The switeaz.com hosts are placeholders until the domain is moved off Kerf
+// (see docs/store-release.md). Override them without editing this file in an
+// optional, gitignored Release.local.xcconfig next to it.
+#include "Config.xcconfig"
+
+API_BASE_URL = https:/$()/api.switeaz.com/v1
+WEB_BASE_URL = https:/$()/switeaz.com
+
+#include? "Release.local.xcconfig"

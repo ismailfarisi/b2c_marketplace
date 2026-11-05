@@ -1,6 +1,5 @@
 package ae.marketplace.mobile.android.support
 
-import ae.marketplace.mobile.android.BuildConfig
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.android.meals.money
 import ae.marketplace.mobile.android.ui.EmptyBlock
@@ -11,9 +10,9 @@ import ae.marketplace.mobile.android.ui.Space
 import ae.marketplace.mobile.android.ui.Type
 import ae.marketplace.mobile.android.ui.words
 import ae.marketplace.mobile.network.Failure
+import ae.marketplace.mobile.support.InvoiceDocument
 import ae.marketplace.mobile.support.SupportViewModel
 import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,7 +32,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -311,63 +312,235 @@ fun HelpTicketScreen(viewModel: SupportViewModel, onBack: () -> Unit) {
     }
 }
 
-/** The customer's tax invoices; each opens its printable copy on the web. */
+private fun invoiceDay(iso: String, arabic: Boolean): String = runCatching {
+    val f = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(if (arabic) Locale("ar") else Locale.ENGLISH)
+    if (iso.length > 10) Instant.parse(iso).atZone(Dubai).format(f) else LocalDate.parse(iso).format(f)
+}.getOrDefault(iso.take(10))
+
 @Composable
-fun InvoicesScreen(viewModel: SupportViewModel, onBack: () -> Unit) {
+private fun kindLabel(kind: String): String = when (kind) {
+    "tax_invoice" -> stringResource(R.string.invoice_tax_invoice)
+    "simplified" -> stringResource(R.string.invoice_simplified)
+    "credit_note" -> stringResource(R.string.invoice_credit_note)
+    else -> kind
+}
+
+/** The customer's tax invoices; each opens natively on the app's own session. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InvoicesScreen(viewModel: SupportViewModel, onBack: () -> Unit, onOpenInvoice: (String) -> Unit) {
     val s by viewModel.invoices.collectAsState()
-    val context = LocalContext.current
     val ar = arabic()
     BackHandler(onBack = onBack)
-    LaunchedEffect(Unit) { viewModel.loadInvoices() }
+    // Every visit, not once per process: an invoice issued while the app was
+    // open must show up without a restart. Keeps the list on screen meanwhile.
+    LaunchedEffect(Unit) { viewModel.loadInvoices(force = true) }
 
     Column(Modifier.fillMaxSize().background(Palette.Ink).statusBarsPadding()) {
         Header(stringResource(R.string.me_invoices), onBack)
-        LazyColumn(Modifier.weight(1f)) {
-            when {
-                s.loading && !s.loaded -> item { LoadingBlock(inline = true) }
-                s.error != null && s.items.isEmpty() ->
-                    item { FailureBlock(s.error!!, onRetry = { viewModel.loadInvoices(force = true) }) }
-                s.items.isEmpty() -> item { EmptyBlock(message = stringResource(R.string.invoices_empty)) }
-                else -> item {
-                    Text(
-                        stringResource(R.string.invoices_print_hint),
-                        color = Palette.TextMuted, fontSize = Type.Secondary,
-                        modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
-                    )
-                }
-            }
-            items(s.items, key = { it.id }) { inv ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val lang = if (ar) "ar" else "en"
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.WEB_BASE_URL}/$lang/invoices/${inv.id}")),
-                                )
-                            }
-                        }
-                        .defaultMinSize(minHeight = Space.Touch)
-                        .padding(horizontal = Space.Edge, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(Space.Small),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(inv.number, color = Palette.Text, fontSize = Type.Body)
-                        val date = runCatching {
-                            LocalDate.parse(inv.supplyDate.take(10))
-                                .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(if (ar) Locale("ar") else Locale.ENGLISH))
-                        }.getOrDefault(inv.supplyDate)
+        PullToRefreshBox(
+            isRefreshing = s.refreshing,
+            onRefresh = { viewModel.loadInvoices(force = true) },
+            modifier = Modifier.weight(1f),
+        ) {
+            LazyColumn(Modifier.fillMaxSize()) {
+                when {
+                    s.loading && !s.loaded -> item { LoadingBlock(inline = true) }
+                    s.error != null && s.items.isEmpty() ->
+                        item { FailureBlock(s.error!!, onRetry = { viewModel.loadInvoices(force = true) }) }
+                    s.items.isEmpty() -> item { EmptyBlock(message = stringResource(R.string.invoices_empty)) }
+                    else -> item {
                         Text(
-                            date + if (inv.kind == "credit_note") " · " + stringResource(R.string.invoices_credit) else "",
-                            color = Palette.TextFaint, fontSize = Type.Caption,
+                            stringResource(R.string.invoices_print_hint),
+                            color = Palette.TextMuted, fontSize = Type.Secondary,
+                            modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
                         )
                     }
-                    Text(money(inv.total.amount, inv.total.currency), color = Palette.Text, fontSize = Type.Body)
+                }
+                items(s.items, key = { it.id }) { inv ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenInvoice(inv.id) }
+                            .defaultMinSize(minHeight = Space.Touch)
+                            .padding(horizontal = Space.Edge, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Space.Small),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(inv.number, color = Palette.Text, fontSize = Type.Body)
+                            val date = runCatching {
+                                LocalDate.parse(inv.supplyDate.take(10))
+                                    .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(if (ar) Locale("ar") else Locale.ENGLISH))
+                            }.getOrDefault(inv.supplyDate)
+                            Text(
+                                date + if (inv.kind == "credit_note") " · " + stringResource(R.string.invoices_credit) else "",
+                                color = Palette.TextFaint, fontSize = Type.Caption,
+                            )
+                        }
+                        Text(money(inv.total.amount, inv.total.currency), color = Palette.Text, fontSize = Type.Body)
+                    }
+                }
+                if (s.nextCursor != null) item { MoreButton(s.loadingMore) { viewModel.loadOlderInvoices() } }
+                // A failed refresh or older page with the list still showing.
+                if (s.error != null && s.items.isNotEmpty()) item { SendFailure(s.error!!) }
+                item { Box(Modifier.navigationBarsPadding().padding(bottom = Space.XL)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InvoiceRow(label: String, value: String, strong: Boolean = false) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Space.Edge, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(Space.Small),
+    ) {
+        Text(
+            label,
+            color = if (strong) Palette.Text else Palette.TextMuted,
+            fontSize = if (strong) Type.Body else Type.Secondary,
+            fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Normal,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            color = Palette.Text,
+            fontSize = if (strong) Type.Body else Type.Secondary,
+            fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Normal,
+        )
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        color = Palette.Text, fontSize = Type.Body, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = Space.Edge, end = Space.Edge, top = Space.Large, bottom = Space.Tight),
+    )
+}
+
+/** The invoice as plain text for the share sheet (mail, WhatsApp, a notes app). */
+private fun shareText(inv: InvoiceDocument, ar: Boolean, words: (Int) -> String): String = buildString {
+    val m = { minor: Long -> money(minor, inv.currency) }
+    val kind = when (inv.kind) {
+        "tax_invoice" -> words(R.string.invoice_tax_invoice)
+        "simplified" -> words(R.string.invoice_simplified)
+        "credit_note" -> words(R.string.invoice_credit_note)
+        else -> inv.kind
+    }
+    appendLine("$kind ${inv.number}")
+    when (inv.status) {
+        "cancelled" -> appendLine(words(R.string.invoice_cancelled))
+        "superseded" -> appendLine(words(R.string.invoice_superseded))
+    }
+    appendLine("${words(R.string.invoice_issued)}: ${invoiceDay(inv.issuedAt, ar)}")
+    appendLine("${words(R.string.invoice_supply)}: ${invoiceDay(inv.supplyDate, ar)}")
+    inv.correctsNumber?.let { appendLine("${words(R.string.invoice_corrects)}: $it") }
+    for ((label, p) in listOf(words(R.string.invoice_supplier) to inv.supplier, words(R.string.invoice_buyer) to inv.buyer)) {
+        appendLine()
+        appendLine("$label: ${p.name.ifBlank { "—" }}")
+        if (p.address.isNotBlank()) appendLine(p.address)
+        if (p.trn.isNotBlank()) appendLine("${words(R.string.invoice_trn)}: ${p.trn}")
+    }
+    appendLine()
+    for (l in inv.lines) {
+        appendLine("${l.label(ar)} — ${l.quantityText} × ${m(l.unitNetMinor)}")
+        appendLine("  ${words(R.string.invoice_vat_total)} ${l.ratePercent}%: ${m(l.taxMinor)} · ${words(R.string.invoice_line_total)}: ${m(l.grossMinor)}")
+    }
+    appendLine()
+    appendLine("${words(R.string.invoice_subtotal)}: ${m(inv.netMinor)}")
+    appendLine("${words(R.string.invoice_vat_total)}: ${m(inv.taxMinor)}")
+    append("${words(R.string.invoice_grand)}: ${m(inv.grossMinor)}")
+}
+
+/** One invoice in full, from the stored snapshot; shares as text. */
+@Composable
+fun InvoiceDetailScreen(viewModel: SupportViewModel, onBack: () -> Unit) {
+    val s by viewModel.invoice.collectAsState()
+    val ar = arabic()
+    val context = LocalContext.current
+    BackHandler(onBack = onBack)
+
+    Column(Modifier.fillMaxSize().background(Palette.Ink).statusBarsPadding()) {
+        Header(s.invoice?.number ?: stringResource(R.string.invoice_title), onBack)
+        Box(Modifier.weight(1f)) {
+            val inv = s.invoice
+            when {
+                s.loading && inv == null -> LoadingBlock()
+                s.error is Failure.NotFound -> EmptyBlock(message = stringResource(R.string.invoice_not_found))
+                s.error != null && inv == null -> FailureBlock(s.error!!, onRetry = viewModel::retryInvoice)
+                inv != null -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        val m = { minor: Long -> money(minor, inv.currency) }
+                        Text(
+                            kindLabel(inv.kind),
+                            color = Palette.Text, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Tight),
+                        )
+                        if (inv.status != "issued") {
+                            Text(
+                                stringResource(if (inv.status == "cancelled") R.string.invoice_cancelled else R.string.invoice_superseded),
+                                color = Palette.Bad, fontSize = Type.Secondary, fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = Space.Edge),
+                            )
+                        }
+                        InvoiceRow(stringResource(R.string.invoice_number), inv.number)
+                        InvoiceRow(stringResource(R.string.invoice_issued), invoiceDay(inv.issuedAt, ar))
+                        InvoiceRow(stringResource(R.string.invoice_supply), invoiceDay(inv.supplyDate, ar))
+                        inv.correctsNumber?.let { InvoiceRow(stringResource(R.string.invoice_corrects), it) }
+
+                        for ((label, p) in listOf(
+                            stringResource(R.string.invoice_supplier) to inv.supplier,
+                            stringResource(R.string.invoice_buyer) to inv.buyer,
+                        )) {
+                            SectionTitle(label)
+                            Text(p.name.ifBlank { "—" }, color = Palette.Text, fontSize = Type.Body,
+                                modifier = Modifier.padding(horizontal = Space.Edge))
+                            if (p.address.isNotBlank()) Text(p.address, color = Palette.TextMuted, fontSize = Type.Secondary,
+                                modifier = Modifier.padding(horizontal = Space.Edge))
+                            if (p.trn.isNotBlank()) Text("${stringResource(R.string.invoice_trn)}: ${p.trn}",
+                                color = Palette.TextMuted, fontSize = Type.Secondary,
+                                modifier = Modifier.padding(horizontal = Space.Edge))
+                        }
+
+                        SectionTitle(stringResource(R.string.invoice_title))
+                        inv.lines.forEach { l ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = Space.Edge, vertical = Space.Tight)
+                                    .border(1.dp, Palette.Line, RoundedCornerShape(12.dp))
+                                    .padding(vertical = Space.Small),
+                            ) {
+                                Text(l.label(ar), color = Palette.Text, fontSize = Type.Body,
+                                    modifier = Modifier.padding(horizontal = Space.Edge))
+                                InvoiceRow("${l.quantityText} × ${m(l.unitNetMinor)}", "")
+                                InvoiceRow(stringResource(R.string.invoice_net), m(l.netMinor))
+                                InvoiceRow("${stringResource(R.string.invoice_vat_total)} (${l.ratePercent}%)", m(l.taxMinor))
+                                InvoiceRow(stringResource(R.string.invoice_line_total), m(l.grossMinor), strong = true)
+                            }
+                        }
+
+                        Box(Modifier.padding(top = Space.Large))
+                        InvoiceRow(stringResource(R.string.invoice_subtotal), m(inv.netMinor))
+                        InvoiceRow(stringResource(R.string.invoice_vat_total), m(inv.taxMinor))
+                        InvoiceRow(stringResource(R.string.invoice_grand), m(inv.grossMinor), strong = true)
+
+                        val shareLabel = stringResource(R.string.invoice_share)
+                        SendButton(shareLabel, enabled = true) {
+                            val text = shareText(inv, ar) { context.getString(it) }
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, inv.number)
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            }
+                            runCatching { context.startActivity(Intent.createChooser(send, shareLabel)) }
+                        }
+                        Box(Modifier.navigationBarsPadding().padding(bottom = Space.XL))
+                    }
                 }
             }
-            if (s.nextCursor != null) item { MoreButton(s.loadingMore) { viewModel.loadOlderInvoices() } }
-            item { Box(Modifier.navigationBarsPadding().padding(bottom = Space.XL)) }
         }
     }
 }

@@ -9,6 +9,7 @@ import ae.marketplace.mobile.android.me.SearchScreen
 import ae.marketplace.mobile.android.me.ThreadScreen
 import ae.marketplace.mobile.android.support.HelpScreen
 import ae.marketplace.mobile.android.support.HelpTicketScreen
+import ae.marketplace.mobile.android.support.InvoiceDetailScreen
 import ae.marketplace.mobile.android.support.InvoicesScreen
 import ae.marketplace.mobile.meals.MealsLinkPage
 import ae.marketplace.mobile.support.SupportViewModel
@@ -78,7 +79,7 @@ import kotlinx.coroutines.launch
  * CTA press three swipes into the feed, and making it a sixth tab would turn
  * the second one into a context switch out of the reel the viewer is watching.
  */
-private enum class Route { None, Inbox, Thread, Help, HelpTicket, Invoices }
+private enum class Route { None, Inbox, Thread, Help, HelpTicket, Invoices, InvoiceDetail }
 
 class MainActivity : ComponentActivity() {
 
@@ -307,6 +308,11 @@ class MainActivity : ComponentActivity() {
                 // second one a context switch out of the feed the viewer is
                 // still watching.
                 var route by remember { mutableStateOf(Route.None) }
+                // Help is native: a ticket (or the Help list) on the app's own session.
+                fun openHelp(ticketId: String?) {
+                    destination = Destination.Me
+                    route = if (ticketId != null) { supportVm?.openTicket(ticketId); Route.HelpTicket } else Route.Help
+                }
                 val linkTarget = pendingLink.value?.let { ae.marketplace.mobile.meals.MealsLinks.parse(it) }
                 LaunchedEffect(pendingLink.value) {
                     val raw = pendingLink.value ?: return@LaunchedEffect
@@ -317,8 +323,7 @@ class MainActivity : ComponentActivity() {
                         // Help is native: open the ticket on the app's own session.
                         val id = linkTarget.id
                         pendingLink.value = null
-                        destination = Destination.Me
-                        route = if (id != null) { supportVm?.openTicket(id); Route.HelpTicket } else Route.Help
+                        openHelp(id)
                     } else { route = Route.None; destination = Destination.Meals }
                 }
 
@@ -568,6 +573,7 @@ class MainActivity : ComponentActivity() {
                                         requireAccount = { run -> if (authorised) run() else pendingMeals = run },
                                         link = linkTarget,
                                         onLinkHandled = { pendingLink.value = null },
+                                        onOpenHelp = ::openHelp,
                                     )
                                     if (pendingMeals != null && !authorised && gate != null) {
                                         // Composed after MealsTab, so Back closes the gate
@@ -750,7 +756,14 @@ class MainActivity : ComponentActivity() {
                                     HelpTicketScreen(viewModel = vm, onBack = { route = Route.Help })
                                 }
                                 Route.Invoices -> supportVm?.let { vm ->
-                                    InvoicesScreen(viewModel = vm, onBack = { route = Route.None })
+                                    InvoicesScreen(
+                                        viewModel = vm,
+                                        onBack = { route = Route.None },
+                                        onOpenInvoice = { id -> vm.openInvoice(id); route = Route.InvoiceDetail },
+                                    )
+                                }
+                                Route.InvoiceDetail -> supportVm?.let { vm ->
+                                    InvoiceDetailScreen(viewModel = vm, onBack = { route = Route.Invoices })
                                 }
                                 Route.None -> Unit
                             }

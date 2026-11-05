@@ -458,8 +458,28 @@
 "help_kept" = "Your message is kept; try again.";
 "invoices_empty" = "No invoices yet. An invoice is issued once a paid order is delivered.";
 "invoices_credit" = "Credit note";
-"invoices_print_hint" = "Tap an invoice to open the printable copy on the web.";
+"invoices_print_hint" = "Tap an invoice to see it in full and share it. Pull down to refresh.";
 "legal_kitchen" = "Kitchen portal";
+"invoice_title" = "Invoice";
+"invoice_tax_invoice" = "Tax invoice";
+"invoice_simplified" = "Simplified tax invoice";
+"invoice_credit_note" = "Credit note";
+"invoice_number" = "Invoice no.";
+"invoice_issued" = "Date of issue";
+"invoice_supply" = "Date of supply";
+"invoice_corrects" = "Corrects invoice";
+"invoice_supplier" = "Supplier";
+"invoice_buyer" = "Customer";
+"invoice_trn" = "TRN";
+"invoice_net" = "Net";
+"invoice_line_total" = "Total";
+"invoice_subtotal" = "Total excluding VAT";
+"invoice_vat_total" = "VAT";
+"invoice_grand" = "Total including VAT";
+"invoice_cancelled" = "Cancelled";
+"invoice_superseded" = "Superseded";
+"invoice_share" = "Share";
+"invoice_not_found" = "This invoice isn't on your account.";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

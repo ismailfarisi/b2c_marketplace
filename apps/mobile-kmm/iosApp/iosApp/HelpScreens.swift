@@ -271,12 +271,41 @@ struct HelpTicketScreen: View {
     }
 }
 
-/// The customer's tax invoices; each opens its printable copy on the web.
+private func invoiceDay(_ iso: String) -> String {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: isArabicLocale ? "ar" : "en")
+    f.timeZone = dubai
+    f.dateStyle = .long
+    f.timeStyle = .none
+    if iso.count > 10 {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return String(iso.prefix(10)) }
+        return f.string(from: date)
+    }
+    let day = DateFormatter()
+    day.locale = Locale(identifier: "en_US_POSIX")
+    day.timeZone = dubai
+    day.dateFormat = "yyyy-MM-dd"
+    guard let date = day.date(from: iso) else { return iso }
+    return f.string(from: date)
+}
+
+private func kindLabel(_ kind: String) -> String {
+    switch kind {
+    case "tax_invoice": return String(localized: "invoice_tax_invoice")
+    case "simplified": return String(localized: "invoice_simplified")
+    case "credit_note": return String(localized: "invoice_credit_note")
+    default: return kind
+    }
+}
+
+/// The customer's tax invoices; each opens natively on the app's own session.
 struct InvoicesScreen: View {
     let viewModel: SupportViewModel
     let onBack: () -> Void
+    let onOpenInvoice: (String) -> Void
 
-    @Environment(\.openURL) private var openURL
     @State private var current: InvoicesUiState?
     private var s: InvoicesUiState { current ?? viewModel.invoices.value }
 
@@ -287,7 +316,7 @@ struct InvoicesScreen: View {
                 if s.loading && !s.loaded {
                     LoadingBlock().listRowBackground(Palette.ink)
                 } else if let failure = s.error, s.items.isEmpty {
-                    FailureBlock(failure: failure) { viewModel.loadInvoices(force: true) }
+                    FailureBlock(failure: failure, onRetry: { viewModel.loadInvoices(force: true) })
                         .listRowBackground(Palette.ink)
                 } else if s.items.isEmpty {
                     EmptyBlock(message: String(localized: "invoices_empty")).listRowBackground(Palette.ink)
@@ -298,10 +327,7 @@ struct InvoicesScreen: View {
                         .listRowBackground(Palette.ink)
                 }
                 ForEach(s.items, id: \.id) { inv in
-                    Button {
-                        let path = (isArabicLocale ? "/ar/invoices/" : "/en/invoices/") + inv.id
-                        if let url = URL(string: Config.webBaseUrl + path) { openURL(url) }
-                    } label: {
+                    Button { onOpenInvoice(inv.id) } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(inv.number)
@@ -328,14 +354,183 @@ struct InvoicesScreen: View {
                     .disabled(s.loadingMore)
                     .listRowBackground(Palette.ink)
                 }
+                // A failed refresh or older page with the list still showing.
+                if let failure = s.error, !s.items.isEmpty {
+                    SendFailure(failure: failure).listRowBackground(Palette.ink)
+                }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .refreshable {
+                viewModel.loadInvoices(force: true)
+                // Keep the system spinner until the first page is back.
+                for await state in viewModel.invoices where !state.refreshing && !state.loading { _ = state; break }
+            }
         }
         .background(Palette.ink)
         .task {
-            viewModel.loadInvoices(force: false)
+            // Every visit, not once per process: an invoice issued while the
+            // app was open must show up without a restart.
+            viewModel.loadInvoices(force: true)
             for await state in viewModel.invoices { current = state }
+        }
+    }
+}
+
+private struct InvoiceRow: View {
+    let label: String
+    let value: String
+    var strong = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.small) {
+            Text(label)
+                .font(.system(size: strong ? TypeScale.body : TypeScale.secondary).weight(strong ? .semibold : .regular))
+                .foregroundStyle(strong ? Palette.text : Palette.textMuted)
+            Spacer()
+            Text(value)
+                .font(.system(size: strong ? TypeScale.body : TypeScale.secondary).weight(strong ? .semibold : .regular))
+                .foregroundStyle(Palette.text)
+        }
+    }
+}
+
+/// The invoice as plain text for the share sheet (mail, WhatsApp, Notes).
+private func invoiceShareText(_ inv: InvoiceDocument) -> String {
+    let m = { (minor: Int64) in amount(minor, inv.currency) }
+    var out: [String] = [kindLabel(inv.kind) + " " + inv.number]
+    if inv.status == "cancelled" { out.append(String(localized: "invoice_cancelled")) }
+    if inv.status == "superseded" { out.append(String(localized: "invoice_superseded")) }
+    out.append(String(localized: "invoice_issued") + ": " + invoiceDay(inv.issuedAt))
+    out.append(String(localized: "invoice_supply") + ": " + invoiceDay(inv.supplyDate))
+    if let corrects = inv.correctsNumber { out.append(String(localized: "invoice_corrects") + ": " + corrects) }
+    for (label, p) in [(String(localized: "invoice_supplier"), inv.supplier), (String(localized: "invoice_buyer"), inv.buyer)] {
+        out.append("")
+        out.append(label + ": " + (p.name.isEmpty ? "—" : p.name))
+        if !p.address.isEmpty { out.append(p.address) }
+        if !p.trn.isEmpty { out.append(String(localized: "invoice_trn") + ": " + p.trn) }
+    }
+    out.append("")
+    for l in inv.lines {
+        out.append(l.label(arabic: isArabicLocale) + " — " + l.quantityText + " × " + m(l.unitNetMinor))
+        out.append("  " + String(localized: "invoice_vat_total") + " " + l.ratePercent + "%: " + m(l.taxMinor)
+                   + " · " + String(localized: "invoice_line_total") + ": " + m(l.grossMinor))
+    }
+    out.append("")
+    out.append(String(localized: "invoice_subtotal") + ": " + m(inv.netMinor))
+    out.append(String(localized: "invoice_vat_total") + ": " + m(inv.taxMinor))
+    out.append(String(localized: "invoice_grand") + ": " + m(inv.grossMinor))
+    return out.joined(separator: "\n")
+}
+
+/// One invoice in full, from the stored snapshot; shares as text.
+struct InvoiceDetailScreen: View {
+    let viewModel: SupportViewModel
+    let onBack: () -> Void
+
+    @State private var current: InvoiceUiState?
+    private var s: InvoiceUiState { current ?? viewModel.invoice.value }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Header(title: s.invoice?.number ?? String(localized: "invoice_title"), onBack: onBack)
+            if let inv = s.invoice {
+                ScrollView { document(inv).padding(.horizontal, Space.edge).padding(.bottom, Space.xl) }
+            } else if s.loading {
+                Spacer(); LoadingBlock(); Spacer()
+            } else if let failure = s.error {
+                Spacer()
+                if case .notFound = onEnum(of: failure) {
+                    EmptyBlock(message: String(localized: "invoice_not_found"))
+                } else {
+                    FailureBlock(failure: failure, onRetry: { viewModel.retryInvoice() })
+                }
+                Spacer()
+            } else {
+                Spacer()
+            }
+        }
+        .background(Palette.ink)
+        .task {
+            for await state in viewModel.invoice { current = state }
+        }
+    }
+
+    private func document(_ inv: InvoiceDocument) -> some View {
+        let m = { (minor: Int64) in amount(minor, inv.currency) }
+        return VStack(alignment: .leading, spacing: Space.small) {
+            Text(kindLabel(inv.kind))
+                .font(.system(size: TypeScale.heading).weight(.semibold))
+                .foregroundStyle(Palette.text)
+            if inv.status != "issued" {
+                Text(LocalizedStringKey(inv.status == "cancelled" ? "invoice_cancelled" : "invoice_superseded"))
+                    .font(.system(size: TypeScale.secondary).weight(.medium))
+                    .foregroundStyle(Palette.bad)
+            }
+            InvoiceRow(label: String(localized: "invoice_number"), value: inv.number)
+            InvoiceRow(label: String(localized: "invoice_issued"), value: invoiceDay(inv.issuedAt))
+            InvoiceRow(label: String(localized: "invoice_supply"), value: invoiceDay(inv.supplyDate))
+            if let corrects = inv.correctsNumber {
+                InvoiceRow(label: String(localized: "invoice_corrects"), value: corrects)
+            }
+
+            party(String(localized: "invoice_supplier"), inv.supplier)
+            party(String(localized: "invoice_buyer"), inv.buyer)
+
+            sectionTitle(String(localized: "invoice_title"))
+            ForEach(Array(inv.lines.enumerated()), id: \.offset) { _, l in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(l.label(arabic: isArabicLocale))
+                        .font(.system(size: TypeScale.body))
+                        .foregroundStyle(Palette.text)
+                    InvoiceRow(label: l.quantityText + " × " + m(l.unitNetMinor), value: "")
+                    InvoiceRow(label: String(localized: "invoice_net"), value: m(l.netMinor))
+                    InvoiceRow(label: String(localized: "invoice_vat_total") + " (" + l.ratePercent + "%)", value: m(l.taxMinor))
+                    InvoiceRow(label: String(localized: "invoice_line_total"), value: m(l.grossMinor), strong: true)
+                }
+                .padding(Space.small + 4)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line, lineWidth: 1))
+            }
+
+            VStack(spacing: Space.tight) {
+                InvoiceRow(label: String(localized: "invoice_subtotal"), value: m(inv.netMinor))
+                InvoiceRow(label: String(localized: "invoice_vat_total"), value: m(inv.taxMinor))
+                InvoiceRow(label: String(localized: "invoice_grand"), value: m(inv.grossMinor), strong: true)
+            }
+            .padding(.top, Space.large)
+
+            ShareLink(item: invoiceShareText(inv), subject: Text(inv.number)) {
+                Text("invoice_share")
+                    .font(.system(size: 14).weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Space.large).padding(.vertical, 11)
+                    .frame(minHeight: Space.touch)
+                    .background(Capsule().fill(Palette.accent))
+            }
+            .padding(.top, Space.medium)
+        }
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: TypeScale.body).weight(.semibold))
+            .foregroundStyle(Palette.text)
+            .padding(.top, Space.large)
+    }
+
+    @ViewBuilder
+    private func party(_ label: String, _ p: InvoiceParty) -> some View {
+        sectionTitle(label)
+        Text(p.name.isEmpty ? "—" : p.name)
+            .font(.system(size: TypeScale.body))
+            .foregroundStyle(Palette.text)
+        if !p.address.isEmpty {
+            Text(p.address).font(.system(size: TypeScale.secondary)).foregroundStyle(Palette.textMuted)
+        }
+        if !p.trn.isEmpty {
+            Text(String(localized: "invoice_trn") + ": " + p.trn)
+                .font(.system(size: TypeScale.secondary))
+                .foregroundStyle(Palette.textMuted)
         }
     }
 }
