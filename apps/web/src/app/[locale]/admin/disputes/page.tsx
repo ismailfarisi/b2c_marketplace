@@ -138,7 +138,7 @@ export default function DisputeQueue() {
         rows={rows}
         loaded={data !== undefined}
         error={error}
-        perm="ops staff access"
+        perm="the ops role"
         onRetry={() => void refetch()}
         empty="No open disputes."
         rowKey={(d) => d.id}

@@ -51,7 +51,7 @@ export default function CampaignQueue() {
         rows={rows}
         loaded={data !== undefined}
         error={error}
-        perm="ops staff access"
+        perm="the ops role"
         onRetry={() => void refetch()}
         empty="No campaigns awaiting review."
         rowKey={(c) => c.id}
