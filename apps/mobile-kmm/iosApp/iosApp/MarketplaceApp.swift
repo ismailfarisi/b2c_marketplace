@@ -131,6 +131,8 @@ struct RootView: View {
     @State private var supportViewModel: SupportViewModel?
     /// A meals action waiting on sign-in: checkout, rotation, My meals.
     @State private var pendingMeals: (() -> Void)?
+    /// Whether that action is Help, so the gate says "get help".
+    @State private var pendingMealsHelp = false
     @State private var session: Session?
     @State private var sellViewModel: SellViewModel?
     /// A feed action (like, save, inquiry) waiting on sign-in; replayed once
@@ -212,8 +214,10 @@ struct RootView: View {
     }
 
     /// Help is native: a ticket (or the Help list) on the app's own session.
-    private func openHelp(_ ticketId: String?) {
-        destinationRaw = Destination.me.rawValue
+    /// It is an overlay, so from a Meals banner it opens over Meals and Back
+    /// returns there; only a push or deep link moves to Me.
+    private func openHelp(_ ticketId: String?, switchToMe: Bool = true) {
+        if switchToMe { destinationRaw = Destination.me.rawValue }
         if let ticketId {
             supportViewModel?.openTicket(id: ticketId)
             route = .helpTicket
@@ -367,6 +371,7 @@ struct RootView: View {
             }
             guard let run = pendingMeals else { return }
             pendingMeals = nil
+            pendingMealsHelp = false
             run()
         }
         .onChange(of: destination) { _, new in
@@ -447,17 +452,25 @@ struct RootView: View {
                             lat: lat != 0 || lng != 0 ? lat : 25.0805,
                             lng: lat != 0 || lng != 0 ? lng : 55.1403,
                             requireAccount: { run in
-                                if authorised { run() } else { pendingMeals = run }
+                                if authorised { run() } else { pendingMealsHelp = false; pendingMeals = run }
                             },
                             startOnMine: destination == .myMeals,
                             link: link,
                             onLinkHandled: { link = nil },
-                            onOpenHelp: { ticketId in openHelp(ticketId) }
+                            onOpenHelp: { ticketId in
+                                if authorised {
+                                    openHelp(ticketId, switchToMe: false)
+                                } else {
+                                    pendingMealsHelp = true
+                                    pendingMeals = { openHelp(ticketId, switchToMe: false) }
+                                }
+                            }
                         )
                         .id(destination)
                         if pendingMeals != nil && !authorised, let gate = signInViewModel {
-                            SignInGate(viewModel: gate, onCancel: { pendingMeals = nil },
-                                       titleKey: "meals_signin_title", whyKey: "meals_signin_why")
+                            SignInGate(viewModel: gate, onCancel: { pendingMeals = nil; pendingMealsHelp = false },
+                                       titleKey: pendingMealsHelp ? "help_signin_title" : "meals_signin_title",
+                                       whyKey: pendingMealsHelp ? "help_signin_why" : "meals_signin_why")
                                 .background(Palette.ink.ignoresSafeArea())
                         }
                     }

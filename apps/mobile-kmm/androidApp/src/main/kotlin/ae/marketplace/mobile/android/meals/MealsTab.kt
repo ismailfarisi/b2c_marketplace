@@ -87,6 +87,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -147,7 +148,9 @@ fun MealsTab(
             MealsLinkPage.ROTATION_DETAIL -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
             // Help is native, on the app's session (a banner to /support must not
             // open the web, which has no session and asks for a new code).
-            MealsLinkPage.SUPPORT -> requireAccount { onOpenHelp(id) }
+            // The host gates it, so the sign-in screen can say "get help"
+            // rather than "subscribe".
+            MealsLinkPage.SUPPORT -> onOpenHelp(id)
             MealsLinkPage.COLLECTION -> if (id != null) { viewModel.openCollection(id); home(Page.Collection) }
             MealsLinkPage.HOME -> home()
         }
@@ -339,8 +342,8 @@ private fun NearHeader(count: Int, place: ChosenPlace?, arabic: Boolean, noMatch
     val title = when {
         noMatches -> stringResource(R.string.meals_no_matches)
         place != null && count == 0 -> stringResource(R.string.meals_none_near, place.name(arabic))
-        place != null -> stringResource(R.string.meals_near_place, count, place.name(arabic))
-        else -> stringResource(R.string.meals_near_count, count)
+        place != null -> pluralStringResource(R.plurals.meals_near_place, count, count, place.name(arabic))
+        else -> pluralStringResource(R.plurals.meals_near_count, count, count)
     }
     Row(
         Modifier.fillMaxWidth().padding(start = Space.Edge, end = Space.Small, top = Space.Large, bottom = Space.Small),
@@ -998,6 +1001,17 @@ private fun CheckoutPage(
             s.addresses.forEach { a ->
                 Choice(a.label, a.line, a.id == s.addressId) { vm.selectAddress(a.id) }
             }
+            // Under the addresses rather than in the generic strip at the
+            // bottom: the fix is to pick another one, right here.
+            val addressCode = (s.error as? Failure.Rejected)?.fieldCodes?.get("address_id")
+            addressCode?.let {
+                Text(
+                    stringResource(addressReason(it)),
+                    color = Palette.Bad,
+                    fontSize = Type.Secondary,
+                    modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp),
+                )
+            }
             AddressForm(s.addresses.isEmpty(), s.busy, s.addressAdded, s.error) { label, building, area, city, at ->
                 vm.addAddress(label, building, area, city, at)
             }
@@ -1050,12 +1064,14 @@ private fun CheckoutPage(
             if (s.paymentFailed) {
                 Text(stringResource(R.string.meals_pay_failed), color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp))
             }
-            if (promoCode == null && startCode == null) s.error?.let { FailureStrip(it, onRetry = vm::retryCheckout) }
+            if (promoCode == null && startCode == null && addressCode == null) s.error?.let { FailureStrip(it, onRetry = vm::retryCheckout) }
             Spacer(Modifier.height(Space.XL))
         }
         Box(Modifier.padding(Space.Edge)) {
+            // No total, no amount: "Pay " with a dangling space read as a bug.
             PrimaryButton(
-                stringResource(R.string.meals_pay, s.preview?.let { money(it.totalMinor, it.currency) } ?: ""),
+                s.preview?.let { stringResource(R.string.meals_pay, money(it.totalMinor, it.currency)) }
+                    ?: stringResource(R.string.meals_pay_unavailable),
                 vm::subscribe,
                 enabled = s.preview != null && !s.busy,
             )
@@ -1526,6 +1542,11 @@ private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsV
             }
         }
     }
+}
+
+private fun addressReason(code: String): Int = when (code) {
+    "not_found" -> R.string.meals_address_gone
+    else -> R.string.meals_address_outside
 }
 
 private fun promoReason(code: String): Int = when (code) {

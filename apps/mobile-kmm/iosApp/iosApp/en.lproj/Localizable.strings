@@ -106,6 +106,9 @@
 "err_rejected" = "That could not be done.";
 "err_server" = "Something went wrong on our side. Try again shortly.";
 "err_unknown" = "Something went wrong. Try again.";
+"err_in_flight" = "Still working on your last request. Try again in a moment.";
+"err_request_changed" = "That request was already sent with different details. Go back and try again.";
+"feed_cta_unavailable" = "This isn't available right now.";
 "feed_save" = "Save";
 "feed_unsave" = "Remove from saved";
 "action_retry" = "Retry";
@@ -281,6 +284,9 @@
 "meals_delivery" = "Delivery";
 "meals_total" = "Total";
 "meals_pay" = "Pay %@";
+"meals_pay_unavailable" = "Pay";
+"meals_address_outside" = "This kitchen doesn't deliver to that address. Choose another address.";
+"meals_address_gone" = "That address is no longer saved. Choose another address.";
 "meals_back" = "Back";
 "meals_rotation" = "4-kitchen rotation";
 "meals_pick_four" = "Pick 4 kitchens (%lld/4)";
@@ -308,6 +314,8 @@
 "meals_subscriptions" = "Subscriptions";
 "meals_signin_title" = "Sign in to subscribe";
 "meals_signin_why" = "We use your number for delivery updates and to keep your subscriptions in one place.";
+"help_signin_title" = "Sign in to get help";
+"help_signin_why" = "Your requests and our replies stay on your account, so you can follow them on any phone.";
 "meals_paying" = "Finish paying in your browser. Your meals are scheduled once the payment is confirmed.";
 "meals_pause_title" = "Pause deliveries";
 "meals_pause_left" = "%lld of %lld pause days left";
@@ -365,8 +373,6 @@
 "meals_offer_percent_cap" = "%@ off up to %@";
 "meals_offer_fixed" = "%@ off";
 "meals_offer_new_only" = "First-time subscribers";
-"meals_near_count" = "%lld kitchens deliver to you";
-"meals_near_place" = "%lld kitchens deliver to %@";
 "meals_none_near" = "No kitchens deliver to %@ yet";
 "meals_change" = "Change";
 "meals_where" = "Where should we deliver?";

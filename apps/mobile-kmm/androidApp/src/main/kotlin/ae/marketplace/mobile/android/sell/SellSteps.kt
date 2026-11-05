@@ -21,6 +21,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -414,31 +417,36 @@ private fun TextRow(field: SellField, value: String, onValue: (String) -> Unit) 
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SelectRow(field: SellField, value: String, onValue: (String) -> Unit) {
     // Chips rather than a dropdown. Seven short options fit on two rows and a
     // dropdown hides them behind a tap on the screen where abandonment matters.
-    Column(Modifier.padding(top = 8.dp)) {
-        field.options.chunked(4).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
-                row.forEach { option ->
-                    val active = option.value == value
-                    Box(
-                        Modifier
-                            .then(
-                                if (active) Modifier.background(Accent, RoundedCornerShape(50))
-                                else Modifier.border(1.dp, Line, RoundedCornerShape(50))
-                            )
-                            .clickable { onValue(option.value) }
-                            .padding(horizontal = 13.dp, vertical = 7.dp),
-                    ) {
-                        Text(
-                            option.label,
-                            color = if (active) Color.White else Palette.Text.copy(alpha = 0.75f),
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
+    // A FlowRow, not fixed rows of four: at 320dp a fourth chip squeezed into
+    // what was left of the row and wrapped its label one letter per line.
+    FlowRow(
+        Modifier.padding(top = 8.dp).fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        field.options.forEach { option ->
+            val active = option.value == value
+            Box(
+                Modifier
+                    .then(
+                        if (active) Modifier.background(Accent, RoundedCornerShape(50))
+                        else Modifier.border(1.dp, Line, RoundedCornerShape(50))
+                    )
+                    .clickable { onValue(option.value) }
+                    .padding(horizontal = 13.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    option.label,
+                    color = if (active) Color.White else Palette.Text.copy(alpha = 0.75f),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

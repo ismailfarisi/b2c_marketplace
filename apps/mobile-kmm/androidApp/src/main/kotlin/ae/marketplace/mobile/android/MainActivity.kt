@@ -292,6 +292,8 @@ class MainActivity : ComponentActivity() {
                 var mealsVm by remember { mutableStateOf<MealsViewModel?>(null) }
                 // A meals action waiting on sign-in: checkout, rotation, My meals.
                 var pendingMeals by remember { mutableStateOf<(() -> Unit)?>(null) }
+                // Whether that action is Help, so the gate says "get help".
+                var pendingMealsHelp by remember { mutableStateOf(false) }
                 // A feed action waiting on sign-in: like, save, or an inquiry
                 // from a CTA or a search result. Replayed once the session is
                 // authorised, so the viewer lands on what they asked for
@@ -311,8 +313,10 @@ class MainActivity : ComponentActivity() {
                 // still watching.
                 var route by remember { mutableStateOf(Route.None) }
                 // Help is native: a ticket (or the Help list) on the app's own session.
-                fun openHelp(ticketId: String?) {
-                    destination = Destination.Me
+                // It is an overlay, so from a Meals banner it opens over Meals and
+                // Back returns there; only a push or deep link moves to Me.
+                fun openHelp(ticketId: String?, switchToMe: Boolean = true) {
+                    if (switchToMe) destination = Destination.Me
                     route = if (ticketId != null) { supportVm?.openTicket(ticketId); Route.HelpTicket } else Route.Help
                 }
                 val linkTarget = pendingLink.value?.let { ae.marketplace.mobile.meals.MealsLinks.parse(it) }
@@ -558,7 +562,7 @@ class MainActivity : ComponentActivity() {
 
                             Destination.Meals, Destination.MyMeals -> mealsVm?.let { key(destination) {
                                 LaunchedEffect(authorised) {
-                                    if (authorised) pendingMeals?.let { run -> pendingMeals = null; run() }
+                                    if (authorised) pendingMeals?.let { run -> pendingMeals = null; pendingMealsHelp = false; run() }
                                 }
                                 val here = if (feedState.lat != 0.0 || feedState.lng != 0.0) {
                                     LatLng(feedState.lat, feedState.lng)
@@ -572,21 +576,29 @@ class MainActivity : ComponentActivity() {
                                         viewModel = it,
                                         location = here,
                                         startOnMine = destination == Destination.MyMeals,
-                                        requireAccount = { run -> if (authorised) run() else pendingMeals = run },
+                                        requireAccount = { run -> if (authorised) run() else { pendingMealsHelp = false; pendingMeals = run } },
                                         link = linkTarget,
                                         onLinkHandled = { pendingLink.value = null },
-                                        onOpenHelp = ::openHelp,
+                                        onOpenHelp = { id ->
+                                            if (authorised) {
+                                                openHelp(id, switchToMe = false)
+                                            } else {
+                                                pendingMealsHelp = true
+                                                pendingMeals = { openHelp(id, switchToMe = false) }
+                                            }
+                                        },
                                     )
                                     if (pendingMeals != null && !authorised && gate != null) {
+                                        val cancelGate = { gate.reset(); pendingMeals = null; pendingMealsHelp = false }
                                         // Composed after MealsTab, so Back closes the gate
                                         // instead of popping the page underneath it.
-                                        BackHandler { gate.reset(); pendingMeals = null }
+                                        BackHandler { cancelGate() }
                                         SignInGate(
                                             viewModel = gate,
-                                            onCancel = { gate.reset(); pendingMeals = null },
+                                            onCancel = cancelGate,
                                             modifier = Modifier.fillMaxSize(),
-                                            title = R.string.meals_signin_title,
-                                            why = R.string.meals_signin_why,
+                                            title = if (pendingMealsHelp) R.string.help_signin_title else R.string.meals_signin_title,
+                                            why = if (pendingMealsHelp) R.string.help_signin_why else R.string.meals_signin_why,
                                             light = true,
                                         )
                                     }

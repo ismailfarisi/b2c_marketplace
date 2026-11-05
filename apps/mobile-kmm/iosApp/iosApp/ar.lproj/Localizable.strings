@@ -106,6 +106,9 @@
 "err_rejected" = "تعذّر تنفيذ ذلك.";
 "err_server" = "حدث خطأ لدينا. حاول بعد قليل.";
 "err_unknown" = "حدث خطأ ما. حاول مجدداً.";
+"err_in_flight" = "ما زلنا نعالج طلبك السابق. حاول مجدداً بعد لحظات.";
+"err_request_changed" = "أُرسل هذا الطلب من قبل بتفاصيل مختلفة. ارجع وحاول مجدداً.";
+"feed_cta_unavailable" = "هذا غير متاح حاليًا.";
 "feed_save" = "حفظ";
 "feed_unsave" = "إزالة من المحفوظات";
 "action_retry" = "إعادة المحاولة";
@@ -281,6 +284,9 @@
 "meals_delivery" = "التوصيل";
 "meals_total" = "الإجمالي";
 "meals_pay" = "ادفع %@";
+"meals_pay_unavailable" = "ادفع";
+"meals_address_outside" = "هذا المطبخ لا يوصّل إلى هذا العنوان. اختر عنواناً آخر.";
+"meals_address_gone" = "هذا العنوان لم يعد محفوظاً. اختر عنواناً آخر.";
 "meals_back" = "رجوع";
 "meals_rotation" = "تناوب ٤ مطابخ";
 "meals_pick_four" = "اختر ٤ مطابخ (%lld/4)";
@@ -308,6 +314,8 @@
 "meals_subscriptions" = "الاشتراكات";
 "meals_signin_title" = "سجّل الدخول للاشتراك";
 "meals_signin_why" = "نستخدم رقمك لتحديثات التوصيل ولحفظ اشتراكاتك في مكان واحد.";
+"help_signin_title" = "سجّل الدخول للحصول على المساعدة";
+"help_signin_why" = "طلباتك وردودنا تبقى في حسابك، فتتابعها من أي هاتف.";
 "meals_paying" = "أكمل الدفع في المتصفح. تُجدول وجباتك بعد تأكيد الدفع.";
 "meals_pause_title" = "إيقاف التوصيل مؤقتًا";
 "meals_pause_left" = "متبقٍ %lld من %lld أيام إيقاف";
@@ -365,8 +373,6 @@
 "meals_offer_percent_cap" = "خصم %@ حتى %@";
 "meals_offer_fixed" = "خصم %@";
 "meals_offer_new_only" = "للمشتركين الجدد";
-"meals_near_count" = "%lld مطبخ يوصل إليك";
-"meals_near_place" = "%lld مطبخ يوصل إلى %@";
 "meals_none_near" = "لا توجد مطابخ توصل إلى %@ بعد";
 "meals_change" = "تغيير";
 "meals_where" = "أين نوصل؟";

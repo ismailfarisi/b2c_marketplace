@@ -19,6 +19,7 @@ import ae.marketplace.mobile.model.ScheduleRule
 import ae.marketplace.mobile.model.SubscribeInput
 import ae.marketplace.mobile.model.SubscriptionPreview
 import ae.marketplace.mobile.network.Failure
+import ae.marketplace.mobile.network.orNullUnlessCancelled
 import ae.marketplace.mobile.network.toFailure
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -312,15 +313,15 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 coroutineScope {
                     val home: Deferred<List<HomeSection>?>? = if (needHome) {
                         async {
-                            runCatching {
+                            orNullUnlessCancelled {
                                 api.home(at).sections.orEmpty().filter { it.enabled && it.type != "all_kitchens" }
-                            }.getOrNull()
+                            }
                         }
                     } else {
                         null
                     }
                     val dishes: Deferred<List<DayDish>>? = if (unfiltered) {
-                        async { runCatching { api.tomorrowDishes(at).items }.getOrDefault(emptyList()) }
+                        async { orNullUnlessCancelled { api.tomorrowDishes(at).items } ?: emptyList() }
                     } else {
                         null
                     }

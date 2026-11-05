@@ -20,8 +20,9 @@
 # Plurals are deliberately *not* generated. Android's <plurals> and Foundation's
 # .stringsdict have different category rules and a different file format, and a
 # mechanical translation between them would be wrong for Arabic — which has six
-# categories where English has two. The four `ago_*` plurals are the only ones,
-# and iOS renders those from `RelativeDateTimeFormatter` instead.
+# categories where English has two. The `ago_*` plurals are rendered on iOS by
+# `RelativeDateTimeFormatter`; the rest live in the hand-written
+# en.lproj/ar.lproj Localizable.stringsdict, which this script only checks.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -70,6 +71,18 @@ EOF
 # The unlocalised copy Xcode falls back to when a device language matches no
 # .lproj at all.
 cp "$ios/en.lproj/Localizable.strings" "$ios/Localizable.strings"
+cp "$ios/en.lproj/Localizable.stringsdict" "$ios/Localizable.stringsdict"
+
+# Every Android <plurals> other than ago_* must be in both .stringsdict files,
+# or iOS renders the key.
+for name in $(grep -oE '<plurals name="[a-z_]+"' "$android/values/strings.xml" | sed -E 's/.*"(.*)"/\1/' | grep -v '^ago_'); do
+  for lang in en ar; do
+    if ! grep -q "<key>$name</key>" "$ios/$lang.lproj/Localizable.stringsdict"; then
+      echo "ERROR: plural $name is missing from $lang.lproj/Localizable.stringsdict" >&2
+      exit 1
+    fi
+  done
+done
 
 en=$(grep -c '^"' "$ios/en.lproj/Localizable.strings")
 ar=$(grep -c '^"' "$ios/ar.lproj/Localizable.strings")

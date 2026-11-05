@@ -157,6 +157,9 @@
     <string name="err_rejected">تعذّر تنفيذ ذلك.</string>
     <string name="err_server">حدث خطأ لدينا. حاول بعد قليل.</string>
     <string name="err_unknown">حدث خطأ ما. حاول مجدداً.</string>
+    <string name="err_in_flight">ما زلنا نعالج طلبك السابق. حاول مجدداً بعد لحظات.</string>
+    <string name="err_request_changed">أُرسل هذا الطلب من قبل بتفاصيل مختلفة. ارجع وحاول مجدداً.</string>
+    <string name="feed_cta_unavailable">هذا غير متاح حاليًا.</string>
     <string name="feed_save">حفظ</string>
     <string name="feed_unsave">إزالة من المحفوظات</string>
     <string name="action_retry">إعادة المحاولة</string>
@@ -385,6 +388,9 @@
     <string name="meals_delivery">التوصيل</string>
     <string name="meals_total">الإجمالي</string>
     <string name="meals_pay">ادفع %1$s</string>
+    <string name="meals_pay_unavailable">ادفع</string>
+    <string name="meals_address_outside">هذا المطبخ لا يوصّل إلى هذا العنوان. اختر عنواناً آخر.</string>
+    <string name="meals_address_gone">هذا العنوان لم يعد محفوظاً. اختر عنواناً آخر.</string>
     <string name="meals_back">رجوع</string>
     <string name="meals_rotation">تناوب ٤ مطابخ</string>
     <string name="meals_pick_four">اختر ٤ مطابخ (%1$d/4)</string>
@@ -412,6 +418,8 @@
     <string name="meals_subscriptions">الاشتراكات</string>
     <string name="meals_signin_title">سجّل الدخول للاشتراك</string>
     <string name="meals_signin_why">نستخدم رقمك لتحديثات التوصيل ولحفظ اشتراكاتك في مكان واحد.</string>
+    <string name="help_signin_title">سجّل الدخول للحصول على المساعدة</string>
+    <string name="help_signin_why">طلباتك وردودنا تبقى في حسابك، فتتابعها من أي هاتف.</string>
     <string name="meals_paying">أكمل الدفع في المتصفح. تُجدول وجباتك بعد تأكيد الدفع.</string>
     <string name="meals_pause_title">إيقاف التوصيل مؤقتًا</string>
     <string name="meals_pause_left">متبقٍ %1$d من %2$d أيام إيقاف</string>
@@ -470,8 +478,22 @@
     <string name="meals_offer_percent_cap">خصم %1$s حتى %2$s</string>
     <string name="meals_offer_fixed">خصم %1$s</string>
     <string name="meals_offer_new_only">للمشتركين الجدد</string>
-    <string name="meals_near_count">%1$d مطبخ يوصل إليك</string>
-    <string name="meals_near_place">%1$d مطبخ يوصل إلى %2$s</string>
+    <plurals name="meals_near_count">
+        <item quantity="zero">لا مطابخ توصل إليك</item>
+        <item quantity="one">مطبخ واحد يوصل إليك</item>
+        <item quantity="two">مطبخان يوصلان إليك</item>
+        <item quantity="few">%1$d مطابخ توصل إليك</item>
+        <item quantity="many">%1$d مطبخاً يوصل إليك</item>
+        <item quantity="other">%1$d مطبخ يوصل إليك</item>
+    </plurals>
+    <plurals name="meals_near_place">
+        <item quantity="zero">لا مطابخ توصل إلى %2$s</item>
+        <item quantity="one">مطبخ واحد يوصل إلى %2$s</item>
+        <item quantity="two">مطبخان يوصلان إلى %2$s</item>
+        <item quantity="few">%1$d مطابخ توصل إلى %2$s</item>
+        <item quantity="many">%1$d مطبخاً يوصل إلى %2$s</item>
+        <item quantity="other">%1$d مطبخ يوصل إلى %2$s</item>
+    </plurals>
     <string name="meals_none_near">لا توجد مطابخ توصل إلى %1$s بعد</string>
     <string name="meals_change">تغيير</string>
     <string name="meals_where">أين نوصل؟</string>

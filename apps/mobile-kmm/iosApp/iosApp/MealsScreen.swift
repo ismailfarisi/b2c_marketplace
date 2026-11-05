@@ -44,6 +44,15 @@ private func tr(_ key: String, _ args: CVarArg...) -> String {
     String(format: NSLocalizedString(key, comment: ""), arguments: args)
 }
 
+/// A count-led sentence from Localizable.stringsdict (Arabic has six forms).
+private func trPlural(_ key: String, _ count: Int) -> String {
+    String.localizedStringWithFormat(NSLocalizedString(key, comment: ""), count)
+}
+
+private func trPlural(_ key: String, _ count: Int, _ name: String) -> String {
+    String.localizedStringWithFormat(NSLocalizedString(key, comment: ""), count, name)
+}
+
 private func pick(_ en: String, _ ar: String?) -> String { localised(en, ar ?? "") }
 
 private func money(_ minor: Int64, _ currency: String) -> String {
@@ -181,8 +190,9 @@ struct MealsScreen: View {
         case .support:
             // Help is native, on the app's session (a banner to /support must
             // not open the web, which has no session and asks for a new code).
-            let ticketId = l.id
-            requireAccount { onOpenHelp(ticketId) }
+            // The host gates it, so the sign-in screen can say "get help"
+            // rather than "subscribe".
+            onOpenHelp(l.id)
             stack = [.home]
         case .collection:
             if let id = l.id { viewModel.openCollection(slug: id); stack = [.home, .collection] }
@@ -627,9 +637,9 @@ private struct MealsHomePage: View {
         if s.filtering && s.kitchens.isEmpty {
             title = NSLocalizedString("meals_no_matches", comment: "")
         } else if let p = place {
-            title = s.kitchens.isEmpty ? tr("meals_none_near", p.name) : tr("meals_near_place", s.kitchens.count, p.name)
+            title = s.kitchens.isEmpty ? tr("meals_none_near", p.name) : trPlural("meals_near_place", s.kitchens.count, p.name)
         } else {
-            title = tr("meals_near_count", s.kitchens.count)
+            title = trPlural("meals_near_count", s.kitchens.count)
         }
         return HStack(alignment: .firstTextBaseline) {
             Text(title).font(display(TypeScale.title)).foregroundStyle(Warm.ink)
@@ -1596,13 +1606,24 @@ private struct CheckoutPage: View {
         return r.fieldCodes["start_date"]
     }
 
+    private var addressCode: String? {
+        guard let failure = s.error, case .rejected(let r) = onEnum(of: failure) else { return nil }
+        return r.fieldCodes["address_id"]
+    }
+
+    /// No total, no amount: "Pay " with a dangling space read as a bug.
+    private var payLabel: String {
+        guard let p = s.preview else { return NSLocalizedString("meals_pay_unavailable", comment: "") }
+        return tr("meals_pay", money(p.totalMinor, p.currency))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             TopBar(title: NSLocalizedString("meals_checkout", comment: ""), onBack: onBack)
             if let plan = s.plan {
                 form(plan)
                 PrimaryButton(
-                    label: tr("meals_pay", s.preview.map { money($0.totalMinor, $0.currency) } ?? ""),
+                    label: payLabel,
                     enabled: s.preview != nil && !s.busy
                 ) { vm.subscribe() }
                 .padding(Space.edge)
@@ -1635,6 +1656,15 @@ private struct CheckoutPage: View {
                 FieldLabel(text: NSLocalizedString("meals_address", comment: ""))
                 ForEach(s.addresses, id: \.id) { a in
                     Choice(title: a.label, detail: a.line, selected: a.id == s.addressId) { vm.selectAddress(id: a.id) }
+                }
+                // Under the addresses rather than in the generic strip at the
+                // bottom: the fix is to pick another one, right here.
+                if let code = addressCode {
+                    Text(NSLocalizedString(code == "not_found" ? "meals_address_gone" : "meals_address_outside", comment: ""))
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(MP.bad)
+                        .padding(.horizontal, Space.edge)
+                        .padding(.vertical, 6)
                 }
                 AddressForm(startOpen: s.addresses.isEmpty, busy: s.busy,
                             added: Int(s.addressAdded), failure: s.error) { label, building, area, city, at in
@@ -1694,7 +1724,7 @@ private struct CheckoutPage: View {
                         .padding(.horizontal, Space.edge)
                         .padding(.vertical, 6)
                 }
-                if promoCode == nil, startCode == nil, let failure = s.error {
+                if promoCode == nil, startCode == nil, addressCode == nil, let failure = s.error {
                     FailureStrip(failure: failure, onRetry: { vm.retryCheckout() })
                 }
                 Color.clear.frame(height: Space.xl)

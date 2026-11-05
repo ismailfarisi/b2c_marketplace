@@ -210,6 +210,9 @@
     <string name="err_rejected">That could not be done.</string>
     <string name="err_server">Something went wrong on our side. Try again shortly.</string>
     <string name="err_unknown">Something went wrong. Try again.</string>
+    <string name="err_in_flight">Still working on your last request. Try again in a moment.</string>
+    <string name="err_request_changed">That request was already sent with different details. Go back and try again.</string>
+    <string name="feed_cta_unavailable">This isn\'t available right now.</string>
     <string name="feed_save">Save</string>
     <string name="feed_unsave">Remove from saved</string>
     <string name="action_retry">Retry</string>
@@ -455,6 +458,9 @@
     <string name="meals_delivery">Delivery</string>
     <string name="meals_total">Total</string>
     <string name="meals_pay">Pay %1$s</string>
+    <string name="meals_pay_unavailable">Pay</string>
+    <string name="meals_address_outside">This kitchen doesn\'t deliver to that address. Choose another address.</string>
+    <string name="meals_address_gone">That address is no longer saved. Choose another address.</string>
     <string name="meals_back">Back</string>
     <string name="meals_rotation">4-kitchen rotation</string>
     <string name="meals_pick_four">Pick 4 kitchens (%1$d/4)</string>
@@ -482,6 +488,8 @@
     <string name="meals_subscriptions">Subscriptions</string>
     <string name="meals_signin_title">Sign in to subscribe</string>
     <string name="meals_signin_why">We use your number for delivery updates and to keep your subscriptions in one place.</string>
+    <string name="help_signin_title">Sign in to get help</string>
+    <string name="help_signin_why">Your requests and our replies stay on your account, so you can follow them on any phone.</string>
     <string name="meals_paying">Finish paying in your browser. Your meals are scheduled once the payment is confirmed.</string>
     <string name="meals_pause_title">Pause deliveries</string>
     <string name="meals_pause_left">%1$d of %2$d pause days left</string>
@@ -540,8 +548,14 @@
     <string name="meals_offer_percent_cap">%1$s off up to %2$s</string>
     <string name="meals_offer_fixed">%1$s off</string>
     <string name="meals_offer_new_only">First-time subscribers</string>
-    <string name="meals_near_count">%1$d kitchens deliver to you</string>
-    <string name="meals_near_place">%1$d kitchens deliver to %2$s</string>
+    <plurals name="meals_near_count">
+        <item quantity="one">%1$d kitchen delivers to you</item>
+        <item quantity="other">%1$d kitchens deliver to you</item>
+    </plurals>
+    <plurals name="meals_near_place">
+        <item quantity="one">%1$d kitchen delivers to %2$s</item>
+        <item quantity="other">%1$d kitchens deliver to %2$s</item>
+    </plurals>
     <string name="meals_none_near">No kitchens deliver to %1$s yet</string>
     <string name="meals_change">Change</string>
     <string name="meals_where">Where should we deliver?</string>

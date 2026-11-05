@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hand-maintained: tools/gen-ios-strings.sh converts <string> resources only.
+  Keep in step with the <plurals> of the same name in androidApp res/values*/strings.xml.
+-->
+<plist version="1.0">
+<dict>
+	<key>meals_near_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@kitchens@</string>
+		<key>kitchens</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا مطابخ توصل إليك</string>
+			<key>one</key>
+			<string>مطبخ واحد يوصل إليك</string>
+			<key>two</key>
+			<string>مطبخان يوصلان إليك</string>
+			<key>few</key>
+			<string>%1$lld مطابخ توصل إليك</string>
+			<key>many</key>
+			<string>%1$lld مطبخاً يوصل إليك</string>
+			<key>other</key>
+			<string>%1$lld مطبخ يوصل إليك</string>
+		</dict>
+	</dict>
+	<key>meals_near_place</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@kitchens@</string>
+		<key>kitchens</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا مطابخ توصل إلى %2$@</string>
+			<key>one</key>
+			<string>مطبخ واحد يوصل إلى %2$@</string>
+			<key>two</key>
+			<string>مطبخان يوصلان إلى %2$@</string>
+			<key>few</key>
+			<string>%1$lld مطابخ توصل إلى %2$@</string>
+			<key>many</key>
+			<string>%1$lld مطبخاً يوصل إلى %2$@</string>
+			<key>other</key>
+			<string>%1$lld مطبخ يوصل إلى %2$@</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
