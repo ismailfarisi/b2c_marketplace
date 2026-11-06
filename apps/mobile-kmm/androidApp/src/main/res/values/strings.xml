@@ -686,4 +686,42 @@
     <string name="invoice_superseded">Superseded</string>
     <string name="invoice_share">Share</string>
     <string name="invoice_not_found">This invoice isn\'t on your account.</string>
+
+    <!-- Variety at renewal: proposal, taste memory, adventure setting -->
+    <string name="meals_renew_fresh">Choose next kitchens</string>
+    <string name="meals_renew_title">Renew with fresh kitchens</string>
+    <string name="meals_renew_lede">Your next 4 weeks. We kept what you love and found new kitchens that deliver to you on the same days and meals.</string>
+    <string name="meals_renew_starts">Starts %1$s</string>
+    <string name="meals_refresh_on_renew">Fresh kitchens at renewal</string>
+    <string name="meals_refresh_note">Keeps up to two kitchens you loved and brings in new ones, within 10% of this rotation\'s price. Off: the same four kitchens again.</string>
+    <string name="meals_swap">Swap</string>
+    <string name="meals_swap_done">Done</string>
+    <string name="meals_pick_for_week">Pick a kitchen for week %1$d</string>
+    <string name="meals_in_rotation">In your current rotation</string>
+    <string name="meals_reason_loved">You loved it</string>
+    <string name="meals_reason_top_rated">Your top rated</string>
+    <string name="meals_reason_kept">Kept from this rotation</string>
+    <string name="meals_reason_new_kitchen">New kitchen</string>
+    <string name="meals_reason_new_cuisine">New: %1$s home cooking</string>
+    <string name="meals_reason_familiar_cuisine">More %1$s, a new kitchen</string>
+    <string name="meals_adventure">How adventurous?</string>
+    <string name="meals_adventure_familiar">Familiar</string>
+    <string name="meals_adventure_balanced">Balanced</string>
+    <string name="meals_adventure_surprise">Surprise me</string>
+    <string name="meals_adventure_familiar_note">New kitchens in cuisines you already eat.</string>
+    <string name="meals_adventure_balanced_note">A mix of cuisines you know and new ones.</string>
+    <string name="meals_adventure_surprise_note">Cuisines you haven\'t had in the last two rotations.</string>
+    <string name="meals_last_rotation">Last rotation: %1$s</string>
+    <string name="meals_confirm_pay">Confirm and pay %1$s</string>
+    <string name="meals_renew_repeats">Not enough kitchens deliver here for four different ones; some weeks repeat a kitchen from this rotation.</string>
+    <string name="meals_per_week">/ week</string>
+    <string name="meals_per_meal">%1$s per meal</string>
+    <string name="meals_heart">Love it</string>
+    <string name="meals_hearted">Loved — kept first when your rotation renews</string>
+    <string name="meals_not_again">Not again</string>
+    <string name="meals_kitchen_avoided">Not again — left out of your suggestions</string>
+    <string name="meals_dish_avoided">Not again — we\'ll pick the other dish when there is one</string>
+    <string name="meals_undo">Undo</string>
+    <string name="account_meal_prefs">Meal preferences</string>
+    <string name="account_adventure">How adventurous should your next rotation be?</string>
 </resources>

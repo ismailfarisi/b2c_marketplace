@@ -8,6 +8,7 @@ import ae.marketplace.mobile.model.AddressPage
 import ae.marketplace.mobile.model.KitchenDetail
 import ae.marketplace.mobile.model.KitchenPage
 import ae.marketplace.mobile.model.LatLng
+import ae.marketplace.mobile.model.MealPreferences
 import ae.marketplace.mobile.model.MealsHome
 import ae.marketplace.mobile.model.MyReview
 import ae.marketplace.mobile.model.MySubscription
@@ -15,6 +16,7 @@ import ae.marketplace.mobile.model.OfferPage
 import ae.marketplace.mobile.model.Resumed
 import ae.marketplace.mobile.model.PaymentIntent
 import ae.marketplace.mobile.model.ReviewPage
+import ae.marketplace.mobile.model.RenewalProposal
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationInput
 import ae.marketplace.mobile.model.RotationPage
@@ -22,9 +24,13 @@ import ae.marketplace.mobile.model.SubscribeInput
 import ae.marketplace.mobile.model.Subscribed
 import ae.marketplace.mobile.model.SubscriptionPage
 import ae.marketplace.mobile.model.SubscriptionPreview
+import ae.marketplace.mobile.model.Taste
+import ae.marketplace.mobile.model.TasteInput
+import ae.marketplace.mobile.model.TastePage
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -146,9 +152,37 @@ class MealsApi(private val client: HttpClient) {
             json(input)
         }.body()
 
-    /** Prepares the next rotation (same kitchens, next four weeks), unpaid. */
-    suspend fun renewRotation(id: String): Rotation =
-        client.post("rotations/$id/renew") { json(Empty()) }.body()
+    /**
+     * Prepares the next rotation, unpaid: the four plans given (an edited
+     * proposal) or, without them, the same kitchens.
+     */
+    suspend fun renewRotation(id: String, planIds: List<String>? = null, idempotencyKey: String? = null): Rotation =
+        client.post("rotations/$id/renew") {
+            idempotencyKey?.let { header("Idempotency-Key", it) }
+            if (planIds == null) json(Empty()) else json(RenewBody(planIds))
+        }.body()
+
+    /** The four kitchens proposed for renewing a rotation, and everything they can be swapped with. */
+    suspend fun renewalProposal(id: String): RenewalProposal =
+        client.get("me/rotations/$id/renewal-proposal").body()
+
+    suspend fun setRotationRefresh(id: String, refresh: Boolean) {
+        client.put("rotations/$id/renewal") { json(RefreshBody(refresh)) }
+    }
+
+    suspend fun tastes(): TastePage = client.get("me/tastes").body()
+
+    suspend fun setTaste(kind: String, subjectId: String, sentiment: String): Taste =
+        client.put("me/tastes") { json(TasteInput(kind, subjectId, sentiment)) }.body()
+
+    suspend fun clearTaste(kind: String, subjectId: String) {
+        client.delete("me/tastes/$kind/$subjectId")
+    }
+
+    suspend fun mealPreferences(): MealPreferences = client.get("me/meal-preferences").body()
+
+    suspend fun setMealPreferences(adventure: String): MealPreferences =
+        client.put("me/meal-preferences") { json(MealPreferences(adventure)) }.body()
 
     suspend fun payRotation(id: String): PaymentIntent =
         client.post("rotations/$id/payment-intent") {
@@ -180,6 +214,8 @@ class MealsApi(private val client: HttpClient) {
 }
 
 @Serializable private class Empty
+@Serializable private data class RenewBody(@SerialName("plan_ids") val planIds: List<String>)
+@Serializable private data class RefreshBody(@SerialName("refresh_on_renew") val refreshOnRenew: Boolean)
 @Serializable private data class DishBody(@SerialName("dish_id") val dishId: String)
 @Serializable private data class SkipBody(val date: String, @SerialName("meal_slot") val mealSlot: String)
 @Serializable private data class PauseBody(@SerialName("from_date") val from: String, @SerialName("to_date") val to: String)

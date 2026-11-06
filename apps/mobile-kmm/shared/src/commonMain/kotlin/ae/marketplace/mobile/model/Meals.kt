@@ -416,6 +416,8 @@ data class Rotation(
     val currency: String = "AED",
     @SerialName("auto_renew") val autoRenew: Boolean = false,
     @SerialName("renewed_by_id") val renewedById: String? = null,
+    /** Renewals propose fresh kitchens instead of the same four. */
+    @SerialName("refresh_on_renew") val refreshOnRenew: Boolean = false,
 ) {
     /** Created, not paid yet: the card offers to pay. */
     val awaitingPayment: Boolean get() = status == "pending_payment" || status == "pending"
@@ -429,3 +431,65 @@ data class Rotation(
 
 @Serializable
 data class RotationPage(val items: List<Rotation> = emptyList())
+
+// ── Variety at renewal: proposal, taste memory, adventure setting ──────────
+
+/** One kitchen the next rotation could use, priced for one week of this rotation's meals. */
+@Serializable
+data class ProposalKitchen(
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("plan_id") val planId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    val cuisines: List<String> = emptyList(),
+    val rating: Double? = null,
+    @SerialName("rating_count") val ratingCount: Int = 0,
+    @SerialName("week_price_minor") val weekPriceMinor: Long,
+    @SerialName("meal_price_minor") val mealPriceMinor: Long = 0,
+    val currency: String = "AED",
+    @SerialName("in_current") val inCurrent: Boolean = false,
+    val favourite: Boolean = false,
+    @SerialName("own_rating") val ownRating: Int = 0,
+    /** loved, top_rated, kept, new_cuisine, familiar_cuisine, new_kitchen or empty. */
+    val reason: String = "",
+    @SerialName("reason_cuisine") val reasonCuisine: String? = null,
+)
+
+@Serializable
+data class RenewalProposal(
+    @SerialName("rotation_id") val rotationId: String,
+    @SerialName("start_date") val startDate: String,
+    val adventure: String = "balanced",
+    @SerialName("refresh_on_renew") val refreshOnRenew: Boolean = false,
+    /** The four proposed, favourites first. */
+    val kitchens: List<ProposalKitchen> = emptyList(),
+    /** Every kitchen that can be swapped in, the current ones included. */
+    val eligible: List<ProposalKitchen> = emptyList(),
+    @SerialName("amount_minor") val amountMinor: Long = 0,
+    @SerialName("previous_amount_minor") val previousAmountMinor: Long = 0,
+    val currency: String = "AED",
+    @SerialName("meals_per_week") val mealsPerWeek: Int = 0,
+)
+
+/** A heart or a "not again" on a kitchen or a dish. */
+@Serializable
+data class Taste(
+    @SerialName("subject_kind") val subjectKind: String,
+    @SerialName("subject_id") val subjectId: String,
+    val sentiment: String,
+    @SerialName("updated_at") val updatedAt: String = "",
+)
+
+@Serializable
+data class TasteInput(
+    @SerialName("subject_kind") val subjectKind: String,
+    @SerialName("subject_id") val subjectId: String,
+    val sentiment: String,
+)
+
+@Serializable
+data class TastePage(val items: List<Taste> = emptyList())
+
+/** familiar, balanced or surprise. */
+@Serializable
+data class MealPreferences(val adventure: String = "balanced")

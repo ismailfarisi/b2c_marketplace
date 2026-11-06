@@ -502,6 +502,42 @@
 "invoice_superseded" = "Superseded";
 "invoice_share" = "Share";
 "invoice_not_found" = "This invoice isn't on your account.";
+"meals_renew_fresh" = "Choose next kitchens";
+"meals_renew_title" = "Renew with fresh kitchens";
+"meals_renew_lede" = "Your next 4 weeks. We kept what you love and found new kitchens that deliver to you on the same days and meals.";
+"meals_renew_starts" = "Starts %@";
+"meals_refresh_on_renew" = "Fresh kitchens at renewal";
+"meals_refresh_note" = "Keeps up to two kitchens you loved and brings in new ones, within 10% of this rotation's price. Off: the same four kitchens again.";
+"meals_swap" = "Swap";
+"meals_swap_done" = "Done";
+"meals_pick_for_week" = "Pick a kitchen for week %lld";
+"meals_in_rotation" = "In your current rotation";
+"meals_reason_loved" = "You loved it";
+"meals_reason_top_rated" = "Your top rated";
+"meals_reason_kept" = "Kept from this rotation";
+"meals_reason_new_kitchen" = "New kitchen";
+"meals_reason_new_cuisine" = "New: %@ home cooking";
+"meals_reason_familiar_cuisine" = "More %@, a new kitchen";
+"meals_adventure" = "How adventurous?";
+"meals_adventure_familiar" = "Familiar";
+"meals_adventure_balanced" = "Balanced";
+"meals_adventure_surprise" = "Surprise me";
+"meals_adventure_familiar_note" = "New kitchens in cuisines you already eat.";
+"meals_adventure_balanced_note" = "A mix of cuisines you know and new ones.";
+"meals_adventure_surprise_note" = "Cuisines you haven't had in the last two rotations.";
+"meals_last_rotation" = "Last rotation: %@";
+"meals_confirm_pay" = "Confirm and pay %@";
+"meals_renew_repeats" = "Not enough kitchens deliver here for four different ones; some weeks repeat a kitchen from this rotation.";
+"meals_per_week" = "/ week";
+"meals_per_meal" = "%@ per meal";
+"meals_heart" = "Love it";
+"meals_hearted" = "Loved — kept first when your rotation renews";
+"meals_not_again" = "Not again";
+"meals_kitchen_avoided" = "Not again — left out of your suggestions";
+"meals_dish_avoided" = "Not again — we'll pick the other dish when there is one";
+"meals_undo" = "Undo";
+"account_meal_prefs" = "Meal preferences";
+"account_adventure" = "How adventurous should your next rotation be?";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

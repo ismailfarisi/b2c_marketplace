@@ -147,7 +147,7 @@ private func promoReason(_ code: String) -> String {
 }
 
 private enum MealsPage {
-    case home, kitchen, checkout, rotation, paid, mine, subscription, collection
+    case home, kitchen, checkout, rotation, rotationRenew, paid, mine, subscription, collection
 }
 
 /// The meals tab: storefront, kitchen, checkout, rotation and My meals, each
@@ -187,6 +187,8 @@ struct MealsScreen: View {
         case .rotationDetail:
             // No native rotation screen yet; rotations are listed on My meals.
             requireAccount { viewModel.loadMine(force: false); stack = [.home, .mine] }
+        case .rotationRenew:
+            if let id = l.id { requireAccount { viewModel.openRenewal(id: id); stack = [.home, .mine, .rotationRenew] } }
         case .support:
             // Help is native, on the app's session (a banner to /support must
             // not open the web, which has no session and asks for a new code).
@@ -232,7 +234,8 @@ struct MealsScreen: View {
             case .collection:
                 CollectionPage(vm: viewModel, onBack: back) { id in viewModel.openKitchen(branchId: id); go(.kitchen) }
             case .kitchen:
-                KitchenPage(vm: viewModel, onBack: back) { plan in
+                KitchenPage(vm: viewModel, onBack: back,
+                            onTaste: { mark in requireAccount { viewModel.setKitchenTaste(sentiment: mark) } }) { plan in
                     requireAccount {
                         viewModel.startCheckout(plan: plan)
                         // The address picked on home leads at checkout.
@@ -245,13 +248,16 @@ struct MealsScreen: View {
                              onPaid: { go(.paid) }, openPayment: openPayment)
             case .rotation:
                 RotationPage(vm: viewModel, onBack: back, onPaid: { go(.paid) }, openPayment: openPayment)
+            case .rotationRenew:
+                RotationRenewPage(vm: viewModel, onBack: back, onPaid: { go(.paid) }, openPayment: openPayment)
             case .paid:
                 PaidPage(redirected: redirected, pending: viewModel.checkout.value.paymentPending) {
                     viewModel.loadMine(force: true)
                     stack = [.home, .mine]
                 }
             case .mine:
-                MinePage(vm: viewModel, onBack: back, openPayment: openPayment) { id in
+                MinePage(vm: viewModel, onBack: back, openPayment: openPayment,
+                         onRenew: { id in viewModel.openRenewal(id: id); go(.rotationRenew) }) { id in
                     viewModel.openSubscription(id: id)
                     go(.subscription)
                 }
@@ -1174,6 +1180,7 @@ private struct PlacePicker: View {
 private struct KitchenPage: View {
     let vm: MealsViewModel
     let onBack: () -> Void
+    let onTaste: (String?) -> Void
     let onSubscribe: (MealPlan) -> Void
 
     @State private var current: KitchenUiState?
@@ -1189,6 +1196,7 @@ private struct KitchenPage: View {
                 }
             } else if let k = s.kitchen {
                 KitchenBody(k: k, reviews: s.reviews, offers: s.offers, reviewsError: s.reviewsError,
+                            taste: s.taste, tasteBusy: s.tasteBusy, tasteError: s.tasteError, onTaste: onTaste,
                             onRetryReviews: { vm.retryReviews() }, onBack: onBack, onSubscribe: onSubscribe)
             } else {
                 VStack(spacing: 0) {
@@ -1209,6 +1217,10 @@ private struct KitchenBody: View {
     let reviews: [KitchenReview]
     let offers: [PromoOffer]
     let reviewsError: Failure?
+    let taste: String?
+    let tasteBusy: Bool
+    let tasteError: Failure?
+    let onTaste: (String?) -> Void
     let onRetryReviews: () -> Void
     let onBack: () -> Void
     let onSubscribe: (MealPlan) -> Void
@@ -1251,6 +1263,7 @@ private struct KitchenBody: View {
                                     .font(.system(size: TypeScale.secondary))
                                     .foregroundStyle(Warm.muted)
                             }
+                            TasteRow(taste: taste, busy: tasteBusy, error: tasteError, onTaste: onTaste)
                             if let from {
                                 Text(tr("meals_from_meal", money(from, currency)))
                                     .font(.system(size: TypeScale.secondary, weight: .bold))
@@ -1869,6 +1882,9 @@ private struct RotationPage: View {
                             vm.selectRotationAddress(id: a.id)
                         }
                     }
+                    if let a = s.adventure {
+                        AdventureChips(current: a, enabled: true) { vm.setBuilderAdventure(adventure: $0) }
+                    }
                     FieldLabel(text: tr("meals_pick_four", s.picked.count))
                     if s.busy && s.candidates.isEmpty { LoadingBlock() }
                     ForEach(s.candidates, id: \.branchId) { k in
@@ -1954,6 +1970,7 @@ private struct MinePage: View {
     let vm: MealsViewModel
     let onBack: () -> Void
     let openPayment: (String) -> Void
+    let onRenew: (String) -> Void
     let onOpen: (String) -> Void
 
     @State private var current: MyMealsUiState?
@@ -2004,7 +2021,7 @@ private struct MinePage: View {
                         if !s.rotations.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_rotations", comment: ""))
                             ForEach(s.rotations, id: \.id) { r in
-                                RotationCard(r: r, vm: vm, busy: s.busy.contains(r.id), onOpen: onOpen)
+                                RotationCard(r: r, vm: vm, busy: s.busy.contains(r.id), onOpen: onOpen, onRenew: onRenew)
                             }
                         }
                         if !s.subscriptions.isEmpty {
@@ -2033,6 +2050,7 @@ private struct RotationCard: View {
     let vm: MealsViewModel
     let busy: Bool
     let onOpen: (String) -> Void
+    let onRenew: (String) -> Void
     @State private var confirming = false
 
     var body: some View {
@@ -2066,6 +2084,8 @@ private struct RotationCard: View {
             if r.live {
                 RenewToggle(on: r.autoRenew) { vm.setRotationRenewal(id: r.id, auto: $0) }
                     .disabled(busy)
+                RefreshToggle(on: r.refreshOnRenew) { vm.setRotationRefresh(id: r.id, on: $0) }
+                    .disabled(busy)
                 Button { confirming = true } label: {
                     Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(busy ? MP.textFaint : MP.bad)
                 }
@@ -2073,12 +2093,217 @@ private struct RotationCard: View {
                 .padding(.vertical, Space.small)
             }
             if r.renewable {
-                SecondaryButton(label: NSLocalizedString("meals_renew_rotation", comment: "")) { vm.renewRotation(id: r.id) }
-                    .disabled(busy)
+                PrimaryButton(label: NSLocalizedString("meals_renew_fresh", comment: ""), enabled: !busy) { onRenew(r.id) }
                     .padding(.top, Space.small)
+                Button { vm.renewRotation(id: r.id) } label: {
+                    Text("meals_renew_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(busy ? MP.textFaint : MP.textMuted)
+                }
+                .disabled(busy)
+                .padding(.vertical, Space.small)
             }
         }
         .modifier(ConfirmCancel(shown: $confirming) { vm.cancelRotation(id: r.id) })
+    }
+}
+
+private struct RefreshToggle: View {
+    let on: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { on }, set: onChange)) {
+            Text("meals_refresh_on_renew")
+                .font(.system(size: TypeScale.body))
+                .foregroundStyle(MP.text)
+        }
+        .tint(Warm.chilli)
+    }
+}
+
+// MARK: - Renewal with fresh kitchens
+
+private struct AdventureChips: View {
+    let current: String
+    let enabled: Bool
+    let onPick: (String) -> Void
+
+    var body: some View {
+        FieldLabel(text: NSLocalizedString("meals_adventure", comment: ""))
+        HStack(spacing: Space.small) {
+            ForEach(["familiar", "balanced", "surprise"], id: \.self) { a in
+                Chip(label: NSLocalizedString("meals_adventure_" + a, comment: ""), selected: current == a, enabled: enabled) { onPick(a) }
+            }
+        }
+        .padding(.horizontal, Space.edge)
+        Text(LocalizedStringKey("meals_adventure_" + current + "_note"))
+            .font(.system(size: TypeScale.secondary))
+            .foregroundStyle(MP.textMuted)
+            .padding(.horizontal, Space.edge)
+            .padding(.vertical, Space.small)
+    }
+}
+
+private func reasonLabel(_ k: ProposalKitchen) -> String {
+    let cuisine = k.reasonCuisine.map { tagLabel($0) }
+    switch k.reason {
+    case "loved": return NSLocalizedString("meals_reason_loved", comment: "")
+    case "top_rated": return NSLocalizedString("meals_reason_top_rated", comment: "")
+    case "kept": return NSLocalizedString("meals_reason_kept", comment: "")
+    case "new_cuisine":
+        if let c = cuisine { return tr("meals_reason_new_cuisine", c) }
+        return NSLocalizedString("meals_reason_new_kitchen", comment: "")
+    case "familiar_cuisine":
+        if let c = cuisine { return tr("meals_reason_familiar_cuisine", c) }
+        return NSLocalizedString("meals_reason_new_kitchen", comment: "")
+    default:
+        return NSLocalizedString(k.inCurrent ? "meals_reason_kept" : "meals_reason_new_kitchen", comment: "")
+    }
+}
+
+private func eligibleDetail(_ k: ProposalKitchen) -> String {
+    var detail = money(k.weekPriceMinor, k.currency) + " " + NSLocalizedString("meals_per_week", comment: "") + starText(k.rating)
+    if k.inCurrent { detail += " · " + NSLocalizedString("meals_in_rotation", comment: "") }
+    if k.favourite { detail += " · ♥" }
+    return detail
+}
+
+private func starText(_ rating: KotlinDouble?) -> String {
+    guard let r = rating?.doubleValue else { return "" }
+    return " · ★ " + String(format: "%.1f", r)
+}
+
+/// The proposed next four kitchens, each swappable, with the total and the pay step.
+private struct RotationRenewPage: View {
+    let vm: MealsViewModel
+    let onBack: () -> Void
+    let onPaid: () -> Void
+    let openPayment: (String) -> Void
+
+    @State private var current: RenewUiState?
+    @State private var swapping: Int? = nil
+    private var s: RenewUiState { current ?? vm.renew.value }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TopBar(title: NSLocalizedString("meals_renew_title", comment: ""), onBack: onBack)
+            if let failure = s.error, s.proposal == nil {
+                FailureBlock(failure: failure) { vm.retryRenewal() }
+                Spacer()
+            } else if let p = s.proposal {
+                let chosen = s.chosen
+                let repeats = Set(chosen.map { $0.branchId }).count < chosen.count
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(NSLocalizedString("meals_renew_lede", comment: "") + " " + tr("meals_renew_starts", shortDate(p.startDate)))
+                            .font(.system(size: TypeScale.secondary))
+                            .foregroundStyle(MP.textMuted)
+                            .padding(.horizontal, Space.edge)
+                            .padding(.vertical, Space.small)
+                        AdventureChips(current: p.adventure, enabled: !s.busy) { vm.setRenewalAdventure(adventure: $0) }
+                        ForEach(Array(chosen.enumerated()), id: \.offset) { i, k in
+                            CardBox {
+                                HStack(alignment: .top, spacing: Space.small) {
+                                    Circle().fill(Warm.weeks[i % 4]).frame(width: 10, height: 10).padding(.top, 5)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(tr("meals_week", i + 1) + " · " + pick(k.kitchenName, k.kitchenNameAr))
+                                            .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                                        Text(reasonLabel(k) + starText(k.rating))
+                                            .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(money(k.weekPriceMinor, k.currency))
+                                            .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                                        if k.mealPriceMinor > 0 {
+                                            Text(tr("meals_per_meal", money(k.mealPriceMinor, k.currency)))
+                                                .font(.system(size: TypeScale.caption)).foregroundStyle(MP.textFaint)
+                                        }
+                                    }
+                                }
+                                SecondaryButton(label: NSLocalizedString(swapping == i ? "meals_swap_done" : "meals_swap", comment: "")) {
+                                    swapping = swapping == i ? nil : i
+                                }
+                                .padding(.top, Space.small)
+                            }
+                        }
+                        if repeats {
+                            Text("meals_renew_repeats")
+                                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                                .padding(.horizontal, Space.edge)
+                        }
+                        if let slot = swapping {
+                            FieldLabel(text: tr("meals_pick_for_week", slot + 1))
+                            ForEach(p.eligible, id: \.planId) { k in
+                                let picked = slot < s.picks.count ? s.picks[slot] : nil
+                                let taken = s.picks.contains(k.planId) && picked != k.planId
+                                Choice(title: pick(k.kitchenName, k.kitchenNameAr), detail: eligibleDetail(k), selected: picked == k.planId) {
+                                    if !taken && !s.busy {
+                                        vm.swapKitchen(slot: Int32(slot), planId: k.planId)
+                                        swapping = nil
+                                    }
+                                }
+                                .opacity(taken ? 0.5 : 1)
+                            }
+                        }
+                        CardBox {
+                            PriceLine(label: NSLocalizedString("meals_total", comment: ""), value: money(s.totalMinor, s.currency), strong: true)
+                            Text(tr("meals_last_rotation", money(p.previousAmountMinor, p.currency)))
+                                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                        }
+                        .padding(.top, Space.medium)
+                        if let failure = s.actionError {
+                            FailureStrip(failure: failure, onRetry: nil, onDismiss: { vm.dismissRenewalError() })
+                        }
+                    }
+                }
+                PrimaryButton(
+                    label: tr("meals_confirm_pay", money(s.totalMinor, s.currency)),
+                    enabled: !s.busy && chosen.count == 4
+                ) { vm.confirmRenewal() }
+                .padding(Space.edge)
+                Color.clear.frame(height: navBarHeight)
+            } else {
+                LoadingBlock()
+                Spacer()
+            }
+        }
+        .task {
+            for await state in vm.renew {
+                current = state
+                if let url = state.paymentUrl { openPayment(url); vm.renewalPaymentOpened() }
+                if state.paid { onPaid() }
+            }
+        }
+    }
+}
+
+/// Heart / "not again" on a kitchen; the mark is remembered for renewal proposals.
+private struct TasteRow: View {
+    let taste: String?
+    let busy: Bool
+    let error: Failure?
+    let onTaste: (String?) -> Void
+
+    var body: some View {
+        HStack(spacing: Space.small) {
+            if taste == "favourite" {
+                Text("♥ " + NSLocalizedString("meals_hearted", comment: ""))
+                    .font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.leaf)
+                Spacer()
+                Chip(label: NSLocalizedString("meals_undo", comment: ""), selected: false, enabled: !busy) { onTaste(nil) }
+            } else if taste == "avoid" {
+                Text("meals_kitchen_avoided")
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                Spacer()
+                Chip(label: NSLocalizedString("meals_undo", comment: ""), selected: false, enabled: !busy) { onTaste(nil) }
+            } else {
+                Chip(label: "♡ " + NSLocalizedString("meals_heart", comment: ""), selected: false, enabled: !busy) { onTaste("favourite") }
+                Chip(label: NSLocalizedString("meals_not_again", comment: ""), selected: false, enabled: !busy) { onTaste("avoid") }
+            }
+        }
+        if let failure = error {
+            Text(failure.words).font(.system(size: TypeScale.caption)).foregroundStyle(MP.bad)
+        }
     }
 }
 
@@ -2190,7 +2415,7 @@ private struct SubscriptionPage: View {
                         if m.skipped {
                             SkippedMealCard(m: m, busy: s.busy, vm: vm)
                         } else {
-                            MealCard(m: m, busy: s.busy, vm: vm)
+                            MealCard(m: m, busy: s.busy, vm: vm, avoided: s.avoidedDishes, tasteBusy: s.tasteBusy)
                         }
                     }
                 }
@@ -2444,6 +2669,8 @@ private struct MealCard: View {
     let m: UpcomingMeal
     let busy: Bool
     let vm: MealsViewModel
+    var avoided: Set<String> = []
+    var tasteBusy: Set<String> = []
     @State private var confirmingSkip = false
 
     var body: some View {
@@ -2475,6 +2702,26 @@ private struct MealCard: View {
                             vm.choose(date: m.date, slot: m.mealSlot, dishId: o.id)
                         }
                     }
+                }
+            }
+            // A delivered dish can be marked "not again": remembered, and the default moves off it.
+            if m.deliveryStatus == "completed", let dish = chosen {
+                let saving = tasteBusy.contains(dish)
+                if avoided.contains(dish) {
+                    HStack(spacing: Space.small) {
+                        Text("meals_dish_avoided").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+                        Spacer()
+                        Button { vm.setDishAvoided(dishId: dish, avoid: false) } label: {
+                            Text("meals_undo").font(.system(size: TypeScale.secondary)).foregroundStyle(saving ? MP.textFaint : Warm.chilli)
+                        }
+                        .disabled(saving)
+                    }
+                } else {
+                    Button { vm.setDishAvoided(dishId: dish, avoid: true) } label: {
+                        Text("meals_not_again").font(.system(size: TypeScale.secondary)).foregroundStyle(saving ? MP.textFaint : MP.textMuted)
+                            .padding(.vertical, Space.small)
+                    }
+                    .disabled(saving)
                 }
             }
         }

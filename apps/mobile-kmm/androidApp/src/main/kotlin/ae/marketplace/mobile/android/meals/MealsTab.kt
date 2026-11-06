@@ -37,6 +37,7 @@ import ae.marketplace.mobile.model.Kitchen
 import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealPlan
 import ae.marketplace.mobile.model.MySubscription
+import ae.marketplace.mobile.model.ProposalKitchen
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.UpcomingMeal
 import android.content.Intent
@@ -94,7 +95,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-private enum class Page { Home, Kitchen, Checkout, Rotation, Paid, Mine, Subscription, Collection }
+private enum class Page { Home, Kitchen, Checkout, Rotation, RotationRenew, Paid, Mine, Subscription, Collection }
 
 /**
  * The meals tab. Its pages stack inside the tab, so the bottom bar stays put
@@ -146,6 +147,7 @@ fun MealsTab(
             MealsLinkPage.ROTATION -> requireAccount { viewModel.startRotation(); home(Page.Rotation) }
             // No native rotation screen yet; rotations are listed on My meals.
             MealsLinkPage.ROTATION_DETAIL -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
+            MealsLinkPage.ROTATION_RENEW -> if (id != null) requireAccount { viewModel.openRenewal(id); home(Page.RotationRenew) }
             // Help is native, on the app's session (a banner to /support must not
             // open the web, which has no session and asks for a new code).
             // The host gates it, so the sign-in screen can say "get help"
@@ -192,6 +194,7 @@ fun MealsTab(
             Page.Kitchen -> KitchenPage(
                 viewModel,
                 onBack = ::back,
+                onTaste = { mark -> requireAccount { viewModel.setKitchenTaste(mark) } },
                 onSubscribe = { plan ->
                     requireAccount {
                         viewModel.startCheckout(plan)
@@ -203,8 +206,15 @@ fun MealsTab(
             )
             Page.Checkout -> CheckoutPage(viewModel, location, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Rotation -> RotationPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
+            Page.RotationRenew -> RotationRenewPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Paid -> PaidPage(redirected, viewModel.checkout.value.paymentPending, onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
-            Page.Mine -> MinePage(viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) }, openPayment = openPayment)
+            Page.Mine -> MinePage(
+                viewModel,
+                onBack = ::back,
+                onOpen = { viewModel.openSubscription(it); go(Page.Subscription) },
+                onRenew = { viewModel.openRenewal(it); go(Page.RotationRenew) },
+                openPayment = openPayment,
+            )
             Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
         }
     }
@@ -696,7 +706,7 @@ private fun VerifiedBadge() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onSubscribe: (MealPlan) -> Unit) {
+private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onTaste: (String?) -> Unit, onSubscribe: (MealPlan) -> Unit) {
     val s by vm.kitchen.collectAsState()
     val arabic = rememberArabic()
     val k = s.kitchen
@@ -707,7 +717,7 @@ private fun KitchenPage(vm: MealsViewModel, onBack: () -> Unit, onSubscribe: (Me
             FailureBlock(failure, onRetry = { vm.openKitchen(s.branchId) })
         }
         k == null -> Column(Modifier.fillMaxSize()) { TopBar("", onBack); LoadingBlock() }
-        else -> KitchenBody(k, s, arabic, onBack, onSubscribe, onRetryReviews = vm::retryReviews)
+        else -> KitchenBody(k, s, arabic, onBack, onSubscribe, onRetryReviews = vm::retryReviews, onTaste = onTaste)
     }
 }
 
@@ -719,6 +729,7 @@ private fun KitchenBody(
     onBack: () -> Unit,
     onSubscribe: (MealPlan) -> Unit,
     onRetryReviews: () -> Unit,
+    onTaste: (String?) -> Unit,
 ) {
     val reviews = state.reviews
     val name = pick(k.name, k.nameAr, arabic)
@@ -767,6 +778,7 @@ private fun KitchenBody(
                 ) {
                     Text(name, color = M.Ink, fontFamily = Serif, fontSize = Type.Title * 1.25f, fontWeight = FontWeight.ExtraBold)
                     if (k.cuisines.isNotEmpty()) Text(MealTags.line(k.cuisines, arabic), color = M.Muted, fontSize = Type.Secondary)
+                    TasteRow(state.taste, state.tasteBusy, state.tasteError, onTaste)
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.meals_from_meal, money(k.fromMealPriceMinor, k.currency)),
@@ -1227,6 +1239,7 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Label(stringResource(R.string.meals_address))
             s.addresses.forEach { a -> Choice(a.label, a.line, a.id == s.addressId) { vm.selectRotationAddress(a.id) } }
+            s.adventure?.let { a -> AdventureChips(a, enabled = true, onPick = vm::setBuilderAdventure) }
             Label(stringResource(R.string.meals_pick_four, s.picked.size))
             if (s.busy && s.candidates.isEmpty()) LoadingBlock(inline = true)
             s.candidates.forEach { k ->
@@ -1292,7 +1305,7 @@ private fun PaidPage(redirected: Boolean, pending: Boolean, onMine: () -> Unit) 
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit, openPayment: (String) -> Unit) {
+private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit, onRenew: (String) -> Unit, openPayment: (String) -> Unit) {
     val s by vm.mine.collectAsState()
     val arabic = rememberArabic()
     LaunchedEffect(Unit) { vm.loadMine() }
@@ -1312,7 +1325,7 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
                 items(s.companies, key = { "company-" + it.companyId }) { c -> CompanyCoversCard(c.name, arabic) }
                 if (s.rotations.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_rotations)) }
-                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, busy = r.id in s.busy) }
+                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, onRenew, busy = r.id in s.busy) }
                 }
                 if (s.subscriptions.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_subscriptions)) }
@@ -1325,7 +1338,7 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
 }
 
 @Composable
-private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit, busy: Boolean) {
+private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit, onRenew: (String) -> Unit, busy: Boolean) {
     var confirming by remember { mutableStateOf(false) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1356,6 +1369,10 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
                 Text(stringResource(R.string.meals_auto_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
                 RenewSwitch(r.autoRenew, enabled = !busy) { vm.setRotationRenewal(r.id, it) }
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.meals_refresh_on_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
+                RenewSwitch(r.refreshOnRenew, enabled = !busy) { vm.setRotationRefresh(r.id, it) }
+            }
             Text(
                 stringResource(R.string.meals_cancel_rotation),
                 color = if (busy) M.Faint else Palette.Bad,
@@ -1365,9 +1382,170 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
             if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancelRotation(r.id) }, onDismiss = { confirming = false })
         }
         if (r.renewable) {
-            SecondaryButton(stringResource(R.string.meals_renew_rotation), { if (!busy) vm.renewRotation(r.id) }, Modifier.padding(top = Space.Small))
+            PrimaryButton(stringResource(R.string.meals_renew_fresh), { onRenew(r.id) }, enabled = !busy, modifier = Modifier.padding(top = Space.Small))
+            Text(
+                stringResource(R.string.meals_renew_rotation),
+                color = if (busy) M.Faint else M.Muted,
+                fontSize = Type.Secondary,
+                modifier = Modifier.clickable(enabled = !busy) { vm.renewRotation(r.id) }.padding(vertical = Space.Small),
+            )
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Renewal with fresh kitchens
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AdventureChips(current: String, enabled: Boolean, onPick: (String) -> Unit) {
+    Label(stringResource(R.string.meals_adventure))
+    Row(Modifier.padding(horizontal = Space.Edge), horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+        Chip(stringResource(R.string.meals_adventure_familiar), current == "familiar", { onPick("familiar") }, enabled = enabled)
+        Chip(stringResource(R.string.meals_adventure_balanced), current == "balanced", { onPick("balanced") }, enabled = enabled)
+        Chip(stringResource(R.string.meals_adventure_surprise), current == "surprise", { onPick("surprise") }, enabled = enabled)
+    }
+    Text(
+        stringResource(
+            when (current) {
+                "familiar" -> R.string.meals_adventure_familiar_note
+                "surprise" -> R.string.meals_adventure_surprise_note
+                else -> R.string.meals_adventure_balanced_note
+            },
+        ),
+        color = M.Muted,
+        fontSize = Type.Secondary,
+        modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
+    )
+}
+
+@Composable
+private fun reasonLabel(k: ProposalKitchen, arabic: Boolean): String = when (k.reason) {
+    "loved" -> stringResource(R.string.meals_reason_loved)
+    "top_rated" -> stringResource(R.string.meals_reason_top_rated)
+    "kept" -> stringResource(R.string.meals_reason_kept)
+    "new_cuisine" -> k.reasonCuisine?.let { stringResource(R.string.meals_reason_new_cuisine, MealTags.label(it, arabic)) }
+        ?: stringResource(R.string.meals_reason_new_kitchen)
+    "familiar_cuisine" -> k.reasonCuisine?.let { stringResource(R.string.meals_reason_familiar_cuisine, MealTags.label(it, arabic)) }
+        ?: stringResource(R.string.meals_reason_new_kitchen)
+    else -> stringResource(if (k.inCurrent) R.string.meals_reason_kept else R.string.meals_reason_new_kitchen)
+}
+
+@Composable
+private fun RotationRenewPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> Unit, openPayment: (String) -> Unit) {
+    val s by vm.renew.collectAsState()
+    val arabic = rememberArabic()
+    var swapping by remember(s.rotationId) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(s.paymentUrl, s.paid) {
+        s.paymentUrl?.let { openPayment(it); vm.renewalPaymentOpened() }
+        if (s.paid) onPaid()
+    }
+    Column(Modifier.fillMaxSize()) {
+        TopBar(stringResource(R.string.meals_renew_title), onBack)
+        val p = s.proposal
+        val failure = s.error
+        when {
+            p == null && failure != null -> FailureBlock(failure, onRetry = vm::retryRenewal)
+            p == null -> LoadingBlock()
+            else -> {
+                val chosen = s.chosen
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    Text(
+                        stringResource(R.string.meals_renew_lede) + " " + stringResource(R.string.meals_renew_starts, shortDate(p.startDate, arabic)),
+                        color = M.Muted,
+                        fontSize = Type.Secondary,
+                        modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
+                    )
+                    AdventureChips(p.adventure, enabled = !s.busy, onPick = vm::setRenewalAdventure)
+                    chosen.forEachIndexed { i, k ->
+                        Card {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(10.dp).background(Warm.Weeks[i.mod(Warm.Weeks.size)], RoundedCornerShape(50)))
+                                Column(Modifier.weight(1f).padding(start = Space.Small)) {
+                                    Text(
+                                        stringResource(R.string.meals_week, i + 1) + " · " + pick(k.kitchenName, k.kitchenNameAr, arabic),
+                                        color = M.Ink,
+                                        fontSize = Type.Body,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        reasonLabel(k, arabic) + (k.rating?.let { " · ★ " + String.format("%.1f", it) } ?: ""),
+                                        color = M.Muted,
+                                        fontSize = Type.Secondary,
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(money(k.weekPriceMinor, k.currency), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+                                    if (k.mealPriceMinor > 0) {
+                                        Text(stringResource(R.string.meals_per_meal, money(k.mealPriceMinor, k.currency)), color = M.Faint, fontSize = Type.Caption)
+                                    }
+                                }
+                            }
+                            SecondaryButton(
+                                stringResource(if (swapping == i) R.string.meals_swap_done else R.string.meals_swap),
+                                { swapping = if (swapping == i) null else i },
+                                Modifier.padding(top = Space.Small),
+                            )
+                        }
+                    }
+                    if (chosen.map { it.branchId }.toSet().size < chosen.size) {
+                        Text(stringResource(R.string.meals_renew_repeats), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge))
+                    }
+                    swapping?.let { slot ->
+                        Label(stringResource(R.string.meals_pick_for_week, slot + 1))
+                        p.eligible.forEach { k ->
+                            val detail = buildString {
+                                append(money(k.weekPriceMinor, k.currency)).append(' ').append(stringResource(R.string.meals_per_week))
+                                k.rating?.let { append(" · ★ ").append(String.format("%.1f", it)) }
+                                if (k.inCurrent) append(" · ").append(stringResource(R.string.meals_in_rotation))
+                                if (k.favourite) append(" · ♥")
+                            }
+                            val taken = k.planId in s.picks && s.picks.getOrNull(slot) != k.planId
+                            Choice(pick(k.kitchenName, k.kitchenNameAr, arabic), detail, s.picks.getOrNull(slot) == k.planId) {
+                                if (!taken && !s.busy) { vm.swapKitchen(slot, k.planId); swapping = null }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(Space.Medium))
+                    Card {
+                        Line(stringResource(R.string.meals_total), money(s.totalMinor, s.currency), strong = true)
+                        Text(stringResource(R.string.meals_last_rotation, money(p.previousAmountMinor, p.currency)), color = M.Muted, fontSize = Type.Secondary)
+                    }
+                    s.actionError?.let { FailureStrip(it, onRetry = null, onDismiss = vm::dismissRenewalError) }
+                }
+                Box(Modifier.padding(Space.Edge)) {
+                    PrimaryButton(
+                        stringResource(R.string.meals_confirm_pay, money(s.totalMinor, s.currency)),
+                        vm::confirmRenewal,
+                        enabled = !s.busy && chosen.size == MealsViewModel.ROTATION_KITCHENS,
+                    )
+                }
+                BottomPad()
+            }
+        }
+    }
+}
+
+/** Heart / "not again" on a kitchen; the mark is remembered for renewal proposals. */
+@Composable
+private fun TasteRow(taste: String?, busy: Boolean, error: ae.marketplace.mobile.network.Failure?, onTaste: (String?) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalAlignment = Alignment.CenterVertically) {
+        when (taste) {
+            "favourite" -> {
+                Text("♥ " + stringResource(R.string.meals_hearted), color = M.Leaf, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Chip(stringResource(R.string.meals_undo), false, { onTaste(null) }, enabled = !busy)
+            }
+            "avoid" -> {
+                Text(stringResource(R.string.meals_kitchen_avoided), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.weight(1f))
+                Chip(stringResource(R.string.meals_undo), false, { onTaste(null) }, enabled = !busy)
+            }
+            else -> {
+                Chip("♡ " + stringResource(R.string.meals_heart), false, { onTaste("favourite") }, enabled = !busy)
+                Chip(stringResource(R.string.meals_not_again), false, { onTaste("avoid") }, enabled = !busy)
+            }
+        }
+    }
+    error?.let { Text(it.words(), color = Palette.Bad, fontSize = Type.Caption) }
 }
 
 @Composable
@@ -1459,7 +1637,7 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                 if (meals.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_upcoming)) }
                     items(meals, key = { it.date + it.mealSlot }) { m ->
-                        if (m.skipped) SkippedMealCard(m, arabic, s.busy, vm) else MealCard(m, arabic, s.busy, vm)
+                        if (m.skipped) SkippedMealCard(m, arabic, s.busy, vm) else MealCard(m, arabic, s.busy, vm, s.avoidedDishes, s.tasteBusy)
                     }
                 }
                 if (sub.recent.isNotEmpty()) item { RecentDeliveriesCard(sub.recent, arabic) }
@@ -1507,7 +1685,7 @@ private fun ConfirmCancel(onConfirm: () -> Unit, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsViewModel) {
+private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsViewModel, avoided: Set<String> = emptySet(), tasteBusy: Set<String> = emptySet()) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(shortDate(m.date, arabic) + " · " + slotLabel(m.mealSlot), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -1539,6 +1717,28 @@ private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsV
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.Small), verticalArrangement = Arrangement.spacedBy(Space.Small)) {
             m.options.forEach { o ->
                 Chip(pick(o.name, o.nameAr, arabic), o.id == chosen, { vm.choose(m.date, m.mealSlot, o.id) }, enabled = !m.locked && !busy)
+            }
+        }
+        // A delivered dish can be marked "not again": remembered, and the default moves off it.
+        if (m.deliveryStatus == "completed" && chosen != null) {
+            val saving = chosen in tasteBusy
+            if (chosen in avoided) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+                    Text(stringResource(R.string.meals_dish_avoided), color = M.Muted, fontSize = Type.Caption, modifier = Modifier.weight(1f))
+                    Text(
+                        stringResource(R.string.meals_undo),
+                        color = if (saving) M.Faint else M.Chilli,
+                        fontSize = Type.Secondary,
+                        modifier = Modifier.clickable(enabled = !saving) { vm.setDishAvoided(chosen, false) }.padding(Space.Small),
+                    )
+                }
+            } else {
+                Text(
+                    stringResource(R.string.meals_not_again),
+                    color = if (saving) M.Faint else M.Muted,
+                    fontSize = Type.Secondary,
+                    modifier = Modifier.clickable(enabled = !saving) { vm.setDishAvoided(chosen, true) }.padding(vertical = Space.Small),
+                )
             }
         }
     }
