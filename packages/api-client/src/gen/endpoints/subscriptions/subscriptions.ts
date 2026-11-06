@@ -38,7 +38,9 @@ import type {
   CancelSubscriptionBody,
   ChooseSubscriptionMealBody,
   CreateSubscriptionBody,
+  GetMyNextWeek200,
   GetMyReferrals200,
+  ListMyRotationRecaps200,
   ListMyRotations200,
   ListMySubscriptions200,
   MySubscriptionDetail,
@@ -1435,6 +1437,147 @@ export function useGetMyRotation<TData = Awaited<ReturnType<typeof getMyRotation
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMyRotationQueryOptions(rotationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * One entry per active subscription (rotation weeks included) with meals
+in the week starting next Sunday in the kitchen's time zone. Dishes
+come from the menu-cycle week those dates fall in.
+
+ * @summary Next week's kitchen and dishes, per active subscription
+ */
+export const getMyNextWeek = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GetMyNextWeek200>(
+      {url: `/me/next-week`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetMyNextWeekQueryKey = () => {
+    return [
+    `/me/next-week`
+    ] as const;
+    }
+
+    
+export const getGetMyNextWeekQueryOptions = <TData = Awaited<ReturnType<typeof getMyNextWeek>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyNextWeek>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyNextWeekQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyNextWeek>>> = ({ signal }) => getMyNextWeek(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyNextWeek>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyNextWeekQueryResult = NonNullable<Awaited<ReturnType<typeof getMyNextWeek>>>
+export type GetMyNextWeekQueryError = UnauthorizedResponse
+
+
+/**
+ * @summary Next week's kitchen and dishes, per active subscription
+ */
+
+export function useGetMyNextWeek<TData = Awaited<ReturnType<typeof getMyNextWeek>>, TError = UnauthorizedResponse>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyNextWeek>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyNextWeekQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * Shown from week 4 until four weeks after the rotation ends, newest first.
+ * @summary End-of-cycle recaps for rotations in or past week 4
+ */
+export const listMyRotationRecaps = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMyRotationRecaps200>(
+      {url: `/me/rotation-recaps`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListMyRotationRecapsQueryKey = () => {
+    return [
+    `/me/rotation-recaps`
+    ] as const;
+    }
+
+    
+export const getListMyRotationRecapsQueryOptions = <TData = Awaited<ReturnType<typeof listMyRotationRecaps>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyRotationRecaps>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyRotationRecapsQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyRotationRecaps>>> = ({ signal }) => listMyRotationRecaps(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyRotationRecaps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyRotationRecapsQueryResult = NonNullable<Awaited<ReturnType<typeof listMyRotationRecaps>>>
+export type ListMyRotationRecapsQueryError = UnauthorizedResponse
+
+
+/**
+ * @summary End-of-cycle recaps for rotations in or past week 4
+ */
+
+export function useListMyRotationRecaps<TData = Awaited<ReturnType<typeof listMyRotationRecaps>>, TError = UnauthorizedResponse>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyRotationRecaps>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyRotationRecapsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

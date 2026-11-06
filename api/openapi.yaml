@@ -1964,6 +1964,45 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /me/next-week:
+    get:
+      tags: [subscriptions]
+      operationId: getMyNextWeek
+      summary: Next week's kitchen and dishes, per active subscription
+      description: |
+        One entry per active subscription (rotation weeks included) with meals
+        in the week starting next Sunday in the kitchen's time zone. Dishes
+        come from the menu-cycle week those dates fall in.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/NextWeekPreview" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /me/rotation-recaps:
+    get:
+      tags: [subscriptions]
+      operationId: listMyRotationRecaps
+      summary: End-of-cycle recaps for rotations in or past week 4
+      description: Shown from week 4 until four weeks after the rotation ends, newest first.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RotationRecap" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /me/addresses/{addressId}:
     patch:
       tags: [me]
@@ -7141,6 +7180,78 @@ components:
             renewed_from_id: { type: [string, "null"], format: uuid }
             renewed_by_id: { type: [string, "null"], format: uuid }
             renewed_by_status: { type: [string, "null"] }
+    PreviewDish:
+      type: object
+      required: [id, name, is_default, chosen]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        name_ar: { type: [string, "null"] }
+        image_url: { type: [string, "null"] }
+        is_default: { type: boolean }
+        chosen: { type: boolean }
+    PreviewMeal:
+      type: object
+      required: [date, weekday, meal_slot, dishes]
+      properties:
+        date: { type: string, format: date }
+        weekday: { type: integer, minimum: 0, maximum: 6, description: 0 is Sunday }
+        meal_slot: { type: string }
+        dishes: { type: array, items: { $ref: "#/components/schemas/PreviewDish" } }
+    NextWeekPreview:
+      type: object
+      required: [subscription_id, branch_id, kitchen_name, cuisines, starts_on, ends_on, menu_week, meals]
+      properties:
+        subscription_id: { type: string, format: uuid }
+        rotation_id: { type: [string, "null"], format: uuid }
+        rotation_week: { type: [integer, "null"] }
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        cover_image_url: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+        kitchen_description: { type: [string, "null"] }
+        kitchen_description_ar: { type: [string, "null"] }
+        starts_on: { type: string, format: date, description: The Sunday the week starts }
+        ends_on: { type: string, format: date }
+        menu_week: { type: integer, minimum: 1, description: Menu-cycle week for these dates }
+        meals: { type: array, items: { $ref: "#/components/schemas/PreviewMeal" } }
+    RecapKitchen:
+      type: object
+      required: [week, branch_id, kitchen_name, cuisines]
+      properties:
+        week: { type: integer, minimum: 1, maximum: 4 }
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        cover_image_url: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+    RotationRecap:
+      type: object
+      required: [rotation_id, rotation_no, starts_on, ends_on, week4_starts_on, ended, kitchens,
+        kitchen_count, cuisine_count, dishes_delivered, days_skipped, renew_path]
+      properties:
+        rotation_id: { type: string, format: uuid }
+        rotation_no: { type: string }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date }
+        week4_starts_on: { type: string, format: date }
+        ended: { type: boolean }
+        kitchens: { type: array, items: { $ref: "#/components/schemas/RecapKitchen" } }
+        kitchen_count: { type: integer }
+        cuisine_count: { type: integer }
+        dishes_delivered: { type: integer }
+        days_skipped: { type: integer }
+        favourite:
+          type: [object, "null"]
+          description: The kitchen the customer rated highest (4+ stars) this cycle.
+          required: [branch_id, kitchen_name, rating]
+          properties:
+            branch_id: { type: string, format: uuid }
+            kitchen_name: { type: string }
+            kitchen_name_ar: { type: [string, "null"] }
+            rating: { type: integer, minimum: 1, maximum: 5 }
+        renew_path: { type: string, description: "/rotations/{id}/renew" }
     MealOption:
       type: object
       required: [id, name, allergens, is_default]
