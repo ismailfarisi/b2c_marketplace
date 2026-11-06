@@ -20,6 +20,9 @@ import {
   deleteAddress,
   describeAddress,
   listAddresses,
+  getMealPreferences,
+  setMealPreferences,
+  type Adventure,
 } from "@/lib/customer-api";
 import { problemFields, problemMessage } from "@/lib/problem";
 
@@ -49,6 +52,15 @@ const COPY = {
     yesRemove: "Yes, remove",
     keep: "Keep",
     notifications: "Notifications",
+    mealPrefs: "Meal preferences",
+    adventure: "How adventurous should your next rotation be?",
+    adventures: { familiar: "Familiar", balanced: "Balanced", surprise: "Surprise me" } as Record<Adventure, string>,
+    adventureNote: {
+      familiar: "New kitchens in cuisines you already eat.",
+      balanced: "A mix of cuisines you know and new ones.",
+      surprise: "Cuisines you haven't had in the last two rotations.",
+    } as Record<Adventure, string>,
+    adventureFailed: "Could not save. Try again.",
     marketingNote:
       "Offers and news. Delivery codes, sign-in codes and order updates are always sent.",
     channel: {
@@ -82,6 +94,15 @@ const COPY = {
     yesRemove: "نعم، أزله",
     keep: "إبقاء",
     notifications: "الإشعارات",
+    mealPrefs: "تفضيلات الوجبات",
+    adventure: "كم تحب المغامرة في تناوبك التالي؟",
+    adventures: { familiar: "مألوف", balanced: "متوازن", surprise: "فاجئني" } as Record<Adventure, string>,
+    adventureNote: {
+      familiar: "مطابخ جديدة من مطابخ تأكلها أصلًا.",
+      balanced: "مزيج من مطابخ تعرفها وأخرى جديدة.",
+      surprise: "مطابخ لم تتذوقها في آخر تناوبين.",
+    } as Record<Adventure, string>,
+    adventureFailed: "تعذر الحفظ. حاول مرة أخرى.",
     marketingNote:
       "العروض والأخبار. نرسل دائمًا رموز التوصيل ورموز الدخول وتحديثات الطلبات.",
     channel: {
@@ -101,6 +122,7 @@ export function AccountSections({ locale }: { locale: Locale }) {
       <ProfileSection locale={locale} />
       <AddressesSection locale={locale} />
       <NotificationsSection locale={locale} />
+      <MealPreferencesSection locale={locale} />
     </div>
   );
 }
@@ -411,6 +433,60 @@ function NotificationsSection({ locale }: { locale: Locale }) {
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  );
+}
+
+const ADVENTURES: Adventure[] = ["familiar", "balanced", "surprise"];
+
+function MealPreferencesSection({ locale }: { locale: Locale }) {
+  const t = COPY[locale];
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["me", "meal-preferences"], queryFn: getMealPreferences });
+  const [error, setError] = useState<string | null>(null);
+  const set = useMutation({
+    mutationFn: (adventure: Adventure) => setMealPreferences({ adventure }),
+    onMutate: (adventure) => {
+      setError(null);
+      qc.setQueryData(["me", "meal-preferences"], { adventure });
+    },
+    onError: (err) => {
+      setError(problemMessage(err, locale) || t.adventureFailed);
+      void q.refetch();
+    },
+  });
+  const current = q.data?.adventure ?? "balanced";
+  return (
+    <section aria-labelledby="ms-meal-prefs-title">
+      <h2 id="ms-meal-prefs-title">{t.mealPrefs}</h2>
+      <p className="ms-sub">{t.adventure}</p>
+      {q.isPending ? null : q.isError ? (
+        <LoadError error={q.error} onRetry={() => q.refetch()} locale={locale} />
+      ) : (
+        <>
+          <div className="ms-chips" role="radiogroup" aria-label={t.adventure}>
+            {ADVENTURES.map((a) => (
+              <button
+                key={a}
+                type="button"
+                role="radio"
+                aria-checked={current === a}
+                className={current === a ? "on" : undefined}
+                disabled={set.isPending}
+                onClick={() => set.mutate(a)}
+              >
+                {t.adventures[a]}
+              </button>
+            ))}
+          </div>
+          <p className="ms-sub">{t.adventureNote[current]}</p>
+          {error && (
+            <small className="ms-bad" role="alert">
+              {error}
+            </small>
+          )}
+        </>
       )}
     </section>
   );

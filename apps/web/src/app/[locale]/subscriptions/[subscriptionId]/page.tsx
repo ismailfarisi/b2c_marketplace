@@ -20,6 +20,9 @@ import {
 import {
   cancelSubscription,
   chooseMeal,
+  clearMyTaste,
+  listMyTastes,
+  setMyTaste,
   getMySubscription,
   pauseSubscription,
   payOrder,
@@ -55,6 +58,10 @@ const COPY = {
     until: (d: string) => `Change until ${d}`,
     skipUntil: (d: string) => `Skip until ${d}`,
     yourPick: "Your pick",
+    notAgain: "Not again",
+    avoided: "Not again — we'll pick the other dish when there is one",
+    undoAvoid: "Undo",
+    tasteFailed: "Could not save. Try again.",
     skip: "Skip this meal",
     skipConfirm:
       "Skip this meal? Skipped meals are not credited. To move days to the end of your cycle, pause instead.",
@@ -139,6 +146,10 @@ const COPY = {
     until: (d: string) => `يمكن التغيير حتى ${d}`,
     skipUntil: (d: string) => `يمكن التخطي حتى ${d}`,
     yourPick: "اختيارك",
+    notAgain: "ليس مرة أخرى",
+    avoided: "ليس مرة أخرى — سنختار الطبق الآخر عندما يتوفر",
+    undoAvoid: "تراجع",
+    tasteFailed: "تعذر الحفظ. حاول مرة أخرى.",
     skip: "تخطي هذه الوجبة",
     skipConfirm:
       "تخطي هذه الوجبة؟ لا يُعوَّض عن الوجبات المتخطاة. لنقل الأيام إلى نهاية دورتك، استخدم الإيقاف المؤقت.",
@@ -701,6 +712,9 @@ function Meal({
         {m.delivery_status && (
           <DeliveryStatus status={m.delivery_status} locale={locale} />
         )}
+        {m.delivery_status === "completed" && chosen && (
+          <NotAgain dishId={chosen} locale={locale} t={t} />
+        )}
         <small className="ms-sub">
           {m.locked
             ? t.locked
@@ -929,5 +943,61 @@ function Cancel({
         {m.isPending ? t.cancelling : t.cancelBtn}
       </button>
     </details>
+  );
+}
+
+/** "Not again" on a dish that was delivered: remembered, and the default moves off it. */
+function NotAgain({ dishId, locale, t }: { dishId: string; locale: Locale; t: Copy }) {
+  const qc = useQueryClient();
+  const tastes = useQuery({ queryKey: ["me", "tastes"], queryFn: listMyTastes });
+  const avoided =
+    tastes.data?.items.some(
+      (x) => x.subject_kind === "dish" && x.subject_id === dishId && x.sentiment === "avoid",
+    ) ?? false;
+  const [error, setError] = useState<string | null>(null);
+  const flip = useMutation({
+    mutationFn: async (on: boolean) => {
+      if (on) await setMyTaste({ subject_kind: "dish", subject_id: dishId, sentiment: "avoid" });
+      else await clearMyTaste("dish", dishId);
+    },
+    onSuccess: async () => {
+      setError(null);
+      await qc.invalidateQueries({ queryKey: ["me", "tastes"] });
+      await qc.invalidateQueries({ queryKey: ["me", "subscription"] });
+    },
+    onError: (err) => setError(problemMessage(err, locale) || t.tasteFailed),
+  });
+  if (tastes.isPending || tastes.isError) return null;
+  return (
+    <span className="ms-taste">
+      {avoided ? (
+        <>
+          <small className="ms-sub">{t.avoided}</small>{" "}
+          <button
+            type="button"
+            className="ms-link"
+            disabled={flip.isPending}
+            onClick={() => flip.mutate(false)}
+          >
+            {t.undoAvoid}
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="ms-link ms-taste-avoid"
+          disabled={flip.isPending}
+          aria-pressed={false}
+          onClick={() => flip.mutate(true)}
+        >
+          {t.notAgain}
+        </button>
+      )}
+      {error && (
+        <small className="ms-bad" role="alert">
+          {error}
+        </small>
+      )}
+    </span>
   );
 }

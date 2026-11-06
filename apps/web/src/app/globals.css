@@ -3498,3 +3498,101 @@ body {
 .ms .ms-support-thread small {
   opacity: 0.7;
 }
+
+/* ── Variety at renewal: proposal, taste memory ─────────────────────────── */
+.ms-taste {
+  margin-block: 6px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ms-taste-on {
+  color: var(--ms-leaf, #276c44);
+  font-weight: 600;
+}
+.ms-taste-avoid {
+  color: var(--ms-muted, #76675b);
+}
+.ms-renew-page h1 {
+  margin-block-end: 4px;
+}
+.ms-adventure {
+  border: 0;
+  padding: 0;
+  margin-block: 12px 16px;
+}
+.ms-adventure legend {
+  font-weight: 600;
+  margin-block-end: 6px;
+}
+.ms-renew-weeks li.ms-renew-slot {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.ms-renew-kitchen,
+.ms-renew-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ms-renew-price {
+  text-align: end;
+}
+.ms-renew-pick {
+  margin-block: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--ms-surface, #fff);
+  border: 1px solid var(--ms-line, #ead9c7);
+}
+.ms-renew-pick h2 {
+  font-size: 1rem;
+  margin-block: 0 8px;
+}
+.ms-renew-eligible {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.ms-renew-eligible .ms-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: start;
+}
+.ms-renew-eligible .ms-option > span:first-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ms-renew-eligible .ms-option:disabled {
+  opacity: 0.5;
+}
+.ms-renew-total {
+  margin-block: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--ms-surface, #fff);
+  border: 1px solid var(--ms-line, #ead9c7);
+}
+.ms-renew-total > p:first-child {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.15rem;
+  margin: 0;
+}
+.ms-renew-total .ms-cta {
+  width: 100%;
+  margin-block-start: 10px;
+}
+.ms-rot-renew {
+  margin: 8px 12px 12px;
+}

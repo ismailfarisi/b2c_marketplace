@@ -37,6 +37,7 @@ const COPY = {
     singles: "Kitchen subscriptions",
     weekShort: (n: number) => `Week ${n}`,
     rotationTitle: "4-kitchen rotation",
+    renewFresh: "Renew with fresh kitchens",
     rotationWeek: (n: number) => `Rotation week ${n}`,
     build: "Build a 4-kitchen rotation",
   },
@@ -53,6 +54,7 @@ const COPY = {
     singles: "اشتراكات المطابخ",
     weekShort: (n: number) => `الأسبوع ${n}`,
     rotationTitle: "تناوب ٤ مطابخ",
+    renewFresh: "جدّد بمطابخ جديدة",
     rotationWeek: (n: number) => `الأسبوع ${n} من التناوب`,
     build: "اختر تناوب ٤ مطابخ",
   },
@@ -143,6 +145,15 @@ export default function MySubscriptionsPage({
                     );
                   })}
                 </ol>
+                {!r.renewed_by_id &&
+                  (r.status === "active" || r.status === "completed") && (
+                    <Link
+                      className="ms-cta ms-cta-quiet ms-rot-renew"
+                      href={`/${locale}/rotations/${r.id}/renew`}
+                    >
+                      {t.renewFresh}
+                    </Link>
+                  )}
               </li>
             ))}
           </ul>
