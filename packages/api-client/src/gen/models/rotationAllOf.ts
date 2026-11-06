@@ -35,4 +35,6 @@ export type RotationAllOf = {
   renewed_from_id?: RotationAllOfRenewedFromId;
   renewed_by_id?: RotationAllOfRenewedById;
   renewed_by_status?: RotationAllOfRenewedByStatus;
+  /** Renewals propose fresh kitchens instead of the same four. */
+  refresh_on_renew?: boolean;
 };

@@ -1683,9 +1683,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [auto]
+              description: At least one of auto and refresh_on_renew.
               properties:
                 auto: { type: boolean }
+                refresh_on_renew:
+                  type: boolean
+                  description: Renewals propose fresh kitchens instead of the same four.
       responses:
         "204": { description: Updated }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1868,13 +1871,28 @@ paths:
     post:
       tags: [subscriptions]
       operationId: renewRotation
-      summary: Start the next rotation with the same four kitchens
+      summary: Start the next rotation
       description: >
         Starts the day after this rotation ends (or tomorrow). When the two run
         back to back, the kitchen that cooked the last week does not cook the
-        first. Pending payment; pay with the rotation payment-intent call.
+        first. The body may name four plans (the edited renewal proposal),
+        checked exactly like a new rotation; without a body the same four
+        kitchens come back. Pending payment; pay with the rotation
+        payment-intent call.
       parameters:
         - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan_ids:
+                  type: array
+                  minItems: 4
+                  maxItems: 4
+                  items: { type: string, format: uuid }
       responses:
         "201":
           description: Created
@@ -1963,6 +1981,112 @@ paths:
               schema: { $ref: "#/components/schemas/Rotation" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Variety at renewal: proposal, taste memory, adventure setting ──────────
+  /me/rotations/{rotationId}/renewal-proposal:
+    get:
+      tags: [subscriptions]
+      operationId: getRenewalProposal
+      summary: The four kitchens proposed for renewing a rotation
+      description: >
+        Keeps up to two favourites from this rotation (hearted kitchens first,
+        then the customer's own highest-rated), fills the rest with kitchens not
+        in it that cover the same address, days and meals, are not avoided,
+        ranked by rating with cuisine variety per the adventure setting. Every
+        eligible kitchen is listed too, so any of the four can be swapped.
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RenewalProposal" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Already renewed, unpaid or not renewable
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /me/tastes:
+    get:
+      tags: [me]
+      operationId: listMyTastes
+      summary: Kitchens and dishes the customer hearted or marked "not again"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Taste" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [me]
+      operationId: setMyTaste
+      summary: Heart or mark "not again" a kitchen or dish
+      description: One mark per subject; marking again with the other sentiment flips it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TasteInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Taste" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /me/tastes/{kind}/{subjectId}:
+    delete:
+      tags: [me]
+      operationId: clearMyTaste
+      summary: Forget a heart or "not again"
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string, enum: [kitchen, dish] } }
+        - { name: subjectId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Forgotten (or never marked) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /me/meal-preferences:
+    get:
+      tags: [me]
+      operationId: getMealPreferences
+      summary: The customer's meal preferences
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MealPreferences" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [me]
+      operationId: setMealPreferences
+      summary: Change the adventure setting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MealPreferences" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MealPreferences" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /me/addresses/{addressId}:
     patch:
@@ -7141,6 +7265,84 @@ components:
             renewed_from_id: { type: [string, "null"], format: uuid }
             renewed_by_id: { type: [string, "null"], format: uuid }
             renewed_by_status: { type: [string, "null"] }
+            refresh_on_renew:
+              type: boolean
+              description: Renewals propose fresh kitchens instead of the same four.
+    # ── Variety at renewal: proposal, taste memory, adventure setting ──────────
+    ProposalKitchen:
+      type: object
+      required: [branch_id, plan_id, kitchen_name, cuisines, rating_count, week_price_minor,
+                 meal_price_minor, currency, in_current, favourite, own_rating, reason]
+      properties:
+        branch_id: { type: string, format: uuid }
+        plan_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+        rating: { type: [number, "null"] }
+        rating_count: { type: integer }
+        week_price_minor:
+          type: integer
+          format: int64
+          description: One rotation week of this rotation's days and meals, tax in.
+        meal_price_minor:
+          type: integer
+          format: int64
+          description: week_price_minor over the meals in a week.
+        currency: { type: string }
+        in_current: { type: boolean, description: Cooks in the rotation being renewed. }
+        favourite: { type: boolean, description: The customer hearted this kitchen. }
+        own_rating: { type: integer, description: The customer's own rating, 0 when none. }
+        reason:
+          type: string
+          description: Why it is proposed; empty on an eligible kitchen that is not.
+          enum: ["", loved, top_rated, kept, new_cuisine, familiar_cuisine, new_kitchen]
+        reason_cuisine: { type: string, description: The cuisine the reason refers to. }
+    RenewalProposal:
+      type: object
+      required: [rotation_id, start_date, adventure, refresh_on_renew, kitchens, eligible,
+                 amount_minor, previous_amount_minor, currency, meals_per_week]
+      properties:
+        rotation_id: { type: string, format: uuid }
+        start_date: { type: string, format: date }
+        adventure: { type: string, enum: [familiar, balanced, surprise] }
+        refresh_on_renew: { type: boolean }
+        kitchens:
+          type: array
+          description: The four proposed, favourites first.
+          items: { $ref: "#/components/schemas/ProposalKitchen" }
+        eligible:
+          type: array
+          description: Every kitchen that can be swapped in, the current ones included.
+          items: { $ref: "#/components/schemas/ProposalKitchen" }
+        amount_minor: { type: integer, format: int64 }
+        previous_amount_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        meals_per_week: { type: integer }
+    TasteInput:
+      type: object
+      required: [subject_kind, subject_id, sentiment]
+      properties:
+        subject_kind: { type: string, enum: [kitchen, dish] }
+        subject_id: { type: string, format: uuid }
+        sentiment: { type: string, enum: [favourite, avoid] }
+    Taste:
+      allOf:
+        - $ref: "#/components/schemas/TasteInput"
+        - type: object
+          required: [updated_at]
+          properties:
+            updated_at: { type: string, format: date-time }
+    MealPreferences:
+      type: object
+      required: [adventure]
+      properties:
+        adventure:
+          type: string
+          enum: [familiar, balanced, surprise]
+          description: >
+            familiar: new kitchens in cuisines already eaten or hearted;
+            surprise: cuisines not eaten in the last two cycles; balanced: a mix.
     MealOption:
       type: object
       required: [id, name, allergens, is_default]

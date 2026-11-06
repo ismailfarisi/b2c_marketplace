@@ -46,7 +46,9 @@ import type {
   PauseSubscriptionBody,
   PreviewSubscriptionBody,
   Problem,
+  RenewRotationBody,
   RenewSubscription201,
+  RenewalProposal,
   ResumeSubscription200,
   Rotation,
   RotationInput,
@@ -1176,18 +1178,21 @@ export const useSetRotationRenewal = <TError = UnauthorizedResponse | NotFoundRe
       return useMutation(mutationOptions);
     }
     /**
- * Starts the day after this rotation ends (or tomorrow). When the two run back to back, the kitchen that cooked the last week does not cook the first. Pending payment; pay with the rotation payment-intent call.
+ * Starts the day after this rotation ends (or tomorrow). When the two run back to back, the kitchen that cooked the last week does not cook the first. The body may name four plans (the edited renewal proposal), checked exactly like a new rotation; without a body the same four kitchens come back. Pending payment; pay with the rotation payment-intent call.
 
- * @summary Start the next rotation with the same four kitchens
+ * @summary Start the next rotation
  */
 export const renewRotation = (
     rotationId: string,
+    renewRotationBody?: RenewRotationBody,
  signal?: AbortSignal
 ) => {
       
       
       return apiFetch<Rotation>(
-      {url: `/rotations/${rotationId}/renew`, method: 'POST', signal
+      {url: `/rotations/${rotationId}/renew`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: renewRotationBody, signal
     },
       );
     }
@@ -1195,8 +1200,8 @@ export const renewRotation = (
 
 
 export const getRenewRotationMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renewRotation>>, TError,{rotationId: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof renewRotation>>, TError,{rotationId: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renewRotation>>, TError,{rotationId: string;data: RenewRotationBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof renewRotation>>, TError,{rotationId: string;data: RenewRotationBody}, TContext> => {
 
 const mutationKey = ['renewRotation'];
 const {mutation: mutationOptions} = options ?
@@ -1208,10 +1213,10 @@ const {mutation: mutationOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renewRotation>>, {rotationId: string}> = (props) => {
-          const {rotationId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renewRotation>>, {rotationId: string;data: RenewRotationBody}> = (props) => {
+          const {rotationId,data} = props ?? {};
 
-          return  renewRotation(rotationId,)
+          return  renewRotation(rotationId,data,)
         }
 
         
@@ -1220,18 +1225,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type RenewRotationMutationResult = NonNullable<Awaited<ReturnType<typeof renewRotation>>>
-    
+    export type RenewRotationMutationBody = RenewRotationBody
     export type RenewRotationMutationError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse
 
     /**
- * @summary Start the next rotation with the same four kitchens
+ * @summary Start the next rotation
  */
 export const useRenewRotation = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renewRotation>>, TError,{rotationId: string}, TContext>, }
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renewRotation>>, TError,{rotationId: string;data: RenewRotationBody}, TContext>, }
  ): UseMutationResult<
         Awaited<ReturnType<typeof renewRotation>>,
         TError,
-        {rotationId: string},
+        {rotationId: string;data: RenewRotationBody},
         TContext
       > => {
 
@@ -1435,6 +1440,76 @@ export function useGetMyRotation<TData = Awaited<ReturnType<typeof getMyRotation
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMyRotationQueryOptions(rotationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * Keeps up to two favourites from this rotation (hearted kitchens first, then the customer's own highest-rated), fills the rest with kitchens not in it that cover the same address, days and meals, are not avoided, ranked by rating with cuisine variety per the adventure setting. Every eligible kitchen is listed too, so any of the four can be swapped.
+
+ * @summary The four kitchens proposed for renewing a rotation
+ */
+export const getRenewalProposal = (
+    rotationId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<RenewalProposal>(
+      {url: `/me/rotations/${rotationId}/renewal-proposal`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetRenewalProposalQueryKey = (rotationId?: string,) => {
+    return [
+    `/me/rotations/${rotationId}/renewal-proposal`
+    ] as const;
+    }
+
+    
+export const getGetRenewalProposalQueryOptions = <TData = Awaited<ReturnType<typeof getRenewalProposal>>, TError = UnauthorizedResponse | NotFoundResponse | Problem>(rotationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRenewalProposal>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRenewalProposalQueryKey(rotationId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRenewalProposal>>> = ({ signal }) => getRenewalProposal(rotationId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(rotationId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRenewalProposal>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRenewalProposalQueryResult = NonNullable<Awaited<ReturnType<typeof getRenewalProposal>>>
+export type GetRenewalProposalQueryError = UnauthorizedResponse | NotFoundResponse | Problem
+
+
+/**
+ * @summary The four kitchens proposed for renewing a rotation
+ */
+
+export function useGetRenewalProposal<TData = Awaited<ReturnType<typeof getRenewalProposal>>, TError = UnauthorizedResponse | NotFoundResponse | Problem>(
+ rotationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRenewalProposal>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRenewalProposalQueryOptions(rotationId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

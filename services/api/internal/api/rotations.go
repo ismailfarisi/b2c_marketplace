@@ -180,32 +180,66 @@ func (h *RotationHandlers) SetRenewal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Auto *bool `json:"auto"`
+		Auto    *bool `json:"auto"`
+		Refresh *bool `json:"refresh_on_renew"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
-	if body.Auto == nil {
+	if body.Auto == nil && body.Refresh == nil {
 		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
-			Field: "auto", Code: "required", Message: "auto is required"}}})
+			Field: "auto", Code: "required", Message: "auto or refresh_on_renew is required"}}})
 		return
 	}
-	if err := h.Service.SetRotationRenewal(r.Context(), userID, id, *body.Auto); err != nil {
-		httpx.WriteProblem(w, r, err)
-		return
+	if body.Auto != nil {
+		if err := h.Service.SetRotationRenewal(r.Context(), userID, id, *body.Auto); err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+	}
+	if body.Refresh != nil {
+		if err := h.Service.SetRotationRefresh(r.Context(), userID, id, *body.Refresh); err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Renew answers POST /rotations/{rotationId}/renew: the next rotation with the
-// same four kitchens, pending payment.
+// Proposal answers GET /me/rotations/{rotationId}/renewal-proposal: the next
+// four kitchens suggested for the renewal and everything they can be swapped with.
+func (h *RotationHandlers) Proposal(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := rotationTarget(w, r)
+	if !ok {
+		return
+	}
+	p, err := h.Service.RenewalProposal(r.Context(), userID, id, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", p)
+}
+
+// Renew answers POST /rotations/{rotationId}/renew: the next rotation, pending
+// payment. The body may name the four plans (an edited proposal); without one
+// the same four kitchens come back.
 func (h *RotationHandlers) Renew(w http.ResponseWriter, r *http.Request) {
 	userID, id, ok := rotationTarget(w, r)
 	if !ok {
 		return
 	}
-	rot, err := h.Service.RenewRotation(r.Context(), userID, id, time.Now())
+	var body struct {
+		PlanIDs []uuid.UUID `json:"plan_ids"`
+	}
+	if r.ContentLength != 0 {
+		if err := httpx.DecodeJSON(r, &body); err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+	}
+	rot, err := h.Service.RenewRotation(r.Context(), userID, id, time.Now(), subscriptions.RenewOptions{PlanIDs: body.PlanIDs})
 	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return

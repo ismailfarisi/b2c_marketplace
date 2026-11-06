@@ -47,6 +47,7 @@ type Handlers struct {
 	Meals         *MealsHandlers
 	Addresses     *AddressHandlers
 	Rotations     *RotationHandlers
+	Taste         *TasteHandlers
 	// Company is office lunch accounts. Nil-safe like the rest.
 	Company *CompanyHandlers
 
