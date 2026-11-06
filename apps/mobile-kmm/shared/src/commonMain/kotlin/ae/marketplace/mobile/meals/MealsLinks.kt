@@ -4,6 +4,8 @@ enum class MealsLinkPage {
     HOME, KITCHEN, MINE, SUBSCRIPTION, ROTATION,
     /** One rotation subscription (`/rotations/{id}`). */
     ROTATION_DETAIL,
+    /** /rotations/{id}/renew: the renewal screen with the proposed kitchens. */
+    ROTATION_RENEW,
     /** Help: the ticket list, or one ticket when [MealsLink.id] is set. Web-only today. */
     SUPPORT,
     /** A merchandised collection (`/collections/{slug}`). */
@@ -34,7 +36,11 @@ object MealsLinks {
             null -> MealsLink(MealsLinkPage.HOME)
             "kitchens" -> id?.let { MealsLink(MealsLinkPage.KITCHEN, it) } ?: MealsLink(MealsLinkPage.HOME)
             "subscriptions" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.SUBSCRIPTION, id)
-            "rotations" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.ROTATION_DETAIL, id)
+            "rotations" -> when {
+                id == null -> MealsLink(MealsLinkPage.MINE)
+                parts.getOrNull(2) == "renew" -> MealsLink(MealsLinkPage.ROTATION_RENEW, id)
+                else -> MealsLink(MealsLinkPage.ROTATION_DETAIL, id)
+            }
             "support" -> MealsLink(MealsLinkPage.SUPPORT, id)
             "collections" -> id?.let { MealsLink(MealsLinkPage.COLLECTION, it) } ?: MealsLink(MealsLinkPage.HOME)
             "rotation" -> MealsLink(MealsLinkPage.ROTATION)

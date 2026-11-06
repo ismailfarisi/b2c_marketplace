@@ -37,9 +37,13 @@ import type {
   Address,
   AddressInput,
   ListAddresses200,
+  ListMyTastes200,
+  MealPreferences,
   NotFoundResponse,
   Problem,
   RegisterDeviceBody,
+  Taste,
+  TasteInput,
   UnauthorizedResponse,
   UnprocessableEntityResponse,
   UpdateAddressBody,
@@ -451,6 +455,331 @@ export const useCreateAddress = <TError = UnauthorizedResponse | UnprocessableEn
       > => {
 
       const mutationOptions = getCreateAddressMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * @summary Kitchens and dishes the customer hearted or marked "not again"
+ */
+export const listMyTastes = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<ListMyTastes200>(
+      {url: `/me/tastes`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListMyTastesQueryKey = () => {
+    return [
+    `/me/tastes`
+    ] as const;
+    }
+
+    
+export const getListMyTastesQueryOptions = <TData = Awaited<ReturnType<typeof listMyTastes>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTastes>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyTastesQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyTastes>>> = ({ signal }) => listMyTastes(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyTastes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyTastesQueryResult = NonNullable<Awaited<ReturnType<typeof listMyTastes>>>
+export type ListMyTastesQueryError = UnauthorizedResponse
+
+
+/**
+ * @summary Kitchens and dishes the customer hearted or marked "not again"
+ */
+
+export function useListMyTastes<TData = Awaited<ReturnType<typeof listMyTastes>>, TError = UnauthorizedResponse>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTastes>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyTastesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * One mark per subject; marking again with the other sentiment flips it.
+ * @summary Heart or mark "not again" a kitchen or dish
+ */
+export const setMyTaste = (
+    tasteInput: TasteInput,
+ ) => {
+      
+      
+      return apiFetch<Taste>(
+      {url: `/me/tastes`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: tasteInput
+    },
+      );
+    }
+  
+
+
+export const getSetMyTasteMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMyTaste>>, TError,{data: TasteInput}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof setMyTaste>>, TError,{data: TasteInput}, TContext> => {
+
+const mutationKey = ['setMyTaste'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setMyTaste>>, {data: TasteInput}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setMyTaste(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetMyTasteMutationResult = NonNullable<Awaited<ReturnType<typeof setMyTaste>>>
+    export type SetMyTasteMutationBody = TasteInput
+    export type SetMyTasteMutationError = UnauthorizedResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary Heart or mark "not again" a kitchen or dish
+ */
+export const useSetMyTaste = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMyTaste>>, TError,{data: TasteInput}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setMyTaste>>,
+        TError,
+        {data: TasteInput},
+        TContext
+      > => {
+
+      const mutationOptions = getSetMyTasteMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * @summary Forget a heart or "not again"
+ */
+export const clearMyTaste = (
+    kind: 'kitchen' | 'dish',
+    subjectId: string,
+ ) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/me/tastes/${kind}/${subjectId}`, method: 'DELETE'
+    },
+      );
+    }
+  
+
+
+export const getClearMyTasteMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearMyTaste>>, TError,{kind: 'kitchen' | 'dish';subjectId: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof clearMyTaste>>, TError,{kind: 'kitchen' | 'dish';subjectId: string}, TContext> => {
+
+const mutationKey = ['clearMyTaste'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearMyTaste>>, {kind: 'kitchen' | 'dish';subjectId: string}> = (props) => {
+          const {kind,subjectId} = props ?? {};
+
+          return  clearMyTaste(kind,subjectId,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearMyTasteMutationResult = NonNullable<Awaited<ReturnType<typeof clearMyTaste>>>
+    
+    export type ClearMyTasteMutationError = UnauthorizedResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary Forget a heart or "not again"
+ */
+export const useClearMyTaste = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearMyTaste>>, TError,{kind: 'kitchen' | 'dish';subjectId: string}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearMyTaste>>,
+        TError,
+        {kind: 'kitchen' | 'dish';subjectId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getClearMyTasteMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * @summary The customer's meal preferences
+ */
+export const getMealPreferences = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<MealPreferences>(
+      {url: `/me/meal-preferences`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetMealPreferencesQueryKey = () => {
+    return [
+    `/me/meal-preferences`
+    ] as const;
+    }
+
+    
+export const getGetMealPreferencesQueryOptions = <TData = Awaited<ReturnType<typeof getMealPreferences>>, TError = UnauthorizedResponse>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMealPreferences>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMealPreferencesQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMealPreferences>>> = ({ signal }) => getMealPreferences(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMealPreferences>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMealPreferencesQueryResult = NonNullable<Awaited<ReturnType<typeof getMealPreferences>>>
+export type GetMealPreferencesQueryError = UnauthorizedResponse
+
+
+/**
+ * @summary The customer's meal preferences
+ */
+
+export function useGetMealPreferences<TData = Awaited<ReturnType<typeof getMealPreferences>>, TError = UnauthorizedResponse>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMealPreferences>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMealPreferencesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Change the adventure setting
+ */
+export const setMealPreferences = (
+    mealPreferences: MealPreferences,
+ ) => {
+      
+      
+      return apiFetch<MealPreferences>(
+      {url: `/me/meal-preferences`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: mealPreferences
+    },
+      );
+    }
+  
+
+
+export const getSetMealPreferencesMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMealPreferences>>, TError,{data: MealPreferences}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof setMealPreferences>>, TError,{data: MealPreferences}, TContext> => {
+
+const mutationKey = ['setMealPreferences'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setMealPreferences>>, {data: MealPreferences}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setMealPreferences(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetMealPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof setMealPreferences>>>
+    export type SetMealPreferencesMutationBody = MealPreferences
+    export type SetMealPreferencesMutationError = UnauthorizedResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary Change the adventure setting
+ */
+export const useSetMealPreferences = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMealPreferences>>, TError,{data: MealPreferences}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setMealPreferences>>,
+        TError,
+        {data: MealPreferences},
+        TContext
+      > => {
+
+      const mutationOptions = getSetMealPreferencesMutationOptions(options);
 
       return useMutation(mutationOptions);
     }

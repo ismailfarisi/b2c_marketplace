@@ -157,6 +157,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/rotations/{rotationId}/renew", h.Rotations.Renew)
 			r.Get("/me/rotations", h.Rotations.Mine)
 			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
+			r.Get("/me/rotations/{rotationId}/renewal-proposal", h.Rotations.Proposal)
+		}
+		if h.Taste != nil {
+			r.Get("/me/tastes", h.Taste.List)
+			r.Put("/me/tastes", h.Taste.Set)
+			r.Delete("/me/tastes/{kind}/{subjectId}", h.Taste.Clear)
+			r.Get("/me/meal-preferences", h.Taste.Preferences)
+			r.Put("/me/meal-preferences", h.Taste.SetPreferences)
 		}
 		if h.Meals != nil && h.Meals.Promos != nil {
 			r.Get("/me/referrals", h.Meals.MyReferrals)

@@ -57,6 +57,7 @@ import (
 	"github.com/marketplace/api/internal/modules/reviews"
 	"github.com/marketplace/api/internal/modules/subscriptions"
 	"github.com/marketplace/api/internal/modules/support"
+	"github.com/marketplace/api/internal/modules/taste"
 	"github.com/marketplace/api/internal/modules/tax"
 	"github.com/marketplace/api/internal/modules/timesignal"
 	"github.com/marketplace/api/internal/modules/trust"
@@ -228,6 +229,7 @@ func run() error {
 	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc, Promos: promoSvc, Reviews: reviewsSvc}
 	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}
 	handlers.Rotations = &api.RotationHandlers{Service: handlers.Subscriptions.Service, Payments: paymentsSvc}
+	handlers.Taste = &api.TasteHandlers{Taste: taste.NewService(pool)}
 	companySvc := company.NewService(pool, handlers.Subscriptions.Service, paymentsSvc)
 	handlers.Company = &api.CompanyHandlers{Company: companySvc}
 	handlers.DriverOps = &api.DriverHandlers{Driver: driverSvc, Dispatch: dispatchSvc, Console: consoleSvc}

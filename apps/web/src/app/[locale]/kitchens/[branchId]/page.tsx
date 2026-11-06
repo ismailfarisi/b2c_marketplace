@@ -1,14 +1,14 @@
 "use client";
 
 import { ApiError } from "@marketplace/api-client";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useEffect, useState, type KeyboardEvent } from "react";
 
 import { KitchenCover } from "@/components/meals/cover";
 import { DishPhoto, shortMoney } from "@/components/meals/food";
 import { useCustomerPoint } from "@/components/meals/location";
-import { CustomerShell } from "@/components/meals/shell";
+import { CustomerShell, signInHref, useHasSession } from "@/components/meals/shell";
 import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
 import {
   RatingBadge,
@@ -25,11 +25,20 @@ import type { MenuChoice, MenuSlot } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
 import { allergenLine } from "@/components/meals/allergens";
 import { LoadError } from "@/components/load-error";
+import { clearMyTaste, listMyTastes, setMyTaste, type Sentiment } from "@/lib/customer-api";
+import { problemMessage } from "@/lib/problem";
 
 const COPY = {
   en: {
     back: "All kitchens",
     deliversYes: "Delivers to your location",
+    heart: "Love it",
+    hearted: "Loved — kept first when your rotation renews",
+    notAgain: "Not again",
+    avoidedKitchen: "Not again — left out of your suggestions",
+    undoTaste: "Undo",
+    tasteSignIn: "Sign in to remember what you love",
+    tasteFailed: "Could not save. Try again.",
     deliversNo: "Does not deliver to your location",
     windows: "Delivery windows",
     menu: "Weekly menu",
@@ -93,6 +102,13 @@ const COPY = {
   ar: {
     back: "كل المطابخ",
     deliversYes: "يوصل إلى موقعك",
+    heart: "أحبه",
+    hearted: "أحببته — يبقى أولًا عند تجديد تناوبك",
+    notAgain: "ليس مرة أخرى",
+    avoidedKitchen: "ليس مرة أخرى — خارج اقتراحاتك",
+    undoTaste: "تراجع",
+    tasteSignIn: "سجّل الدخول لنتذكر ما تحبه",
+    tasteFailed: "تعذر الحفظ. حاول مرة أخرى.",
     deliversNo: "لا يوصل إلى موقعك",
     windows: "أوقات التوصيل",
     menu: "القائمة الأسبوعية",
@@ -513,6 +529,7 @@ export default function KitchenPage({
               </div>
             )}
             <h1 dir="auto">{name}</h1>
+            <KitchenTaste branchId={k.branch_id} locale={locale} t={t} />
             <p className="ms-khero-sub" dir="auto">
               {(locale === "ar" && k.vendor_name_ar) || k.vendor_name}
               {k.city && ` · ${k.city}`}
@@ -765,5 +782,73 @@ function mealsPerCycle(p: {
   return Math.max(
     1,
     Math.round((p.cycle_days * p.days_per_week) / 7) * p.meals_per_day,
+  );
+}
+
+/** Heart or "not again" on the kitchen: remembered for renewal proposals. Signed out it points at sign-in. */
+function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" | "ar"; t: Copy }) {
+  const hasSession = useHasSession();
+  const qc = useQueryClient();
+  const tastes = useQuery({
+    queryKey: ["me", "tastes"],
+    queryFn: listMyTastes,
+    enabled: hasSession,
+  });
+  const mark = tastes.data?.items.find(
+    (x) => x.subject_kind === "kitchen" && x.subject_id === branchId,
+  )?.sentiment;
+  const [error, setError] = useState<string | null>(null);
+  const flip = useMutation({
+    mutationFn: async (s: Sentiment | null) => {
+      if (s) await setMyTaste({ subject_kind: "kitchen", subject_id: branchId, sentiment: s });
+      else await clearMyTaste("kitchen", branchId);
+    },
+    onSuccess: async () => {
+      setError(null);
+      await qc.invalidateQueries({ queryKey: ["me", "tastes"] });
+    },
+    onError: (err) => setError(problemMessage(err, locale) || t.tasteFailed),
+  });
+  if (!hasSession) {
+    return (
+      <p className="ms-taste ms-sub">
+        <Link href={signInHref(locale, `/${locale}/kitchens/${branchId}`)}>♡ {t.tasteSignIn}</Link>
+      </p>
+    );
+  }
+  if (tastes.isPending || tastes.isError) return null;
+  const busy = flip.isPending;
+  return (
+    <div className="ms-taste ms-chips" role="group" aria-label={t.heart}>
+      {mark === "favourite" ? (
+        <>
+          <span className="ms-taste-on">♥ {t.hearted}</span>
+          <button type="button" className="ms-link" disabled={busy} onClick={() => flip.mutate(null)}>
+            {t.undoTaste}
+          </button>
+        </>
+      ) : mark === "avoid" ? (
+        <>
+          <span className="ms-taste-on">⊘ {t.avoidedKitchen}</span>
+          <button type="button" className="ms-link" disabled={busy} onClick={() => flip.mutate(null)}>
+            {t.undoTaste}
+          </button>
+        </>
+      ) : (
+        <>
+          <button type="button" aria-pressed={false} disabled={busy} onClick={() => flip.mutate("favourite")}>
+            ♡ {t.heart}
+          </button>
+          <button type="button" aria-pressed={false} disabled={busy} onClick={() => flip.mutate("avoid")}>
+            {t.notAgain}
+          </button>
+        </>
+      )}
+      {error && (
+        <small className="ms-bad" role="alert">
+          {error}
+        </small>
+      )}
+    </div>
   );
 }

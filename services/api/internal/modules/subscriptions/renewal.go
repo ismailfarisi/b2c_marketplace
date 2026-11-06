@@ -401,11 +401,13 @@ func rotationRenewable(status string) bool {
 	return status == "active" || status == "completed"
 }
 
-// RenewRotation starts the next rotation with the same four kitchens, address,
-// days and meals. It begins the day after this one ends (or tomorrow), and when
-// the two run back to back the kitchen that cooked the last week does not cook
-// the first. The new rotation is pending payment and paid in one go.
-func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now time.Time) (Rotation, error) {
+// RenewRotation starts the next rotation at the same address, days and meals.
+// It begins the day after this one ends (or tomorrow), and when the two run
+// back to back the kitchen that cooked the last week does not cook the first.
+// The kitchens are the customer's edited proposal when given, the price-capped
+// proposal when the worker renews a rotation with refresh_on_renew, and the
+// same four otherwise. The new rotation is pending payment and paid in one go.
+func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now time.Time, opts RenewOptions) (Rotation, error) {
 	r, err := s.MyRotation(ctx, userID, id)
 	if err != nil {
 		return Rotation{}, err
@@ -419,35 +421,47 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 	if !rotationRenewable(r.Status) || len(r.Weeks) != RotationKitchens {
 		return Rotation{}, httpx.Coded(httpx.ErrConflict, "not_renewable", "This rotation cannot be renewed.")
 	}
-	var addressID uuid.UUID
-	var tz string
-	if err := s.pool.QueryRow(ctx, `
-		SELECT r.address_id, s.timezone FROM meal_rotations r
-		  JOIN subscriptions s ON s.rotation_id = r.id
-		 WHERE r.id = $1 ORDER BY s.rotation_week LIMIT 1`, id).Scan(&addressID, &tz); err != nil {
-		return Rotation{}, fmt.Errorf("subscriptions: rotation address: %w", err)
-	}
-	loc, lerr := time.LoadLocation(tz)
-	if lerr != nil {
-		loc = time.UTC
-	}
-	end, err := time.ParseInLocation("2006-01-02", r.EndDate, loc)
+	addressID, loc, err := s.rotationContext(ctx, id)
 	if err != nil {
-		return Rotation{}, fmt.Errorf("subscriptions: rotation end: %w", err)
+		return Rotation{}, err
 	}
-	start := end.AddDate(0, 0, 1)
-	notFirst := r.Weeks[RotationKitchens-1].BranchID
-	if tomorrow := dayIn(now, loc).AddDate(0, 0, 1); start.Before(tomorrow) {
-		start, notFirst = tomorrow, uuid.Nil
+	start, notFirst, err := renewalWindow(r, now, loc)
+	if err != nil {
+		return Rotation{}, err
 	}
-	plans := make([]uuid.UUID, 0, RotationKitchens)
-	for _, w := range r.Weeks {
-		plans = append(plans, w.PlanID)
+	plans, err := renewalPlans(r, opts, func() ([]uuid.UUID, error) {
+		ids, err := s.cappedProposalPlans(ctx, r, userID, addressID, start)
+		if err != nil {
+			// The proposal is a nicety; the renewal itself must still happen.
+			slog.ErrorContext(ctx, "renewal proposal failed, keeping kitchens", "rotation_id", id, "error", err)
+			return nil, nil
+		}
+		return ids, nil
+	})
+	if err != nil {
+		return Rotation{}, err
 	}
 	return s.createRotation(ctx, RotationInput{
 		UserID: userID, AddressID: addressID, PlanIDs: plans, StartDate: start,
-		Weekdays: r.Weekdays, Slots: r.MealSlots,
+		Weekdays: r.Weekdays, Slots: r.MealSlots, RefreshOnRenew: r.RefreshOnRenew,
 	}, uuid.NullUUID{UUID: id, Valid: true}, notFirst)
+}
+
+// SetRotationRefresh turns fresh kitchens at renewal on or off for a rotation.
+func (s *Service) SetRotationRefresh(ctx context.Context, userID, id uuid.UUID, refresh bool) error {
+	r, err := s.MyRotation(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if r.Status != "active" && r.Status != "pending_payment" {
+		return httpx.Coded(httpx.ErrConflict, "not_live", "Only a running rotation can change renewal.")
+	}
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE meal_rotations SET refresh_on_renew = $3, updated_at = now()
+		 WHERE id = $1 AND user_id = $2`, id, userID, refresh); err != nil {
+		return fmt.Errorf("subscriptions: rotation refresh: %w", err)
+	}
+	return nil
 }
 
 // SetRotationRenewal turns automatic renewal of a rotation on or off. Off also
@@ -500,7 +514,7 @@ func (s *Service) OpenRotationRenewals(ctx context.Context, now time.Time, batch
 	rows.Close()
 	opened := 0
 	for _, d := range list {
-		if _, err := s.RenewRotation(ctx, d.user, d.id, now); err != nil {
+		if _, err := s.RenewRotation(ctx, d.user, d.id, now, RenewOptions{Refresh: true}); err != nil {
 			slog.ErrorContext(ctx, "rotation renewal failed", "rotation_id", d.id, "error", err)
 			continue
 		}

@@ -39,6 +39,15 @@ class AccountApi(private val client: HttpClient) {
 
     suspend fun preferences(): PreferencePage = client.get("me/notification-preferences").body()
 
+    /** familiar, balanced or surprise: how adventurous renewal proposals are. */
+    suspend fun mealPreferences(): MealPreferences = client.get("me/meal-preferences").body()
+
+    suspend fun setMealPreferences(adventure: String): MealPreferences =
+        client.put("me/meal-preferences") {
+            contentType(ContentType.Application.Json)
+            setBody(MealPreferences(adventure))
+        }.body()
+
     suspend fun setPreference(category: String, channel: String, allowed: Boolean) {
         client.put("me/notification-preferences") {
             contentType(ContentType.Application.Json)
@@ -72,6 +81,9 @@ data class NotificationPreference(
 
 @Serializable
 data class PreferencePage(val items: List<NotificationPreference> = emptyList())
+
+@Serializable
+data class MealPreferences(val adventure: String = "balanced")
 
 @Serializable
 private data class DefaultBody(@SerialName("is_default") val isDefault: Boolean)

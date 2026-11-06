@@ -31,6 +31,9 @@ data class AccountUiState(
     val addressError: Failure? = null,
     /** Per channel: why a switch went back (422 not_optional, offline…). */
     val preferenceErrors: Map<String, Failure> = emptyMap(),
+    /** familiar, balanced or surprise; null while unknown (the load is best effort). */
+    val adventure: String? = null,
+    val adventureError: Failure? = null,
 )
 
 /**
@@ -54,8 +57,9 @@ class AccountViewModel(private val api: AccountApi) : ViewModel() {
                 // The switches are secondary: a failure here leaves them out
                 // rather than hiding the profile.
                 val prefs = runCatching { api.preferences().items }.getOrDefault(emptyList())
+                val adventure = runCatching { api.mealPreferences().adventure }.getOrNull()
                 _state.update {
-                    it.copy(profile = profile, addresses = addresses, preferences = prefs, loading = false, loaded = true)
+                    it.copy(profile = profile, addresses = addresses, preferences = prefs, adventure = adventure, loading = false, loaded = true)
                 }
             } catch (e: Throwable) {
                 _state.update { it.copy(loading = false, error = e.toFailure()) }
@@ -126,6 +130,19 @@ class AccountViewModel(private val api: AccountApi) : ViewModel() {
                 val failure = e.toFailure()
                 put(!allowed)
                 _state.update { it.copy(preferenceErrors = it.preferenceErrors + (pref.channel to failure)) }
+            }
+        }
+    }
+
+    /** Changes the adventure setting; shows the new value at once and puts it back if saving fails. */
+    fun setAdventure(adventure: String) {
+        val before = _state.value.adventure
+        _state.update { it.copy(adventure = adventure, adventureError = null) }
+        viewModelScope.launch {
+            try {
+                api.setMealPreferences(adventure)
+            } catch (e: Throwable) {
+                _state.update { it.copy(adventure = before, adventureError = e.toFailure()) }
             }
         }
     }

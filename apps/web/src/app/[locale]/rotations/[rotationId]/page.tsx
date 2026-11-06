@@ -48,6 +48,10 @@ const COPY = {
     cancelling: "Cancelling…",
     renewal: "Renewal",
     autoRenew: "Renew automatically",
+    refresh: "Fresh kitchens at renewal",
+    refreshNote:
+      "Your next rotation keeps up to two kitchens you loved and brings in new ones that deliver to you, within 10% of this rotation's price. Off: the same four kitchens again.",
+    renewFresh: "Choose next kitchens",
     autoNote:
       "Your next 4 weeks, with the same kitchens, are set up 3 days before this rotation ends for you to pay with one tap. The kitchen that cooks the last week won't cook the first week of the next rotation.",
     renew: "Renew rotation",
@@ -83,6 +87,10 @@ const COPY = {
     cancelling: "جارٍ الإلغاء…",
     renewal: "التجديد",
     autoRenew: "التجديد التلقائي",
+    refresh: "مطابخ جديدة عند التجديد",
+    refreshNote:
+      "يحتفظ تناوبك التالي بمطبخين على الأكثر أحببتهما ويضيف مطابخ جديدة توصّل إليك، في حدود ١٠٪ من سعر هذا التناوب. عند الإيقاف: نفس المطابخ الأربعة.",
+    renewFresh: "اختر المطابخ التالية",
     autoNote:
       "تُجهَّز الأسابيع الأربعة التالية بنفس المطابخ قبل انتهاء هذا التناوب بثلاثة أيام لتدفعها بلمسة واحدة. المطبخ الذي يطبخ الأسبوع الأخير لن يطبخ الأسبوع الأول من التناوب التالي.",
     renew: "جدّد التناوب",
@@ -285,7 +293,8 @@ function Renewal({
   const router = useRouter();
   const renewKey = useIdempotencyKey();
   const toggle = useMutation({
-    mutationFn: (auto: boolean) => setRotationRenewal(r.id, auto),
+    mutationFn: (data: { auto?: boolean; refresh_on_renew?: boolean }) =>
+      setRotationRenewal(r.id, data),
     onSuccess: onDone,
     // The checkbox shows the server's value again once this reloads.
     onError: () => onDone(),
@@ -331,19 +340,35 @@ function Renewal({
               disabled={toggle.isPending}
               onChange={(e) => {
                 renew.reset();
-                toggle.mutate(e.target.checked);
+                toggle.mutate({ auto: e.target.checked });
               }}
             />
             <span>{t.autoRenew}</span>
           </label>
           <p className="ms-sub">{t.autoNote}</p>
+          <label className="ms-toggle">
+            <input
+              type="checkbox"
+              checked={r.refresh_on_renew}
+              disabled={toggle.isPending}
+              onChange={(e) => {
+                renew.reset();
+                toggle.mutate({ refresh_on_renew: e.target.checked });
+              }}
+            />
+            <span>{t.refresh}</span>
+          </label>
+          <p className="ms-sub">{t.refreshNote}</p>
         </>
       )}
       {canRenew && (
         <div className="ms-renew">
+          <Link className="ms-cta" href={`/${locale}/rotations/${r.id}/renew`}>
+            {t.renewFresh}
+          </Link>
           <button
             type="button"
-            className="ms-cta"
+            className="ms-cta ms-cta-quiet"
             disabled={renew.isPending}
             onClick={() => {
               toggle.reset();

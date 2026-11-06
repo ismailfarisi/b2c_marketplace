@@ -21,6 +21,7 @@ struct AccountSections: View {
             profile
             addresses
             notifications
+            mealPreferences
             language
         }
     }
@@ -157,6 +158,43 @@ struct AccountSections: View {
                 .listRowBackground(Palette.ink)
             }
         } header: { heading("account_notifications") }
+    }
+
+    /// The adventure setting: how far renewal proposals stray from the kitchens the person knows.
+    @ViewBuilder
+    private var mealPreferences: some View {
+        if let current = state.adventure {
+            Section {
+                Text("account_adventure")
+                    .font(.system(size: TypeScale.secondary))
+                    .foregroundStyle(Palette.textMuted)
+                    .listRowBackground(Palette.ink)
+                HStack(spacing: Space.small) {
+                    ForEach(["familiar", "balanced", "surprise"], id: \.self) { a in
+                        Button { vm.setAdventure(adventure: a) } label: {
+                            Text(LocalizedStringKey("meals_adventure_" + a))
+                                .font(.system(size: TypeScale.secondary, weight: current == a ? .semibold : .regular))
+                                .foregroundStyle(current == a ? Color.white : Palette.text)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(current == a ? Palette.accent : Palette.surface, in: Capsule())
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .listRowBackground(Palette.ink)
+                Text(LocalizedStringKey("meals_adventure_" + current + "_note"))
+                    .font(.system(size: TypeScale.secondary))
+                    .foregroundStyle(Palette.textMuted)
+                    .listRowBackground(Palette.ink)
+                if let failure = state.adventureError {
+                    Text(failure.words)
+                        .font(.system(size: TypeScale.secondary))
+                        .foregroundStyle(Palette.bad)
+                        .listRowBackground(Palette.ink)
+                }
+            } header: { heading("account_meal_prefs") }
+        }
     }
 
     /// iOS keeps each app's language on its Settings page.

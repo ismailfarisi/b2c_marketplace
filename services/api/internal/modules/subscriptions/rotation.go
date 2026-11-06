@@ -28,6 +28,8 @@ type RotationInput struct {
 	Weekdays  []int
 	Slots     []string
 	Promo     promo.Ref
+	// RefreshOnRenew: renewals take the proposal's fresh kitchens.
+	RefreshOnRenew bool
 }
 
 // RotationWeek is one week of a rotation and the kitchen the platform gave it.
@@ -74,6 +76,8 @@ type Rotation struct {
 	// The rotation that renews this one, and its status.
 	RenewedByID     *uuid.UUID `json:"renewed_by_id"`
 	RenewedByStatus *string    `json:"renewed_by_status"`
+	// RefreshOnRenew: a renewal proposes fresh kitchens instead of the same four.
+	RefreshOnRenew bool `json:"refresh_on_renew"`
 	RotationQuote
 }
 
@@ -346,6 +350,7 @@ func (s *Service) PreviewRotation(ctx context.Context, in RotationInput) (Rotati
 // week's money and meals belong to the kitchen that cooks it. All four start
 // pending payment and are paid together.
 func (s *Service) CreateRotation(ctx context.Context, in RotationInput) (Rotation, error) {
+	in.RefreshOnRenew = true
 	return s.createRotation(ctx, in, uuid.NullUUID{}, uuid.Nil)
 }
 
@@ -392,10 +397,10 @@ func (s *Service) createRotation(ctx context.Context, in RotationInput, renewedF
 				INSERT INTO meal_rotations (
 					id, rotation_no, user_id, address_id, start_date, end_date,
 					meal_slots, delivery_weekdays, amount_minor, currency,
-					auto_renew, renewed_from_id
-				) VALUES ($1, generate_rotation_no(), $2, $3, $4, $5, $6, $7, $8, $9, true, $10)`,
+					auto_renew, renewed_from_id, refresh_on_renew
+				) VALUES ($1, generate_rotation_no(), $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11)`,
 				id, in.UserID, in.AddressID, start, start.AddDate(0, 0, 7*RotationKitchens-1),
-				in.Slots, weekdays, quote.AmountMinor, quote.Currency, from)
+				in.Slots, weekdays, quote.AmountMinor, quote.Currency, from, in.RefreshOnRenew)
 			if err == nil {
 				break
 			}
@@ -463,7 +468,7 @@ func (s *Service) createRotation(ctx context.Context, in RotationInput, renewedF
 const rotationSelect = `
 	SELECT r.id, r.rotation_no, r.status, r.meal_slots, r.delivery_weekdays,
 	       r.created_at, r.start_date, r.end_date, r.amount_minor, r.currency,
-	       r.auto_renew, r.renewed_from_id, n.id, n.status
+	       r.auto_renew, r.renewed_from_id, n.id, n.status, r.refresh_on_renew
 	  FROM meal_rotations r
 	  LEFT JOIN LATERAL (
 	       SELECT id, status FROM meal_rotations
@@ -476,7 +481,7 @@ func scanRotation(row pgx.Row) (Rotation, error) {
 	var start, end time.Time
 	if err := row.Scan(&r.ID, &r.RotationNo, &r.Status, &r.MealSlots, &weekdays,
 		&r.CreatedAt, &start, &end, &r.AmountMinor, &r.Currency,
-		&r.AutoRenew, &r.RenewedFromID, &r.RenewedByID, &r.RenewedByStatus); err != nil {
+		&r.AutoRenew, &r.RenewedFromID, &r.RenewedByID, &r.RenewedByStatus, &r.RefreshOnRenew); err != nil {
 		return r, err
 	}
 	for _, d := range weekdays {

@@ -334,6 +334,8 @@ export interface Rotation extends RotationQuote {
   renewed_from_id: string | null;
   renewed_by_id: string | null;
   renewed_by_status: string | null;
+  /** Renewals propose fresh kitchens instead of the same four. */
+  refresh_on_renew: boolean;
 }
 
 /** Which kitchen the platform would give each week, and the total. */
@@ -388,21 +390,112 @@ export const writeReview = (
     data,
   });
 
-export const setRotationRenewal = (id: string, auto: boolean) =>
+export const setRotationRenewal = (
+  id: string,
+  data: { auto?: boolean; refresh_on_renew?: boolean },
+) =>
   apiFetch<void>({
     url: `/rotations/${id}/renewal`,
     method: "PUT",
-    data: { auto },
+    data,
   });
 
-/** The next rotation with the same four kitchens, pending payment. */
-export const renewRotation = (id: string, opts?: CallOptions) =>
+/**
+ * The next rotation, pending payment: the four plans given (an edited
+ * proposal) or, without them, the same four kitchens.
+ */
+export const renewRotation = (
+  id: string,
+  opts?: CallOptions & { planIds?: string[] },
+) =>
   apiFetch<Rotation>({
     url: `/rotations/${id}/renew`,
     method: "POST",
-    data: {},
+    data: opts?.planIds ? { plan_ids: opts.planIds } : {},
     headers: opts?.headers,
   });
+
+// ── Variety at renewal: proposal, taste memory, adventure setting ──────────
+
+export type ProposalReason =
+  | ""
+  | "loved"
+  | "top_rated"
+  | "kept"
+  | "new_cuisine"
+  | "familiar_cuisine"
+  | "new_kitchen";
+
+export interface ProposalKitchen {
+  branch_id: string;
+  plan_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  cuisines: string[];
+  rating: number | null;
+  rating_count: number;
+  week_price_minor: number;
+  meal_price_minor: number;
+  currency: string;
+  in_current: boolean;
+  favourite: boolean;
+  own_rating: number;
+  reason: ProposalReason;
+  reason_cuisine?: string;
+}
+
+export type Adventure = "familiar" | "balanced" | "surprise";
+
+export interface RenewalProposal {
+  rotation_id: string;
+  start_date: string;
+  adventure: Adventure;
+  refresh_on_renew: boolean;
+  kitchens: ProposalKitchen[];
+  eligible: ProposalKitchen[];
+  amount_minor: number;
+  previous_amount_minor: number;
+  currency: string;
+  meals_per_week: number;
+}
+
+export const getRenewalProposal = (id: string) =>
+  apiFetch<RenewalProposal>({
+    url: `/me/rotations/${id}/renewal-proposal`,
+    method: "GET",
+  });
+
+export type TasteKind = "kitchen" | "dish";
+export type Sentiment = "favourite" | "avoid";
+
+export interface Taste {
+  subject_kind: TasteKind;
+  subject_id: string;
+  sentiment: Sentiment;
+  updated_at: string;
+}
+
+export const listMyTastes = () =>
+  apiFetch<{ items: Taste[] }>({ url: "/me/tastes", method: "GET" });
+
+export const setMyTaste = (data: {
+  subject_kind: TasteKind;
+  subject_id: string;
+  sentiment: Sentiment;
+}) => apiFetch<Taste>({ url: "/me/tastes", method: "PUT", data });
+
+export const clearMyTaste = (kind: TasteKind, subjectId: string) =>
+  apiFetch<void>({ url: `/me/tastes/${kind}/${subjectId}`, method: "DELETE" });
+
+export interface MealPreferences {
+  adventure: Adventure;
+}
+
+export const getMealPreferences = () =>
+  apiFetch<MealPreferences>({ url: "/me/meal-preferences", method: "GET" });
+
+export const setMealPreferences = (data: MealPreferences) =>
+  apiFetch<MealPreferences>({ url: "/me/meal-preferences", method: "PUT", data });
 
 // ---- referrals ------------------------------------------------------------
 

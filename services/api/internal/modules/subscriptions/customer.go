@@ -299,6 +299,9 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := avoidDishes(ctx, tx, live.UserID, menu); err != nil {
+		return nil, nil, err
+	}
 	windows, err := windowsByID(ctx, tx, live.BranchID)
 	if err != nil {
 		return nil, nil, err
@@ -474,6 +477,60 @@ func branchMenu(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (cycleMenu, 
 		}
 	}
 	return menu, nil
+}
+
+// avoidDishes moves the default off a dish the customer marked "not again"
+// when the day has another dish to stand in; a lone avoided dish stays the
+// default. The kitchen's prep sheet makes the same call.
+func avoidDishes(ctx context.Context, tx pgx.Tx, userID uuid.UUID, menu map[menuKey][]Dish) error {
+	rows, err := tx.Query(ctx, `
+		SELECT subject_id FROM meal_tastes
+		 WHERE user_id = $1 AND subject_kind = 'dish' AND sentiment = 'avoid'`, userID)
+	if err != nil {
+		return fmt.Errorf("subscriptions: avoided dishes: %w", err)
+	}
+	defer rows.Close()
+	avoided := map[uuid.UUID]bool{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("subscriptions: scan avoided dish: %w", err)
+		}
+		avoided[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(avoided) == 0 {
+		return nil
+	}
+	for k, ds := range menu {
+		preferDefault(ds, avoided)
+		menu[k] = ds
+	}
+	return nil
+}
+
+// preferDefault makes the first non-avoided dish the default when the current
+// default is avoided. The list stays in menu order.
+func preferDefault(ds []Dish, avoided map[uuid.UUID]bool) {
+	cur := -1
+	for i, d := range ds {
+		if d.IsDefault {
+			cur = i
+			break
+		}
+	}
+	if cur < 0 || !avoided[ds[cur].ID] {
+		return
+	}
+	for i, d := range ds {
+		if !avoided[d.ID] {
+			ds[cur].IsDefault = false
+			ds[i].IsDefault = true
+			return
+		}
+	}
 }
 
 type window struct {

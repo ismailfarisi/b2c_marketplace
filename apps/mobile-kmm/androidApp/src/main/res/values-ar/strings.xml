@@ -629,4 +629,42 @@
     <string name="meals_this_week">هذا الأسبوع</string>
     <string name="meals_next_week">الأسبوع القادم</string>
     <string name="meals_in_weeks">بعد %1$d أسابيع</string>
+
+    <!-- Variety at renewal: proposal, taste memory, adventure setting -->
+    <string name="meals_renew_fresh">اختر المطابخ التالية</string>
+    <string name="meals_renew_title">جدّد بمطابخ جديدة</string>
+    <string name="meals_renew_lede">أسابيعك الأربعة التالية. أبقينا ما تحبه ووجدنا مطابخ جديدة توصّل إليك في نفس الأيام والوجبات.</string>
+    <string name="meals_renew_starts">يبدأ %1$s</string>
+    <string name="meals_refresh_on_renew">مطابخ جديدة عند التجديد</string>
+    <string name="meals_refresh_note">يحتفظ بمطبخين على الأكثر أحببتهما ويضيف مطابخ جديدة، في حدود ١٠٪ من سعر هذا التناوب. عند الإيقاف: نفس المطابخ الأربعة.</string>
+    <string name="meals_swap">بدّل</string>
+    <string name="meals_swap_done">تم</string>
+    <string name="meals_pick_for_week">اختر مطبخًا للأسبوع %1$d</string>
+    <string name="meals_in_rotation">في تناوبك الحالي</string>
+    <string name="meals_reason_loved">أحببته</string>
+    <string name="meals_reason_top_rated">أعلى تقييم منك</string>
+    <string name="meals_reason_kept">من تناوبك الحالي</string>
+    <string name="meals_reason_new_kitchen">مطبخ جديد</string>
+    <string name="meals_reason_new_cuisine">جديد: طبخ %1$s بيتي</string>
+    <string name="meals_reason_familiar_cuisine">مزيد من %1$s، مطبخ جديد</string>
+    <string name="meals_adventure">كم تحب المغامرة؟</string>
+    <string name="meals_adventure_familiar">مألوف</string>
+    <string name="meals_adventure_balanced">متوازن</string>
+    <string name="meals_adventure_surprise">فاجئني</string>
+    <string name="meals_adventure_familiar_note">مطابخ جديدة من مطابخ تأكلها أصلًا.</string>
+    <string name="meals_adventure_balanced_note">مزيج من مطابخ تعرفها وأخرى جديدة.</string>
+    <string name="meals_adventure_surprise_note">مطابخ لم تتذوقها في آخر تناوبين.</string>
+    <string name="meals_last_rotation">التناوب السابق: %1$s</string>
+    <string name="meals_confirm_pay">أكّد وادفع %1$s</string>
+    <string name="meals_renew_repeats">لا توجد مطابخ كافية هنا لأربعة مطابخ مختلفة؛ تتكرر بعض الأسابيع بمطبخ من هذا التناوب.</string>
+    <string name="meals_per_week">/ أسبوع</string>
+    <string name="meals_per_meal">%1$s للوجبة</string>
+    <string name="meals_heart">أحبه</string>
+    <string name="meals_hearted">أحببته — يبقى أولًا عند تجديد تناوبك</string>
+    <string name="meals_not_again">ليس مرة أخرى</string>
+    <string name="meals_kitchen_avoided">ليس مرة أخرى — خارج اقتراحاتك</string>
+    <string name="meals_dish_avoided">ليس مرة أخرى — سنختار الطبق الآخر عندما يتوفر</string>
+    <string name="meals_undo">تراجع</string>
+    <string name="account_meal_prefs">تفضيلات الوجبات</string>
+    <string name="account_adventure">كم تحب المغامرة في تناوبك التالي؟</string>
 </resources>

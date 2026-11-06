@@ -12,7 +12,9 @@ import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealPlan
 import ae.marketplace.mobile.model.MyReview
 import ae.marketplace.mobile.model.MySubscription
+import ae.marketplace.mobile.model.ProposalKitchen
 import ae.marketplace.mobile.model.PromoOffer
+import ae.marketplace.mobile.model.RenewalProposal
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationInput
 import ae.marketplace.mobile.model.ScheduleRule
@@ -110,7 +112,38 @@ data class KitchenUiState(
     val offers: List<PromoOffer> = emptyList(),
     val loading: Boolean = false,
     val error: Failure? = null,
+    /** The viewer's mark on this kitchen: favourite, avoid, or null (none, or signed out). */
+    val taste: String? = null,
+    val tasteBusy: Boolean = false,
+    val tasteError: Failure? = null,
 )
+
+/** The renewal screen: the proposed four kitchens, edited, and the pay step. */
+data class RenewUiState(
+    val rotationId: String = "",
+    val proposal: RenewalProposal? = null,
+    /** Plan ids in the four slots, as the customer edited them. */
+    val picks: List<String> = emptyList(),
+    val loading: Boolean = false,
+    val error: Failure? = null,
+    /** Renewing, paying or changing the adventure setting. */
+    val busy: Boolean = false,
+    val actionError: Failure? = null,
+    val paymentUrl: String? = null,
+    /** Set once the next rotation exists; a retried pay pays it instead of renewing again. */
+    val nextId: String? = null,
+    val idempotencyKey: String = newIdempotencyKey(),
+    val paid: Boolean = false,
+) {
+    /** The four kitchens as picked, with the proposal's reason where it proposed them. */
+    val chosen: List<ProposalKitchen>
+        get() {
+            val p = proposal ?: return emptyList()
+            return picks.mapNotNull { id -> p.kitchens.firstOrNull { it.planId == id } ?: p.eligible.firstOrNull { it.planId == id } }
+        }
+    val totalMinor: Long get() = chosen.sumOf { it.weekPriceMinor }
+    val currency: String get() = proposal?.currency ?: "AED"
+}
 
 data class CheckoutUiState(
     val kitchen: KitchenDetail? = null,
@@ -166,6 +199,8 @@ data class RotationUiState(
     val paymentUrl: String? = null,
     /** Set once the rotation is created; a retried payment pays this one instead of creating another. */
     val rotationId: String? = null,
+    /** The customer's adventure setting, shown in the builder; null until loaded (or signed out). */
+    val adventure: String? = null,
     /** Sent with the create, one per draft, so a create retried after a timeout is not a second rotation. */
     val idempotencyKey: String = newIdempotencyKey(),
     val candidatesLoaded: Boolean = false,
@@ -206,6 +241,11 @@ data class SubscriptionUiState(
     /** Set after a resume: the day deliveries restart. */
     val resumesOn: String? = null,
     val review: ReviewUiState = ReviewUiState(),
+    /** Dishes the customer marked "not again"; the default moves off them. */
+    val avoidedDishes: Set<String> = emptySet(),
+    /** Dish marks being saved. */
+    val tasteBusy: Set<String> = emptySet(),
+    val tasteError: Failure? = null,
 )
 
 data class ReviewUiState(
@@ -235,6 +275,8 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     private val _rotation = MutableStateFlow(RotationUiState())
     val rotation: StateFlow<RotationUiState> = _rotation.asStateFlow()
+    private val _renew = MutableStateFlow(RenewUiState())
+    val renew: StateFlow<RenewUiState> = _renew.asStateFlow()
 
     private val _mine = MutableStateFlow(MyMealsUiState())
     val mine: StateFlow<MyMealsUiState> = _mine.asStateFlow()
@@ -399,9 +441,152 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 return@launch
             }
             launch { loadOffers(branchId) }
+            launch { loadKitchenTaste(branchId) }
             loadReviews(branchId)
         }
     }
+
+    // ── Taste memory ────────────────────────────────────────────────────────
+
+    // A mark is an extra: signed out or offline it is simply not shown.
+    private suspend fun loadKitchenTaste(branchId: String) {
+        val mark = runCatching { api.tastes().items }.getOrNull()
+            ?.firstOrNull { it.subjectKind == "kitchen" && it.subjectId == branchId }?.sentiment
+        _kitchen.update { if (it.branchId == branchId) it.copy(taste = mark) else it }
+    }
+
+    /** Hearts the open kitchen, marks it "not again", or (null) forgets the mark. Flips at once, back on failure. */
+    fun setKitchenTaste(sentiment: String?) {
+        val s = _kitchen.value
+        val branchId = s.branchId.ifEmpty { return }
+        if (s.tasteBusy) return
+        val before = s.taste
+        _kitchen.update { it.copy(taste = sentiment, tasteBusy = true, tasteError = null) }
+        viewModelScope.launch {
+            try {
+                if (sentiment == null) api.clearTaste("kitchen", branchId) else api.setTaste("kitchen", branchId, sentiment)
+                _kitchen.update { if (it.branchId == branchId) it.copy(tasteBusy = false) else it }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _kitchen.update { if (it.branchId == branchId) it.copy(taste = before, tasteBusy = false, tasteError = e.toFailure()) else it }
+            }
+        }
+    }
+
+    private suspend fun loadAvoidedDishes(subscriptionId: String) {
+        val avoided = runCatching { api.tastes().items }.getOrNull()
+            ?.filter { it.subjectKind == "dish" && it.sentiment == "avoid" }?.map { it.subjectId }?.toSet() ?: return
+        _sub.update { if (it.id == subscriptionId) it.copy(avoidedDishes = avoided) else it }
+    }
+
+    /** "Not again" on a delivered dish (or taking it back). Flips at once, back on failure. */
+    fun setDishAvoided(dishId: String, avoid: Boolean) {
+        val subId = _sub.value.id ?: return
+        if (dishId in _sub.value.tasteBusy) return
+        fun put(on: Boolean) = _sub.update { it.copy(avoidedDishes = if (on) it.avoidedDishes + dishId else it.avoidedDishes - dishId) }
+        put(avoid)
+        _sub.update { it.copy(tasteBusy = it.tasteBusy + dishId, tasteError = null) }
+        viewModelScope.launch {
+            try {
+                if (avoid) api.setTaste("dish", dishId, "avoid") else api.clearTaste("dish", dishId)
+                // The default dish moves off an avoided one: show the meals again.
+                reloadSubscription(subId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                put(!avoid)
+                _sub.update { it.copy(tasteError = e.toFailure()) }
+            } finally {
+                _sub.update { it.copy(tasteBusy = it.tasteBusy - dishId) }
+            }
+        }
+    }
+
+    fun dismissTasteError() {
+        _sub.update { it.copy(tasteError = null) }
+        _kitchen.update { it.copy(tasteError = null) }
+    }
+
+    // ── Renewal with fresh kitchens ─────────────────────────────────────────
+
+    /** Opens the renewal screen for a rotation: loads the proposal, picks start as proposed. */
+    fun openRenewal(id: String) {
+        _renew.value = RenewUiState(rotationId = id, loading = true)
+        viewModelScope.launch { loadProposal(id) }
+    }
+
+    fun retryRenewal() {
+        val id = _renew.value.rotationId.ifEmpty { return }
+        _renew.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch { loadProposal(id) }
+    }
+
+    private suspend fun loadProposal(id: String) {
+        try {
+            val p = api.renewalProposal(id)
+            _renew.update {
+                if (it.rotationId != id) it
+                else it.copy(proposal = p, picks = p.kitchens.map { k -> k.planId }, loading = false, error = null)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            _renew.update { if (it.rotationId == id) it.copy(loading = false, error = e.toFailure()) else it }
+        }
+    }
+
+    /** Puts another eligible kitchen in one of the four slots. A kitchen already picked stays where it is. */
+    fun swapKitchen(slot: Int, planId: String) {
+        _renew.update { s ->
+            if (slot !in s.picks.indices || planId in s.picks || s.nextId != null) s
+            else s.copy(picks = s.picks.toMutableList().also { it[slot] = planId }, actionError = null)
+        }
+    }
+
+    /** Changes the adventure setting and asks for a fresh proposal. */
+    fun setRenewalAdventure(adventure: String) {
+        val id = _renew.value.rotationId.ifEmpty { return }
+        if (_renew.value.busy) return
+        _renew.update { it.copy(busy = true, actionError = null) }
+        viewModelScope.launch {
+            try {
+                api.setMealPreferences(adventure)
+                _rotation.update { it.copy(adventure = adventure) }
+                loadProposal(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _renew.update { it.copy(actionError = e.toFailure()) }
+            } finally {
+                _renew.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    /** Renews with the four picked plans and pays; a retry after a failed payment pays the same rotation. */
+    fun confirmRenewal() {
+        val s = _renew.value
+        if (s.busy || s.picks.size != ROTATION_KITCHENS) return
+        _renew.update { it.copy(busy = true, actionError = null) }
+        viewModelScope.launch {
+            try {
+                val nextId = s.nextId ?: api.renewRotation(s.rotationId, s.picks, s.idempotencyKey).id
+                _renew.update { it.copy(nextId = nextId) }
+                _mine.update { it.copy(loaded = false) }
+                val intent = api.payRotation(nextId)
+                _renew.update { it.copy(busy = false, paymentUrl = intent.redirectUrl, paid = true) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _renew.update { it.copy(busy = false, actionError = e.toFailure()) }
+            }
+        }
+    }
+
+    fun renewalPaymentOpened() = _renew.update { it.copy(paymentUrl = null) }
+
+    fun dismissRenewalError() = _renew.update { it.copy(actionError = null) }
 
     fun retryReviews() {
         val branchId = _kitchen.value.branchId.ifEmpty { return }
@@ -637,6 +822,10 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         val at = _store.value.at ?: return
         _rotation.value = RotationUiState(busy = true, startDate = earliestStart(48).toString())
         viewModelScope.launch {
+            launch {
+                val a = runCatching { api.mealPreferences().adventure }.getOrNull()
+                _rotation.update { it.copy(adventure = a) }
+            }
             try {
                 val kitchens = api.kitchens(at, rotation = true).items
                 // One kitchen that fails to load is left out rather than failing the list.
@@ -668,6 +857,21 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
             }
         }
         loadAddresses()
+    }
+
+    /** The adventure setting from the builder; the builder itself is unaffected, renewals follow it. */
+    fun setBuilderAdventure(adventure: String) {
+        val before = _rotation.value.adventure
+        _rotation.update { it.copy(adventure = adventure) }
+        viewModelScope.launch {
+            try {
+                api.setMealPreferences(adventure)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                _rotation.update { it.copy(adventure = before) }
+            }
+        }
     }
 
     fun togglePick(branchId: String) {
@@ -783,6 +987,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     private fun reloadSubscription(id: String) {
         viewModelScope.launch {
+            launch { loadAvoidedDishes(id) }
             try {
                 val s = api.subscription(id)
                 _sub.update { it.copy(subscription = s, loading = false, busy = false, error = null) }
@@ -901,6 +1106,17 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     fun cancelRotation(id: String) = rotationAction(id) { api.cancelRotation(id, "customer_request") }
 
+    private fun setLocalRefresh(id: String, on: Boolean) = _mine.update { s ->
+        s.copy(rotations = s.rotations.map { if (it.id == id) it.copy(refreshOnRenew = on) else it })
+    }
+
+    /** Fresh kitchens at renewal, on or off. Flips the switch now and puts it back if the server refuses. */
+    fun setRotationRefresh(id: String, on: Boolean) {
+        if (id in _mine.value.busy) return
+        setLocalRefresh(id, on)
+        rotationAction(id, onFailure = { setLocalRefresh(id, !on) }) { api.setRotationRefresh(id, on) }
+    }
+
     /** Flips the switch now and puts it back if the server refuses. */
     fun setRotationRenewal(id: String, auto: Boolean) {
         if (id in _mine.value.busy) return
@@ -925,6 +1141,9 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     fun forget() {
         _mine.value = MyMealsUiState()
         _sub.value = SubscriptionUiState()
+        _renew.value = RenewUiState()
+        _kitchen.update { it.copy(taste = null, tasteError = null) }
+        _rotation.update { it.copy(adventure = null) }
         _checkout.update { it.copy(addresses = emptyList(), addressId = null) }
     }
 

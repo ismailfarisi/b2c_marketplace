@@ -19,8 +19,7 @@ type PrepLine struct {
 }
 
 // PrepSheet counts the day's subscription meals by dish: the customer's pick
-// where they made one, otherwise the default dish for that date's cycle week
-// and weekday.
+// where they made one, otherwise that weekday's default dish.
 func (s *Service) PrepSheet(ctx context.Context, branchID uuid.UUID, date time.Time) ([]PrepLine, error) {
 	rows, err := s.pool.Query(ctx, `
 		WITH f AS (
@@ -29,25 +28,32 @@ func (s *Service) PrepSheet(ctx context.Context, branchID uuid.UUID, date time.T
 		      FROM fulfillments f
 		     WHERE f.branch_id = $1 AND f.scheduled_date = $2
 		       AND f.subscription_id IS NOT NULL AND f.status <> 'cancelled'
-		), def AS (
-		    SELECT DISTINCT ON (di.meal_slot) di.meal_slot, di.menu_item_id
-		      FROM (SELECT id, weeks, anchor_date FROM menu_cycles
-		             WHERE branch_id = $1 AND is_active ORDER BY created_at LIMIT 1) c
-		      JOIN menu_cycle_days cd ON cd.cycle_id = c.id
-		      JOIN menu_day_items di ON di.cycle_day_id = cd.id
-		      JOIN menu_items m ON m.id = di.menu_item_id AND m.is_active
-		     WHERE cd.week_no = `+cycleWeekSQL("c.anchor_date", "c.weeks", "$2::date")+`
-		       AND cd.weekday = extract(dow FROM $2::date)::int
-		     ORDER BY di.meal_slot, di.is_default DESC, di.sort_order
 		)
 		SELECT f.slot, m.id, COALESCE(sms.item_name_snapshot, m.name, ''),
 		       COALESCE(sms.item_name_ar_snapshot, m.name_ar),
 		       count(*)::int, count(*) FILTER (WHERE sms.chosen_by = 'customer')::int
 		  FROM f
+		  JOIN subscriptions sub ON sub.id = f.subscription_id
 		  LEFT JOIN subscription_meal_selections sms
 		         ON sms.subscription_id = f.subscription_id
 		        AND sms.service_date = f.scheduled_date AND sms.meal_slot = f.slot
-		  LEFT JOIN def ON def.meal_slot = f.slot
+		  -- The day's default dish for this customer: a dish they marked "not
+		  -- again" gives way to the alternative when the day has one.
+		  LEFT JOIN LATERAL (
+		    SELECT di.menu_item_id
+		      FROM (SELECT id, weeks, anchor_date FROM menu_cycles
+		             WHERE branch_id = $1 AND is_active ORDER BY created_at LIMIT 1) c
+		      JOIN menu_cycle_days cd ON cd.cycle_id = c.id
+		      JOIN menu_day_items di ON di.cycle_day_id = cd.id AND di.meal_slot = f.slot
+		      JOIN menu_items mi ON mi.id = di.menu_item_id AND mi.is_active
+		     WHERE cd.week_no = `+cycleWeekSQL("c.anchor_date", "c.weeks", "$2::date")+`
+		       AND cd.weekday = extract(dow FROM $2::date)::int
+		     ORDER BY EXISTS (SELECT 1 FROM meal_tastes t
+		                       WHERE t.user_id = sub.user_id AND t.subject_kind = 'dish'
+		                         AND t.subject_id = di.menu_item_id AND t.sentiment = 'avoid'),
+		              di.is_default DESC, di.sort_order
+		     LIMIT 1
+		  ) def ON true
 		  LEFT JOIN menu_items m ON m.id = COALESCE(sms.menu_item_id, def.menu_item_id)
 		 GROUP BY 1, 2, 3, 4
 		 ORDER BY 1, 5 DESC, 3`, branchID, date)

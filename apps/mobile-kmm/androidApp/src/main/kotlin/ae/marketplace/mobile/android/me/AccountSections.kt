@@ -22,6 +22,8 @@ import android.os.LocaleList
 import android.provider.Settings
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -73,6 +75,7 @@ internal fun AccountSections(vm: AccountViewModel) {
                 Profile(vm)
                 Addresses(vm)
                 Notifications(vm)
+                MealPreferences(vm)
                 Language()
             }
         }
@@ -291,6 +294,48 @@ private fun PreferenceRow(p: NotificationPreference, error: Failure?, onChange: 
         )
     }
     error?.let { Text(it.words(), color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge)) }
+}
+
+/** The adventure setting: how far renewal proposals stray from the kitchens the person knows. */
+@Composable
+private fun MealPreferences(vm: AccountViewModel) {
+    val s by vm.state.collectAsState()
+    val current = s.adventure ?: return
+    Heading(stringResource(R.string.account_meal_prefs))
+    Text(
+        stringResource(R.string.account_adventure),
+        color = Palette.TextMuted, fontSize = Type.Secondary,
+        modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Tight),
+    )
+    Row(Modifier.padding(horizontal = Space.Edge), horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+        listOf("familiar" to R.string.meals_adventure_familiar, "balanced" to R.string.meals_adventure_balanced, "surprise" to R.string.meals_adventure_surprise)
+            .forEach { (value, label) ->
+                val on = current == value
+                Text(
+                    stringResource(label),
+                    color = if (on) Palette.Surface else Palette.Text,
+                    fontSize = Type.Secondary,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (on) Palette.Accent else Palette.Surface)
+                        .clickable(role = Role.RadioButton) { vm.setAdventure(value) }
+                        .padding(horizontal = 14.dp, vertical = 9.dp),
+                )
+            }
+    }
+    Text(
+        stringResource(
+            when (current) {
+                "familiar" -> R.string.meals_adventure_familiar_note
+                "surprise" -> R.string.meals_adventure_surprise_note
+                else -> R.string.meals_adventure_balanced_note
+            },
+        ),
+        color = Palette.TextMuted, fontSize = Type.Secondary,
+        modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Tight),
+    )
+    s.adventureError?.let { Text(it.words(), color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge)) }
 }
 
 /** Android 13+ per-app language; older versions follow the phone's language. */

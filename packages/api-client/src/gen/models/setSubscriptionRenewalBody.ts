@@ -20,6 +20,11 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * At least one of auto and refresh_on_renew.
+ */
 export type SetSubscriptionRenewalBody = {
-  auto: boolean;
+  auto?: boolean;
+  /** Renewals propose fresh kitchens instead of the same four. */
+  refresh_on_renew?: boolean;
 };
