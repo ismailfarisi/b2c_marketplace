@@ -502,6 +502,47 @@
 "invoice_superseded" = "Superseded";
 "invoice_share" = "Share";
 "invoice_not_found" = "This invoice isn't on your account.";
+"meals_cancel_why" = "Why are you leaving?";
+"meals_reason_bored" = "Bored of the food";
+"meals_reason_expensive" = "Too expensive";
+"meals_reason_quality" = "Food quality";
+"meals_reason_delivery" = "Delivery problems";
+"meals_reason_moving" = "Moving / away";
+"meals_reason_other" = "Something else";
+"meals_cancel_note" = "Anything else? (optional)";
+"meals_before_you_go" = "Before you go";
+"meals_save_bored_rotation" = "Change next week's kitchen instead — your rotation can swap a week.";
+"meals_save_bored_single" = "Same kitchen every week gets old. Try someone new for a week, or rotate four kitchens.";
+"meals_save_guest_week" = "Try a guest kitchen next week";
+"meals_save_rotation" = "Switch to a 4-kitchen rotation";
+"meals_save_change_week" = "Change next week's kitchen";
+"meals_save_expensive" = "Kitchens near you with a lower price per meal:";
+"meals_save_expensive_none" = "No cheaper kitchen covers your address right now.";
+"meals_per_meal" = "%@ / meal";
+"meals_save_pause" = "Pause instead — your meals wait for you and the credit stays yours.";
+"meals_save_pause_btn" = "Pause my meals";
+"meals_cancel_pick_reason" = "Pick a reason to continue.";
+"meals_guest_offer" = "Try a different kitchen next week";
+"meals_guest_offer_lede" = "%@: pick another kitchen for one week. Your paused week is credited (%@) and pays for it; the difference is charged or stays as credit.";
+"meals_guest_same_days" = "Same days, same slots, same address.";
+"meals_guest_week_price" = "%@ for the week";
+"meals_guest_covered" = "Covered by your credit";
+"meals_guest_due" = "%@ to pay";
+"meals_guest_leftover" = "%@ stays as credit";
+"meals_guest_start" = "Try this kitchen";
+"meals_guest_not_now" = "Not now";
+"meals_guest_done" = "Done — %@ cooks for you next week.";
+"meals_guest_week" = "Guest week";
+"meals_guest_lede" = "%@: %@ cooks instead of your usual kitchen. Your usual meals resume right after.";
+"meals_guest_pending" = "Waiting for payment of the difference.";
+"meals_guest_see" = "See the guest week";
+"meals_guest_of" = "A one-week guest from your %@ subscription.";
+"meals_guest_back" = "Back to my subscription";
+"meals_make_rotation" = "Liked the change? Make it a rotation";
+"meals_make_rotation_lede" = "Four kitchens, each cooking one week — never the same menu twice in a month.";
+"meals_make_rotation_btn" = "Build my rotation";
+"meals_guest_line" = "Guest week: %@ cooks one week";
+"meals_guest_of_line" = "One-week guest from your %@ subscription";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

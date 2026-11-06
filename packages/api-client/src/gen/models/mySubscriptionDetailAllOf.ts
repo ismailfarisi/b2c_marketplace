@@ -19,6 +19,7 @@ Conventions:
 
  * OpenAPI spec version: 0.1.0
  */
+import type { MySubscriptionDetailAllOfGuestWeekOffer } from './mySubscriptionDetailAllOfGuestWeekOffer';
 import type { UpcomingMeal } from './upcomingMeal';
 import type { MyDelivery } from './myDelivery';
 import type { MySubscriptionDetailAllOfCyclesItem } from './mySubscriptionDetailAllOfCyclesItem';
@@ -28,6 +29,7 @@ export type MySubscriptionDetailAllOf = {
   cutoff_hours?: number;
   pause_allowance_days?: number;
   pause_days_used?: number;
+  guest_week_offer?: MySubscriptionDetailAllOfGuestWeekOffer;
   upcoming?: UpcomingMeal[];
   /** Skipped meals in the upcoming window; can be put back before the cutoff. */
   skipped?: UpcomingMeal[];

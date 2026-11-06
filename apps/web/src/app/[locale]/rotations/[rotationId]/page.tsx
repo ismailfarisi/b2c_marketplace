@@ -3,6 +3,7 @@
 import { ApiError, formatMoney } from "@marketplace/api-client";
 
 import { LoadError } from "@/components/load-error";
+import { CancelFlow } from "@/components/meals/cancel-reasons";
 import { rotationProblem } from "@/lib/rotation-problem";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -20,6 +21,8 @@ import { problemMessage } from "@/lib/problem";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import {
   cancelRotation,
+  getRotationCheaperPlans,
+  type CancellationReasonCode,
   getMyRotation,
   payRotation,
   renewRotation,
@@ -152,11 +155,14 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
     mutationFn: () => payRotation(r.id),
     onSuccess: refresh,
   });
-  const [reason, setReason] = useState("");
   const cancelKey = useIdempotencyKey();
   const cancel = useMutation({
-    mutationFn: () =>
-      cancelRotation(r.id, reason.trim(), { headers: cancelKey.headers() }),
+    mutationFn: (v: { code: CancellationReasonCode; note: string }) =>
+      cancelRotation(
+        r.id,
+        { reason_code: v.code, reason: v.note },
+        { headers: cancelKey.headers() },
+      ),
     onSuccess: async () => {
       cancelKey.reset();
       await refresh();
@@ -238,34 +244,22 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
       <Renewal r={r} locale={locale} t={t} onDone={refresh} />
 
       {(r.status === "active" || r.status === "pending_payment") && (
-        <details className="ms-danger">
-          <summary>{t.cancel}</summary>
-          <p className="ms-sub">{t.cancelNote}</p>
-          <label className="ms-field">
-            <span>{t.reason}</span>
-            <input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              maxLength={200}
-              dir="auto"
-            />
-          </label>
-          {cancel.isError && (
-            <p className="ms-bad" role="alert">
-              {rotationProblem(cancel.error, locale, t.cancelFailed)}
-            </p>
-          )}
-          <button
-            type="button"
-            className="ms-cta ms-cta-danger"
-            disabled={cancel.isPending}
-            onClick={() => {
-              if (window.confirm(t.cancelConfirm)) cancel.mutate();
-            }}
-          >
-            {cancel.isPending ? t.cancelling : t.cancel}
-          </button>
-        </details>
+        <CancelFlow
+          kind="rotation"
+          locale={locale}
+          pending={cancel.isPending}
+          error={
+            cancel.isError
+              ? rotationProblem(cancel.error, locale, t.cancelFailed)
+              : null
+          }
+          onCancel={(code, note) => cancel.mutate({ code, note })}
+          saves={{
+            rotationHref: `/${locale}/rotations/${r.id}#weeks`,
+            cheaper: () => getRotationCheaperPlans(r.id),
+            kitchenHref: (b) => `/${locale}/kitchens/${b}`,
+          }}
+        />
       )}
     </div>
   );

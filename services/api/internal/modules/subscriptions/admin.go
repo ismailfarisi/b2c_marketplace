@@ -203,3 +203,43 @@ func (s *Service) AdminDetail(ctx context.Context, id uuid.UUID) (AdminDetail, e
 	}
 	return d, nil
 }
+
+// CancellationReason is one bucket of the admin "why do customers leave"
+// breakdown: how many subscriptions and rotations were cancelled with that code.
+type CancellationReason struct {
+	Code          string `json:"code"`
+	Subscriptions int    `json:"subscriptions"`
+	Rotations     int    `json:"rotations"`
+}
+
+// CancellationReasons counts customer cancellations by structured reason over
+// the last `days` days (default 90). Weekly subscriptions inside a rotation are
+// not double counted: the rotation carries the code for them.
+func (s *Service) CancellationReasons(ctx context.Context, days int) ([]CancellationReason, error) {
+	if days <= 0 {
+		days = 90
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT code, sum(subs)::int, sum(rots)::int FROM (
+		    SELECT COALESCE(cancellation_code, 'unspecified') AS code, count(*) AS subs, 0 AS rots
+		      FROM subscriptions
+		     WHERE status = 'cancelled' AND rotation_id IS NULL
+		       AND cancelled_at >= now() - ($1::int * interval '1 day')
+		     GROUP BY 1
+		    UNION ALL
+		    SELECT COALESCE(cancellation_code, 'unspecified'), 0, count(*)
+		      FROM meal_rotations
+		     WHERE status = 'cancelled'
+		       AND cancelled_at >= now() - ($1::int * interval '1 day')
+		     GROUP BY 1) x
+		 GROUP BY code
+		 ORDER BY sum(subs) + sum(rots) DESC, code`, days)
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: cancellation reasons: %w", err)
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (CancellationReason, error) {
+		var c CancellationReason
+		err := r.Scan(&c.Code, &c.Subscriptions, &c.Rotations)
+		return c, err
+	})
+}

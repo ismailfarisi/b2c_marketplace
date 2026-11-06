@@ -3498,3 +3498,51 @@ body {
 .ms .ms-support-thread small {
   opacity: 0.7;
 }
+
+/* Cancel reasons + guest week (variety retention) */
+.ms-reasons {
+  margin-block: 0.5rem 0.75rem;
+}
+.ms-save {
+  margin-block: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.ms-save .ms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ms-cheaper {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+}
+.ms-guest {
+  display: grid;
+  gap: 0.6rem;
+}
+.ms-guest .ms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ms-guest-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.ms-guest-options .ms-option {
+  width: 100%;
+  text-align: start;
+  font: inherit;
+  background: var(--ms-paper);
+  cursor: pointer;
+}
+.ms-guest-next {
+  border-block-start: 1px solid var(--ms-line);
+  padding-block-start: 0.75rem;
+  display: grid;
+  gap: 0.4rem;
+}

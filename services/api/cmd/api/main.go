@@ -194,6 +194,7 @@ func run() error {
 				ReserveCapacity: true,
 				Promos:          promoSvc,
 				Notifier:        app.MealNotifier{Svc: notifySvc},
+				Wallet:          paymentsSvc,
 			}),
 			Reviews: reviewsSvc,
 		},

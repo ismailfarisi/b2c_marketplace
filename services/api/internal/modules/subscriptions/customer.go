@@ -47,6 +47,11 @@ type MySubscription struct {
 	CanRenew    bool       `json:"can_renew"`
 	// Set when the employee's company pays for this office lunch.
 	CompanyName *string `json:"company_name"`
+
+	// Guest week links: on the original subscription, the guest kitchen that
+	// cooks one of its weeks; on the guest subscription, where it came from.
+	GuestWeek *GuestWeekLink `json:"guest_week"`
+	GuestOf   *GuestWeekLink `json:"guest_of"`
 }
 
 // Dish is one option a customer can be served on a given day.
@@ -115,7 +120,8 @@ type MyDetail struct {
 	// clients that only read upcoming don't show them as coming.
 	Skipped []UpcomingMeal `json:"skipped"`
 	// The last two weeks' deliveries, newest first.
-	Recent []MyDelivery `json:"recent"`
+	Recent         []MyDelivery    `json:"recent"`
+	GuestWeekOffer *GuestWeekOffer `json:"guest_week_offer"`
 }
 
 const mySelect = `
@@ -178,7 +184,13 @@ func (s *Service) Mine(ctx context.Context, userID uuid.UUID) ([]MySubscription,
 		}
 		out = append(out, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachGuestWeeks(ctx, s.pool, out, time.Now()); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // MyDetail is one subscription the customer owns, with the next two weeks of
@@ -195,6 +207,16 @@ func (s *Service) MyDetail(ctx context.Context, userID, subID uuid.UUID, now tim
 			return fmt.Errorf("subscriptions: load mine: %w", err)
 		}
 		d.CutoffHours = live.CutoffHours
+		one := []MySubscription{d.MySubscription}
+		if err := s.attachGuestWeeks(ctx, tx, one, now); err != nil {
+			return err
+		}
+		d.MySubscription = one[0]
+		g, err := s.guestOffer(ctx, tx, live, now)
+		if err != nil {
+			return err
+		}
+		d.GuestWeekOffer = &g.GuestWeekOffer
 		if d.PauseAllowance, d.PauseDaysUsed, err = s.pauseAllowance(ctx, tx, subID); err != nil {
 			return err
 		}

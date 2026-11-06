@@ -256,7 +256,11 @@ struct MealsScreen: View {
                     go(.subscription)
                 }
             case .subscription:
-                SubscriptionPage(vm: viewModel, onBack: back, openPayment: openPayment)
+                SubscriptionPage(
+                    vm: viewModel, onBack: back, openPayment: openPayment,
+                    onOpen: { id in viewModel.openSubscription(id: id); go(.subscription) },
+                    onRotation: { requireAccount { viewModel.startRotation(); go(.rotation) } }
+                )
             }
         }
         .environment(\.colorScheme, .light)
@@ -2078,7 +2082,15 @@ private struct RotationCard: View {
                     .padding(.top, Space.small)
             }
         }
-        .modifier(ConfirmCancel(shown: $confirming) { vm.cancelRotation(id: r.id) })
+        .sheet(isPresented: $confirming) {
+            CancelReasonsSheet(
+                vm: vm, rotationId: r.id, busy: busy, canPause: false, canGuestWeek: false,
+                onRotationBuilder: { confirming = false },
+                onChangeWeek: { confirming = false; onOpen(r.id) },
+                onCancel: { code, note in confirming = false; vm.cancelRotation(id: r.id, reasonCode: code, note: note) },
+                onClose: { confirming = false }
+            )
+        }
     }
 }
 
@@ -2107,22 +2119,12 @@ private struct SubscriptionRow: View {
     }
 }
 
-private struct ConfirmCancel: ViewModifier {
-    @Binding var shown: Bool
-    let onConfirm: () -> Void
-
-    func body(content: Content) -> some View {
-        content.alert(Text("meals_cancel_confirm"), isPresented: $shown) {
-            Button(role: .destructive, action: onConfirm) { Text("meals_cancel_yes") }
-            Button(role: .cancel) {} label: { Text("meals_keep") }
-        }
-    }
-}
-
 private struct SubscriptionPage: View {
     let vm: MealsViewModel
     let onBack: () -> Void
     let openPayment: (String) -> Void
+    let onOpen: (String) -> Void
+    let onRotation: () -> Void
 
     @State private var current: SubscriptionUiState?
     private var s: SubscriptionUiState { current ?? vm.sub.value }
@@ -2141,7 +2143,19 @@ private struct SubscriptionPage: View {
                 Spacer()
             }
         }
-        .modifier(ConfirmCancel(shown: $confirming) { vm.cancel() })
+        .sheet(isPresented: $confirming) {
+            if let sub = s.subscription {
+                CancelReasonsSheet(
+                    vm: vm, rotationId: nil, busy: s.busy,
+                    canPause: sub.status == "active" && sub.pauseAllowanceDays > 0,
+                    canGuestWeek: sub.guestWeekOffer?.eligible == true && sub.guestWeek == nil,
+                    onRotationBuilder: { confirming = false; onRotation() },
+                    onChangeWeek: { confirming = false },
+                    onCancel: { code, note in confirming = false; vm.cancel(reasonCode: code, note: note) },
+                    onClose: { confirming = false }
+                )
+            }
+        }
         .task {
             for await state in vm.sub {
                 current = state
@@ -2200,6 +2214,9 @@ private struct SubscriptionPage: View {
                 }
                 if sub.status != "pending_payment" && sub.status != "pending" {
                     RateKitchenCard(state: s.review, subscriptionId: sub.id, vm: vm)
+                }
+                if sub.rotationId == nil {
+                    GuestWeekCard(sub: sub, state: s, vm: vm, onOpen: onOpen, onRotation: onRotation)
                 }
                 if sub.rotationId == nil && sub.status == "active" && sub.pauseAllowanceDays > 0 {
                     PauseCard(sub: sub, busy: s.busy, vm: vm)
@@ -2484,5 +2501,264 @@ private struct MealCard: View {
         } message: {
             Text("meals_skip_note")
         }
+    }
+}
+
+// MARK: - Cancel reasons + guest week (variety retention)
+
+private let cancelReasonCodes = ["bored_of_food", "too_expensive", "food_quality", "delivery_problems", "moving_away", "other"]
+
+private func reasonLabel(_ code: String) -> String {
+    switch code {
+    case "bored_of_food": return NSLocalizedString("meals_reason_bored", comment: "")
+    case "too_expensive": return NSLocalizedString("meals_reason_expensive", comment: "")
+    case "food_quality": return NSLocalizedString("meals_reason_quality", comment: "")
+    case "delivery_problems": return NSLocalizedString("meals_reason_delivery", comment: "")
+    case "moving_away": return NSLocalizedString("meals_reason_moving", comment: "")
+    default: return NSLocalizedString("meals_reason_other", comment: "")
+    }
+}
+
+/// Why are you leaving? One honest save option for the answer, and the cancel
+/// button right there under it — no second "are you sure".
+private struct CancelReasonsSheet: View {
+    let vm: MealsViewModel
+    let rotationId: String?
+    let busy: Bool
+    let canPause: Bool
+    let canGuestWeek: Bool
+    let onRotationBuilder: () -> Void
+    let onChangeWeek: () -> Void
+    let onCancel: (String, String) -> Void
+    let onClose: () -> Void
+
+    @State private var code: String?
+    @State private var note = ""
+    @State private var cheaper: CheaperPlans?
+    @State private var cheaperLoading = false
+    @State private var cheaperError: Failure?
+
+    private var title: String {
+        NSLocalizedString(rotationId == nil ? "meals_cancel" : "meals_cancel_rotation", comment: "")
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.medium) {
+                Text(title).font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(MP.text)
+                Text("meals_cancel_why").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                FlowChips(items: cancelReasonCodes, label: reasonLabel, selected: { code == $0 }, enabled: !busy) { code = $0 }
+                if let c = code {
+                    Text("meals_cancel_note").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                    TextField("", text: $note, axis: .vertical)
+                        .lineLimit(2...4)
+                        .padding(10)
+                        .background(MP.surface, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(MP.line, lineWidth: 1))
+                    saveOption(c)
+                }
+                Button { if let c = code { onCancel(c, note) } } label: {
+                    Text(title)
+                        .font(.system(size: TypeScale.body, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(code == nil || busy ? MP.bad.opacity(0.35) : MP.bad, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(code == nil || busy)
+                SecondaryButton(label: NSLocalizedString("meals_keep", comment: ""), action: onClose)
+            }
+            .padding(Space.edge)
+        }
+        .task { loadCheaper() }
+    }
+
+    private func loadCheaper() {
+        cheaperLoading = true
+        cheaperError = nil
+        if let rid = rotationId {
+            vm.loadRotationCheaperPlans(id: rid)
+        } else {
+            vm.loadCheaperPlans()
+        }
+        Task {
+            if let rid = rotationId {
+                for await st in vm.mine where st.cheaperFor == rid {
+                    cheaper = st.cheaper
+                    cheaperLoading = st.cheaperLoading
+                    cheaperError = st.cheaperError
+                }
+            } else {
+                for await st in vm.sub {
+                    cheaper = st.cheaper
+                    cheaperLoading = st.cheaperLoading
+                    cheaperError = st.cheaperError
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pause: some View {
+        if canPause {
+            Text("meals_save_pause").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+            SecondaryButton(label: NSLocalizedString("meals_save_pause_btn", comment: ""), action: onClose)
+        }
+    }
+
+    @ViewBuilder
+    private func saveOption(_ c: String) -> some View {
+        if c == "bored_of_food" || c == "too_expensive" || canPause {
+            VStack(alignment: .leading, spacing: Space.small) {
+                Text("meals_before_you_go").font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                if c == "bored_of_food" {
+                    if rotationId != nil {
+                        Text("meals_save_bored_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                        SecondaryButton(label: NSLocalizedString("meals_save_change_week", comment: ""), action: onChangeWeek)
+                    } else {
+                        Text("meals_save_bored_single").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                        if canGuestWeek {
+                            SecondaryButton(label: NSLocalizedString("meals_save_guest_week", comment: ""), action: onClose)
+                        }
+                        SecondaryButton(label: NSLocalizedString("meals_save_rotation", comment: ""), action: onRotationBuilder)
+                    }
+                } else if c == "too_expensive" {
+                    if cheaperLoading {
+                        LoadingBlock()
+                    } else if let failure = cheaperError {
+                        FailureStrip(failure: failure, onRetry: { loadCheaper() })
+                    } else if let items = cheaper?.items, !items.isEmpty {
+                        Text("meals_save_expensive").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                        ForEach(items, id: \.planId) { p in
+                            Text(pick(p.kitchenName, p.kitchenNameAr) + " · " + tr("meals_per_meal", money(p.perMealMinor, p.currency)))
+                                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                        }
+                    } else {
+                        Text("meals_save_expensive_none").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                    }
+                    pause
+                } else {
+                    pause
+                }
+            }
+            .padding(Space.medium)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Warm.chilli, lineWidth: 1))
+        }
+    }
+}
+
+private struct FlowChips: View {
+    let items: [String]
+    let label: (String) -> String
+    let selected: (String) -> Bool
+    let enabled: Bool
+    let action: (String) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .leading)], alignment: .leading, spacing: 6) {
+            ForEach(items, id: \.self) { c in
+                Chip(label: label(c), selected: selected(c), enabled: enabled) { action(c) }
+            }
+        }
+    }
+}
+
+/// The guest week in My meals: the offer, the week itself with both kitchens
+/// named, then "make it a rotation".
+private struct GuestWeekCard: View {
+    let sub: MySubscription
+    let state: SubscriptionUiState
+    let vm: MealsViewModel
+    let onOpen: (String) -> Void
+    let onRotation: () -> Void
+    @State private var planId: String?
+
+    var body: some View {
+        if let g = sub.guestOf {
+            CardBox {
+                Text("meals_guest_week").font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                Text(tr("meals_guest_of", pick(g.kitchenName, g.kitchenNameAr)))
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                SecondaryButton(label: NSLocalizedString("meals_guest_back", comment: "")) { onOpen(g.subscriptionId) }
+            }
+        } else if let g = sub.guestWeek {
+            CardBox {
+                Text("meals_guest_week").font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                Text(tr("meals_guest_lede", shortDate(g.weekStart) + " – " + shortDate(g.weekEnd), pick(g.kitchenName, g.kitchenNameAr)))
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                if g.status == "pending_payment" {
+                    Text("meals_guest_pending").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                }
+                SecondaryButton(label: NSLocalizedString(g.status == "pending_payment" ? "meals_pay_due" : "meals_guest_see", comment: "")) {
+                    onOpen(g.guestSubscriptionId)
+                }
+                if g.completed {
+                    Text("meals_make_rotation").font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                        .padding(.top, Space.small)
+                    Text("meals_make_rotation_lede").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                    PrimaryButton(label: NSLocalizedString("meals_make_rotation_btn", comment: ""), action: onRotation)
+                }
+            }
+        } else if let offer = sub.guestWeekOffer, let from = offer.weekStart, let to = offer.weekEnd {
+            if let started = state.guestStarted {
+                let k = offer.options.first { $0.weekMinor == started.walletMinor + started.dueMinor }
+                CardBox {
+                    Text(tr("meals_guest_done", k.map { pick($0.kitchenName, $0.kitchenNameAr) } ?? ""))
+                        .font(.system(size: TypeScale.body)).foregroundStyle(Warm.leaf)
+                }
+            } else if offer.eligible {
+                CardBox {
+                    Text("meals_guest_offer").font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                    Text(tr("meals_guest_offer_lede", shortDate(from) + " – " + shortDate(to), money(offer.creditMinor, offer.currency)))
+                        .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                    Text("meals_guest_same_days").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                    ForEach(offer.options, id: \.planId) { o in
+                        GuestOptionRow(o: o, selected: planId == o.planId, enabled: !state.busy) { planId = o.planId }
+                    }
+                    HStack(spacing: Space.small) {
+                        PrimaryButton(label: NSLocalizedString("meals_guest_start", comment: ""), enabled: !state.busy && planId != nil) {
+                            if let id = planId { vm.startGuestWeek(planId: id) }
+                        }
+                        SecondaryButton(label: NSLocalizedString("meals_guest_not_now", comment: "")) {
+                            if !state.busy { vm.dismissGuestWeek() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct GuestOptionRow: View {
+    let o: GuestWeekOption
+    let selected: Bool
+    let enabled: Bool
+    let action: () -> Void
+
+    private var split: String {
+        if o.dueMinor > 0 { return tr("meals_guest_due", money(o.dueMinor, o.currency)) }
+        if o.leftoverCreditMinor > 0 { return tr("meals_guest_leftover", money(o.leftoverCreditMinor, o.currency)) }
+        return NSLocalizedString("meals_guest_covered", comment: "")
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(pick(o.kitchenName, o.kitchenNameAr)).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                if !o.cuisines.isEmpty {
+                    Text(o.cuisines.joined(separator: " · ")).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                }
+                Text(tr("meals_per_meal", money(o.perMealMinor, o.currency)) + " · " + tr("meals_guest_week_price", money(o.weekMinor, o.currency)))
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                Text(split).font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.leaf)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Space.medium)
+            .padding(.vertical, 10)
+            .background(MP.surface, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? Warm.chilli : MP.line, lineWidth: 1))
+        }
+        .disabled(!enabled)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }

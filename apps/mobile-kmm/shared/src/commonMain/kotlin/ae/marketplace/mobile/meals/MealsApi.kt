@@ -11,6 +11,9 @@ import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealsHome
 import ae.marketplace.mobile.model.MyReview
 import ae.marketplace.mobile.model.MySubscription
+import ae.marketplace.mobile.model.GuestWeekResult
+import ae.marketplace.mobile.model.GuestWeekOffer
+import ae.marketplace.mobile.model.CheaperPlans
 import ae.marketplace.mobile.model.OfferPage
 import ae.marketplace.mobile.model.Resumed
 import ae.marketplace.mobile.model.PaymentIntent
@@ -130,6 +133,30 @@ class MealsApi(private val client: HttpClient) {
         client.post("subscriptions/$id/cancel") { json(ReasonBody(reason)) }
     }
 
+    /** Cancel with a structured reason (CancelReasons) and an optional note. */
+    suspend fun cancel(id: String, reasonCode: String, note: String, idempotencyKey: String) {
+        client.post("subscriptions/$id/cancel") {
+            header("Idempotency-Key", idempotencyKey)
+            json(ReasonBody(reason = note, reasonCode = reasonCode))
+        }
+    }
+
+    suspend fun guestWeekOffer(id: String): GuestWeekOffer = client.get("me/subscriptions/$id/guest-week").body()
+
+    suspend fun startGuestWeek(id: String, planId: String, idempotencyKey: String): GuestWeekResult =
+        client.post("subscriptions/$id/guest-week") {
+            header("Idempotency-Key", idempotencyKey)
+            json(PlanBody(planId))
+        }.body()
+
+    suspend fun dismissGuestWeek(id: String) {
+        client.post("subscriptions/$id/guest-week/dismiss") { json(Empty()) }
+    }
+
+    suspend fun cheaperPlans(id: String): CheaperPlans = client.get("me/subscriptions/$id/cheaper-plans").body()
+
+    suspend fun rotationCheaperPlans(id: String): CheaperPlans = client.get("me/rotations/$id/cheaper-plans").body()
+
     suspend fun setRenewal(id: String, auto: Boolean) {
         client.put("subscriptions/$id/renewal") { json(AutoBody(auto)) }
     }
@@ -164,6 +191,13 @@ class MealsApi(private val client: HttpClient) {
         client.post("rotations/$id/cancel") { json(ReasonBody(reason)) }
     }
 
+    suspend fun cancelRotation(id: String, reasonCode: String, note: String, idempotencyKey: String) {
+        client.post("rotations/$id/cancel") {
+            header("Idempotency-Key", idempotencyKey)
+            json(ReasonBody(reason = note, reasonCode = reasonCode))
+        }
+    }
+
     suspend fun setRotationRenewal(id: String, auto: Boolean) {
         client.put("rotations/$id/renewal") { json(AutoBody(auto)) }
     }
@@ -183,6 +217,7 @@ class MealsApi(private val client: HttpClient) {
 @Serializable private data class DishBody(@SerialName("dish_id") val dishId: String)
 @Serializable private data class SkipBody(val date: String, @SerialName("meal_slot") val mealSlot: String)
 @Serializable private data class PauseBody(@SerialName("from_date") val from: String, @SerialName("to_date") val to: String)
-@Serializable private data class ReasonBody(val reason: String)
+@Serializable private data class ReasonBody(val reason: String, @SerialName("reason_code") val reasonCode: String? = null)
+@Serializable private data class PlanBody(@SerialName("plan_id") val planId: String)
 @Serializable private data class AutoBody(val auto: Boolean)
 @Serializable private data class ReviewBody(val rating: Int, val comment: String)

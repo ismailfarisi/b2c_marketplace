@@ -7,7 +7,9 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useState, type FormEvent } from "react";
 
 import { LoadError } from "@/components/load-error";
+import { CancelFlow } from "@/components/meals/cancel-reasons";
 import { DeliveryStatus, RecentDeliveries } from "@/components/meals/delivery-status";
+import { GUEST_WEEK_ANCHOR, GuestWeekCard } from "@/components/meals/guest-week";
 import { RateKitchen } from "@/components/meals/rate-kitchen";
 import {
   CustomerShell,
@@ -20,6 +22,7 @@ import {
 import {
   cancelSubscription,
   chooseMeal,
+  getCheaperPlans,
   getMySubscription,
   pauseSubscription,
   payOrder,
@@ -28,6 +31,7 @@ import {
   setRenewal,
   skipMeal,
   unskipMeal,
+  type CancellationReasonCode,
   type MySubscriptionDetail,
   type UpcomingMeal,
 } from "@/lib/customer-api";
@@ -458,6 +462,10 @@ function Detail({
       )}
 
       {!s.rotation_id && (
+        <GuestWeekCard s={s} locale={locale} onDone={refresh} />
+      )}
+
+      {!s.rotation_id && (
         <Renewal s={s} locale={locale} t={t} onDone={refresh} />
       )}
 
@@ -466,7 +474,9 @@ function Detail({
       )}
 
       {s.status === "active" && !s.rotation_id && (
-        <Pause s={s} locale={locale} t={t} onDone={refresh} />
+        <div id="pause">
+          <Pause s={s} locale={locale} t={t} onDone={refresh} />
+        </div>
       )}
       {live && !s.rotation_id && (
         <Cancel s={s} locale={locale} t={t} onDone={refresh} />
@@ -876,7 +886,6 @@ function Resume({
 function Cancel({
   s,
   locale,
-  t,
   onDone,
 }: {
   s: MySubscriptionDetail;
@@ -884,50 +893,45 @@ function Cancel({
   t: Copy;
   onDone: () => Promise<unknown>;
 }) {
-  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const key = useIdempotencyKey();
   const m = useMutation({
-    mutationFn: () =>
-      cancelSubscription(s.id, reason.trim(), { headers: key.headers() }),
+    mutationFn: (v: { code: CancellationReasonCode; note: string }) =>
+      cancelSubscription(
+        s.id,
+        { reason_code: v.code, reason: v.note },
+        { headers: key.headers() },
+      ),
     onSuccess: async () => {
       key.reset();
       await onDone();
     },
     onError: (err) => setError(problemMessage(err, locale)),
   });
+  const reveal = (id: string) => {
+    const el = document.getElementById(id);
+    el?.querySelector("details")?.setAttribute("open", "");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   return (
-    <details className="ms-danger">
-      <summary>{t.cancel}</summary>
-      <p className="ms-sub">{t.cancelNote}</p>
-      <label className="ms-field">
-        <span>{t.reason}</span>
-        <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={2}
-          maxLength={500}
-          dir="auto"
-        />
-      </label>
-      {error && (
-        <p className="ms-bad" role="alert">
-          {error}
-        </p>
-      )}
-      <button
-        type="button"
-        className="ms-cta ms-cta-danger"
-        disabled={m.isPending}
-        onClick={() => {
-          if (window.confirm(t.cancelConfirm)) {
-            setError(null);
-            m.mutate();
-          }
-        }}
-      >
-        {m.isPending ? t.cancelling : t.cancelBtn}
-      </button>
-    </details>
+    <CancelFlow
+      kind="subscription"
+      locale={locale}
+      pending={m.isPending}
+      error={error}
+      onCancel={(code, note) => {
+        setError(null);
+        m.mutate({ code, note });
+      }}
+      saves={{
+        pause: s.status === "active" ? () => reveal("pause") : undefined,
+        rotationBuilderHref: `/${locale}/rotation`,
+        guestWeek: s.guest_week_offer?.eligible
+          ? () => reveal(GUEST_WEEK_ANCHOR)
+          : undefined,
+        cheaper: () => getCheaperPlans(s.id),
+        kitchenHref: (b) => `/${locale}/kitchens/${b}`,
+      }}
+    />
   );
 }

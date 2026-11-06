@@ -19,8 +19,13 @@ Conventions:
 
  * OpenAPI spec version: 0.1.0
  */
+import type { CancellationReasonCode } from './cancellationReasonCode';
 
 export type CancelRotationBody = {
-  /** @maxLength 500 */
+  /**
+   * Optional free-text note.
+   * @maxLength 500
+   */
   reason?: string;
+  reason_code?: CancellationReasonCode;
 };

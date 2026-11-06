@@ -318,6 +318,100 @@ data class MySubscription(
     val recent: List<MyDelivery> = emptyList(),
     /** Current and upcoming pauses. */
     val pauses: List<MyPause> = emptyList(),
+    /** On the original subscription: the guest kitchen cooking one of its weeks. */
+    @SerialName("guest_week") val guestWeek: GuestWeekLink? = null,
+    /** On a guest subscription: the subscription it is a guest of. */
+    @SerialName("guest_of") val guestOf: GuestWeekLink? = null,
+    @SerialName("guest_week_offer") val guestWeekOffer: GuestWeekOffer? = null,
+)
+
+/** Structured answers to "why are you leaving?"; the free-text note rides along. */
+object CancelReasons {
+    const val BORED = "bored_of_food"
+    const val EXPENSIVE = "too_expensive"
+    const val QUALITY = "food_quality"
+    const val DELIVERY = "delivery_problems"
+    const val MOVING = "moving_away"
+    const val OTHER = "other"
+    val all: List<String> = listOf(BORED, EXPENSIVE, QUALITY, DELIVERY, MOVING, OTHER)
+}
+
+@Serializable
+data class GuestWeekLink(
+    @SerialName("subscription_id") val subscriptionId: String,
+    @SerialName("guest_subscription_id") val guestSubscriptionId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    @SerialName("week_start") val weekStart: String,
+    @SerialName("week_end") val weekEnd: String,
+    val status: String = "",
+    @SerialName("pending_order_id") val pendingOrderId: String? = null,
+    val completed: Boolean = false,
+)
+
+@Serializable
+data class GuestWeekOption(
+    @SerialName("plan_id") val planId: String,
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    @SerialName("plan_name") val planName: String = "",
+    @SerialName("plan_name_ar") val planNameAr: String? = null,
+    val cuisines: List<String> = emptyList(),
+    @SerialName("per_meal_minor") val perMealMinor: Long = 0,
+    @SerialName("week_minor") val weekMinor: Long = 0,
+    @SerialName("wallet_minor") val walletMinor: Long = 0,
+    @SerialName("due_minor") val dueMinor: Long = 0,
+    @SerialName("leftover_credit_minor") val leftoverCreditMinor: Long = 0,
+    val currency: String = "AED",
+)
+
+@Serializable
+data class GuestWeekOffer(
+    val eligible: Boolean = false,
+    val reason: String? = null,
+    @SerialName("week_start") val weekStart: String? = null,
+    @SerialName("week_end") val weekEnd: String? = null,
+    @SerialName("delivery_days") val deliveryDays: Int = 0,
+    val meals: Int = 0,
+    @SerialName("credit_minor") val creditMinor: Long = 0,
+    @SerialName("current_per_meal_minor") val currentPerMealMinor: Long = 0,
+    val currency: String = "AED",
+    val options: List<GuestWeekOption> = emptyList(),
+)
+
+@Serializable
+data class GuestWeekResult(
+    @SerialName("guest_subscription_id") val guestSubscriptionId: String,
+    val status: String = "",
+    @SerialName("pending_order_id") val pendingOrderId: String? = null,
+    @SerialName("week_start") val weekStart: String = "",
+    @SerialName("week_end") val weekEnd: String = "",
+    @SerialName("credit_minor") val creditMinor: Long = 0,
+    @SerialName("wallet_minor") val walletMinor: Long = 0,
+    @SerialName("due_minor") val dueMinor: Long = 0,
+    @SerialName("leftover_credit_minor") val leftoverCreditMinor: Long = 0,
+    val currency: String = "AED",
+)
+
+@Serializable
+data class CheaperPlan(
+    @SerialName("plan_id") val planId: String,
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    @SerialName("plan_name") val planName: String = "",
+    @SerialName("plan_name_ar") val planNameAr: String? = null,
+    val cuisines: List<String> = emptyList(),
+    @SerialName("per_meal_minor") val perMealMinor: Long = 0,
+    val currency: String = "AED",
+)
+
+@Serializable
+data class CheaperPlans(
+    @SerialName("current_per_meal_minor") val currentPerMealMinor: Long = 0,
+    val currency: String = "AED",
+    val items: List<CheaperPlan> = emptyList(),
 )
 
 @Serializable

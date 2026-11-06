@@ -1657,6 +1657,19 @@ export const setMealPlanActive = (
     data: { active, reason },
   });
 
+export interface CancellationReasonRow {
+  code: string;
+  subscriptions: number;
+  rotations: number;
+}
+
+export const getCancellationReasons = (days = 90) =>
+  apiFetch<{ items: CancellationReasonRow[]; days: number }>({
+    url: "/admin/meals/cancellation-reasons",
+    method: "GET",
+    params: { days },
+  });
+
 export const getMealSubscriptions = (
   params: { q?: string; status?: string; branch_id?: string } = {},
 ) =>

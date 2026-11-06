@@ -686,4 +686,47 @@
     <string name="invoice_superseded">Superseded</string>
     <string name="invoice_share">Share</string>
     <string name="invoice_not_found">This invoice isn\'t on your account.</string>
+
+    <!-- Cancel reasons + guest week (variety retention) -->
+    <string name="meals_cancel_why">Why are you leaving?</string>
+    <string name="meals_reason_bored">Bored of the food</string>
+    <string name="meals_reason_expensive">Too expensive</string>
+    <string name="meals_reason_quality">Food quality</string>
+    <string name="meals_reason_delivery">Delivery problems</string>
+    <string name="meals_reason_moving">Moving / away</string>
+    <string name="meals_reason_other">Something else</string>
+    <string name="meals_cancel_note">Anything else? (optional)</string>
+    <string name="meals_before_you_go">Before you go</string>
+    <string name="meals_save_bored_rotation">Change next week\'s kitchen instead — your rotation can swap a week.</string>
+    <string name="meals_save_bored_single">Same kitchen every week gets old. Try someone new for a week, or rotate four kitchens.</string>
+    <string name="meals_save_guest_week">Try a guest kitchen next week</string>
+    <string name="meals_save_rotation">Switch to a 4-kitchen rotation</string>
+    <string name="meals_save_change_week">Change next week\'s kitchen</string>
+    <string name="meals_save_expensive">Kitchens near you with a lower price per meal:</string>
+    <string name="meals_save_expensive_none">No cheaper kitchen covers your address right now.</string>
+    <string name="meals_per_meal">%1$s / meal</string>
+    <string name="meals_save_pause">Pause instead — your meals wait for you and the credit stays yours.</string>
+    <string name="meals_save_pause_btn">Pause my meals</string>
+    <string name="meals_cancel_pick_reason">Pick a reason to continue.</string>
+    <string name="meals_guest_offer">Try a different kitchen next week</string>
+    <string name="meals_guest_offer_lede">%1$s: pick another kitchen for one week. Your paused week is credited (%2$s) and pays for it; the difference is charged or stays as credit.</string>
+    <string name="meals_guest_same_days">Same days, same slots, same address.</string>
+    <string name="meals_guest_week_price">%1$s for the week</string>
+    <string name="meals_guest_covered">Covered by your credit</string>
+    <string name="meals_guest_due">%1$s to pay</string>
+    <string name="meals_guest_leftover">%1$s stays as credit</string>
+    <string name="meals_guest_start">Try this kitchen</string>
+    <string name="meals_guest_not_now">Not now</string>
+    <string name="meals_guest_done">Done — %1$s cooks for you next week.</string>
+    <string name="meals_guest_week">Guest week</string>
+    <string name="meals_guest_lede">%1$s: %2$s cooks instead of your usual kitchen. Your usual meals resume right after.</string>
+    <string name="meals_guest_pending">Waiting for payment of the difference.</string>
+    <string name="meals_guest_see">See the guest week</string>
+    <string name="meals_guest_of">A one-week guest from your %1$s subscription.</string>
+    <string name="meals_guest_back">Back to my subscription</string>
+    <string name="meals_make_rotation">Liked the change? Make it a rotation</string>
+    <string name="meals_make_rotation_lede">Four kitchens, each cooking one week — never the same menu twice in a month.</string>
+    <string name="meals_make_rotation_btn">Build my rotation</string>
+    <string name="meals_guest_line">Guest week: %1$s cooks one week</string>
+    <string name="meals_guest_of_line">One-week guest from your %1$s subscription</string>
 </resources>

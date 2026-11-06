@@ -28,6 +28,8 @@ import type { MySubscriptionRotationId } from './mySubscriptionRotationId';
 import type { MySubscriptionRotationWeek } from './mySubscriptionRotationWeek';
 import type { MySubscriptionRenewalMode } from './mySubscriptionRenewalMode';
 import type { MySubscriptionRenewedById } from './mySubscriptionRenewedById';
+import type { MySubscriptionGuestWeek } from './mySubscriptionGuestWeek';
+import type { MySubscriptionGuestOf } from './mySubscriptionGuestOf';
 
 export interface MySubscription {
   id: string;
@@ -58,4 +60,6 @@ export interface MySubscription {
   renewed_by_id?: MySubscriptionRenewedById;
   /** Whether renewSubscription is offered. */
   can_renew?: boolean;
+  guest_week?: MySubscriptionGuestWeek;
+  guest_of?: MySubscriptionGuestOf;
 }
