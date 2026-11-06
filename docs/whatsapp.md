@@ -23,7 +23,7 @@ Both of the first two must be set together, or the API refuses to start.
 Names must match `notification_templates.provider_template_name`. The body
 values go in the order of `notification_templates.provider_params`
 (`{{1}}`, `{{2}}`, ...). The text below mirrors our own copy in migrations
-`000037_meal_notifications` and `000066_meal_variety_notices`; Meta can ask for wording changes during approval,
+`000037_meal_notifications` and `000062_meal_variety_notices`; Meta can ask for wording changes during approval,
 but keep the variable order.
 
 | Template | English body | Arabic body |
@@ -36,7 +36,7 @@ but keep the variable order.
 | `meals_delivery_failed` | We could not deliver your meal from {{1}} today. We will contact you. | لم نتمكن من توصيل وجبتك من {{1}} اليوم. سنتواصل معك. |
 | `meals_next_week` | Next week ({{1}}) {{2}} cooks for you: {{3}}. See the whole week in the app. | الأسبوع القادم ({{1}}) يطبخ لك {{2}}: {{3}}. شاهد الأسبوع كاملًا في التطبيق. |
 
-`meals_next_week` (migration `000066_meal_variety_notices`) goes out Thursday from
+`meals_next_week` (migration `000062_meal_variety_notices`) goes out Thursday from
 18:00 in the kitchen's time zone, once per customer per week (the marker is
 `meal_variety_notices`), alongside a push that also shows in the in-app inbox.
 Its values are dates, kitchen and dishes (`dates_ar`, `kitchen_ar`, `dishes_ar`

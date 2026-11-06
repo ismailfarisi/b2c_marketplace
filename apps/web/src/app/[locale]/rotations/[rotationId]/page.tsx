@@ -4,6 +4,7 @@ import { ApiError, formatMoney } from "@marketplace/api-client";
 
 import { LoadError } from "@/components/load-error";
 import { CancelFlow } from "@/components/meals/cancel-reasons";
+import { RecapCard } from "@/components/meals/next-week";
 import { rotationProblem } from "@/lib/rotation-problem";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -25,6 +26,7 @@ import {
   getRotationCheaperPlans,
   type CancellationReasonCode,
   getMyRotation,
+  listMyRotationRecaps,
   listRotationSwapOptions,
   payRotation,
   renewRotation,
@@ -192,6 +194,13 @@ export default function RotationDetailPage({
 
 function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
   const qc = useQueryClient();
+  // From week 4 on: the month in numbers and the way to next month's kitchens.
+  // A recap that fails to load only hides itself; the rotation still shows.
+  const recaps = useQuery({
+    queryKey: ["me", "rotation-recaps"],
+    queryFn: listMyRotationRecaps,
+  });
+  const recap = recaps.data?.items.find((x) => x.rotation_id === r.id);
   const refresh = () =>
     Promise.all([
       qc.invalidateQueries({ queryKey: ["me", "rotation", r.id] }),
@@ -319,6 +328,7 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
         />
       )}
 
+      {recap && <RecapCard locale={locale} recap={recap} />}
       <Renewal r={r} locale={locale} t={t} onDone={refresh} />
 
       {(r.status === "active" || r.status === "pending_payment") && (

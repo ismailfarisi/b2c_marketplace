@@ -228,8 +228,11 @@ func (s *Service) SwapOptions(ctx context.Context, userID, rotationID uuid.UUID,
 		   AND b.id <> ALL ($6::uuid[])
 		   AND b.service_area IS NOT NULL AND ST_Intersects(b.service_area, a.point)
 		   AND EXISTS (SELECT 1 FROM time_windows w WHERE w.branch_id = b.id AND w.is_active)
+		   AND NOT EXISTS (SELECT 1 FROM meal_tastes t
+		                    WHERE t.user_id = $7 AND t.subject_kind = 'kitchen'
+		                      AND t.subject_id = b.id AND t.sentiment = 'avoid')
 		 ORDER BY b.id, p.rotation_week_price_minor, p.name`,
-		t.addressID, serviceType, t.currency, weekdays, t.slots, exclude)
+		t.addressID, serviceType, t.currency, weekdays, t.slots, exclude, userID)
 	if err != nil {
 		return SwapOptions{}, fmt.Errorf("subscriptions: swap options: %w", err)
 	}
@@ -343,7 +346,7 @@ func (s *Service) SwapRotationWeek(ctx context.Context, userID, rotationID uuid.
 		}
 
 		owner := uuid.NullUUID{UUID: userID, Valid: true}
-		if err := s.cancelInTx(ctx, tx, t.target.subID, owner, "customer", userID, "kitchen_swap"); err != nil {
+		if err := s.cancelInTx(ctx, tx, t.target.subID, owner, "customer", userID, "kitchen_swap", ""); err != nil {
 			return err
 		}
 

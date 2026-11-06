@@ -321,7 +321,7 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := avoidDishes(ctx, tx, live.UserID, menu); err != nil {
+	if err := avoidDishes(ctx, tx, live.UserID, menu.dishes); err != nil {
 		return nil, nil, err
 	}
 	windows, err := windowsByID(ctx, tx, live.BranchID)

@@ -809,14 +809,14 @@ func (s *Service) CancelByStaff(ctx context.Context, actorID, subID uuid.UUID, r
 func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUUID,
 	actorType string, actorID uuid.UUID, reason, code string) error {
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-		return s.cancelInTx(ctx, tx, subID, owner, actorType, actorID, reason)
+		return s.cancelInTx(ctx, tx, subID, owner, actorType, actorID, reason, code)
 	})
 }
 
 // cancelInTx is cancel inside a caller's transaction, for a cancellation that
 // has to land together with what replaces it (a swapped rotation week).
 func (s *Service) cancelInTx(ctx context.Context, tx pgx.Tx, subID uuid.UUID, owner uuid.NullUUID,
-	actorType string, actorID uuid.UUID, reason string) error {
+	actorType string, actorID uuid.UUID, reason, code string) error {
 	{
 		live, err := s.repo.LoadLive(ctx, tx, subID)
 		if err != nil {

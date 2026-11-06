@@ -272,6 +272,12 @@ data class SubscriptionUiState(
     /** Dish marks being saved. */
     val tasteBusy: Set<String> = emptySet(),
     val tasteError: Failure? = null,
+    /** Cheaper kitchens nearby, loaded for the "too expensive" cancel path. */
+    val cheaper: CheaperPlans? = null,
+    val cheaperLoading: Boolean = false,
+    val cheaperError: Failure? = null,
+    /** Set once a guest week was started from this screen. */
+    val guestStarted: GuestWeekResult? = null,
 )
 
 /**
@@ -295,13 +301,6 @@ data class RotationDetailUiState(
     val paymentUrl: String? = null,
     /** Set once the rotation is cancelled, for the screen to leave. */
     val cancelled: Boolean = false,
-
-    /** Cheaper kitchens nearby, loaded for the "too expensive" cancel path. */
-    val cheaper: CheaperPlans? = null,
-    val cheaperLoading: Boolean = false,
-    val cheaperError: Failure? = null,
-    /** Set once a guest week was started from this screen. */
-    val guestStarted: GuestWeekResult? = null,
 )
 
 data class ReviewUiState(

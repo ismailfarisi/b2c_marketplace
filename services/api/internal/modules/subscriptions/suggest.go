@@ -174,7 +174,10 @@ func (s *Service) suggestCandidates(ctx context.Context, userID, addressID uuid.
 		   AND v.deleted_at IS NULL AND v.status = 'active'
 		   AND b.service_area IS NOT NULL AND ST_Intersects(b.service_area, a.point)
 		   AND EXISTS (SELECT 1 FROM time_windows tw WHERE tw.branch_id = b.id AND tw.is_active)
-		 ORDER BY b.id, p.price_minor, p.id`, addressID, rotationServiceType)
+		   AND NOT EXISTS (SELECT 1 FROM meal_tastes t
+		                    WHERE t.user_id = $3 AND t.subject_kind = 'kitchen'
+		                      AND t.subject_id = b.id AND t.sentiment = 'avoid')
+		 ORDER BY b.id, p.price_minor, p.id`, addressID, rotationServiceType, userID)
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: suggestion kitchens: %w", err)
 	}

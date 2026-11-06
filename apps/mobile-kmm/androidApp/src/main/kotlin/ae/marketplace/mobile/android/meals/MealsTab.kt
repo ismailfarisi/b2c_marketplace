@@ -231,6 +231,7 @@ fun MealsTab(
                 onBack = ::back,
                 onOpen = { viewModel.openSubscription(it); go(Page.Subscription) },
                 openPayment = openPayment,
+                onLink = { url -> ae.marketplace.mobile.meals.MealsLinks.parse(url)?.let { innerLink = it } },
             )
         }
     }
@@ -1850,8 +1851,15 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun RotationDetailPage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit, openPayment: (String) -> Unit) {
+private fun RotationDetailPage(
+    vm: MealsViewModel,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    openPayment: (String) -> Unit,
+    onLink: (String) -> Unit,
+) {
     val s by vm.rotationDetail.collectAsState()
+    val mine by vm.mine.collectAsState()
     val arabic = rememberArabic()
     LaunchedEffect(s.paymentUrl) { s.paymentUrl?.let { openPayment(it); vm.clearRotationPaymentUrl() } }
     LaunchedEffect(s.cancelled) { if (s.cancelled) onBack() }
@@ -1874,6 +1882,8 @@ private fun RotationDetailPage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (
                     }
                     failure?.let { FailureStrip(it, onRetry = vm::retryOpenRotation) }
                     s.actionError?.let { FailureStrip(it, onRetry = null, onDismiss = vm::dismissRotationDetailError) }
+                    // From week 4 on: the month in numbers and the way to next month's kitchens.
+                    mine.recaps[r.id]?.let { RecapBlock(it, arabic, onLink) }
                 }
                 items(r.weeks.sortedBy { it.week }, key = { it.week }) { w ->
                     RotationWeekCard(w, r.currency, arabic, picking = s.picking == w.week, busy = s.busy, vm, onOpen)

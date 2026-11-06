@@ -279,7 +279,8 @@ struct MealsScreen: View {
                     onRotation: { requireAccount { viewModel.startRotation(); go(.rotation) } }
                 )
             case .rotationDetail:
-                RotationDetailPage(vm: viewModel, onBack: back, openPayment: openPayment) { id in
+                RotationDetailPage(vm: viewModel, onBack: back, openPayment: openPayment,
+                                   onLink: { url in if let l = MealsLinks.shared.parse(url: url) { follow(l) } }) { id in
                     viewModel.openSubscription(id: id)
                     go(.subscription)
                 }
@@ -2487,9 +2488,11 @@ private struct RotationDetailPage: View {
     let vm: MealsViewModel
     let onBack: () -> Void
     let openPayment: (String) -> Void
+    let onLink: (String) -> Void
     let onOpen: (String) -> Void
 
     @State private var current: RotationDetailUiState?
+    @State private var mine: MyMealsUiState?
     private var s: RotationDetailUiState { current ?? vm.rotationDetail.value }
     @State private var confirming = false
 
@@ -2528,6 +2531,7 @@ private struct RotationDetailPage: View {
                 if state.cancelled { onBack() }
             }
         }
+        .task { for await state in vm.mine { mine = state } }
     }
 
     private func content(_ r: Rotation) -> some View {
@@ -2546,6 +2550,8 @@ private struct RotationDetailPage: View {
                 }
                 if let failure = s.error { FailureStrip(failure: failure, onRetry: { vm.retryOpenRotation() }) }
                 if let failure = s.actionError { FailureStrip(failure: failure, onDismiss: { vm.dismissRotationDetailError() }) }
+                // From week 4 on: the month in numbers and the way to next month's kitchens.
+                if let recap = (mine ?? vm.mine.value).recaps[r.id] { RecapBlock(recap: recap, onLink: onLink) }
                 ForEach(r.weeks.sorted { $0.week < $1.week }, id: \.week) { w in
                     let picking = s.picking?.int32Value == w.week
                     RotationWeekCard(w: w, currency: r.currency, picking: picking, busy: s.busy, vm: vm, onOpen: onOpen)

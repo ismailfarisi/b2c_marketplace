@@ -797,7 +797,6 @@
     <string name="meals_save_change_week">Change next week\'s kitchen</string>
     <string name="meals_save_expensive">Kitchens near you with a lower price per meal:</string>
     <string name="meals_save_expensive_none">No cheaper kitchen covers your address right now.</string>
-    <string name="meals_per_meal">%1$s / meal</string>
     <string name="meals_save_pause">Pause instead — your meals wait for you and the credit stays yours.</string>
     <string name="meals_save_pause_btn">Pause my meals</string>
     <string name="meals_cancel_pick_reason">Pick a reason to continue.</string>

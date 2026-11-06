@@ -389,38 +389,22 @@ func (s *Service) quoteGuestWeek(ctx context.Context, plan PlanTemplate, baseMin
 	})
 }
 
-// avoidedBranches reads the customer's taste memory if another part of the
-// product has built one. The table is optional by contract: when none of the
-// known names exists, nothing is avoided.
+// avoidedBranches is the kitchens the customer marked "not again" in their
+// taste memory (meal_tastes); a guest week never proposes one of them.
 func avoidedBranches(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (map[uuid.UUID]bool, error) {
-	out := map[uuid.UUID]bool{}
-	for _, table := range []string{"taste_avoided_kitchens", "taste_avoidances", "kitchen_avoidances", "customer_kitchen_avoidances"} {
-		var ok bool
-		if err := tx.QueryRow(ctx, `
-			SELECT to_regclass('public.' || $1) IS NOT NULL
-			   AND EXISTS (SELECT 1 FROM information_schema.columns
-			                WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'user_id')
-			   AND EXISTS (SELECT 1 FROM information_schema.columns
-			                WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'branch_id')`,
-			table).Scan(&ok); err != nil {
-			return nil, fmt.Errorf("subscriptions: taste table: %w", err)
-		}
-		if !ok {
-			continue
-		}
-		rows, err := tx.Query(ctx,
-			`SELECT branch_id FROM `+pgx.Identifier{table}.Sanitize()+` WHERE user_id = $1`, userID)
-		if err != nil {
-			return nil, fmt.Errorf("subscriptions: avoided kitchens: %w", err)
-		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		if err != nil {
-			return nil, fmt.Errorf("subscriptions: avoided kitchens: %w", err)
-		}
-		for _, id := range ids {
-			out[id] = true
-		}
-		return out, nil
+	rows, err := tx.Query(ctx, `
+		SELECT subject_id FROM meal_tastes
+		 WHERE user_id = $1 AND subject_kind = 'kitchen' AND sentiment = 'avoid'`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: avoided kitchens: %w", err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: avoided kitchens: %w", err)
+	}
+	out := make(map[uuid.UUID]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
 	}
 	return out, nil
 }
@@ -792,10 +776,6 @@ func (s *Service) cheaperPlans(ctx context.Context, tx pgx.Tx, addressID uuid.UU
 		out.Items = items
 	}
 	return out, nil
-}
-
-type querier interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // attachGuestWeeks decorates My meals rows with their guest-week links so

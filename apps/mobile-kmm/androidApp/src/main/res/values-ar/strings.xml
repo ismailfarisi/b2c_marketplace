@@ -735,7 +735,6 @@
     <string name="meals_save_change_week">غيّر مطبخ الأسبوع القادم</string>
     <string name="meals_save_expensive">مطابخ قريبة منك بسعر أقل للوجبة:</string>
     <string name="meals_save_expensive_none">لا يوجد مطبخ أرخص يغطي عنوانك حاليًا.</string>
-    <string name="meals_per_meal">%1$s / وجبة</string>
     <string name="meals_save_pause">أوقف مؤقتًا بدلًا من ذلك — وجباتك تنتظرك ورصيدك يبقى لك.</string>
     <string name="meals_save_pause_btn">إيقاف وجباتي مؤقتًا</string>
     <string name="meals_cancel_pick_reason">اختر سببًا للمتابعة.</string>
