@@ -157,6 +157,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/rotations/{rotationId}/renew", h.Rotations.Renew)
 			r.Get("/me/rotations", h.Rotations.Mine)
 			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
+			r.Get("/me/next-week", h.Rotations.NextWeek)
+			r.Get("/me/rotation-recaps", h.Rotations.Recaps)
 		}
 		if h.Meals != nil && h.Meals.Promos != nil {
 			r.Get("/me/referrals", h.Meals.MyReferrals)
