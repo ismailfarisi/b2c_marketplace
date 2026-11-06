@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney } from "@marketplace/api-client";
+import { ApiError, formatMoney } from "@marketplace/api-client";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState, type FormEvent } from "react";
@@ -19,6 +19,7 @@ import {
   listAddresses,
   payRotation,
   previewRotation,
+  suggestRotation,
   type RotationInput,
   forgetInvite,
   rememberedInvite,
@@ -30,6 +31,7 @@ import { tagLabel } from "@/components/meals/kitchen-card";
 import { LoadError } from "@/components/load-error";
 import { rotationProblem } from "@/lib/rotation-problem";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
+import { VarietyMeter } from "@/components/meals/variety";
 
 const COPY = {
   en: {
@@ -64,6 +66,12 @@ const COPY = {
     paying: "Processing…",
     loading: "Loading…",
     failed: "Something went wrong. Try again.",
+    balanced: "Build a balanced rotation for me",
+    balancing: "Finding four different kitchens…",
+    balancedHint:
+      "We pick four well-rated kitchens near you with different cuisines and similar prices. You can still swap any of them.",
+    balancedNone:
+      "There aren't enough rotation kitchens near this address for a balanced pick yet. Choose your own four above.",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     slot: {
       breakfast: "Breakfast",
@@ -106,6 +114,12 @@ const COPY = {
     paying: "جارٍ المعالجة…",
     loading: "جارٍ التحميل…",
     failed: "حدث خطأ. حاول مرة أخرى.",
+    balanced: "اختر لي تناوبًا متوازنًا",
+    balancing: "نبحث عن أربعة مطابخ مختلفة…",
+    balancedHint:
+      "نختار أربعة مطابخ قريبة منك وذات تقييم جيد، بمطابخ مختلفة وأسعار متقاربة. يمكنك استبدال أي منها.",
+    balancedNone:
+      "لا توجد مطابخ تناوب كافية قرب هذا العنوان لاختيار متوازن بعد. اختر مطابخك الأربعة بنفسك أعلاه.",
     weekdays: [
       "الأحد",
       "الاثنين",
@@ -175,6 +189,8 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   const [error, setError] = useState<string | null>(null);
   const [codeDraft, setCodeDraft] = useState("");
   const [code, setCode] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<unknown>(null);
   useEffect(() => {
     const invite = rememberedInvite();
     if (invite) {
@@ -342,6 +358,30 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
     }
   }
 
+  // Fills the four picks, days, meals and start from a balanced suggestion.
+  // Everything stays editable; preview re-quotes from the filled builder.
+  async function onBalanced() {
+    if (!addressId || suggesting) return;
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const sug = await suggestRotation({
+        address_id: addressId,
+        ...(code ? { promo_code: code } : {}),
+      });
+      setPicked(sug.branch_ids.slice(0, 4));
+      setDays([...sug.delivery_weekdays].sort());
+      setSlots(sug.meal_slots);
+      setStart(sug.start_date);
+    } catch (err) {
+      setSuggestError(err);
+    } finally {
+      setSuggesting(false);
+    }
+  }
+  const suggestRefused =
+    suggestError instanceof ApiError && suggestError.status === 422;
+
   const list = kitchens.data?.items ?? [];
 
   return (
@@ -404,6 +444,31 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                 <p className="ms-note" role="status">
                   {t.few(list.length)}
                 </p>
+              )}
+              {list.length >= 4 && (
+                <div className="ms-balanced">
+                  <button
+                    type="button"
+                    className="ms-btn"
+                    onClick={() => void onBalanced()}
+                    disabled={suggesting || busy}
+                  >
+                    {suggesting ? t.balancing : t.balanced}
+                  </button>
+                  <span className="ms-sub">{t.balancedHint}</span>
+                  {suggestError != null &&
+                    (suggestRefused ? (
+                      <p className="ms-note" role="status">
+                        {t.balancedNone}
+                      </p>
+                    ) : (
+                      <LoadError
+                        error={suggestError}
+                        onRetry={() => void onBalanced()}
+                        locale={locale}
+                      />
+                    ))}
+                </div>
               )}
               <div className="ms-addresses">
                 {list.map((k) => {
@@ -565,6 +630,9 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                 </dt>
                 <dd className="ms-ok">−{money(preview.data.discount_minor)}</dd>
               </dl>
+            )}
+            {preview.data.variety && (
+              <VarietyMeter variety={preview.data.variety} locale={locale} />
             )}
             <p className="ms-sub">{t.total}</p>
             <p className="ms-plan-price">

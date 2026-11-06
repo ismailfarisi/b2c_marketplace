@@ -21,6 +21,7 @@ Conventions:
  */
 import type { RotationWeek } from './rotationWeek';
 import type { PromoOffer } from './promoOffer';
+import type { RotationVariety } from './rotationVariety';
 
 export interface RotationQuote {
   start_date: string;
@@ -31,4 +32,5 @@ export interface RotationQuote {
   discount_minor?: number;
   promo?: PromoOffer;
   currency: string;
+  variety?: RotationVariety;
 }

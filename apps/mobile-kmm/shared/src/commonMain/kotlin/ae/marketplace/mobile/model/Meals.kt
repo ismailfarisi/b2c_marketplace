@@ -442,6 +442,9 @@ data class Rotation(
     @SerialName("renewed_by_id") val renewedById: String? = null,
     /** Renewals propose fresh kitchens instead of the same four. */
     @SerialName("refresh_on_renew") val refreshOnRenew: Boolean = false,
+
+    /** Advisory variety check from preview; it never blocks buying. */
+    val variety: RotationVariety? = null,
 ) {
     /** Created, not paid yet: the card offers to pay. */
     val awaitingPayment: Boolean get() = status == "pending_payment" || status == "pending"
@@ -452,6 +455,46 @@ data class Rotation(
     /** Paid and ran (or running), not renewed yet: what POST rotations/{id}/renew accepts. */
     val renewable: Boolean get() = renewedById == null && (status == "active" || status == "completed")
 }
+
+@Serializable
+data class RotationVariety(
+    /** low, good or great. */
+    val level: String,
+    val score: Int = 0,
+    @SerialName("distinct_cuisines") val distinctCuisines: Int = 0,
+    val warnings: List<RotationVarietyWarning> = emptyList(),
+) {
+    /** How many of the meter's three steps are lit. */
+    val steps: Int get() = when (level) { "great" -> 3; "good" -> 2; else -> 1 }
+}
+
+@Serializable
+data class RotationVarietyWarning(
+    /** same_cuisine, repeated_dish or repeated_across_weeks. */
+    val code: String,
+    val cuisines: List<String> = emptyList(),
+    val dish: String = "",
+    @SerialName("dish_ar") val dishAr: String? = null,
+    /** repeated_dish only; 0 = Sunday. */
+    val weekday: Int? = null,
+    val kitchens: Int = 0,
+)
+
+@Serializable
+data class RotationSuggestionInput(
+    @SerialName("address_id") val addressId: String,
+    @SerialName("promo_code") val promoCode: String? = null,
+)
+
+@Serializable
+data class RotationSuggestion(
+    @SerialName("plan_ids") val planIds: List<String>,
+    @SerialName("branch_ids") val branchIds: List<String>,
+    @SerialName("start_date") val startDate: String,
+    @SerialName("delivery_weekdays") val deliveryWeekdays: List<Int>,
+    @SerialName("meal_slots") val mealSlots: List<String>,
+    val quote: Rotation,
+)
 
 @Serializable
 data class RotationPage(val items: List<Rotation> = emptyList())

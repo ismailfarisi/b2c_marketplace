@@ -325,6 +325,42 @@ export interface RotationQuote {
   discount_minor: number;
   promo?: Offer;
   currency: string;
+  /** Advisory only; never blocks buying the rotation. */
+  variety?: RotationVariety;
+}
+
+export interface RotationVarietyWarning {
+  code: "same_cuisine" | "repeated_dish" | "repeated_across_weeks";
+  cuisines?: string[];
+  dish?: string;
+  dish_ar?: string | null;
+  /** repeated_dish only; 0 = Sunday. */
+  weekday?: number;
+  kitchens: number;
+}
+
+export interface RotationVariety {
+  level: "low" | "good" | "great";
+  score: number;
+  distinct_cuisines: number;
+  warnings: RotationVarietyWarning[];
+}
+
+export interface RotationSuggestionInput {
+  address_id: string;
+  start_date?: string;
+  delivery_weekdays?: number[];
+  meal_slots?: string[];
+  promo_code?: string;
+}
+
+export interface RotationSuggestion {
+  plan_ids: string[];
+  branch_ids: string[];
+  start_date: string;
+  delivery_weekdays: number[];
+  meal_slots: string[];
+  quote: RotationQuote;
 }
 
 export interface Rotation extends RotationQuote {
@@ -345,6 +381,10 @@ export interface Rotation extends RotationQuote {
 /** Which kitchen the platform would give each week, and the total. */
 export const previewRotation = (data: RotationInput) =>
   apiFetch<RotationQuote>({ url: "/rotations/preview", method: "POST", data });
+
+/** Four balanced kitchens for the address, quoted like preview. Creates nothing. */
+export const suggestRotation = (data: RotationSuggestionInput) =>
+  apiFetch<RotationSuggestion>({ url: "/rotations/suggestion", method: "POST", data });
 
 export const createRotation = (data: RotationInput, opts?: CallOptions) =>
   apiFetch<Rotation>({ url: "/rotations", method: "POST", data, headers: opts?.headers });

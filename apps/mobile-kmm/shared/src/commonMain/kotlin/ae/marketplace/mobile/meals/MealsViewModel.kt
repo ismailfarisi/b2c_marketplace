@@ -18,6 +18,7 @@ import ae.marketplace.mobile.model.RenewalProposal
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationSwapOptions
 import ae.marketplace.mobile.model.RotationInput
+import ae.marketplace.mobile.model.RotationSuggestionInput
 import ae.marketplace.mobile.model.ScheduleRule
 import ae.marketplace.mobile.model.SubscribeInput
 import ae.marketplace.mobile.model.SubscriptionPreview
@@ -207,6 +208,13 @@ data class RotationUiState(
     val candidatesLoaded: Boolean = false,
     /** The rotation is created and its payment went through (or was handed to the provider). */
     val paid: Boolean = false,
+    /** Days and meals a balanced suggestion chose; used while every pick still serves them. */
+    val days: List<Int> = emptyList(),
+    val slots: List<String> = emptyList(),
+    val suggesting: Boolean = false,
+    val suggestError: Failure? = null,
+    /** Too few kitchens near the address for a balanced suggestion. */
+    val suggestNone: Boolean = false,
 ) {
     /** Fewer kitchens deliver here than a rotation needs. */
     val tooFewKitchens: Boolean
@@ -925,12 +933,14 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         val slots = plans.map { it.mealSlots.toSet() }.reduce { a, b -> a intersect b }
         val perWeek = plans.minOf { it.daysPerWeek }
         val perDay = plans.minOf { it.mealsPerDay }
+        val chosenDays = s.days.takeIf { it.size == perWeek && days.containsAll(it) } ?: days.sorted().take(perWeek)
+        val chosenSlots = s.slots.takeIf { it.size == perDay && slots.containsAll(it) } ?: slots.sorted().take(perDay)
         return RotationInput(
             planIds = plans.map { it.id },
             addressId = address,
             startDate = s.startDate,
-            deliveryWeekdays = days.sorted().take(perWeek),
-            mealSlots = slots.sorted().take(perDay),
+            deliveryWeekdays = chosenDays.sorted(),
+            mealSlots = chosenSlots,
         )
     }
 
@@ -942,6 +952,36 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 _rotation.update { it.copy(quote = q, error = null) }
             } catch (e: Throwable) {
                 _rotation.update { it.copy(error = e.toFailure()) }
+            }
+        }
+    }
+
+    /** Fills the four picks from a balanced suggestion; the customer can still swap any of them. */
+    fun suggestRotation() {
+        val s = _rotation.value
+        if (s.suggesting || s.busy) return
+        val address = s.addressId ?: return
+        _rotation.update { it.copy(suggesting = true, suggestError = null, suggestNone = false) }
+        viewModelScope.launch {
+            try {
+                val sug = api.suggestRotation(RotationSuggestionInput(address))
+                _rotation.update {
+                    it.copy(
+                        picked = sug.branchIds.filter { id -> id in it.plans }.take(ROTATION_KITCHENS),
+                        days = sug.deliveryWeekdays,
+                        slots = sug.mealSlots,
+                        startDate = maxOf(it.startDate, sug.startDate),
+                        quote = null,
+                        suggesting = false,
+                    ).newDraft()
+                }
+                quoteRotation()
+            } catch (e: Throwable) {
+                val f = e.toFailure()
+                _rotation.update {
+                    if (f is Failure.Rejected) it.copy(suggesting = false, suggestNone = true)
+                    else it.copy(suggesting = false, suggestError = f)
+                }
             }
         }
     }

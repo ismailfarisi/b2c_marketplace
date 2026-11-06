@@ -41,6 +41,8 @@ import ae.marketplace.mobile.model.ProposalKitchen
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationWeek
 import ae.marketplace.mobile.meals.RotationDetailUiState
+
+import ae.marketplace.mobile.model.RotationVariety
 import ae.marketplace.mobile.model.UpcomingMeal
 import android.content.Intent
 import android.net.Uri
@@ -1283,6 +1285,22 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
             s.adventure?.let { a -> AdventureChips(a, enabled = true, onPick = vm::setBuilderAdventure) }
             Label(stringResource(R.string.meals_pick_four, s.picked.size))
             if (s.busy && s.candidates.isEmpty()) LoadingBlock(inline = true)
+            if (s.candidatesLoaded && !s.tooFewKitchens && s.addressId != null) {
+                SecondaryButton(
+                    stringResource(if (s.suggesting) R.string.meals_balancing else R.string.meals_balanced),
+                    vm::suggestRotation,
+                    Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
+                )
+                if (s.suggestNone) {
+                    Text(
+                        stringResource(R.string.meals_balanced_none),
+                        color = M.Muted,
+                        fontSize = Type.Secondary,
+                        modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
+                    )
+                }
+                s.suggestError?.let { FailureStrip(it, onRetry = vm::suggestRotation) }
+            }
             s.candidates.forEach { k ->
                 val price = s.plans[k.branchId]?.rotationWeekPriceMinor ?: k.rotationWeekPriceMinor ?: 0
                 Choice(
@@ -1313,6 +1331,7 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
                     if (q.discountMinor > 0) Line(stringResource(R.string.meals_discount), "−" + money(q.discountMinor, q.currency))
                     Line(stringResource(R.string.meals_total), money(q.amountMinor, q.currency), strong = true)
                 }
+                q.variety?.let { VarietyCard(it, arabic) }
             }
             // Before the kitchens load, retry loads them; after, the pay button is the retry.
             s.error?.let { FailureStrip(it, onRetry = if (s.candidatesLoaded) null else vm::startRotation) }
@@ -1325,6 +1344,51 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
             )
         }
         BottomPad()
+    }
+}
+
+/** The quote's advisory variety check: a three-step meter and plain-language warnings. */
+@Composable
+private fun VarietyCard(v: RotationVariety, arabic: Boolean) {
+    val tone = when (v.level) { "great" -> M.Leaf; "good" -> M.Saffron; else -> M.Chilli }
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(when (v.level) { "great" -> R.string.meals_variety_great; "good" -> R.string.meals_variety_good; else -> R.string.meals_variety_low }),
+                color = M.Ink,
+                fontSize = Type.Body,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            (1..3).forEach { i ->
+                Box(
+                    Modifier.padding(start = 4.dp).size(width = 22.dp, height = 6.dp)
+                        .background(if (i <= v.steps) tone else M.Line, RoundedCornerShape(50)),
+                )
+            }
+        }
+        Text(
+            stringResource(when (v.level) { "great" -> R.string.meals_variety_hint_great; "good" -> R.string.meals_variety_hint_good; else -> R.string.meals_variety_hint_low }),
+            color = M.Muted,
+            fontSize = Type.Secondary,
+        )
+        v.warnings.forEach { w ->
+            val dish = pick(w.dish, w.dishAr, arabic)
+            Text(
+                "• " + when (w.code) {
+                    "same_cuisine" -> stringResource(
+                        R.string.meals_variety_same_cuisine, w.kitchens,
+                        w.cuisines.joinToString(if (arabic) " و" else " and ") { MealTags.label(it, arabic) },
+                    )
+                    "repeated_dish" -> stringResource(R.string.meals_variety_repeated_dish, dish, weekday(w.weekday ?: 0, arabic), w.kitchens)
+                    else -> stringResource(R.string.meals_variety_across_weeks, dish, w.kitchens)
+                },
+                color = M.Ink,
+                fontSize = Type.Secondary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (v.level != "great") Text(stringResource(R.string.meals_variety_advisory), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

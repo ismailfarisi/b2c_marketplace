@@ -150,6 +150,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 		}
 		if h.Rotations != nil {
 			r.Post("/rotations/preview", h.Rotations.Preview)
+			r.Post("/rotations/suggestion", h.Rotations.Suggest)
 			r.Post("/rotations", h.Rotations.Create)
 			r.Post("/rotations/{rotationId}/payment-intent", h.Rotations.Pay)
 			r.Post("/rotations/{rotationId}/cancel", h.Rotations.Cancel)

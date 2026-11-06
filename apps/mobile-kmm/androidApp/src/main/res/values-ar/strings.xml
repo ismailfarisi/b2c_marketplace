@@ -686,4 +686,18 @@
     <string name="meals_swap_confirm">تغيير مطبخ هذا الأسبوع إلى %1$s؟ لا يمكن التراجع عن ذلك.</string>
     <string name="meals_swap_yes">تغيير</string>
     <string name="meals_open_week">الوجبات واختيار الأطباق</string>
+
+    <string name="meals_variety_low">تنوّع قليل</string>
+    <string name="meals_variety_good">تنوّع جيد</string>
+    <string name="meals_variety_great">تنوّع ممتاز</string>
+    <string name="meals_variety_hint_low">قد تتشابه أسابيعك. استبدال مطبخ واحد يساعد.</string>
+    <string name="meals_variety_hint_good">مزيج جيد. تبديل بسيط قد يجعله أفضل.</string>
+    <string name="meals_variety_hint_great">أربعة مذاقات مختلفة على مدار الشهر.</string>
+    <string name="meals_variety_advisory">هذه مجرد نصيحة، ويمكنك بدء التناوب بأي أربعة مطابخ.</string>
+    <string name="meals_variety_same_cuisine">%1$d من مطابخك تطبخ المطبخ %2$s.</string>
+    <string name="meals_variety_repeated_dish">%1$s يوم %2$s يأتي من %3$d مطابخ.</string>
+    <string name="meals_variety_across_weeks">%1$s يتكرر في %2$d من أسابيعك.</string>
+    <string name="meals_balanced">اختر لي تناوبًا متوازنًا</string>
+    <string name="meals_balancing">نبحث عن أربعة مطابخ مختلفة…</string>
+    <string name="meals_balanced_none">لا توجد مطابخ تناوب كافية قرب هذا العنوان لاختيار متوازن بعد. اختر مطابخك الأربعة بنفسك.</string>
 </resources>

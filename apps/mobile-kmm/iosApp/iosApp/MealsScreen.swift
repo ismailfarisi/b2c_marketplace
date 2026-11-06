@@ -1934,6 +1934,23 @@ private struct RotationPage: View {
                     }
                     FieldLabel(text: tr("meals_pick_four", s.picked.count))
                     if s.busy && s.candidates.isEmpty { LoadingBlock() }
+                    if s.candidatesLoaded && !s.tooFewKitchens && s.addressId != nil {
+                        SecondaryButton(label: NSLocalizedString(s.suggesting ? "meals_balancing" : "meals_balanced", comment: "")) {
+                            vm.suggestRotation()
+                        }
+                        .padding(.horizontal, Space.edge)
+                        .padding(.vertical, Space.small)
+                        if s.suggestNone {
+                            Text(NSLocalizedString("meals_balanced_none", comment: ""))
+                                .font(.system(size: TypeScale.secondary))
+                                .foregroundStyle(MP.textMuted)
+                                .padding(.horizontal, Space.edge)
+                                .padding(.vertical, Space.small)
+                        }
+                        if let failure = s.suggestError {
+                            FailureStrip(failure: failure, onRetry: { vm.suggestRotation() })
+                        }
+                    }
                     ForEach(s.candidates, id: \.branchId) { k in
                         let price = s.plans[k.branchId]?.rotationWeekPriceMinor?.int64Value
                             ?? k.rotationWeekPriceMinor?.int64Value ?? 0
@@ -1965,6 +1982,9 @@ private struct RotationPage: View {
                             PriceLine(label: NSLocalizedString("meals_total", comment: ""), value: money(q.amountMinor, q.currency), strong: true)
                         }
                         .padding(.top, Space.medium)
+                        if let v = q.variety {
+                            VarietyBox(v: v)
+                        }
                     }
                     // Before the kitchens load, retry loads them; after, the pay button is the retry.
                     if let failure = s.error {
@@ -1990,6 +2010,56 @@ private struct RotationPage: View {
                 if state.paid { onPaid() }
             }
         }
+    }
+}
+
+/// The quote's advisory variety check: a three-step meter and plain-language warnings.
+private struct VarietyBox: View {
+    let v: RotationVariety
+
+    private var tone: Color { v.level == "great" ? Warm.leaf : v.level == "good" ? Warm.saffron : Warm.chilli }
+
+    private func text(_ w: RotationVarietyWarning) -> String {
+        let dish = pick(w.dish, w.dishAr)
+        switch w.code {
+        case "same_cuisine":
+            let names = w.cuisines.map { tagLabel($0) }.joined(separator: isArabicLocale ? " و" : " and ")
+            return tr("meals_variety_same_cuisine", Int(w.kitchens), names)
+        case "repeated_dish":
+            return tr("meals_variety_repeated_dish", dish, weekday(w.weekday?.int32Value ?? 0), Int(w.kitchens))
+        default:
+            return tr("meals_variety_across_weeks", dish, Int(w.kitchens))
+        }
+    }
+
+    var body: some View {
+        CardBox {
+            HStack {
+                Text(NSLocalizedString("meals_variety_" + v.level, comment: ""))
+                    .font(.system(size: TypeScale.body, weight: .semibold))
+                    .foregroundStyle(Warm.ink)
+                Spacer()
+                ForEach(1...3, id: \.self) { i in
+                    Capsule()
+                        .fill(i <= Int(v.steps) ? tone : Warm.line)
+                        .frame(width: 22, height: 6)
+                }
+            }
+            Text(NSLocalizedString("meals_variety_hint_" + v.level, comment: ""))
+                .font(.system(size: TypeScale.secondary))
+                .foregroundStyle(Warm.muted)
+            ForEach(Array(v.warnings.enumerated()), id: \.offset) { _, w in
+                Text("• " + text(w))
+                    .font(.system(size: TypeScale.secondary))
+                    .foregroundStyle(Warm.ink)
+            }
+            if v.level != "great" {
+                Text(NSLocalizedString("meals_variety_advisory", comment: ""))
+                    .font(.system(size: TypeScale.secondary))
+                    .foregroundStyle(Warm.muted)
+            }
+        }
+        .padding(.top, Space.medium)
     }
 }
 
