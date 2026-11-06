@@ -188,3 +188,23 @@ func (h *AdminHandlers) CancelMealSubscription(w http.ResponseWriter, r *http.Re
 		"note":   "future deliveries cancelled and the unearned part of the paid cycle credited back. Delivered meals stay delivered.",
 	})
 }
+
+// MealCancellationReasons answers GET /admin/meals/cancellation-reasons.
+func (h *AdminHandlers) MealCancellationReasons(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.caller(w, r, admin.PermCommerceRead); !ok {
+		return
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	if days <= 0 {
+		days = 90
+	}
+	items, err := h.Subscriptions.CancellationReasons(r.Context(), days)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []subscriptions.CancellationReason{}
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": items, "days": days})
+}

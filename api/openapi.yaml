@@ -1609,7 +1609,9 @@ paths:
             schema:
               type: object
               properties:
-                reason: { type: string, maxLength: 500 }
+                reason: { type: string, maxLength: 500, description: Optional free-text note. }
+                reason_code:
+                  $ref: "#/components/schemas/CancellationReasonCode"
       responses:
         "200": { description: Cancelled }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1755,6 +1757,145 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /me/subscriptions/{subscriptionId}/guest-week:
+    get:
+      tags: [subscriptions]
+      operationId: getGuestWeekOffer
+      summary: Is a guest week on offer next week, and with which kitchens
+      description: |
+        A guest week lets a single-kitchen subscriber try another kitchen for
+        one week without leaving: next week on their own subscription is paused
+        with wallet credit and a one-week subscription with the guest kitchen is
+        paid from that credit. Offered once a subscription has two weeks of
+        completed deliveries, at most once per billing cycle, before the same
+        cutoff as a skip. Kitchens must cover the address, days and slots and
+        price a meal within 15% of the current plan.
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestWeekOffer" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/subscriptions/{subscriptionId}/cheaper-plans:
+    get:
+      tags: [subscriptions]
+      operationId: getCheaperPlans
+      summary: Plans around the customer's address with a lower per-meal price
+      description: For the "too expensive" cancel path; excludes the current kitchen.
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheaperPlans" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/rotations/{rotationId}/cheaper-plans:
+    get:
+      tags: [subscriptions]
+      operationId: getRotationCheaperPlans
+      summary: Plans cheaper per meal than the rotation's average
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheaperPlans" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /subscriptions/{subscriptionId}/guest-week:
+    post:
+      tags: [subscriptions]
+      operationId: startGuestWeek
+      summary: Try a different kitchen next week
+      description: |
+        Pauses next week on this subscription with wallet credit (the pause
+        allowance is not consumed) and opens a one-week subscription with the
+        chosen kitchen. The credit pays for the guest week; anything above it is
+        a pending sandbox order to pay, anything below it stays in the wallet.
+        The guest kitchen is paid through its own cycle; the original kitchen
+        is not paid for the paused week. Send an `Idempotency-Key`.
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id: { type: string, format: uuid, description: One of the offer's options. }
+      responses:
+        "201":
+          description: Guest week created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestWeekResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            `guest_week_exists` (already one this cycle), `guest_week_not_eligible`,
+            `guest_week_unavailable`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /subscriptions/{subscriptionId}/guest-week/dismiss:
+    post:
+      tags: [subscriptions]
+      operationId: dismissGuestWeek
+      summary: Hide the guest-week offer for the rest of this cycle
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Dismissed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/meals/cancellation-reasons:
+    get:
+      tags: [admin]
+      operationId: adminMealCancellationReasons
+      summary: Why customers cancelled, by structured reason
+      parameters:
+        - { name: days, in: query, required: false, schema: { type: integer, minimum: 1, default: 90 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, days]
+                properties:
+                  days: { type: integer }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [code, subscriptions, rotations]
+                      properties:
+                        code: { type: string, description: A CancellationReasonCode, or `unspecified`. }
+                        subscriptions: { type: integer }
+                        rotations: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /rotations/preview:
     post:
       tags: [subscriptions]
@@ -1859,7 +2000,9 @@ paths:
             schema:
               type: object
               properties:
-                reason: { type: string, maxLength: 500 }
+                reason: { type: string, maxLength: 500, description: Optional free-text note. }
+                reason_code:
+                  $ref: "#/components/schemas/CancellationReasonCode"
       responses:
         "204": { description: Cancelled }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -7375,6 +7518,14 @@ components:
           format: uuid
           description: The subscription a one-tap renew created from this one.
         can_renew: { type: boolean, description: Whether renewSubscription is offered. }
+        guest_week:
+          oneOf:
+            - $ref: "#/components/schemas/GuestWeekLink"
+            - type: "null"
+        guest_of:
+          oneOf:
+            - $ref: "#/components/schemas/GuestWeekLink"
+            - type: "null"
     RotationInput:
       type: object
       required: [plan_ids, address_id, start_date, delivery_weekdays, meal_slots]
@@ -7769,6 +7920,10 @@ components:
             cutoff_hours: { type: integer }
             pause_allowance_days: { type: integer }
             pause_days_used: { type: integer }
+            guest_week_offer:
+              oneOf:
+                - $ref: "#/components/schemas/GuestWeekOffer"
+                - type: "null"
             upcoming: { type: array, items: { $ref: "#/components/schemas/UpcomingMeal" } }
             skipped:
               type: array
@@ -7796,6 +7951,96 @@ components:
                 properties:
                   from_date: { type: string, format: date }
                   to_date: { type: string, format: date }
+    CancellationReasonCode:
+      type: string
+      description: Structured answer to "why are you leaving?", stored next to the free-text note.
+      enum: [bored_of_food, too_expensive, food_quality, delivery_problems, moving_away, other]
+    GuestWeekLink:
+      type: object
+      description: >-
+        The other half of a guest week. On the original subscription `kitchen_name`
+        is the guest kitchen; on the guest subscription it is the kitchen the
+        customer came from.
+      required: [subscription_id, guest_subscription_id, kitchen_name, week_start, week_end, status, completed]
+      properties:
+        subscription_id: { type: string, format: uuid, description: The original subscription. }
+        guest_subscription_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        week_start: { type: string, format: date }
+        week_end: { type: string, format: date }
+        status: { type: string, description: Status of the guest subscription. }
+        pending_order_id: { type: [string, "null"], format: uuid }
+        completed: { type: boolean, description: The guest week is over; time to suggest a rotation. }
+    GuestWeekOption:
+      type: object
+      required: [plan_id, branch_id, kitchen_name, plan_name, cuisines, per_meal_minor, week_minor, wallet_minor, due_minor, leftover_credit_minor, currency]
+      properties:
+        plan_id: { type: string, format: uuid }
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        plan_name: { type: string }
+        plan_name_ar: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+        per_meal_minor: { type: integer, format: int64 }
+        week_minor: { type: integer, format: int64, description: Price of the guest week. }
+        wallet_minor: { type: integer, format: int64, description: Paid from the paused week's credit. }
+        due_minor: { type: integer, format: int64, description: Left to pay by card (sandbox). }
+        leftover_credit_minor: { type: integer, format: int64, description: Credit that stays in the wallet. }
+        currency: { type: string }
+    GuestWeekOffer:
+      type: object
+      required: [eligible, delivery_days, meals, credit_minor, current_per_meal_minor, currency, options]
+      properties:
+        eligible: { type: boolean }
+        reason:
+          type: string
+          description: >-
+            Why not, when `eligible` is false: rotation, not_active, too_few_weeks,
+            past_cutoff, already_used, dismissed, no_deliveries, no_kitchens, unavailable.
+        week_start: { type: string, format: date }
+        week_end: { type: string, format: date }
+        delivery_days: { type: integer }
+        meals: { type: integer }
+        credit_minor: { type: integer, format: int64 }
+        current_per_meal_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        options: { type: array, items: { $ref: "#/components/schemas/GuestWeekOption" } }
+    GuestWeekResult:
+      type: object
+      required: [guest_subscription_id, status, week_start, week_end, credit_minor, wallet_minor, due_minor, leftover_credit_minor, currency]
+      properties:
+        guest_subscription_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, pending_payment] }
+        pending_order_id: { type: [string, "null"], format: uuid, description: Set when `due_minor` must be paid. }
+        week_start: { type: string, format: date }
+        week_end: { type: string, format: date }
+        credit_minor: { type: integer, format: int64 }
+        wallet_minor: { type: integer, format: int64 }
+        due_minor: { type: integer, format: int64 }
+        leftover_credit_minor: { type: integer, format: int64 }
+        currency: { type: string }
+    CheaperPlan:
+      type: object
+      required: [plan_id, branch_id, kitchen_name, plan_name, cuisines, per_meal_minor, currency]
+      properties:
+        plan_id: { type: string, format: uuid }
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        plan_name: { type: string }
+        plan_name_ar: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+        per_meal_minor: { type: integer, format: int64 }
+        currency: { type: string }
+    CheaperPlans:
+      type: object
+      required: [current_per_meal_minor, currency, items]
+      properties:
+        current_per_meal_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        items: { type: array, items: { $ref: "#/components/schemas/CheaperPlan" } }
     PrepLine:
       type: object
       required: [meal_slot, name, portions, chosen_by_customer]

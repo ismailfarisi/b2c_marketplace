@@ -36,9 +36,12 @@ import type {
 import type {
   CancelRotationBody,
   CancelSubscriptionBody,
+  CheaperPlans,
   ChooseSubscriptionMealBody,
   CreateSubscriptionBody,
   GetMyReferrals200,
+  GuestWeekOffer,
+  GuestWeekResult,
   ListMyRotations200,
   ListMySubscriptions200,
   MySubscriptionDetail,
@@ -58,6 +61,7 @@ import type {
   SetRotationRenewalBody,
   SetSubscriptionRenewalBody,
   SkipDeliveryBody,
+  StartGuestWeekBody,
   SubscriptionCreated,
   SubscriptionPreview,
   UnauthorizedResponse,
@@ -920,6 +924,353 @@ export function useGetMySubscription<TData = Awaited<ReturnType<typeof getMySubs
 
 
 /**
+ * A guest week lets a single-kitchen subscriber try another kitchen for
+one week without leaving: next week on their own subscription is paused
+with wallet credit and a one-week subscription with the guest kitchen is
+paid from that credit. Offered once a subscription has two weeks of
+completed deliveries, at most once per billing cycle, before the same
+cutoff as a skip. Kitchens must cover the address, days and slots and
+price a meal within 15% of the current plan.
+
+ * @summary Is a guest week on offer next week, and with which kitchens
+ */
+export const getGuestWeekOffer = (
+    subscriptionId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GuestWeekOffer>(
+      {url: `/me/subscriptions/${subscriptionId}/guest-week`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetGuestWeekOfferQueryKey = (subscriptionId?: string,) => {
+    return [
+    `/me/subscriptions/${subscriptionId}/guest-week`
+    ] as const;
+    }
+
+    
+export const getGetGuestWeekOfferQueryOptions = <TData = Awaited<ReturnType<typeof getGuestWeekOffer>>, TError = UnauthorizedResponse | NotFoundResponse>(subscriptionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGuestWeekOffer>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGuestWeekOfferQueryKey(subscriptionId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGuestWeekOffer>>> = ({ signal }) => getGuestWeekOffer(subscriptionId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(subscriptionId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGuestWeekOffer>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGuestWeekOfferQueryResult = NonNullable<Awaited<ReturnType<typeof getGuestWeekOffer>>>
+export type GetGuestWeekOfferQueryError = UnauthorizedResponse | NotFoundResponse
+
+
+/**
+ * @summary Is a guest week on offer next week, and with which kitchens
+ */
+
+export function useGetGuestWeekOffer<TData = Awaited<ReturnType<typeof getGuestWeekOffer>>, TError = UnauthorizedResponse | NotFoundResponse>(
+ subscriptionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGuestWeekOffer>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGuestWeekOfferQueryOptions(subscriptionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * For the "too expensive" cancel path; excludes the current kitchen.
+ * @summary Plans around the customer's address with a lower per-meal price
+ */
+export const getCheaperPlans = (
+    subscriptionId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<CheaperPlans>(
+      {url: `/me/subscriptions/${subscriptionId}/cheaper-plans`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetCheaperPlansQueryKey = (subscriptionId?: string,) => {
+    return [
+    `/me/subscriptions/${subscriptionId}/cheaper-plans`
+    ] as const;
+    }
+
+    
+export const getGetCheaperPlansQueryOptions = <TData = Awaited<ReturnType<typeof getCheaperPlans>>, TError = UnauthorizedResponse | NotFoundResponse>(subscriptionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCheaperPlans>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCheaperPlansQueryKey(subscriptionId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCheaperPlans>>> = ({ signal }) => getCheaperPlans(subscriptionId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(subscriptionId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCheaperPlans>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCheaperPlansQueryResult = NonNullable<Awaited<ReturnType<typeof getCheaperPlans>>>
+export type GetCheaperPlansQueryError = UnauthorizedResponse | NotFoundResponse
+
+
+/**
+ * @summary Plans around the customer's address with a lower per-meal price
+ */
+
+export function useGetCheaperPlans<TData = Awaited<ReturnType<typeof getCheaperPlans>>, TError = UnauthorizedResponse | NotFoundResponse>(
+ subscriptionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCheaperPlans>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCheaperPlansQueryOptions(subscriptionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Plans cheaper per meal than the rotation's average
+ */
+export const getRotationCheaperPlans = (
+    rotationId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<CheaperPlans>(
+      {url: `/me/rotations/${rotationId}/cheaper-plans`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetRotationCheaperPlansQueryKey = (rotationId?: string,) => {
+    return [
+    `/me/rotations/${rotationId}/cheaper-plans`
+    ] as const;
+    }
+
+    
+export const getGetRotationCheaperPlansQueryOptions = <TData = Awaited<ReturnType<typeof getRotationCheaperPlans>>, TError = UnauthorizedResponse | NotFoundResponse>(rotationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRotationCheaperPlans>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRotationCheaperPlansQueryKey(rotationId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRotationCheaperPlans>>> = ({ signal }) => getRotationCheaperPlans(rotationId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(rotationId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRotationCheaperPlans>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRotationCheaperPlansQueryResult = NonNullable<Awaited<ReturnType<typeof getRotationCheaperPlans>>>
+export type GetRotationCheaperPlansQueryError = UnauthorizedResponse | NotFoundResponse
+
+
+/**
+ * @summary Plans cheaper per meal than the rotation's average
+ */
+
+export function useGetRotationCheaperPlans<TData = Awaited<ReturnType<typeof getRotationCheaperPlans>>, TError = UnauthorizedResponse | NotFoundResponse>(
+ rotationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRotationCheaperPlans>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRotationCheaperPlansQueryOptions(rotationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * Pauses next week on this subscription with wallet credit (the pause
+allowance is not consumed) and opens a one-week subscription with the
+chosen kitchen. The credit pays for the guest week; anything above it is
+a pending sandbox order to pay, anything below it stays in the wallet.
+The guest kitchen is paid through its own cycle; the original kitchen
+is not paid for the paused week. Send an `Idempotency-Key`.
+
+ * @summary Try a different kitchen next week
+ */
+export const startGuestWeek = (
+    subscriptionId: string,
+    startGuestWeekBody: StartGuestWeekBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<GuestWeekResult>(
+      {url: `/subscriptions/${subscriptionId}/guest-week`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: startGuestWeekBody, signal
+    },
+      );
+    }
+  
+
+
+export const getStartGuestWeekMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startGuestWeek>>, TError,{subscriptionId: string;data: StartGuestWeekBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof startGuestWeek>>, TError,{subscriptionId: string;data: StartGuestWeekBody}, TContext> => {
+
+const mutationKey = ['startGuestWeek'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startGuestWeek>>, {subscriptionId: string;data: StartGuestWeekBody}> = (props) => {
+          const {subscriptionId,data} = props ?? {};
+
+          return  startGuestWeek(subscriptionId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartGuestWeekMutationResult = NonNullable<Awaited<ReturnType<typeof startGuestWeek>>>
+    export type StartGuestWeekMutationBody = StartGuestWeekBody
+    export type StartGuestWeekMutationError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse
+
+    /**
+ * @summary Try a different kitchen next week
+ */
+export const useStartGuestWeek = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startGuestWeek>>, TError,{subscriptionId: string;data: StartGuestWeekBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startGuestWeek>>,
+        TError,
+        {subscriptionId: string;data: StartGuestWeekBody},
+        TContext
+      > => {
+
+      const mutationOptions = getStartGuestWeekMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * @summary Hide the guest-week offer for the rest of this cycle
+ */
+export const dismissGuestWeek = (
+    subscriptionId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<void>(
+      {url: `/subscriptions/${subscriptionId}/guest-week/dismiss`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getDismissGuestWeekMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissGuestWeek>>, TError,{subscriptionId: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof dismissGuestWeek>>, TError,{subscriptionId: string}, TContext> => {
+
+const mutationKey = ['dismissGuestWeek'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissGuestWeek>>, {subscriptionId: string}> = (props) => {
+          const {subscriptionId} = props ?? {};
+
+          return  dismissGuestWeek(subscriptionId,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissGuestWeekMutationResult = NonNullable<Awaited<ReturnType<typeof dismissGuestWeek>>>
+    
+    export type DismissGuestWeekMutationError = UnauthorizedResponse | NotFoundResponse
+
+    /**
+ * @summary Hide the guest-week offer for the rest of this cycle
+ */
+export const useDismissGuestWeek = <TError = UnauthorizedResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissGuestWeek>>, TError,{subscriptionId: string}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissGuestWeek>>,
+        TError,
+        {subscriptionId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getDismissGuestWeekMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
  * Checks the four plans the same way createRotation does (all in the rotation, four different kitchens, the schedule fits every plan, every kitchen delivers to the address) and returns the week order the platform would assign. Creates nothing.
  * @summary Which kitchen would cook which week, and the total
  */

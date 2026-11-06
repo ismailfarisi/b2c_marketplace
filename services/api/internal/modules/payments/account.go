@@ -26,6 +26,13 @@ type AccountCharge func(ctx context.Context, tx pgx.Tx, amountMinor int64, curre
 // order.confirmed event, capture on delivery and the ledger — is the same path
 // a card payment takes.
 func (s *Service) AuthorizeOnAccount(ctx context.Context, userID, orderID uuid.UUID, accountRef string, charge AccountCharge) (*Intent, error) {
+	return s.authorizeOffGateway(ctx, userID, orderID, AccountProvider, accountRef, charge)
+}
+
+// authorizeOffGateway is the shared confirm path for orders paid without the
+// card gateway: a company account or the customer's own wallet credit.
+func (s *Service) authorizeOffGateway(ctx context.Context, userID, orderID uuid.UUID,
+	provider, accountRef string, charge AccountCharge) (*Intent, error) {
 	quote, err := s.loadAuthorizableQuote(ctx, userID, orderID)
 	if err != nil {
 		return nil, err
@@ -33,7 +40,7 @@ func (s *Service) AuthorizeOnAccount(ctx context.Context, userID, orderID uuid.U
 	intent := &Intent{
 		AmountMinor: quote.AuthorizeMinor,
 		Currency:    quote.Currency,
-		Provider:    AccountProvider,
+		Provider:    provider,
 		Status:      "authorized",
 	}
 	err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -54,7 +61,7 @@ func (s *Service) AuthorizeOnAccount(ctx context.Context, userID, orderID uuid.U
 				provider_ref, amount_minor, currency
 			) VALUES ($1,$2,$3,'authorization','succeeded',$4,$5,$6,$7)
 			RETURNING id`,
-			orderID, quote.ID, userID, AccountProvider, accountRef,
+			orderID, quote.ID, userID, provider, accountRef,
 			quote.AuthorizeMinor, quote.Currency,
 		).Scan(&intent.ID); err != nil {
 			return fmt.Errorf("insert payment: %w", err)

@@ -7,7 +7,63 @@ import { use, useState } from "react";
 import { Panel, plural } from "@/components/admin/detail";
 import { ConsoleError } from "@/components/admin/errors";
 import { Tag, money } from "@/components/admin/table";
-import { SUBSCRIPTION_STATUSES, getMealSubscriptions, statusTone } from "@/lib/admin-api";
+import {
+  SUBSCRIPTION_STATUSES,
+  getCancellationReasons,
+  getMealSubscriptions,
+  statusTone,
+} from "@/lib/admin-api";
+
+const REASON_LABEL: Record<string, string> = {
+  bored_of_food: "Bored of the food",
+  too_expensive: "Too expensive",
+  food_quality: "Food quality",
+  delivery_problems: "Delivery problems",
+  moving_away: "Moving / away",
+  other: "Other",
+  unspecified: "No reason given",
+};
+
+function CancelReasons() {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["admin", "meals", "cancellation-reasons"],
+    queryFn: () => getCancellationReasons(90),
+  });
+  const items = data?.items ?? [];
+  const total = items.reduce((n, r) => n + r.subscriptions + r.rotations, 0);
+  return (
+    <Panel title="Why customers cancel" note={`last ${data?.days ?? 90} days`}>
+      {error ? (
+        <ConsoleError error={error} what="cancel reasons" perm="commerce.read" onRetry={() => void refetch()} />
+      ) : isLoading ? (
+        <p className="muted">Loading…</p>
+      ) : total === 0 ? (
+        <p className="muted">No cancellations in this window.</p>
+      ) : (
+        <table className="money-table">
+          <thead>
+            <tr>
+              <th>Reason</th>
+              <th className="num">Subscriptions</th>
+              <th className="num">Rotations</th>
+              <th className="num">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((r) => (
+              <tr key={r.code}>
+                <td>{REASON_LABEL[r.code] ?? r.code}</td>
+                <td className="num">{r.subscriptions}</td>
+                <td className="num">{r.rotations}</td>
+                <td className="num">{Math.round(((r.subscriptions + r.rotations) * 100) / total)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  );
+}
 
 export default function MealSubscriptionsPage({
   params,
@@ -68,6 +124,8 @@ export default function MealSubscriptionsPage({
           </label>
         </div>
       </div>
+
+      <CancelReasons />
 
       <Panel title="Subscriptions" note={plural(rows.length, "subscription")}>
         {isLoading ? (

@@ -166,6 +166,8 @@ export interface MySubscription {
   renewed_by_id: string | null;
   can_renew: boolean;
   company_name: string | null;
+  guest_week?: GuestWeekLink | null;
+  guest_of?: GuestWeekLink | null;
 }
 
 export interface MealOption {
@@ -198,10 +200,101 @@ export interface MyDelivery {
   at: string | null;
 }
 
+/** Structured answer to "why are you leaving?"; the free-text reason stays as a note. */
+export type CancellationReasonCode =
+  | "bored_of_food"
+  | "too_expensive"
+  | "food_quality"
+  | "delivery_problems"
+  | "moving_away"
+  | "other";
+
+export interface CancelBody {
+  reason_code?: CancellationReasonCode;
+  reason?: string;
+}
+
+/**
+ * The other half of a guest week. On the original subscription `kitchen_name`
+ * is the guest kitchen; on the guest subscription it is the original kitchen.
+ */
+export interface GuestWeekLink {
+  subscription_id: string;
+  guest_subscription_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  week_start: string;
+  week_end: string;
+  status: string;
+  pending_order_id: string | null;
+  completed: boolean;
+}
+
+export interface GuestWeekOption {
+  plan_id: string;
+  branch_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  plan_name: string;
+  plan_name_ar: string | null;
+  cuisines: string[];
+  per_meal_minor: number;
+  week_minor: number;
+  wallet_minor: number;
+  due_minor: number;
+  leftover_credit_minor: number;
+  currency: string;
+}
+
+export interface GuestWeekOffer {
+  eligible: boolean;
+  reason?: string;
+  week_start?: string;
+  week_end?: string;
+  delivery_days: number;
+  meals: number;
+  credit_minor: number;
+  current_per_meal_minor: number;
+  currency: string;
+  options: GuestWeekOption[];
+}
+
+export interface GuestWeekResult {
+  guest_subscription_id: string;
+  status: "active" | "pending_payment";
+  pending_order_id: string | null;
+  week_start: string;
+  week_end: string;
+  credit_minor: number;
+  wallet_minor: number;
+  due_minor: number;
+  leftover_credit_minor: number;
+  currency: string;
+}
+
+export interface CheaperPlan {
+  plan_id: string;
+  branch_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  plan_name: string;
+  plan_name_ar: string | null;
+  cuisines: string[];
+  per_meal_minor: number;
+  currency: string;
+}
+
+export interface CheaperPlans {
+  current_per_meal_minor: number;
+  currency: string;
+  items: CheaperPlan[];
+}
+
 export interface MySubscriptionDetail extends MySubscription {
   cutoff_hours: number;
   pause_allowance_days: number;
   pause_days_used: number;
+  guest_week_offer?: GuestWeekOffer | null;
   upcoming: UpcomingMeal[];
   skipped?: UpcomingMeal[];
   recent?: MyDelivery[];
@@ -269,17 +362,33 @@ export const resumeSubscription = (id: string, opts?: CallOptions) =>
     headers: opts?.headers,
   });
 
-export const cancelSubscription = (
-  id: string,
-  reason: string,
-  opts?: CallOptions,
-) =>
+export const cancelSubscription = (id: string, body: CancelBody, opts?: CallOptions) =>
   apiFetch<unknown>({
     url: `/subscriptions/${id}/cancel`,
     method: "POST",
-    data: { reason },
+    data: body,
     headers: opts?.headers,
   });
+
+export const getGuestWeekOffer = (id: string) =>
+  apiFetch<GuestWeekOffer>({ url: `/me/subscriptions/${id}/guest-week`, method: "GET" });
+
+export const startGuestWeek = (id: string, planId: string, opts?: CallOptions) =>
+  apiFetch<GuestWeekResult>({
+    url: `/subscriptions/${id}/guest-week`,
+    method: "POST",
+    data: { plan_id: planId },
+    headers: opts?.headers,
+  });
+
+export const dismissGuestWeek = (id: string) =>
+  apiFetch<void>({ url: `/subscriptions/${id}/guest-week/dismiss`, method: "POST", data: {} });
+
+export const getCheaperPlans = (id: string) =>
+  apiFetch<CheaperPlans>({ url: `/me/subscriptions/${id}/cheaper-plans`, method: "GET" });
+
+export const getRotationCheaperPlans = (id: string) =>
+  apiFetch<CheaperPlans>({ url: `/me/rotations/${id}/cheaper-plans`, method: "GET" });
 
 /** Automatic renewal on or off; off ends with the last paid cycle. */
 export const setRenewal = (id: string, auto: boolean) =>
@@ -418,15 +527,11 @@ export const listMyRotations = () =>
 export const getMyRotation = (id: string) =>
   apiFetch<Rotation>({ url: `/me/rotations/${id}`, method: "GET" });
 
-export const cancelRotation = (
-  id: string,
-  reason: string,
-  opts?: CallOptions,
-) =>
+export const cancelRotation = (id: string, body: CancelBody, opts?: CallOptions) =>
   apiFetch<void>({
     url: `/rotations/${id}/cancel`,
     method: "POST",
-    data: { reason },
+    data: body,
     headers: opts?.headers,
   });
 

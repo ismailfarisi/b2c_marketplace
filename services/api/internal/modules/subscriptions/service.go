@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,6 +35,7 @@ type Service struct {
 	reservationsHeld bool
 	promos           *promo.Service
 	notifier         Notifier
+	wallet           WalletPayer
 }
 
 type Config struct {
@@ -52,6 +54,17 @@ type Config struct {
 	Promos *promo.Service
 	// Notifier sends meal messages to subscribers. Nil sends nothing.
 	Notifier Notifier
+
+	// Wallet confirms an order whose price is fully covered by wallet credit
+	// (payments.Service). Needed for guest weeks; nil disables them.
+	Wallet WalletPayer
+}
+
+// WalletPayer is the slice of the payments service a guest week needs: confirm
+// an order off-gateway once the customer's wallet has paid for it.
+type WalletPayer interface {
+	AuthorizeFromWallet(ctx context.Context, userID, orderID uuid.UUID,
+		charge func(ctx context.Context, tx pgx.Tx, amountMinor int64, currency string) error) error
 }
 
 func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry, cfg Config) *Service {
@@ -64,6 +77,7 @@ func NewService(pool *pgxpool.Pool, verticals *servicetype.Registry, cfg Config)
 		reservationsHeld: cfg.ReserveCapacity,
 		promos:           cfg.Promos,
 		notifier:         cfg.Notifier,
+		wallet:           cfg.Wallet,
 	}
 }
 
@@ -740,17 +754,60 @@ func (s *Service) Cancel(ctx context.Context, userID, subID uuid.UUID, reason st
 		return httpx.Coded(httpx.ErrConflict, "cancel_rotation",
 			"This week is part of a kitchen rotation; cancel the rotation instead.")
 	}
-	return s.cancel(ctx, subID, uuid.NullUUID{UUID: userID, Valid: true}, "customer", userID, reason)
+	return s.cancel(ctx, subID, uuid.NullUUID{UUID: userID, Valid: true}, "customer", userID, reason, "")
+}
+
+// CancelWithCode is Cancel with a structured reason (see CancellationCodes)
+// alongside the optional free-text note. An unknown code is a validation error
+// rather than silently dropped: the admin breakdown is only worth having if
+// every cancellation lands in a bucket.
+func (s *Service) CancelWithCode(ctx context.Context, userID, subID uuid.UUID, code, note string) error {
+	if err := ValidateCancellationCode(code); err != nil {
+		return err
+	}
+	var rotation uuid.NullUUID
+	err := s.pool.QueryRow(ctx,
+		`SELECT rotation_id FROM subscriptions WHERE id = $1 AND user_id = $2`,
+		subID, userID).Scan(&rotation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return httpx.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("subscriptions: load for cancel: %w", err)
+	}
+	if rotation.Valid {
+		return httpx.Coded(httpx.ErrConflict, "cancel_rotation",
+			"This week is part of a kitchen rotation; cancel the rotation instead.")
+	}
+	return s.cancel(ctx, subID, uuid.NullUUID{UUID: userID, Valid: true}, "customer", userID, note, code)
+}
+
+// CancellationCodes are the structured answers to "why are you leaving?".
+// Stored on subscriptions.cancellation_code / meal_rotations.cancellation_code
+// next to the free-text cancellation_reason, which stays as the optional note.
+var CancellationCodes = []string{
+	"bored_of_food", "too_expensive", "food_quality",
+	"delivery_problems", "moving_away", "other",
+}
+
+func ValidateCancellationCode(code string) error {
+	if code == "" || slices.Contains(CancellationCodes, code) {
+		return nil
+	}
+	return &httpx.ValidationError{Fields: []httpx.FieldError{{
+		Field: "reason_code", Code: "invalid_reason_code",
+		Message: "reason_code must be one of " + strings.Join(CancellationCodes, ", "),
+	}}}
 }
 
 // CancelByStaff cancels on the customer's behalf. Same unwinding as the
 // customer path; only the actor recorded against it differs.
 func (s *Service) CancelByStaff(ctx context.Context, actorID, subID uuid.UUID, reason string) error {
-	return s.cancel(ctx, subID, uuid.NullUUID{}, "admin", actorID, reason)
+	return s.cancel(ctx, subID, uuid.NullUUID{}, "admin", actorID, reason, "")
 }
 
 func (s *Service) cancel(ctx context.Context, subID uuid.UUID, owner uuid.NullUUID,
-	actorType string, actorID uuid.UUID, reason string) error {
+	actorType string, actorID uuid.UUID, reason, code string) error {
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		return s.cancelInTx(ctx, tx, subID, owner, actorType, actorID, reason)
 	})
@@ -781,8 +838,9 @@ func (s *Service) cancelInTx(ctx context.Context, tx pgx.Tx, subID uuid.UUID, ow
 		if _, err := tx.Exec(ctx, `
 			UPDATE subscriptions
 			   SET status = 'cancelled', cancelled_at = now(),
-			       cancellation_reason = NULLIF($2,'')
-			 WHERE id = $1`, subID, reason); err != nil {
+			       cancellation_reason = NULLIF($2,''),
+			       cancellation_code = NULLIF($3,'')
+			 WHERE id = $1`, subID, reason, code); err != nil {
 			return fmt.Errorf("subscriptions: cancel: %w", err)
 		}
 		if live.Status == "pending_payment" {

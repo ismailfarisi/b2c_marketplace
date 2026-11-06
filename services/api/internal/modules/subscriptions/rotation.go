@@ -594,6 +594,20 @@ func (s *Service) rotationWeeks(ctx context.Context, id uuid.UUID) ([]RotationWe
 // exactly as a cancelled subscription does, so unearned money for a paid week
 // is credited the same way and delivered meals stay delivered.
 func (s *Service) CancelRotation(ctx context.Context, userID, id uuid.UUID, reason string) error {
+	return s.cancelRotation(ctx, userID, id, reason, "")
+}
+
+// CancelRotationWithCode cancels a rotation with a structured reason (see
+// CancellationCodes) and an optional note. The code is stored on the rotation
+// and on each of its still-live weekly subscriptions.
+func (s *Service) CancelRotationWithCode(ctx context.Context, userID, id uuid.UUID, code, note string) error {
+	if err := ValidateCancellationCode(code); err != nil {
+		return err
+	}
+	return s.cancelRotation(ctx, userID, id, note, code)
+}
+
+func (s *Service) cancelRotation(ctx context.Context, userID, id uuid.UUID, reason, code string) error {
 	r, err := s.MyRotation(ctx, userID, id)
 	if err != nil {
 		return err
@@ -606,15 +620,16 @@ func (s *Service) CancelRotation(ctx context.Context, userID, id uuid.UUID, reas
 			continue
 		}
 		if err := s.cancel(ctx, *w.SubscriptionID, uuid.NullUUID{UUID: userID, Valid: true},
-			"customer", userID, reason); err != nil {
+			"customer", userID, reason, code); err != nil {
 			return err
 		}
 	}
 	if _, err := s.pool.Exec(ctx, `
 		UPDATE meal_rotations
 		   SET status = 'cancelled', cancelled_at = now(),
-		       cancellation_reason = NULLIF($2, ''), updated_at = now()
-		 WHERE id = $1 AND status <> 'cancelled'`, id, reason); err != nil {
+		       cancellation_reason = NULLIF($2, ''), cancellation_code = NULLIF($3, ''),
+		       updated_at = now()
+		 WHERE id = $1 AND status <> 'cancelled'`, id, reason, code); err != nil {
 		return fmt.Errorf("subscriptions: cancel rotation: %w", err)
 	}
 	if r.Status == "pending_payment" {
@@ -655,7 +670,7 @@ func (s *Service) CancelAllForUser(ctx context.Context, userID uuid.UUID, reason
 	}
 	for _, id := range subs {
 		if err := s.cancel(ctx, id, uuid.NullUUID{UUID: userID, Valid: true},
-			"customer", userID, reason); err != nil {
+			"customer", userID, reason, ""); err != nil {
 			return err
 		}
 	}

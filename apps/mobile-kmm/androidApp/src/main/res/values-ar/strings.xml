@@ -717,4 +717,47 @@
     <string name="meals_recap_skipped">الأيام المتخطاة</string>
     <string name="meals_recap_favourite">المفضل لديك: %1$s (%2$d★)</string>
     <string name="meals_recap_renew">شاهد مطابخ الشهر القادم</string>
+
+    <!-- Cancel reasons + guest week (variety retention) -->
+    <string name="meals_cancel_why">لماذا ترغب في الإلغاء؟</string>
+    <string name="meals_reason_bored">مللت من الأكل</string>
+    <string name="meals_reason_expensive">السعر مرتفع</string>
+    <string name="meals_reason_quality">جودة الطعام</string>
+    <string name="meals_reason_delivery">مشاكل في التوصيل</string>
+    <string name="meals_reason_moving">انتقال / مسافر</string>
+    <string name="meals_reason_other">سبب آخر</string>
+    <string name="meals_cancel_note">هل من شيء آخر؟ (اختياري)</string>
+    <string name="meals_before_you_go">قبل أن تذهب</string>
+    <string name="meals_save_bored_rotation">غيّر مطبخ الأسبوع القادم بدلًا من ذلك — يمكن لتناوبك تبديل أسبوع.</string>
+    <string name="meals_save_bored_single">المطبخ نفسه كل أسبوع يصبح مملًا. جرّب مطبخًا جديدًا لأسبوع، أو تناوب بين أربعة مطابخ.</string>
+    <string name="meals_save_guest_week">جرّب مطبخًا ضيفًا الأسبوع القادم</string>
+    <string name="meals_save_rotation">انتقل إلى تناوب ٤ مطابخ</string>
+    <string name="meals_save_change_week">غيّر مطبخ الأسبوع القادم</string>
+    <string name="meals_save_expensive">مطابخ قريبة منك بسعر أقل للوجبة:</string>
+    <string name="meals_save_expensive_none">لا يوجد مطبخ أرخص يغطي عنوانك حاليًا.</string>
+    <string name="meals_per_meal">%1$s / وجبة</string>
+    <string name="meals_save_pause">أوقف مؤقتًا بدلًا من ذلك — وجباتك تنتظرك ورصيدك يبقى لك.</string>
+    <string name="meals_save_pause_btn">إيقاف وجباتي مؤقتًا</string>
+    <string name="meals_cancel_pick_reason">اختر سببًا للمتابعة.</string>
+    <string name="meals_guest_offer">جرّب مطبخًا مختلفًا الأسبوع القادم</string>
+    <string name="meals_guest_offer_lede">%1$s: اختر مطبخًا آخر لأسبوع واحد. يُحتسب أسبوعك الموقوف كرصيد (%2$s) ويدفع ثمنه؛ والفرق يُحتسب عليك أو يبقى رصيدًا.</string>
+    <string name="meals_guest_same_days">الأيام نفسها، الأوقات نفسها، العنوان نفسه.</string>
+    <string name="meals_guest_week_price">%1$s للأسبوع</string>
+    <string name="meals_guest_covered">مغطّى من رصيدك</string>
+    <string name="meals_guest_due">%1$s للدفع</string>
+    <string name="meals_guest_leftover">%1$s يبقى رصيدًا</string>
+    <string name="meals_guest_start">جرّب هذا المطبخ</string>
+    <string name="meals_guest_not_now">ليس الآن</string>
+    <string name="meals_guest_done">تم — %1$s يطبخ لك الأسبوع القادم.</string>
+    <string name="meals_guest_week">أسبوع الضيف</string>
+    <string name="meals_guest_lede">%1$s: %2$s يطبخ بدلًا من مطبخك المعتاد. تعود وجباتك المعتادة بعده مباشرة.</string>
+    <string name="meals_guest_pending">بانتظار دفع الفرق.</string>
+    <string name="meals_guest_see">عرض أسبوع الضيف</string>
+    <string name="meals_guest_of">ضيف لأسبوع واحد من اشتراكك في %1$s.</string>
+    <string name="meals_guest_back">العودة إلى اشتراكي</string>
+    <string name="meals_make_rotation">أعجبك التغيير؟ اجعله تناوبًا</string>
+    <string name="meals_make_rotation_lede">أربعة مطابخ، كل منها يطبخ أسبوعًا — لا تتكرر القائمة مرتين في الشهر.</string>
+    <string name="meals_make_rotation_btn">أنشئ تناوبي</string>
+    <string name="meals_guest_line">أسبوع ضيف: %1$s يطبخ أسبوعًا واحدًا</string>
+    <string name="meals_guest_of_line">ضيف لأسبوع واحد من اشتراكك في %1$s</string>
 </resources>

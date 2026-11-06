@@ -221,7 +221,11 @@ fun MealsTab(
                 onKitchen = { viewModel.openKitchen(it); go(Page.Kitchen) },
                 onLink = { url -> ae.marketplace.mobile.meals.MealsLinks.parse(url)?.let { innerLink = it } },
             )
-            Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
+            Page.Subscription -> SubscriptionPage(
+                viewModel, onBack = ::back, openPayment = openPayment,
+                onOpen = { id -> viewModel.openSubscription(id); go(Page.Subscription) },
+                onRotation = { requireAccount { viewModel.startRotation(); go(Page.Rotation) } },
+            )
             Page.RotationDetail -> RotationDetailPage(
                 viewModel,
                 onBack = ::back,
@@ -1514,7 +1518,26 @@ private fun RotationCard(
                 fontSize = Type.Secondary,
                 modifier = Modifier.clickable(enabled = !busy) { confirming = true }.padding(vertical = Space.Small),
             )
-            if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancelRotation(r.id) }, onDismiss = { confirming = false })
+            if (confirming) {
+                val mine by vm.mine.collectAsState()
+                CancelReasonsDialog(
+                    rotation = true,
+                    busy = busy,
+                    arabic = arabic,
+                    canPause = false,
+                    canGuestWeek = false,
+                    cheaper = if (mine.cheaperFor == r.id) mine.cheaper else null,
+                    cheaperLoading = mine.cheaperFor == r.id && mine.cheaperLoading,
+                    cheaperError = if (mine.cheaperFor == r.id) mine.cheaperError else null,
+                    onLoadCheaper = { vm.loadRotationCheaperPlans(r.id) },
+                    onPause = { confirming = false },
+                    onGuestWeek = { confirming = false },
+                    onRotationBuilder = { confirming = false },
+                    onChangeWeek = { confirming = false; onOpenRotation(r.id) },
+                    onCancel = { code, note -> confirming = false; vm.cancelRotation(r.id, code, note) },
+                    onDismiss = { confirming = false },
+                )
+            }
         }
         if (r.renewable) {
             PrimaryButton(stringResource(R.string.meals_renew_fresh), { onRenew(r.id) }, enabled = !busy, modifier = Modifier.padding(top = Space.Small))
@@ -1733,7 +1756,7 @@ private fun RenewSwitch(checked: Boolean, enabled: Boolean = true, onChange: (Bo
 }
 
 @Composable
-private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment: (String) -> Unit) {
+private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment: (String) -> Unit, onOpen: (String) -> Unit, onRotation: () -> Unit) {
     val s by vm.sub.collectAsState()
     val arabic = rememberArabic()
     LaunchedEffect(s.paymentUrl) { s.paymentUrl?.let(openPayment) }
@@ -1782,6 +1805,9 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                 if (sub.status != "pending_payment" && sub.status != "pending") {
                     item { RateKitchenCard(s.review, vm) }
                 }
+                if (sub.rotationId == null) {
+                    item { GuestWeekCard(sub, s, arabic, vm, onOpen = onOpen, onRotation = onRotation) }
+                }
                 if (sub.rotationId == null && sub.status == "active" && sub.pauseAllowanceDays > 0) {
                     item { PauseCard(sub, s.busy, vm) }
                 }
@@ -1794,7 +1820,23 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                             fontSize = Type.Secondary,
                             modifier = Modifier.clickable(enabled = !s.busy) { confirming = true }.padding(Space.Edge),
                         )
-                        if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancel() }, onDismiss = { confirming = false })
+                        if (confirming) CancelReasonsDialog(
+                            rotation = false,
+                            busy = s.busy,
+                            arabic = arabic,
+                            canPause = sub.status == "active" && sub.pauseAllowanceDays > 0,
+                            canGuestWeek = sub.guestWeekOffer?.eligible == true && sub.guestWeek == null,
+                            cheaper = s.cheaper,
+                            cheaperLoading = s.cheaperLoading,
+                            cheaperError = s.cheaperError,
+                            onLoadCheaper = vm::loadCheaperPlans,
+                            onPause = { confirming = false },
+                            onGuestWeek = { confirming = false },
+                            onRotationBuilder = { confirming = false; onRotation() },
+                            onChangeWeek = { confirming = false },
+                            onCancel = { code, note -> confirming = false; vm.cancel(code, note) },
+                            onDismiss = { confirming = false },
+                        )
                     }
                 }
                 item { BottomPad() }
@@ -1846,7 +1888,27 @@ private fun RotationDetailPage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (
                             fontSize = Type.Secondary,
                             modifier = Modifier.clickable(enabled = !s.busy) { confirming = true }.padding(Space.Edge),
                         )
-                        if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancelOpenRotation() }, onDismiss = { confirming = false })
+                        if (confirming) {
+                            val mine by vm.mine.collectAsState()
+                            CancelReasonsDialog(
+                                rotation = true,
+                                busy = s.busy,
+                                arabic = arabic,
+                                canPause = false,
+                                canGuestWeek = false,
+                                cheaper = if (mine.cheaperFor == r.id) mine.cheaper else null,
+                                cheaperLoading = mine.cheaperFor == r.id && mine.cheaperLoading,
+                                cheaperError = if (mine.cheaperFor == r.id) mine.cheaperError else null,
+                                onLoadCheaper = { vm.loadRotationCheaperPlans(r.id) },
+                                onPause = { confirming = false },
+                                onGuestWeek = { confirming = false },
+                                onRotationBuilder = { confirming = false },
+                                // The weeks and their "Change kitchen" buttons are on this very screen.
+                                onChangeWeek = { confirming = false },
+                                onCancel = { code, note -> confirming = false; vm.cancelOpenRotation(code, note) },
+                                onDismiss = { confirming = false },
+                            )
+                        }
                     }
                 }
                 item { BottomPad() }
@@ -1969,21 +2031,6 @@ private fun swapDifference(minor: Long, currency: String): String = when {
     minor == 0L -> stringResource(R.string.meals_same_price)
     minor > 0 -> stringResource(R.string.meals_pay_more, money(minor, currency))
     else -> stringResource(R.string.meals_credit_back, money(-minor, currency))
-}
-
-@Composable
-private fun ConfirmCancel(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = M.Surface,
-        text = { Text(stringResource(R.string.meals_cancel_confirm), color = M.Ink, fontSize = Type.Body) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(stringResource(R.string.meals_cancel_yes), color = Palette.Bad) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.meals_keep), color = M.Ink) }
-        },
-    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

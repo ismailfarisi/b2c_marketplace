@@ -27,6 +27,8 @@ import {
 
 const COPY = {
   en: {
+    guestWeek: (k: string) => `Guest week: ${k} cooks one week`,
+    guestOf: (k: string) => `One-week guest from your ${k} subscription`,
     title: "My subscriptions",
     invoices: "Invoices",
     empty: "You have no meal subscriptions yet.",
@@ -44,6 +46,8 @@ const COPY = {
     build: "Build a 4-kitchen rotation",
   },
   ar: {
+    guestWeek: (k: string) => `أسبوع ضيف: ${k} يطبخ أسبوعًا واحدًا`,
+    guestOf: (k: string) => `ضيف لأسبوع واحد من اشتراكك في ${k}`,
     title: "اشتراكاتي",
     invoices: "الفواتير",
     empty: "لا توجد لديك اشتراكات وجبات بعد.",
@@ -231,6 +235,22 @@ export default function MySubscriptionsPage({
                         s.cycle_ends_on && formatDay(locale, s.cycle_ends_on),
                       )}
                     </span>
+                    {s.guest_week && (
+                      <span className="ms-sub" dir="auto">
+                        {t.guestWeek(
+                          (locale === "ar" && s.guest_week.kitchen_name_ar) ||
+                            s.guest_week.kitchen_name,
+                        )}
+                      </span>
+                    )}
+                    {s.guest_of && (
+                      <span className="ms-sub" dir="auto">
+                        {t.guestOf(
+                          (locale === "ar" && s.guest_of.kitchen_name_ar) ||
+                            s.guest_of.kitchen_name,
+                        )}
+                      </span>
+                    )}
                   </span>
                   <span className="ms-sub-side">
                     {status(s.status)}

@@ -332,3 +332,46 @@ func PostSubscriptionWalletApplied(ctx context.Context, tx pgx.Tx, c Subscriptio
 		},
 	})
 }
+
+// WalletCharge is a subscription cycle paid out of the customer's wallet
+// credit instead of a card: the money that a credited pause put into the
+// wallet moves into deferred revenue for the new cycle, where recognition
+// pays the new kitchen as deliveries complete.
+type WalletCharge struct {
+	SubscriptionID uuid.UUID
+	CycleID        uuid.UUID
+	UserID         uuid.UUID
+	Currency       string
+	AmountMinor    int64
+	Reason         string
+}
+
+func PostSubscriptionPaidFromWallet(ctx context.Context, tx pgx.Tx, c WalletCharge) (uuid.UUID, error) {
+	if c.AmountMinor <= 0 {
+		return uuid.Nil, fmt.Errorf("ledger: wallet charge must be positive, got %d", c.AmountMinor)
+	}
+	userID := c.UserID
+	reason := c.Reason
+	if reason == "" {
+		reason = "subscription"
+	}
+	return Post(ctx, tx, Journal{
+		EventType:     "subscription_paid_from_wallet",
+		ReferenceType: "subscription_cycle",
+		ReferenceID:   c.CycleID,
+		Description:   fmt.Sprintf("Wallet payment for %s", reason),
+		Currency:      c.Currency,
+		Postings: []Posting{
+			{
+				Account:     AccountRef{Type: CustomerWallet, OwnerType: OwnerUser, OwnerID: &userID, Currency: c.Currency},
+				Direction:   Debit,
+				AmountMinor: c.AmountMinor,
+			},
+			{
+				Account:     AccountRef{Type: DeferredRevenue, OwnerType: OwnerPlatform, Currency: c.Currency},
+				Direction:   Credit,
+				AmountMinor: c.AmountMinor,
+			},
+		},
+	})
+}

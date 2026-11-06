@@ -280,14 +280,21 @@ func (h *SubscriptionHandlers) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Reason string `json:"reason"`
+		Reason     string `json:"reason"`
+		ReasonCode string `json:"reason_code"`
 	}
 	// A cancellation with no body is valid — a reason is useful and not
 	// required, and refusing to cancel because the client sent no JSON would be
 	// the worst possible moment to be pedantic.
 	_ = httpx.DecodeJSON(r, &body)
 
-	if err := h.Service.Cancel(r.Context(), userID, subID, body.Reason); err != nil {
+	var err error
+	if body.ReasonCode != "" {
+		err = h.Service.CancelWithCode(r.Context(), userID, subID, body.ReasonCode, body.Reason)
+	} else {
+		err = h.Service.Cancel(r.Context(), userID, subID, body.Reason)
+	}
+	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
@@ -356,4 +363,71 @@ func (h *SubscriptionHandlers) Renew(w http.ResponseWriter, r *http.Request) {
 		"trial_days":      res.TrialDays,
 		"currency":        res.Currency,
 	})
+}
+
+// GuestWeekOffer answers GET /me/subscriptions/{subscriptionId}/guest-week.
+func (h *SubscriptionHandlers) GuestWeekOffer(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	offer, err := h.Service.GuestWeekOffer(r.Context(), userID, subID, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", offer)
+}
+
+// StartGuestWeek answers POST /subscriptions/{subscriptionId}/guest-week.
+func (h *SubscriptionHandlers) StartGuestWeek(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		PlanID uuid.UUID `json:"plan_id"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if body.PlanID == uuid.Nil {
+		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "plan_id", Code: "required"}}})
+		return
+	}
+	res, err := h.Service.StartGuestWeek(r.Context(), userID, subID, body.PlanID, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, "", res)
+}
+
+// DismissGuestWeek answers POST /subscriptions/{subscriptionId}/guest-week/dismiss.
+func (h *SubscriptionHandlers) DismissGuestWeek(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	if err := h.Service.DismissGuestWeek(r.Context(), userID, subID); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// CheaperPlans answers GET /me/subscriptions/{subscriptionId}/cheaper-plans.
+func (h *SubscriptionHandlers) CheaperPlans(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.Service.CheaperPlans(r.Context(), userID, subID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", res)
 }

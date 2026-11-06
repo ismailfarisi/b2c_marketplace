@@ -138,10 +138,14 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/subscriptions/{subscriptionId}/unskip", h.Subscriptions.Unskip)
 			r.Post("/subscriptions/{subscriptionId}/resume", h.Subscriptions.Resume)
 			r.Post("/subscriptions/{subscriptionId}/cancel", h.Subscriptions.Cancel)
+			r.Post("/subscriptions/{subscriptionId}/guest-week", h.Subscriptions.StartGuestWeek)
+			r.Post("/subscriptions/{subscriptionId}/guest-week/dismiss", h.Subscriptions.DismissGuestWeek)
 			r.Put("/subscriptions/{subscriptionId}/renewal", h.Subscriptions.SetRenewal)
 			r.Post("/subscriptions/{subscriptionId}/renew", h.Subscriptions.Renew)
 			r.Get("/me/subscriptions", h.Subscriptions.Mine)
 			r.Get("/me/subscriptions/{subscriptionId}", h.Subscriptions.MyDetail)
+			r.Get("/me/subscriptions/{subscriptionId}/guest-week", h.Subscriptions.GuestWeekOffer)
+			r.Get("/me/subscriptions/{subscriptionId}/cheaper-plans", h.Subscriptions.CheaperPlans)
 			if h.Subscriptions.Reviews != nil {
 				r.Get("/me/subscriptions/{subscriptionId}/review", h.Subscriptions.MyReview)
 				r.Put("/subscriptions/{subscriptionId}/review", h.Subscriptions.WriteReview)
@@ -171,6 +175,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 
 			r.Get("/me/next-week", h.Rotations.NextWeek)
 			r.Get("/me/rotation-recaps", h.Rotations.Recaps)
+
+			r.Get("/me/rotations/{rotationId}/cheaper-plans", h.Rotations.CheaperPlans)
 		}
 		if h.Meals != nil && h.Meals.Promos != nil {
 			r.Get("/me/referrals", h.Meals.MyReferrals)
@@ -520,6 +526,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 					r.Get("/admin/meals/kitchens/{branchId}", h.AdminConsole.MealKitchen)
 					r.Post("/admin/meals/plans/{planId}/active", h.AdminConsole.SetMealPlanActive)
 					r.Get("/admin/meals/subscriptions", h.AdminConsole.MealSubscriptions)
+					r.Get("/admin/meals/cancellation-reasons", h.AdminConsole.MealCancellationReasons)
 					r.Get("/admin/meals/subscriptions/{subscriptionId}", h.AdminConsole.MealSubscription)
 					r.Post("/admin/meals/subscriptions/{subscriptionId}/cancel", h.AdminConsole.CancelMealSubscription)
 				}

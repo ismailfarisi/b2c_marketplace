@@ -178,7 +178,8 @@ func (h *RotationHandlers) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Reason string `json:"reason"`
+		Reason     string `json:"reason"`
+		ReasonCode string `json:"reason_code"`
 	}
 	if r.ContentLength != 0 {
 		if err := httpx.DecodeJSON(r, &body); err != nil {
@@ -186,7 +187,13 @@ func (h *RotationHandlers) Cancel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := h.Service.CancelRotation(r.Context(), userID, id, body.Reason); err != nil {
+	var err error
+	if body.ReasonCode != "" {
+		err = h.Service.CancelRotationWithCode(r.Context(), userID, id, body.ReasonCode, body.Reason)
+	} else {
+		err = h.Service.CancelRotation(r.Context(), userID, id, body.Reason)
+	}
+	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
@@ -374,4 +381,18 @@ func (h *RotationHandlers) Renew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, "", rot)
+}
+
+// CheaperPlans answers GET /me/rotations/{rotationId}/cheaper-plans.
+func (h *RotationHandlers) CheaperPlans(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := rotationTarget(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.Service.CheaperPlansForRotation(r.Context(), userID, id)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", res)
 }

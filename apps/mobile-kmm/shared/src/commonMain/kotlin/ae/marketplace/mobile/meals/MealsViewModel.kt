@@ -13,6 +13,9 @@ import ae.marketplace.mobile.model.MealPlan
 import ae.marketplace.mobile.model.MyReview
 import ae.marketplace.mobile.model.MySubscription
 import ae.marketplace.mobile.model.ProposalKitchen
+
+import ae.marketplace.mobile.model.GuestWeekResult
+import ae.marketplace.mobile.model.CheaperPlans
 import ae.marketplace.mobile.model.PromoOffer
 import ae.marketplace.mobile.model.RenewalProposal
 import ae.marketplace.mobile.model.Rotation
@@ -246,6 +249,11 @@ data class MyMealsUiState(
     /** Why the last rotation action failed; shown over the loaded list. */
     val actionError: Failure? = null,
     val paymentUrl: String? = null,
+    /** Cheaper kitchens for the rotation whose cancel sheet is open. */
+    val cheaperFor: String? = null,
+    val cheaper: CheaperPlans? = null,
+    val cheaperLoading: Boolean = false,
+    val cheaperError: Failure? = null,
 )
 
 data class SubscriptionUiState(
@@ -287,6 +295,13 @@ data class RotationDetailUiState(
     val paymentUrl: String? = null,
     /** Set once the rotation is cancelled, for the screen to leave. */
     val cancelled: Boolean = false,
+
+    /** Cheaper kitchens nearby, loaded for the "too expensive" cancel path. */
+    val cheaper: CheaperPlans? = null,
+    val cheaperLoading: Boolean = false,
+    val cheaperError: Failure? = null,
+    /** Set once a guest week was started from this screen. */
+    val guestStarted: GuestWeekResult? = null,
 )
 
 data class ReviewUiState(
@@ -1124,6 +1139,34 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     }
     fun cancel() = act { api.cancel(it, "customer_request") }
 
+    /** Cancel with one of CancelReasons and an optional note. */
+    fun cancel(reasonCode: String, note: String) = act { api.cancel(it, reasonCode, note.trim(), newIdempotencyKey()) }
+
+    /** "Try a different kitchen next week": one of the offer's options. */
+    fun startGuestWeek(planId: String) = act { id ->
+        val out = api.startGuestWeek(id, planId, newIdempotencyKey())
+        _sub.update { it.copy(guestStarted = out) }
+        if (out.pendingOrderId != null) {
+            api.payOrder(out.pendingOrderId).redirectUrl?.let { url -> _sub.update { it.copy(paymentUrl = url) } }
+        }
+    }
+
+    fun dismissGuestWeek() = act { api.dismissGuestWeek(it) }
+
+    fun loadCheaperPlans() {
+        val id = _sub.value.subscription?.id ?: return
+        if (_sub.value.cheaperLoading) return
+        _sub.update { it.copy(cheaperLoading = true, cheaperError = null) }
+        viewModelScope.launch {
+            try {
+                val out = api.cheaperPlans(id)
+                _sub.update { it.copy(cheaper = out, cheaperLoading = false) }
+            } catch (e: Throwable) {
+                _sub.update { it.copy(cheaperLoading = false, cheaperError = e.toFailure()) }
+            }
+        }
+    }
+
     fun loadReview(id: String = _sub.value.subscription?.id ?: "") {
         if (id.isEmpty()) return
         _sub.update { it.copy(review = it.review.copy(loading = true, error = null)) }
@@ -1200,6 +1243,22 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         if (id in _mine.value.busy) return
         setLocalRefresh(id, on)
         rotationAction(id, onFailure = { setLocalRefresh(id, !on) }) { api.setRotationRefresh(id, on) }
+    }
+
+    fun cancelRotation(id: String, reasonCode: String, note: String) =
+        rotationAction(id) { api.cancelRotation(id, reasonCode, note.trim(), newIdempotencyKey()) }
+
+    fun loadRotationCheaperPlans(id: String) {
+        if (_mine.value.cheaperLoading && _mine.value.cheaperFor == id) return
+        _mine.update { it.copy(cheaperFor = id, cheaper = null, cheaperLoading = true, cheaperError = null) }
+        viewModelScope.launch {
+            try {
+                val out = api.rotationCheaperPlans(id)
+                _mine.update { if (it.cheaperFor == id) it.copy(cheaper = out, cheaperLoading = false) else it }
+            } catch (e: Throwable) {
+                _mine.update { if (it.cheaperFor == id) it.copy(cheaperLoading = false, cheaperError = e.toFailure()) else it }
+            }
+        }
     }
 
     /** Flips the switch now and puts it back if the server refuses. */
@@ -1296,10 +1355,10 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     }
 
     /** Cancels the open rotation; My meals reloads so its card agrees. */
-    fun cancelOpenRotation() {
+    fun cancelOpenRotation(reasonCode: String, note: String) {
         val id = _rotationDetail.value.id ?: return
         rotationDetailAction(id) {
-            api.cancelRotation(id, "customer_request")
+            api.cancelRotation(id, reasonCode, note.trim(), newIdempotencyKey())
             _rotationDetail.update { it.copy(cancelled = true) }
         }
     }
