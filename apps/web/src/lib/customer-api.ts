@@ -118,7 +118,12 @@ export interface CallOptions {
 }
 
 export const subscribe = (data: SubscribeInput, opts?: CallOptions) =>
-  apiFetch<Subscribed>({ url: "/subscriptions", method: "POST", data, headers: opts?.headers });
+  apiFetch<Subscribed>({
+    url: "/subscriptions",
+    method: "POST",
+    data,
+    headers: opts?.headers,
+  });
 
 export interface PaymentIntent {
   id: string;
@@ -264,7 +269,11 @@ export const resumeSubscription = (id: string, opts?: CallOptions) =>
     headers: opts?.headers,
   });
 
-export const cancelSubscription = (id: string, reason: string, opts?: CallOptions) =>
+export const cancelSubscription = (
+  id: string,
+  reason: string,
+  opts?: CallOptions,
+) =>
   apiFetch<unknown>({
     url: `/subscriptions/${id}/cancel`,
     method: "POST",
@@ -387,7 +396,12 @@ export const suggestRotation = (data: RotationSuggestionInput) =>
   apiFetch<RotationSuggestion>({ url: "/rotations/suggestion", method: "POST", data });
 
 export const createRotation = (data: RotationInput, opts?: CallOptions) =>
-  apiFetch<Rotation>({ url: "/rotations", method: "POST", data, headers: opts?.headers });
+  apiFetch<Rotation>({
+    url: "/rotations",
+    method: "POST",
+    data,
+    headers: opts?.headers,
+  });
 
 /** One payment for all four weeks, keyed on the rotation like payOrder. */
 export const payRotation = (id: string) =>
@@ -404,7 +418,11 @@ export const listMyRotations = () =>
 export const getMyRotation = (id: string) =>
   apiFetch<Rotation>({ url: `/me/rotations/${id}`, method: "GET" });
 
-export const cancelRotation = (id: string, reason: string, opts?: CallOptions) =>
+export const cancelRotation = (
+  id: string,
+  reason: string,
+  opts?: CallOptions,
+) =>
   apiFetch<void>({
     url: `/rotations/${id}/cancel`,
     method: "POST",
@@ -777,7 +795,10 @@ export interface LunchInput {
 }
 
 export const listMyCompanies = () =>
-  apiFetch<{ items: CompanyBenefit[] }>({ url: "/me/companies", method: "GET" });
+  apiFetch<{ items: CompanyBenefit[] }>({
+    url: "/me/companies",
+    method: "GET",
+  });
 export const registerCompany = (data: RegisterCompanyInput) =>
   apiFetch<Company>({ url: "/companies", method: "POST", data });
 export const getCompany = (id: string) =>
@@ -792,20 +813,30 @@ export const addCompanyMember = (
   data: { phone: string; name: string; role: "admin" | "employee" },
 ) => apiFetch<void>({ url: `/companies/${id}/members`, method: "POST", data });
 export const removeCompanyMember = (id: string, memberId: string) =>
-  apiFetch<void>({ url: `/companies/${id}/members/${memberId}`, method: "DELETE" });
+  apiFetch<void>({
+    url: `/companies/${id}/members/${memberId}`,
+    method: "DELETE",
+  });
 export const setCompanyPolicy = (id: string, data: CompanyPolicy) =>
   apiFetch<void>({ url: `/companies/${id}/policy`, method: "PUT", data });
 export const addCompanyOffice = (id: string, data: OfficeInput) =>
   apiFetch<void>({ url: `/companies/${id}/offices`, method: "POST", data });
 export const removeCompanyOffice = (id: string, officeId: string) =>
-  apiFetch<void>({ url: `/companies/${id}/offices/${officeId}`, method: "DELETE" });
+  apiFetch<void>({
+    url: `/companies/${id}/offices/${officeId}`,
+    method: "DELETE",
+  });
 export const previewLunch = (companyId: string, data: LunchInput) =>
   apiFetch<{ preview: SubscriptionPreview; per_meal_minor: number }>({
     url: `/companies/${companyId}/lunches/preview`,
     method: "POST",
     data,
   });
-export const startLunch = (companyId: string, data: LunchInput, opts?: CallOptions) =>
+export const startLunch = (
+  companyId: string,
+  data: LunchInput,
+  opts?: CallOptions,
+) =>
   apiFetch<{ id: string; subscription_no: string; status: string }>({
     url: `/companies/${companyId}/lunches`,
     method: "POST",
@@ -844,7 +875,12 @@ export const openTicket = (
   body: { subject: string; body: string; subscription_id?: string },
   opts?: CallOptions,
 ) =>
-  apiFetch<SupportThread>({ url: "/me/support/tickets", method: "POST", data: body, headers: opts?.headers });
+  apiFetch<SupportThread>({
+    url: "/me/support/tickets",
+    method: "POST",
+    data: body,
+    headers: opts?.headers,
+  });
 
 export const getMyTicket = (id: string) =>
   apiFetch<SupportThread>({ url: `/me/support/tickets/${id}`, method: "GET" });
@@ -906,3 +942,79 @@ export const listMyInvoices = (cursor?: string) =>
 
 export const getMyInvoice = (id: string) =>
   apiFetch<InvoiceDocument>({ url: `/me/invoices/${id}`, method: "GET" });
+
+// Next-week preview and end-of-cycle recap (anti-boredom).
+export interface PreviewDish {
+  id: string;
+  name: string;
+  name_ar: string | null;
+  image_url: string | null;
+  is_default: boolean;
+  chosen: boolean;
+}
+
+export interface PreviewMeal {
+  date: string;
+  weekday: number;
+  meal_slot: string;
+  dishes: PreviewDish[];
+}
+
+export interface NextWeekPreview {
+  subscription_id: string;
+  rotation_id: string | null;
+  rotation_week: number | null;
+  branch_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  cover_image_url: string | null;
+  cuisines: string[];
+  kitchen_description: string | null;
+  kitchen_description_ar: string | null;
+  starts_on: string;
+  ends_on: string;
+  menu_week: number;
+  meals: PreviewMeal[];
+}
+
+export interface RecapKitchen {
+  week: number;
+  branch_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  cover_image_url: string | null;
+  cuisines: string[];
+}
+
+export interface RotationRecap {
+  rotation_id: string;
+  rotation_no: string;
+  starts_on: string;
+  ends_on: string;
+  week4_starts_on: string;
+  ended: boolean;
+  kitchens: RecapKitchen[];
+  kitchen_count: number;
+  cuisine_count: number;
+  dishes_delivered: number;
+  days_skipped: number;
+  favourite: {
+    branch_id: string;
+    kitchen_name: string;
+    kitchen_name_ar: string | null;
+    rating: number;
+  } | null;
+  renew_path: string;
+}
+
+export const getMyNextWeek = () =>
+  apiFetch<{ items: NextWeekPreview[] }>({
+    url: "/me/next-week",
+    method: "GET",
+  });
+
+export const listMyRotationRecaps = () =>
+  apiFetch<{ items: RotationRecap[] }>({
+    url: "/me/rotation-recaps",
+    method: "GET",
+  });

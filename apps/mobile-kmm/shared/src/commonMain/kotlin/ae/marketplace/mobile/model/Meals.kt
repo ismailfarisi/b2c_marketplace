@@ -596,3 +596,68 @@ data class RotationSwapResult(
     /** Collects dueMinor when the new kitchen costs more. */
     val payment: PaymentIntent? = null,
 )
+
+// ── Next-week preview and end-of-cycle recap ────────────────────────────────
+
+@Serializable
+data class PreviewDish(
+    val id: String,
+    val name: String,
+    @SerialName("name_ar") val nameAr: String? = null,
+    @SerialName("image_url") val imageUrl: String? = null,
+    @SerialName("is_default") val isDefault: Boolean = false,
+    val chosen: Boolean = false,
+)
+
+@Serializable
+data class PreviewMeal(
+    val date: String,
+    val weekday: Int = 0,
+    @SerialName("meal_slot") val mealSlot: String,
+    val dishes: List<PreviewDish> = emptyList(),
+) {
+    /** The dish this meal brings: the customer's choice, else the kitchen's first. */
+    val shown: PreviewDish? get() = dishes.firstOrNull { it.chosen } ?: dishes.firstOrNull()
+}
+
+@Serializable
+data class NextWeekPreview(
+    @SerialName("subscription_id") val subscriptionId: String,
+    @SerialName("rotation_id") val rotationId: String? = null,
+    @SerialName("rotation_week") val rotationWeek: Int? = null,
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    @SerialName("cover_image_url") val coverImageUrl: String? = null,
+    val cuisines: List<String> = emptyList(),
+    @SerialName("starts_on") val startsOn: String,
+    @SerialName("ends_on") val endsOn: String,
+    @SerialName("menu_week") val menuWeek: Int = 1,
+    val meals: List<PreviewMeal> = emptyList(),
+)
+
+@Serializable
+data class NextWeekPage(val items: List<NextWeekPreview> = emptyList())
+
+@Serializable
+data class RecapFavourite(
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    val rating: Int,
+)
+
+@Serializable
+data class RotationRecap(
+    @SerialName("rotation_id") val rotationId: String,
+    val ended: Boolean = false,
+    @SerialName("kitchen_count") val kitchenCount: Int = 0,
+    @SerialName("cuisine_count") val cuisineCount: Int = 0,
+    @SerialName("dishes_delivered") val dishesDelivered: Int = 0,
+    @SerialName("days_skipped") val daysSkipped: Int = 0,
+    val favourite: RecapFavourite? = null,
+    @SerialName("renew_path") val renewPath: String = "",
+)
+
+@Serializable
+data class RotationRecapPage(val items: List<RotationRecap> = emptyList())

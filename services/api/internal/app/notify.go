@@ -198,3 +198,19 @@ func (n LoginCodeNotifier) SendOTP(
 	})
 	return err
 }
+
+// NotifyOn sends on one channel only, for notices that go out on push (which
+// also shows in the in-app inbox) and WhatsApp both. The channel still has to
+// pass the recipient's preferences and WhatsApp opt-in.
+func (n MealNotifier) NotifyOn(ctx context.Context, tx pgx.Tx, userID uuid.UUID, templateKey, channel string,
+	transactional bool, params map[string]string, dedupeKey string) error {
+	cat := notify.CategoryDelivery
+	if transactional {
+		cat = notify.CategoryTransactional
+	}
+	_, err := n.Svc.Enqueue(ctx, tx, notify.Message{
+		UserID: userID.String(), TemplateKey: templateKey, Category: cat,
+		Params: params, DedupeKey: dedupeKey, ForceChannel: notify.Channel(channel),
+	})
+	return err
+}

@@ -17,6 +17,9 @@ import ae.marketplace.mobile.model.PromoOffer
 import ae.marketplace.mobile.model.RenewalProposal
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationSwapOptions
+
+import ae.marketplace.mobile.model.NextWeekPreview
+import ae.marketplace.mobile.model.RotationRecap
 import ae.marketplace.mobile.model.RotationInput
 import ae.marketplace.mobile.model.RotationSuggestionInput
 import ae.marketplace.mobile.model.ScheduleRule
@@ -227,6 +230,12 @@ private fun newIdempotencyKey(): String = Uuid.random().toString()
 data class MyMealsUiState(
     val subscriptions: List<MySubscription> = emptyList(),
     val rotations: List<Rotation> = emptyList(),
+    /** Next week's kitchens, first delivery week first; the card shows the first. */
+    val nextWeek: List<NextWeekPreview> = emptyList(),
+    /** End-of-cycle recaps by rotation id, from week 4 on. */
+    val recaps: Map<String, RotationRecap> = emptyMap(),
+    /** Why the next-week card or recaps did not load; the list still shows. */
+    val extrasError: Failure? = null,
     /** Active companies covering this person's office lunches. */
     val companies: List<ae.marketplace.mobile.model.CompanyBenefit> = emptyList(),
     val loading: Boolean = false,
@@ -1025,12 +1034,21 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         // The office-lunch card is extra: its failure must not hide the list.
         val companies = runCatching { api.myCompanies().items }.getOrDefault(emptyList())
             .filter { c -> c.status == "active" }
+        // The next-week card and recaps are extras too: a failure shows a Retry strip.
+        var extrasError: Failure? = null
+        val nextWeek = try { api.nextWeek().items } catch (e: Throwable) { extrasError = e.toFailure(); emptyList() }
+        val recaps = if (rotations.isEmpty()) emptyList() else try {
+            api.rotationRecaps().items
+        } catch (e: Throwable) { extrasError = extrasError ?: e.toFailure(); emptyList() }
         _mine.update {
             it.copy(
                 companies = companies,
                 // Rotation weeks show under their rotation, not as four more rows.
                 subscriptions = subs.filter { s -> s.rotationId == null },
                 rotations = rotations,
+                nextWeek = nextWeek,
+                recaps = recaps.associateBy { r -> r.rotationId },
+                extrasError = extrasError,
                 loading = false,
                 loaded = true,
             )

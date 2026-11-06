@@ -168,6 +168,9 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Delete("/me/tastes/{kind}/{subjectId}", h.Taste.Clear)
 			r.Get("/me/meal-preferences", h.Taste.Preferences)
 			r.Put("/me/meal-preferences", h.Taste.SetPreferences)
+
+			r.Get("/me/next-week", h.Rotations.NextWeek)
+			r.Get("/me/rotation-recaps", h.Rotations.Recaps)
 		}
 		if h.Meals != nil && h.Meals.Promos != nil {
 			r.Get("/me/referrals", h.Meals.MyReferrals)

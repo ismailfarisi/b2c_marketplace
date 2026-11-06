@@ -3,6 +3,8 @@ package ae.marketplace.mobile.meals
 import ae.marketplace.mobile.model.CollectionKitchens
 import ae.marketplace.mobile.model.Address
 import ae.marketplace.mobile.model.NextDayDishes
+import ae.marketplace.mobile.model.NextWeekPage
+import ae.marketplace.mobile.model.RotationRecapPage
 import ae.marketplace.mobile.model.AddressInput
 import ae.marketplace.mobile.model.AddressPage
 import ae.marketplace.mobile.model.KitchenDetail
@@ -202,6 +204,10 @@ class MealsApi(private val client: HttpClient) {
     suspend fun rotations(): RotationPage = client.get("me/rotations").body()
 
     suspend fun rotation(id: String): Rotation = client.get("me/rotations/$id").body()
+
+    suspend fun nextWeek(): NextWeekPage = client.get("me/next-week").body()
+
+    suspend fun rotationRecaps(): RotationRecapPage = client.get("me/rotation-recaps").body()
 
     suspend fun cancelRotation(id: String, reason: String) {
         client.post("rotations/$id/cancel") { json(ReasonBody(reason)) }

@@ -218,6 +218,8 @@ fun MealsTab(
                 onOpenRotation = { viewModel.openRotation(it); go(Page.RotationDetail) },
                 onRenew = { viewModel.openRenewal(it); go(Page.RotationRenew) },
                 openPayment = openPayment,
+                onKitchen = { viewModel.openKitchen(it); go(Page.Kitchen) },
+                onLink = { url -> ae.marketplace.mobile.meals.MealsLinks.parse(url)?.let { innerLink = it } },
             )
             Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
             Page.RotationDetail -> RotationDetailPage(
@@ -1417,6 +1419,8 @@ private fun MinePage(
     onOpenRotation: (String) -> Unit,
     onRenew: (String) -> Unit,
     openPayment: (String) -> Unit,
+    onKitchen: (String) -> Unit,
+    onLink: (String) -> Unit,
 ) {
     val s by vm.mine.collectAsState()
     val arabic = rememberArabic()
@@ -1434,10 +1438,16 @@ private fun MinePage(
                 failure?.let { f ->
                     item { FailureStrip(f, onRetry = { vm.loadMine(force = true) }, onDismiss = vm::dismissMineError) }
                 }
+                s.extrasError?.let { f ->
+                    item { FailureStrip(f, onRetry = { vm.loadMine(force = true) }) }
+                }
+                if (s.nextWeek.isNotEmpty()) {
+                    item(key = "next-week") { NextWeekCard(s.nextWeek, arabic, onKitchen) }
+                }
                 items(s.companies, key = { "company-" + it.companyId }) { c -> CompanyCoversCard(c.name, arabic) }
                 if (s.rotations.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_rotations)) }
-                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, onOpenRotation, onRenew, busy = r.id in s.busy) }
+                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, onOpenRotation, onRenew, busy = r.id in s.busy, recap = s.recaps[r.id], onLink = onLink) }
                 }
                 if (s.subscriptions.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_subscriptions)) }
@@ -1458,6 +1468,8 @@ private fun RotationCard(
     onOpenRotation: (String) -> Unit,
     onRenew: (String) -> Unit,
     busy: Boolean,
+    recap: ae.marketplace.mobile.model.RotationRecap? = null,
+    onLink: (String) -> Unit = {},
 ) {
     var confirming by remember { mutableStateOf(false) }
     Card {
@@ -1483,6 +1495,7 @@ private fun RotationCard(
                 Text("›", color = M.Faint, fontSize = Type.Heading)
             }
         }
+        recap?.let { RecapBlock(it, arabic, onLink) }
         if (r.awaitingPayment) {
             PrimaryButton(stringResource(R.string.meals_pay_due), { vm.payPendingRotation(r.id) }, enabled = !busy, modifier = Modifier.padding(top = Space.Small))
         }
