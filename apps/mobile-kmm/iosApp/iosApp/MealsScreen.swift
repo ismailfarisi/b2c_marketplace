@@ -251,7 +251,9 @@ struct MealsScreen: View {
                     stack = [.home, .mine]
                 }
             case .mine:
-                MinePage(vm: viewModel, onBack: back, openPayment: openPayment) { id in
+                MinePage(vm: viewModel, onBack: back, openPayment: openPayment,
+                         onKitchen: { id in viewModel.openKitchen(branchId: id); go(.kitchen) },
+                         onLink: { url in if let l = MealsLinks.shared.parse(url: url) { follow(l) } }) { id in
                     viewModel.openSubscription(id: id)
                     go(.subscription)
                 }
@@ -1954,6 +1956,8 @@ private struct MinePage: View {
     let vm: MealsViewModel
     let onBack: () -> Void
     let openPayment: (String) -> Void
+    let onKitchen: (String) -> Void
+    let onLink: (String) -> Void
     let onOpen: (String) -> Void
 
     @State private var current: MyMealsUiState?
@@ -2000,11 +2004,17 @@ private struct MinePage: View {
                         if let failure = s.error {
                             FailureStrip(failure: failure, onRetry: { vm.loadMine(force: true) }, onDismiss: { vm.dismissMineError() })
                         }
+                        if let failure = s.extrasError {
+                            FailureStrip(failure: failure, onRetry: { vm.loadMine(force: true) })
+                        }
+                        if !s.nextWeek.isEmpty {
+                            NextWeekCard(items: s.nextWeek, onKitchen: onKitchen)
+                        }
                         ForEach(s.companies, id: \.companyId) { c in companyCard(c.name) }
                         if !s.rotations.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_rotations", comment: ""))
                             ForEach(s.rotations, id: \.id) { r in
-                                RotationCard(r: r, vm: vm, busy: s.busy.contains(r.id), onOpen: onOpen)
+                                RotationCard(r: r, vm: vm, busy: s.busy.contains(r.id), recap: s.recaps[r.id], onLink: onLink, onOpen: onOpen)
                             }
                         }
                         if !s.subscriptions.isEmpty {
@@ -2032,6 +2042,8 @@ private struct RotationCard: View {
     let r: Rotation
     let vm: MealsViewModel
     let busy: Bool
+    var recap: RotationRecap? = nil
+    var onLink: (String) -> Void = { _ in }
     let onOpen: (String) -> Void
     @State private var confirming = false
 
@@ -2057,6 +2069,7 @@ private struct RotationCard: View {
                 }
                 .disabled(w.subscriptionId == nil)
             }
+            if let recap { RecapBlock(recap: recap, onLink: onLink) }
             if r.awaitingPayment {
                 PrimaryButton(label: NSLocalizedString("meals_pay_due", comment: ""), enabled: !busy) {
                     vm.payPendingRotation(id: r.id)
@@ -2484,5 +2497,96 @@ private struct MealCard: View {
         } message: {
             Text("meals_skip_note")
         }
+    }
+}
+
+// MARK: - Next-week preview and cycle recap
+
+/// "Lebanese home cooking", from the kitchen's first cuisine tag.
+private func cuisineLine(_ cuisines: [String]) -> String {
+    guard let first = cuisines.first else { return NSLocalizedString("meals_next_week_home_style", comment: "") }
+    return tr("meals_next_week_home_cooking", MealTags.shared.label(tag: first, arabic: isArabicLocale))
+}
+
+/// The "Next week" card at the top of My meals: who cooks and what, per day.
+private struct NextWeekCard: View {
+    let items: [NextWeekPreview]
+    let onKitchen: (String) -> Void
+
+    var body: some View {
+        if let p = items.first {
+            let kitchen = pick(p.kitchenName, p.kitchenNameAr)
+            CardBox {
+                Button { onKitchen(p.branchId) } label: {
+                    HStack(spacing: Space.medium) {
+                        KitchenCover(name: kitchen, imageUrl: p.coverImageUrl, cuisines: p.cuisines)
+                            .frame(width: 72, height: 72)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tr("meals_next_week_kicker", shortDate(p.startsOn) + " – " + shortDate(p.endsOn)))
+                                .font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.chilli)
+                            Text(tr("meals_next_week_title", kitchen, cuisineLine(p.cuisines)))
+                                .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(Warm.ink)
+                                .multilineTextAlignment(.leading)
+                            Text(NSLocalizedString("meals_next_week_open", comment: ""))
+                                .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.chilli)
+                        }
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: Space.small) {
+                        ForEach(p.meals, id: \.self) { m in
+                            let name = m.shown.map { pick($0.name, $0.nameAr) } ?? NSLocalizedString("meals_next_week_no_dishes", comment: "")
+                            VStack(alignment: .leading, spacing: 2) {
+                                KitchenCover(name: name, imageUrl: m.shown?.imageUrl, cuisines: [])
+                                    .frame(width: 112, height: 76)
+                                Text(shortDate(m.date) + " · " + slotLabel(m.mealSlot))
+                                    .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.muted)
+                                Text(name).font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.ink).lineLimit(2)
+                            }
+                            .frame(width: 112, alignment: .leading)
+                        }
+                    }
+                }
+                if items.count > 1 {
+                    Text(tr("meals_next_week_more", items.count - 1))
+                        .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.muted)
+                }
+            }
+        }
+    }
+}
+
+/// The end-of-cycle recap inside a rotation card, from week 4 on.
+private struct RecapBlock: View {
+    let recap: RotationRecap
+    let onLink: (String) -> Void
+
+    private func stat(_ n: Int32, _ key: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("\(n)").font(.system(size: TypeScale.heading, weight: .bold)).foregroundStyle(Warm.chilli)
+            Text(NSLocalizedString(key, comment: "")).font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.small) {
+            Text(NSLocalizedString(recap.ended ? "meals_recap_ended" : "meals_recap_title", comment: ""))
+                .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(Warm.ink)
+            HStack {
+                stat(recap.kitchenCount, "meals_recap_kitchens")
+                stat(recap.cuisineCount, "meals_recap_cuisines")
+                stat(recap.dishesDelivered, "meals_recap_dishes")
+                stat(recap.daysSkipped, "meals_recap_skipped")
+            }
+            if let f = recap.favourite {
+                Text(tr("meals_recap_favourite", pick(f.kitchenName, f.kitchenNameAr), Int(f.rating)))
+                    .font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.leaf)
+            }
+            PrimaryButton(label: NSLocalizedString("meals_recap_renew", comment: ""), enabled: true) { onLink(recap.renewPath) }
+        }
+        .padding(.top, Space.small)
     }
 }

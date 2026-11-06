@@ -686,4 +686,20 @@
     <string name="invoice_superseded">Superseded</string>
     <string name="invoice_share">Share</string>
     <string name="invoice_not_found">This invoice isn\'t on your account.</string>
+    <!-- Next-week preview and cycle recap -->
+    <string name="meals_next_week_title">Next week: %1$s – %2$s</string>
+    <string name="meals_next_week_home_cooking">%1$s home cooking</string>
+    <string name="meals_next_week_home_style">Home-style cooking</string>
+    <string name="meals_next_week_kicker">Next week · %1$s</string>
+    <string name="meals_next_week_more">+%1$d more kitchens next week</string>
+    <string name="meals_next_week_no_dishes">Menu coming soon</string>
+    <string name="meals_next_week_open">See the kitchen</string>
+    <string name="meals_recap_title">Your month of kitchens</string>
+    <string name="meals_recap_ended">Your month of kitchens is done</string>
+    <string name="meals_recap_kitchens">Kitchens</string>
+    <string name="meals_recap_cuisines">Cuisines</string>
+    <string name="meals_recap_dishes">Dishes delivered</string>
+    <string name="meals_recap_skipped">Days skipped</string>
+    <string name="meals_recap_favourite">Your favourite: %1$s (%2$d★)</string>
+    <string name="meals_recap_renew">See next month\'s kitchens</string>
 </resources>

@@ -34,6 +34,8 @@ object MealsLinks {
             null -> MealsLink(MealsLinkPage.HOME)
             "kitchens" -> id?.let { MealsLink(MealsLinkPage.KITCHEN, it) } ?: MealsLink(MealsLinkPage.HOME)
             "subscriptions" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.SUBSCRIPTION, id)
+            // `/rotations/{id}/renew` (next month's kitchens) opens the rotation
+            // until the apps have a renew screen of their own.
             "rotations" -> if (id == null) MealsLink(MealsLinkPage.MINE) else MealsLink(MealsLinkPage.ROTATION_DETAIL, id)
             "support" -> MealsLink(MealsLinkPage.SUPPORT, id)
             "collections" -> id?.let { MealsLink(MealsLinkPage.COLLECTION, it) } ?: MealsLink(MealsLinkPage.HOME)

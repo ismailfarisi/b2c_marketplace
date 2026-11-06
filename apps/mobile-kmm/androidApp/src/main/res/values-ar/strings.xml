@@ -624,4 +624,20 @@
     <string name="invoice_superseded">مستبدلة</string>
     <string name="invoice_share">مشاركة</string>
     <string name="invoice_not_found">هذه الفاتورة ليست في حسابك.</string>
+    <!-- Next-week preview and cycle recap -->
+    <string name="meals_next_week_title">الأسبوع القادم: %1$s – %2$s</string>
+    <string name="meals_next_week_home_cooking">طبخ بيتي %1$s</string>
+    <string name="meals_next_week_home_style">طبخ بيتي</string>
+    <string name="meals_next_week_kicker">الأسبوع القادم · %1$s</string>
+    <string name="meals_next_week_more">+%1$d مطابخ أخرى الأسبوع القادم</string>
+    <string name="meals_next_week_no_dishes">القائمة قريبًا</string>
+    <string name="meals_next_week_open">عرض المطبخ</string>
+    <string name="meals_recap_title">شهرك مع المطابخ</string>
+    <string name="meals_recap_ended">انتهى شهرك مع المطابخ</string>
+    <string name="meals_recap_kitchens">المطابخ</string>
+    <string name="meals_recap_cuisines">أنواع المطبخ</string>
+    <string name="meals_recap_dishes">الأطباق المُوصلة</string>
+    <string name="meals_recap_skipped">الأيام المتخطاة</string>
+    <string name="meals_recap_favourite">المفضل لديك: %1$s (%2$d★)</string>
+    <string name="meals_recap_renew">شاهد مطابخ الشهر القادم</string>
 </resources>

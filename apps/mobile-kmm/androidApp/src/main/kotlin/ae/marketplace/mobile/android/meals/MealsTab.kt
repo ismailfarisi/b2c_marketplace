@@ -204,7 +204,11 @@ fun MealsTab(
             Page.Checkout -> CheckoutPage(viewModel, location, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Rotation -> RotationPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Paid -> PaidPage(redirected, viewModel.checkout.value.paymentPending, onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
-            Page.Mine -> MinePage(viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) }, openPayment = openPayment)
+            Page.Mine -> MinePage(
+                viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) }, openPayment = openPayment,
+                onKitchen = { viewModel.openKitchen(it); go(Page.Kitchen) },
+                onLink = { url -> ae.marketplace.mobile.meals.MealsLinks.parse(url)?.let { innerLink = it } },
+            )
             Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
         }
     }
@@ -1292,7 +1296,14 @@ private fun PaidPage(redirected: Boolean, pending: Boolean, onMine: () -> Unit) 
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit, openPayment: (String) -> Unit) {
+private fun MinePage(
+    vm: MealsViewModel,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    openPayment: (String) -> Unit,
+    onKitchen: (String) -> Unit,
+    onLink: (String) -> Unit,
+) {
     val s by vm.mine.collectAsState()
     val arabic = rememberArabic()
     LaunchedEffect(Unit) { vm.loadMine() }
@@ -1309,10 +1320,16 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
                 failure?.let { f ->
                     item { FailureStrip(f, onRetry = { vm.loadMine(force = true) }, onDismiss = vm::dismissMineError) }
                 }
+                s.extrasError?.let { f ->
+                    item { FailureStrip(f, onRetry = { vm.loadMine(force = true) }) }
+                }
+                if (s.nextWeek.isNotEmpty()) {
+                    item(key = "next-week") { NextWeekCard(s.nextWeek, arabic, onKitchen) }
+                }
                 items(s.companies, key = { "company-" + it.companyId }) { c -> CompanyCoversCard(c.name, arabic) }
                 if (s.rotations.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_rotations)) }
-                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, busy = r.id in s.busy) }
+                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, busy = r.id in s.busy, recap = s.recaps[r.id], onLink = onLink) }
                 }
                 if (s.subscriptions.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_subscriptions)) }
@@ -1325,7 +1342,15 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
 }
 
 @Composable
-private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit, busy: Boolean) {
+private fun RotationCard(
+    r: Rotation,
+    arabic: Boolean,
+    vm: MealsViewModel,
+    onOpen: (String) -> Unit,
+    busy: Boolean,
+    recap: ae.marketplace.mobile.model.RotationRecap? = null,
+    onLink: (String) -> Unit = {},
+) {
     var confirming by remember { mutableStateOf(false) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1348,6 +1373,7 @@ private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpe
                 Text("›", color = M.Faint, fontSize = Type.Heading)
             }
         }
+        recap?.let { RecapBlock(it, arabic, onLink) }
         if (r.awaitingPayment) {
             PrimaryButton(stringResource(R.string.meals_pay_due), { vm.payPendingRotation(r.id) }, enabled = !busy, modifier = Modifier.padding(top = Space.Small))
         }

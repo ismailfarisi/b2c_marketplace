@@ -502,6 +502,21 @@
 "invoice_superseded" = "Superseded";
 "invoice_share" = "Share";
 "invoice_not_found" = "This invoice isn't on your account.";
+"meals_next_week_title" = "Next week: %@ – %@";
+"meals_next_week_home_cooking" = "%@ home cooking";
+"meals_next_week_home_style" = "Home-style cooking";
+"meals_next_week_kicker" = "Next week · %@";
+"meals_next_week_more" = "+%lld more kitchens next week";
+"meals_next_week_no_dishes" = "Menu coming soon";
+"meals_next_week_open" = "See the kitchen";
+"meals_recap_title" = "Your month of kitchens";
+"meals_recap_ended" = "Your month of kitchens is done";
+"meals_recap_kitchens" = "Kitchens";
+"meals_recap_cuisines" = "Cuisines";
+"meals_recap_dishes" = "Dishes delivered";
+"meals_recap_skipped" = "Days skipped";
+"meals_recap_favourite" = "Your favourite: %@ (%lld★)";
+"meals_recap_renew" = "See next month's kitchens";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

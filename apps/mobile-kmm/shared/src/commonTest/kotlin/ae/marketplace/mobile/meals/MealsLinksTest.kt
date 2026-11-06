@@ -34,6 +34,11 @@ class MealsLinksTest {
         MealsLinks.parse("https://meals.example/ar/rotations/r7?x=1"),
     )
 
+    @Test fun rotationRenewOpensTheRotation() = assertEquals(
+        MealsLink(MealsLinkPage.ROTATION_DETAIL, "r7"),
+        MealsLinks.parse("https://meals.example/en/rotations/r7/renew"),
+    )
+
     @Test fun supportTicket() = assertEquals(MealsLink(MealsLinkPage.SUPPORT, "t3"), MealsLinks.parse("/en/support/t3"))
 
     @Test fun supportList() = assertEquals(MealsLink(MealsLinkPage.SUPPORT), MealsLinks.parse("/support"))
