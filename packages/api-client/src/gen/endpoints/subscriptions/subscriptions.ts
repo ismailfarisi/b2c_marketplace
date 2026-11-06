@@ -51,6 +51,8 @@ import type {
   Rotation,
   RotationInput,
   RotationQuote,
+  RotationSuggestion,
+  RotationSuggestionInput,
   SetRotationRenewalBody,
   SetSubscriptionRenewalBody,
   SkipDeliveryBody,
@@ -977,6 +979,71 @@ export const usePreviewRotation = <TError = UnauthorizedResponse | Unprocessable
       > => {
 
       const mutationOptions = getPreviewRotationMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * Picks four well-rated rotation kitchens that deliver to the address on one shared schedule, with as many different cuisines as possible in a similar weekly price band, and quotes them exactly like previewRotation. Leave delivery_weekdays or meal_slots out to use the schedule most kitchens share. Creates nothing; the variety check is advisory and never blocks buying any rotation.
+ * @summary A balanced four-kitchen rotation for an address
+ */
+export const suggestRotation = (
+    rotationSuggestionInput: RotationSuggestionInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<RotationSuggestion>(
+      {url: `/rotations/suggestion`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: rotationSuggestionInput, signal
+    },
+      );
+    }
+  
+
+
+export const getSuggestRotationMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestRotation>>, TError,{data: RotationSuggestionInput}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof suggestRotation>>, TError,{data: RotationSuggestionInput}, TContext> => {
+
+const mutationKey = ['suggestRotation'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suggestRotation>>, {data: RotationSuggestionInput}> = (props) => {
+          const {data} = props ?? {};
+
+          return  suggestRotation(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuggestRotationMutationResult = NonNullable<Awaited<ReturnType<typeof suggestRotation>>>
+    export type SuggestRotationMutationBody = RotationSuggestionInput
+    export type SuggestRotationMutationError = UnauthorizedResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary A balanced four-kitchen rotation for an address
+ */
+export const useSuggestRotation = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestRotation>>, TError,{data: RotationSuggestionInput}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suggestRotation>>,
+        TError,
+        {data: RotationSuggestionInput},
+        TContext
+      > => {
+
+      const mutationOptions = getSuggestRotationMutationOptions(options);
 
       return useMutation(mutationOptions);
     }

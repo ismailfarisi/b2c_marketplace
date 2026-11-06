@@ -69,6 +69,50 @@ func (h *RotationHandlers) Preview(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, "", q)
 }
 
+type suggestionBody struct {
+	AddressID uuid.UUID  `json:"address_id"`
+	StartDate string     `json:"start_date"`
+	Weekdays  []int      `json:"delivery_weekdays"`
+	MealSlots []string   `json:"meal_slots"`
+	PromoCode string     `json:"promo_code"`
+	PromoID   *uuid.UUID `json:"promo_id"`
+}
+
+// Suggest answers POST /rotations/suggestion: a balanced rotation of four
+// kitchens for the address, quoted like preview.
+func (h *RotationHandlers) Suggest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	var body suggestionBody
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	in := subscriptions.SuggestInput{
+		UserID: userID, AddressID: body.AddressID, Weekdays: body.Weekdays, Slots: body.MealSlots,
+		Promo: promo.Ref{Code: body.PromoCode, ID: body.PromoID},
+	}
+	if body.StartDate != "" {
+		start, err := time.Parse("2006-01-02", body.StartDate)
+		if err != nil {
+			httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "start_date", Code: "invalid_date", Message: "expected YYYY-MM-DD",
+			}}})
+			return
+		}
+		in.StartDate = &start
+	}
+	out, err := h.Service.SuggestRotation(r.Context(), in)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", out)
+}
+
 // Create answers POST /rotations.
 func (h *RotationHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	in, ok := h.input(w, r)

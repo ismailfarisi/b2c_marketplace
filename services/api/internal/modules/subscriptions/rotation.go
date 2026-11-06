@@ -57,6 +57,8 @@ type RotationQuote struct {
 	DiscountMinor int64        `json:"discount_minor"`
 	Promo         *promo.Offer `json:"promo,omitempty"`
 	Currency      string       `json:"currency"`
+	// Variety is advisory only; it never blocks a purchase.
+	Variety *Variety `json:"variety,omitempty"`
 }
 
 // Rotation is a purchased rotation.
@@ -325,6 +327,7 @@ func (s *Service) rotationPromo(ctx context.Context, tx pgx.Tx, in RotationInput
 // PreviewRotation shows the week order and prices without creating anything.
 func (s *Service) PreviewRotation(ctx context.Context, in RotationInput) (RotationQuote, error) {
 	var q RotationQuote
+	var chosen []rotationPlan
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		plans, start, _, err := s.prepareRotation(ctx, tx, in)
 		if err != nil {
@@ -336,9 +339,19 @@ func (s *Service) PreviewRotation(ctx context.Context, in RotationInput) (Rotati
 		}
 		q = buildQuote(plans, AssignWeeks(load), start)
 		_, _, _, err = s.rotationPromo(ctx, tx, in, plans, &q)
-		return err
+		if err != nil {
+			return err
+		}
+		chosen = plans
+		return nil
 	})
-	return q, err
+	if err != nil {
+		return q, err
+	}
+	// Read outside the quote's transaction so a failed advisory read can
+	// never abort the quote.
+	q.Variety = rotationVariety(ctx, s.pool, chosen, q, in.Weekdays, in.Slots)
+	return q, nil
 }
 
 // CreateRotation creates the rotation and its four weekly subscriptions, each

@@ -1776,6 +1776,32 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  /rotations/suggestion:
+    post:
+      tags: [subscriptions]
+      operationId: suggestRotation
+      summary: A balanced four-kitchen rotation for an address
+      description: >-
+        Picks four well-rated rotation kitchens that deliver to the address on
+        one shared schedule, with as many different cuisines as possible in a
+        similar weekly price band, and quotes them exactly like
+        previewRotation. Leave delivery_weekdays or meal_slots out to use the
+        schedule most kitchens share. Creates nothing; the variety check is
+        advisory and never blocks buying any rotation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RotationSuggestionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RotationSuggestion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /rotations:
     post:
       tags: [subscriptions]
@@ -7089,6 +7115,49 @@ components:
         discount_minor: { type: integer, format: int64 }
         promo: { $ref: "#/components/schemas/PromoOffer" }
         currency: { type: string }
+        variety: { $ref: "#/components/schemas/RotationVariety" }
+    RotationVariety:
+      type: object
+      description: >-
+        Advisory variety check of the four kitchens: distinct cuisines, the same
+        dish on the same weekday at several kitchens, and dishes repeated
+        across weeks. Never blocks a purchase.
+      required: [level, score, distinct_cuisines, warnings]
+      properties:
+        level: { type: string, enum: [low, good, great] }
+        score: { type: integer, description: 0 to 100. }
+        distinct_cuisines: { type: integer }
+        warnings: { type: array, items: { $ref: "#/components/schemas/RotationVarietyWarning" } }
+    RotationVarietyWarning:
+      type: object
+      required: [code, kitchens]
+      properties:
+        code: { type: string, enum: [same_cuisine, repeated_dish, repeated_across_weeks] }
+        cuisines: { type: array, items: { type: string }, description: same_cuisine only. }
+        dish: { type: string }
+        dish_ar: { type: [string, "null"] }
+        weekday: { type: integer, minimum: 0, maximum: 6, description: "repeated_dish only; 0 = Sunday." }
+        kitchens: { type: integer, description: How many kitchens share the cuisine or dish. }
+    RotationSuggestionInput:
+      type: object
+      required: [address_id]
+      properties:
+        address_id: { type: string, format: uuid }
+        start_date: { type: string, format: date, description: Defaults to the earliest start the kitchens allow. }
+        delivery_weekdays: { type: array, items: { type: integer, minimum: 0, maximum: 6 } }
+        meal_slots: { type: array, items: { type: string } }
+        promo_code: { type: string }
+        promo_id: { type: string, format: uuid }
+    RotationSuggestion:
+      type: object
+      required: [plan_ids, branch_ids, start_date, delivery_weekdays, meal_slots, quote]
+      properties:
+        plan_ids: { type: array, items: { type: string, format: uuid } }
+        branch_ids: { type: array, items: { type: string, format: uuid } }
+        start_date: { type: string, format: date }
+        delivery_weekdays: { type: array, items: { type: integer } }
+        meal_slots: { type: array, items: { type: string } }
+        quote: { $ref: "#/components/schemas/RotationQuote" }
     PromoOffer:
       type: object
       required: [id, name, discount_type, percent_bp, amount_minor, currency, applies_to, audience]
