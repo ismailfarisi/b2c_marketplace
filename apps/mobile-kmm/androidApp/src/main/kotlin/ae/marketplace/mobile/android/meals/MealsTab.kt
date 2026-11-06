@@ -38,6 +38,8 @@ import ae.marketplace.mobile.model.LatLng
 import ae.marketplace.mobile.model.MealPlan
 import ae.marketplace.mobile.model.MySubscription
 import ae.marketplace.mobile.model.Rotation
+import ae.marketplace.mobile.model.RotationWeek
+import ae.marketplace.mobile.meals.RotationDetailUiState
 import ae.marketplace.mobile.model.UpcomingMeal
 import android.content.Intent
 import android.net.Uri
@@ -94,7 +96,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-private enum class Page { Home, Kitchen, Checkout, Rotation, Paid, Mine, Subscription, Collection }
+private enum class Page { Home, Kitchen, Checkout, Rotation, Paid, Mine, Subscription, RotationDetail, Collection }
 
 /**
  * The meals tab. Its pages stack inside the tab, so the bottom bar stays put
@@ -144,8 +146,7 @@ fun MealsTab(
             MealsLinkPage.SUBSCRIPTION -> if (id != null) requireAccount { viewModel.openSubscription(id); home(Page.Subscription) }
             MealsLinkPage.MINE -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
             MealsLinkPage.ROTATION -> requireAccount { viewModel.startRotation(); home(Page.Rotation) }
-            // No native rotation screen yet; rotations are listed on My meals.
-            MealsLinkPage.ROTATION_DETAIL -> requireAccount { viewModel.loadMine(); home(Page.Mine) }
+            MealsLinkPage.ROTATION_DETAIL -> if (id != null) requireAccount { viewModel.openRotation(id); home(Page.RotationDetail) }
             // Help is native, on the app's session (a banner to /support must not
             // open the web, which has no session and asks for a new code).
             // The host gates it, so the sign-in screen can say "get help"
@@ -204,8 +205,20 @@ fun MealsTab(
             Page.Checkout -> CheckoutPage(viewModel, location, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Rotation -> RotationPage(viewModel, onBack = ::back, onPaid = { go(Page.Paid) }, openPayment = openPayment)
             Page.Paid -> PaidPage(redirected, viewModel.checkout.value.paymentPending, onMine = { viewModel.loadMine(force = true); home(Page.Mine) })
-            Page.Mine -> MinePage(viewModel, onBack = ::back, onOpen = { viewModel.openSubscription(it); go(Page.Subscription) }, openPayment = openPayment)
+            Page.Mine -> MinePage(
+                viewModel,
+                onBack = ::back,
+                onOpen = { viewModel.openSubscription(it); go(Page.Subscription) },
+                onOpenRotation = { viewModel.openRotation(it); go(Page.RotationDetail) },
+                openPayment = openPayment,
+            )
             Page.Subscription -> SubscriptionPage(viewModel, onBack = ::back, openPayment = openPayment)
+            Page.RotationDetail -> RotationDetailPage(
+                viewModel,
+                onBack = ::back,
+                onOpen = { viewModel.openSubscription(it); go(Page.Subscription) },
+                openPayment = openPayment,
+            )
         }
     }
 }
@@ -1292,7 +1305,13 @@ private fun PaidPage(redirected: Boolean, pending: Boolean, onMine: () -> Unit) 
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit, openPayment: (String) -> Unit) {
+private fun MinePage(
+    vm: MealsViewModel,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    onOpenRotation: (String) -> Unit,
+    openPayment: (String) -> Unit,
+) {
     val s by vm.mine.collectAsState()
     val arabic = rememberArabic()
     LaunchedEffect(Unit) { vm.loadMine() }
@@ -1312,7 +1331,7 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
                 items(s.companies, key = { "company-" + it.companyId }) { c -> CompanyCoversCard(c.name, arabic) }
                 if (s.rotations.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_rotations)) }
-                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, busy = r.id in s.busy) }
+                    items(s.rotations, key = { it.id }) { r -> RotationCard(r, arabic, vm, onOpen, onOpenRotation, busy = r.id in s.busy) }
                 }
                 if (s.subscriptions.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_subscriptions)) }
@@ -1325,12 +1344,21 @@ private fun MinePage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) ->
 }
 
 @Composable
-private fun RotationCard(r: Rotation, arabic: Boolean, vm: MealsViewModel, onOpen: (String) -> Unit, busy: Boolean) {
+private fun RotationCard(
+    r: Rotation,
+    arabic: Boolean,
+    vm: MealsViewModel,
+    onOpen: (String) -> Unit,
+    onOpenRotation: (String) -> Unit,
+    busy: Boolean,
+) {
     var confirming by remember { mutableStateOf(false) }
     Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // The heading opens the rotation itself: all four weeks, and changing one.
+        Row(Modifier.fillMaxWidth().clickable { onOpenRotation(r.id) }, verticalAlignment = Alignment.CenterVertically) {
             Text(r.rotationNo, color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             StatusPill(r.status)
+            Text("›", color = M.Faint, fontSize = Type.Heading, modifier = Modifier.padding(start = Space.Small))
         }
         Text(shortDate(r.startDate, arabic) + " – " + shortDate(r.endDate, arabic), color = M.Muted, fontSize = Type.Secondary)
         r.weeks.sortedBy { it.week }.forEach { w ->
@@ -1488,6 +1516,174 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
             }
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One rotation: its four weeks, changing a week's kitchen, cancelling
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun RotationDetailPage(vm: MealsViewModel, onBack: () -> Unit, onOpen: (String) -> Unit, openPayment: (String) -> Unit) {
+    val s by vm.rotationDetail.collectAsState()
+    val arabic = rememberArabic()
+    LaunchedEffect(s.paymentUrl) { s.paymentUrl?.let { openPayment(it); vm.clearRotationPaymentUrl() } }
+    LaunchedEffect(s.cancelled) { if (s.cancelled) onBack() }
+    val r = s.rotation
+    Column(Modifier.fillMaxSize()) {
+        TopBar(stringResource(R.string.meals_rotation_detail_title), onBack)
+        val failure = s.error
+        when {
+            r == null && failure != null -> FailureBlock(failure, onRetry = vm::retryOpenRotation)
+            r == null -> LoadingBlock()
+            else -> LazyColumn(Modifier.fillMaxSize()) {
+                item {
+                    Card {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(r.rotationNo, color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            StatusPill(r.status)
+                        }
+                        Text(shortDate(r.startDate, arabic) + " – " + shortDate(r.endDate, arabic), color = M.Muted, fontSize = Type.Secondary)
+                        Text(stringResource(R.string.meals_rotation_total, money(r.amountMinor, r.currency)), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+                    }
+                    failure?.let { FailureStrip(it, onRetry = vm::retryOpenRotation) }
+                    s.actionError?.let { FailureStrip(it, onRetry = null, onDismiss = vm::dismissRotationDetailError) }
+                }
+                items(r.weeks.sortedBy { it.week }, key = { it.week }) { w ->
+                    RotationWeekCard(w, r.currency, arabic, picking = s.picking == w.week, busy = s.busy, vm, onOpen)
+                    if (s.picking == w.week) SwapPickerCard(w, r.currency, arabic, s, vm)
+                }
+                if (r.live) {
+                    item {
+                        var confirming by remember { mutableStateOf(false) }
+                        Text(
+                            stringResource(R.string.meals_cancel_rotation),
+                            color = if (s.busy) M.Faint else Palette.Bad,
+                            fontSize = Type.Secondary,
+                            modifier = Modifier.clickable(enabled = !s.busy) { confirming = true }.padding(Space.Edge),
+                        )
+                        if (confirming) ConfirmCancel(onConfirm = { confirming = false; vm.cancelOpenRotation() }, onDismiss = { confirming = false })
+                    }
+                }
+                item { BottomPad() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RotationWeekCard(
+    w: RotationWeek,
+    currency: String,
+    arabic: Boolean,
+    picking: Boolean,
+    busy: Boolean,
+    vm: MealsViewModel,
+    onOpen: (String) -> Unit,
+) {
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).background(Warm.Weeks[(w.week - 1).mod(Warm.Weeks.size)], RoundedCornerShape(50)))
+            Text(
+                stringResource(R.string.meals_week, w.week) + " · " + pick(w.kitchenName, w.kitchenNameAr, arabic),
+                color = M.Ink,
+                fontSize = Type.Body,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f).padding(start = Space.Small),
+            )
+            w.status?.let { StatusPill(it) }
+        }
+        Text(shortDate(w.startsOn, arabic) + " – " + shortDate(w.endsOn, arabic), color = M.Muted, fontSize = Type.Secondary)
+        Text(money(w.priceMinor, currency), color = M.Ink, fontSize = Type.Secondary)
+        if (w.swapped) Text(stringResource(R.string.meals_kitchen_changed), color = M.Muted, fontSize = Type.Caption)
+        if (w.swappable) {
+            SecondaryButton(
+                stringResource(if (picking) R.string.meals_keep else R.string.meals_change_kitchen),
+                { if (!busy) { if (picking) vm.closeWeekPicker() else vm.pickWeekKitchen(w.week) } },
+                Modifier.padding(top = Space.Small),
+            )
+            w.swapUntil?.let { Text(stringResource(R.string.meals_swap_until, shortDate(it, arabic)), color = M.Faint, fontSize = Type.Caption) }
+        }
+        w.subscriptionId?.let { id ->
+            Text(
+                stringResource(R.string.meals_open_week),
+                color = M.Chilli,
+                fontSize = Type.Secondary,
+                modifier = Modifier.clickable { onOpen(id) }.padding(vertical = Space.Small),
+            )
+        }
+    }
+}
+
+/** The kitchens one week could change to, each with what it costs or credits, and a confirm. */
+@Composable
+private fun SwapPickerCard(w: RotationWeek, currency: String, arabic: Boolean, s: RotationDetailUiState, vm: MealsViewModel) {
+    var chosen by remember(w.week) { mutableStateOf<String?>(null) }
+    var confirming by remember { mutableStateOf(false) }
+    val options = s.options
+    Card {
+        Text(stringResource(R.string.meals_pick_kitchen_title, w.week), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_pick_kitchen_note), color = M.Muted, fontSize = Type.Caption)
+        Text(stringResource(R.string.meals_current_week_price, money(w.priceMinor, currency)), color = M.Muted, fontSize = Type.Caption)
+        val optionsError = s.optionsError
+        when {
+            optionsError != null -> FailureStrip(optionsError, onRetry = vm::retrySwapOptions)
+            options == null || s.optionsLoading -> LoadingBlock(inline = true)
+            options.items.isEmpty() -> Text(stringResource(R.string.meals_no_swap_options), color = M.Muted, fontSize = Type.Body)
+            else -> options.items.forEach { o ->
+                val on = chosen == o.planId
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !s.busy) { chosen = o.planId }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(if (on) "●" else "○", color = if (on) M.Chilli else M.Faint, fontSize = Type.Body)
+                    Column(Modifier.weight(1f).padding(start = Space.Small)) {
+                        Text(pick(o.kitchenName, o.kitchenNameAr, arabic), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+                        val rating = o.rating
+                        Text(
+                            (if (rating != null) "%.1f ★ · %d".format(rating, o.ratingCount) else stringResource(R.string.meals_new_kitchen)) +
+                                (if (o.cuisines.isNotEmpty()) " · " + o.cuisines.joinToString(", ") else ""),
+                            color = M.Muted,
+                            fontSize = Type.Caption,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(money(o.priceMinor, o.currency), color = M.Ink, fontSize = Type.Secondary)
+                        Text(swapDifference(o.differenceMinor, o.currency), color = if (o.differenceMinor > 0) Palette.Bad else M.Muted, fontSize = Type.Caption)
+                    }
+                }
+            }
+        }
+        val pick = options?.items?.firstOrNull { it.planId == chosen }
+        PrimaryButton(
+            stringResource(R.string.meals_confirm_change) + (pick?.let { " · " + swapDifference(it.differenceMinor, it.currency) } ?: ""),
+            { if (pick != null) confirming = true },
+            enabled = pick != null && !s.busy,
+            modifier = Modifier.padding(top = Space.Small),
+        )
+        if (confirming && pick != null) {
+            AlertDialog(
+                onDismissRequest = { confirming = false },
+                containerColor = M.Surface,
+                text = { Text(stringResource(R.string.meals_swap_confirm, pick(pick.kitchenName, pick.kitchenNameAr, arabic)), color = M.Ink, fontSize = Type.Body) },
+                confirmButton = {
+                    TextButton(onClick = { confirming = false; vm.swapWeekKitchen(pick.planId) }) { Text(stringResource(R.string.meals_swap_yes), color = M.Chilli) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.meals_keep), color = M.Ink) }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun swapDifference(minor: Long, currency: String): String = when {
+    minor == 0L -> stringResource(R.string.meals_same_price)
+    minor > 0 -> stringResource(R.string.meals_pay_more, money(minor, currency))
+    else -> stringResource(R.string.meals_credit_back, money(-minor, currency))
 }
 
 @Composable

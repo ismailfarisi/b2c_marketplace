@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -146,6 +147,90 @@ func (h *RotationHandlers) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// SwapOptions answers GET /rotations/{rotationId}/weeks/{week}/options: the
+// kitchens one future week could change to.
+func (h *RotationHandlers) SwapOptions(w http.ResponseWriter, r *http.Request) {
+	userID, id, week, ok := rotationWeekTarget(w, r)
+	if !ok {
+		return
+	}
+	opts, err := h.Service.SwapOptions(r.Context(), userID, id, week)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", opts)
+}
+
+// SwapWeek answers POST /rotations/{rotationId}/weeks/{week}/swap. A dearer
+// kitchen is paid for on the spot through the payment flow; the answer carries
+// the intent so the client can finish it when the provider needs a redirect.
+func (h *RotationHandlers) SwapWeek(w http.ResponseWriter, r *http.Request) {
+	userID, id, week, ok := rotationWeekTarget(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		PlanID uuid.UUID `json:"plan_id"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	if body.PlanID == uuid.Nil {
+		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "plan_id", Code: "required", Message: "choose a kitchen"}}})
+		return
+	}
+	res, err := h.Service.SwapRotationWeek(r.Context(), userID, id, week, body.PlanID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	var payment any
+	if res.DueMinor > 0 {
+		intent, err := h.Payments.Authorize(r.Context(), userID, res.OrderID, r.Header.Get("Idempotency-Key"))
+		if err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+		payment = map[string]any{
+			"id":       intent.ID,
+			"status":   intent.Status,
+			"provider": intent.Provider,
+			"amount": map[string]any{
+				"amount":   intent.AmountMinor,
+				"currency": intent.Currency,
+			},
+			"client_secret": nullable(intent.ClientSecret),
+			"redirect_url":  nullable(intent.RedirectURL),
+		}
+		if res.Rotation, err = h.Service.MyRotation(r.Context(), userID, id); err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{
+		"rotation":  res.Rotation,
+		"due_minor": res.DueMinor,
+		"currency":  res.Currency,
+		"payment":   payment,
+	})
+}
+
+func rotationWeekTarget(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, int, bool) {
+	userID, id, ok := rotationTarget(w, r)
+	if !ok {
+		return uuid.Nil, uuid.Nil, 0, false
+	}
+	week, err := strconv.Atoi(chi.URLParam(r, "week"))
+	if err != nil || week < 1 || week > subscriptions.RotationKitchens {
+		httpx.WriteProblem(w, r, httpx.ErrNotFound)
+		return uuid.Nil, uuid.Nil, 0, false
+	}
+	return userID, id, week, true
 }
 
 // Pay answers POST /rotations/{rotationId}/payment-intent: one payment for all

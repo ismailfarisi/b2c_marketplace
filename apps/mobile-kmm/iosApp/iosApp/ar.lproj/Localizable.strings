@@ -502,5 +502,22 @@
 "invoice_superseded" = "مستبدلة";
 "invoice_share" = "مشاركة";
 "invoice_not_found" = "هذه الفاتورة ليست في حسابك.";
+"meals_rotation_detail_title" = "تناوب ٤ مطابخ";
+"meals_rotation_total" = "المجموع · %@";
+"meals_change_kitchen" = "تغيير المطبخ";
+"meals_kitchen_changed" = "تم تغيير المطبخ";
+"meals_swap_until" = "يمكن التغيير حتى %@";
+"meals_pick_kitchen_title" = "تغيير مطبخ الأسبوع %lld";
+"meals_pick_kitchen_note" = "مطابخ توصل إلى عنوانك في أيامك ووجباتك وليست ضمن هذا التناوب بعد. يمكن تغيير مطبخ الأسبوع مرة واحدة.";
+"meals_no_swap_options" = "لا يوجد مطبخ آخر يمكنه الطبخ لهذا الأسبوع حاليًا.";
+"meals_same_price" = "نفس السعر";
+"meals_pay_more" = "+%@ تُدفع الآن";
+"meals_credit_back" = "%@ تعود إلى محفظتك";
+"meals_current_week_price" = "الأسبوع الحالي: %@";
+"meals_new_kitchen" = "مطبخ جديد";
+"meals_confirm_change" = "تأكيد التغيير";
+"meals_swap_confirm" = "تغيير مطبخ هذا الأسبوع إلى %@؟ لا يمكن التراجع عن ذلك.";
+"meals_swap_yes" = "تغيير";
+"meals_open_week" = "الوجبات واختيار الأطباق";
 
 "action_back" = "رجوع";

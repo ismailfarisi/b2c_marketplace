@@ -624,4 +624,22 @@
     <string name="invoice_superseded">مستبدلة</string>
     <string name="invoice_share">مشاركة</string>
     <string name="invoice_not_found">هذه الفاتورة ليست في حسابك.</string>
+    <!-- Rotation detail: the four weeks and changing one week's kitchen -->
+    <string name="meals_rotation_detail_title">تناوب ٤ مطابخ</string>
+    <string name="meals_rotation_total">المجموع · %1$s</string>
+    <string name="meals_change_kitchen">تغيير المطبخ</string>
+    <string name="meals_kitchen_changed">تم تغيير المطبخ</string>
+    <string name="meals_swap_until">يمكن التغيير حتى %1$s</string>
+    <string name="meals_pick_kitchen_title">تغيير مطبخ الأسبوع %1$d</string>
+    <string name="meals_pick_kitchen_note">مطابخ توصل إلى عنوانك في أيامك ووجباتك وليست ضمن هذا التناوب بعد. يمكن تغيير مطبخ الأسبوع مرة واحدة.</string>
+    <string name="meals_no_swap_options">لا يوجد مطبخ آخر يمكنه الطبخ لهذا الأسبوع حاليًا.</string>
+    <string name="meals_same_price">نفس السعر</string>
+    <string name="meals_pay_more">+%1$s تُدفع الآن</string>
+    <string name="meals_credit_back">%1$s تعود إلى محفظتك</string>
+    <string name="meals_current_week_price">الأسبوع الحالي: %1$s</string>
+    <string name="meals_new_kitchen">مطبخ جديد</string>
+    <string name="meals_confirm_change">تأكيد التغيير</string>
+    <string name="meals_swap_confirm">تغيير مطبخ هذا الأسبوع إلى %1$s؟ لا يمكن التراجع عن ذلك.</string>
+    <string name="meals_swap_yes">تغيير</string>
+    <string name="meals_open_week">الوجبات واختيار الأطباق</string>
 </resources>

@@ -311,6 +311,10 @@ export interface RotationWeek {
   subscription_id: string | null;
   subscription_no: string | null;
   status: string | null;
+  /** The customer can still change this week's kitchen; see swapRotationWeek. */
+  swappable?: boolean;
+  swapped?: boolean;
+  swap_until?: string | null;
 }
 
 export interface RotationQuote {
@@ -363,6 +367,51 @@ export const cancelRotation = (id: string, reason: string, opts?: CallOptions) =
     url: `/rotations/${id}/cancel`,
     method: "POST",
     data: { reason },
+    headers: opts?.headers,
+  });
+
+export interface RotationSwapOption {
+  branch_id: string;
+  kitchen_name: string;
+  kitchen_name_ar: string | null;
+  cuisines: string[];
+  cover_image_url: string | null;
+  rating: number | null;
+  rating_count: number;
+  plan_id: string;
+  plan_name: string;
+  price_minor: number;
+  /** price_minor less the week's current price: positive is charged, negative credited. */
+  difference_minor: number;
+  currency: string;
+}
+
+export interface RotationSwapOptions {
+  week: number;
+  current_price_minor: number;
+  swap_until: string;
+  currency: string;
+  items: RotationSwapOption[];
+}
+
+export interface RotationSwapResult {
+  rotation: Rotation;
+  due_minor: number;
+  currency: string;
+  /** Collects due_minor when the new kitchen costs more. */
+  payment: PaymentIntent | null;
+}
+
+/** Kitchens one future rotation week could change to, best rated first. */
+export const listRotationSwapOptions = (id: string, week: number) =>
+  apiFetch<RotationSwapOptions>({ url: `/rotations/${id}/weeks/${week}/options`, method: "GET" });
+
+/** Changes one future week's kitchen; a dearer kitchen's difference is paid on the spot. */
+export const swapRotationWeek = (id: string, week: number, planId: string, opts?: CallOptions) =>
+  apiFetch<RotationSwapResult>({
+    url: `/rotations/${id}/weeks/${week}/swap`,
+    method: "POST",
+    data: { plan_id: planId },
     headers: opts?.headers,
   });
 

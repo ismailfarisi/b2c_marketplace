@@ -295,3 +295,40 @@ func PostCompanySubscriptionCancelled(ctx context.Context, tx pgx.Tx, c Subscrip
 		},
 	})
 }
+
+// PostSubscriptionWalletApplied spends wallet money on a subscription cycle.
+//
+// The counterpart of a wallet credit: when a rotation week is swapped, the
+// cancelled week's unearned money lands in the wallet and the replacement
+// week is paid from it, so only the price difference ever touches a card or
+// stays in the wallet.
+func PostSubscriptionWalletApplied(ctx context.Context, tx pgx.Tx, c SubscriptionCredit) (uuid.UUID, error) {
+	if c.AmountMinor <= 0 {
+		return uuid.Nil, fmt.Errorf("ledger: wallet application must be positive, got %d", c.AmountMinor)
+	}
+
+	userID := c.UserID
+	reason := c.Reason
+	if reason == "" {
+		reason = "replacement subscription"
+	}
+	return Post(ctx, tx, Journal{
+		EventType:     "subscription_wallet_applied",
+		ReferenceType: "subscription_cycle",
+		ReferenceID:   c.CycleID,
+		Description:   fmt.Sprintf("Wallet applied to %s", reason),
+		Currency:      c.Currency,
+		Postings: []Posting{
+			{
+				Account:     AccountRef{Type: CustomerWallet, OwnerType: OwnerUser, OwnerID: &userID, Currency: c.Currency},
+				Direction:   Debit,
+				AmountMinor: c.AmountMinor,
+			},
+			{
+				Account:     AccountRef{Type: DeferredRevenue, OwnerType: OwnerPlatform, Currency: c.Currency},
+				Direction:   Credit,
+				AmountMinor: c.AmountMinor,
+			},
+		},
+	})
+}

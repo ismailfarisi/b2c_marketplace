@@ -23,6 +23,7 @@ import type { RotationWeekKitchenNameAr } from './rotationWeekKitchenNameAr';
 import type { RotationWeekSubscriptionId } from './rotationWeekSubscriptionId';
 import type { RotationWeekSubscriptionNo } from './rotationWeekSubscriptionNo';
 import type { RotationWeekStatus } from './rotationWeekStatus';
+import type { RotationWeekSwapUntil } from './rotationWeekSwapUntil';
 
 export interface RotationWeek {
   /**
@@ -42,4 +43,10 @@ export interface RotationWeek {
   subscription_id?: RotationWeekSubscriptionId;
   subscription_no?: RotationWeekSubscriptionNo;
   status?: RotationWeekStatus;
+  /** The customer can still change this week's kitchen. */
+  swappable?: boolean;
+  /** This week's kitchen was changed once already. */
+  swapped?: boolean;
+  /** Last day the kitchen can be changed. */
+  swap_until?: RotationWeekSwapUntil;
 }

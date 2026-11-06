@@ -147,7 +147,7 @@ private func promoReason(_ code: String) -> String {
 }
 
 private enum MealsPage {
-    case home, kitchen, checkout, rotation, paid, mine, subscription, collection
+    case home, kitchen, checkout, rotation, paid, mine, subscription, rotationDetail, collection
 }
 
 /// The meals tab: storefront, kitchen, checkout, rotation and My meals, each
@@ -185,8 +185,7 @@ struct MealsScreen: View {
         case .rotation:
             requireAccount { viewModel.startRotation(); stack = [.home, .rotation] }
         case .rotationDetail:
-            // No native rotation screen yet; rotations are listed on My meals.
-            requireAccount { viewModel.loadMine(force: false); stack = [.home, .mine] }
+            if let id = l.id { requireAccount { viewModel.openRotation(id: id); stack = [.home, .mine, .rotationDetail] } }
         case .support:
             // Help is native, on the app's session (a banner to /support must
             // not open the web, which has no session and asks for a new code).
@@ -251,12 +250,20 @@ struct MealsScreen: View {
                     stack = [.home, .mine]
                 }
             case .mine:
-                MinePage(vm: viewModel, onBack: back, openPayment: openPayment) { id in
+                MinePage(vm: viewModel, onBack: back, openPayment: openPayment, onOpenRotation: { id in
+                    viewModel.openRotation(id: id)
+                    go(.rotationDetail)
+                }) { id in
                     viewModel.openSubscription(id: id)
                     go(.subscription)
                 }
             case .subscription:
                 SubscriptionPage(vm: viewModel, onBack: back, openPayment: openPayment)
+            case .rotationDetail:
+                RotationDetailPage(vm: viewModel, onBack: back, openPayment: openPayment) { id in
+                    viewModel.openSubscription(id: id)
+                    go(.subscription)
+                }
             }
         }
         .environment(\.colorScheme, .light)
@@ -1954,6 +1961,7 @@ private struct MinePage: View {
     let vm: MealsViewModel
     let onBack: () -> Void
     let openPayment: (String) -> Void
+    let onOpenRotation: (String) -> Void
     let onOpen: (String) -> Void
 
     @State private var current: MyMealsUiState?
@@ -2004,7 +2012,7 @@ private struct MinePage: View {
                         if !s.rotations.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_rotations", comment: ""))
                             ForEach(s.rotations, id: \.id) { r in
-                                RotationCard(r: r, vm: vm, busy: s.busy.contains(r.id), onOpen: onOpen)
+                                RotationCard(r: r, vm: vm, busy: s.busy.contains(r.id), onOpen: onOpen, onOpenRotation: onOpenRotation)
                             }
                         }
                         if !s.subscriptions.isEmpty {
@@ -2033,15 +2041,21 @@ private struct RotationCard: View {
     let vm: MealsViewModel
     let busy: Bool
     let onOpen: (String) -> Void
+    let onOpenRotation: (String) -> Void
     @State private var confirming = false
 
     var body: some View {
         CardBox {
-            HStack {
-                Text(r.rotationNo).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
-                Spacer()
-                StatusPill(status: r.status)
+            // The heading opens the rotation itself: all four weeks, and changing one.
+            Button { onOpenRotation(r.id) } label: {
+                HStack {
+                    Text(r.rotationNo).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                    Spacer()
+                    StatusPill(status: r.status)
+                    Image(systemName: "chevron.forward").foregroundStyle(MP.textFaint)
+                }
             }
+            .buttonStyle(.plain)
             Text(shortDate(r.startDate) + " – " + shortDate(r.endDate))
                 .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
             ForEach(r.weeks.sorted { $0.week < $1.week }, id: \.week) { w in
@@ -2104,6 +2118,204 @@ private struct SubscriptionRow: View {
         .background(Warm.card, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, Space.edge)
         .padding(.vertical, 6)
+    }
+}
+
+// MARK: - One rotation: its four weeks, changing a week's kitchen, cancelling
+
+private struct RotationDetailPage: View {
+    let vm: MealsViewModel
+    let onBack: () -> Void
+    let openPayment: (String) -> Void
+    let onOpen: (String) -> Void
+
+    @State private var current: RotationDetailUiState?
+    private var s: RotationDetailUiState { current ?? vm.rotationDetail.value }
+    @State private var confirming = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TopBar(title: NSLocalizedString("meals_rotation_detail_title", comment: ""), onBack: onBack)
+            if let r = s.rotation {
+                content(r)
+            } else if let failure = s.error {
+                FailureBlock(failure: failure) { vm.retryOpenRotation() }
+                Spacer()
+            } else {
+                LoadingBlock()
+                Spacer()
+            }
+        }
+        .modifier(ConfirmCancel(shown: $confirming) { vm.cancelOpenRotation() })
+        .task {
+            for await state in vm.rotationDetail {
+                current = state
+                if let url = state.paymentUrl {
+                    vm.clearRotationPaymentUrl()
+                    openPayment(url)
+                }
+                if state.cancelled { onBack() }
+            }
+        }
+    }
+
+    private func content(_ r: Rotation) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                CardBox {
+                    HStack {
+                        Text(r.rotationNo).font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(MP.text)
+                        Spacer()
+                        StatusPill(status: r.status)
+                    }
+                    Text(shortDate(r.startDate) + " – " + shortDate(r.endDate))
+                        .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                    Text(String(format: NSLocalizedString("meals_rotation_total", comment: ""), money(r.amountMinor, r.currency)))
+                        .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                }
+                if let failure = s.error { FailureStrip(failure: failure, onRetry: { vm.retryOpenRotation() }) }
+                if let failure = s.actionError { FailureStrip(failure: failure, onDismiss: { vm.dismissRotationDetailError() }) }
+                ForEach(r.weeks.sorted { $0.week < $1.week }, id: \.week) { w in
+                    let picking = s.picking?.int32Value == w.week
+                    RotationWeekCard(w: w, currency: r.currency, picking: picking, busy: s.busy, vm: vm, onOpen: onOpen)
+                    if picking { SwapPickerCard(w: w, currency: r.currency, s: s, vm: vm) }
+                }
+                if r.live {
+                    Button { confirming = true } label: {
+                        Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(s.busy ? MP.textFaint : MP.bad)
+                    }
+                    .disabled(s.busy)
+                    .padding(Space.edge)
+                }
+                Color.clear.frame(height: navBarHeight + Space.xl)
+            }
+        }
+    }
+}
+
+private struct RotationWeekCard: View {
+    let w: RotationWeek
+    let currency: String
+    let picking: Bool
+    let busy: Bool
+    let vm: MealsViewModel
+    let onOpen: (String) -> Void
+
+    var body: some View {
+        CardBox {
+            HStack(spacing: Space.small) {
+                Circle().fill(Warm.weeks[(Int(w.week) - 1 + 4) % 4]).frame(width: 10, height: 10)
+                Text(tr("meals_week", Int(w.week)) + " · " + pick(w.kitchenName, w.kitchenNameAr))
+                    .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                Spacer()
+                if let status = w.status { StatusPill(status: status) }
+            }
+            Text(shortDate(w.startsOn) + " – " + shortDate(w.endsOn))
+                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+            Text(money(w.priceMinor, currency)).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+            if w.swapped {
+                Text("meals_kitchen_changed").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+            }
+            if w.swappable {
+                SecondaryButton(label: NSLocalizedString(picking ? "meals_keep" : "meals_change_kitchen", comment: "")) {
+                    if busy { return }
+                    if picking { vm.closeWeekPicker() } else { vm.pickWeekKitchen(week: w.week) }
+                }
+                .padding(.top, Space.small)
+                if let until = w.swapUntil {
+                    Text(String(format: NSLocalizedString("meals_swap_until", comment: ""), shortDate(until)))
+                        .font(.system(size: TypeScale.caption)).foregroundStyle(MP.textFaint)
+                }
+            }
+            if let id = w.subscriptionId {
+                Button { onOpen(id) } label: {
+                    Text("meals_open_week").font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.chilli)
+                }
+                .padding(.vertical, Space.small)
+            }
+        }
+    }
+}
+
+/// The kitchens one week could change to, each with what it costs or credits, and a confirm.
+private struct SwapPickerCard: View {
+    let w: RotationWeek
+    let currency: String
+    let s: RotationDetailUiState
+    let vm: MealsViewModel
+
+    @State private var chosen: String?
+    @State private var confirming = false
+
+    private var pickedOption: RotationSwapOption? { s.options?.items.first { $0.planId == chosen } }
+
+    private func difference(_ minor: Int64, _ currency: String) -> String {
+        if minor == 0 { return NSLocalizedString("meals_same_price", comment: "") }
+        if minor > 0 { return String(format: NSLocalizedString("meals_pay_more", comment: ""), money(minor, currency)) }
+        return String(format: NSLocalizedString("meals_credit_back", comment: ""), money(-minor, currency))
+    }
+
+    var body: some View {
+        CardBox {
+            Text(tr("meals_pick_kitchen_title", Int(w.week)))
+                .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+            Text("meals_pick_kitchen_note").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+            Text(String(format: NSLocalizedString("meals_current_week_price", comment: ""), money(w.priceMinor, currency)))
+                .font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+            if let failure = s.optionsError {
+                FailureStrip(failure: failure, onRetry: { vm.retrySwapOptions() })
+            } else if let options = s.options, !s.optionsLoading {
+                if options.items.isEmpty {
+                    Text("meals_no_swap_options").font(.system(size: TypeScale.body)).foregroundStyle(MP.textMuted)
+                } else {
+                    ForEach(options.items, id: \.planId) { o in
+                        let on = chosen == o.planId
+                        Button { chosen = o.planId } label: {
+                            HStack(alignment: .top, spacing: Space.small) {
+                                Text(on ? "●" : "○").font(.system(size: TypeScale.body)).foregroundStyle(on ? Warm.chilli : MP.textFaint)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(pick(o.kitchenName, o.kitchenNameAr))
+                                        .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                                    Text(ratingLine(o)).font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(money(o.priceMinor, o.currency)).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
+                                    Text(difference(o.differenceMinor, o.currency))
+                                        .font(.system(size: TypeScale.caption)).foregroundStyle(o.differenceMinor > 0 ? MP.bad : MP.textMuted)
+                                }
+                            }
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(s.busy)
+                    }
+                }
+            } else {
+                LoadingBlock()
+            }
+            let picked = pickedOption
+            PrimaryButton(
+                label: NSLocalizedString("meals_confirm_change", comment: "")
+                    + (picked.map { " · " + difference($0.differenceMinor, $0.currency) } ?? ""),
+                enabled: picked != nil && !s.busy
+            ) { confirming = true }
+            .padding(.top, Space.small)
+        }
+        .alert(
+            Text(String(format: NSLocalizedString("meals_swap_confirm", comment: ""),
+                        pickedOption.map { pick($0.kitchenName, $0.kitchenNameAr) } ?? "")),
+            isPresented: $confirming
+        ) {
+            Button(action: { if let p = pickedOption { vm.swapWeekKitchen(planId: p.planId) } }) { Text("meals_swap_yes") }
+            Button(role: .cancel) {} label: { Text("meals_keep") }
+        }
+    }
+
+    private func ratingLine(_ o: RotationSwapOption) -> String {
+        let rated = o.rating.map { String(format: "%.1f ★ · %d", $0.doubleValue, Int(o.ratingCount)) }
+            ?? NSLocalizedString("meals_new_kitchen", comment: "")
+        return o.cuisines.isEmpty ? rated : rated + " · " + o.cuisines.joined(separator: ", ")
     }
 }
 

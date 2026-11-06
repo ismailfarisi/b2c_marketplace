@@ -502,6 +502,23 @@
 "invoice_superseded" = "Superseded";
 "invoice_share" = "Share";
 "invoice_not_found" = "This invoice isn't on your account.";
+"meals_rotation_detail_title" = "4-kitchen rotation";
+"meals_rotation_total" = "Total · %@";
+"meals_change_kitchen" = "Change kitchen";
+"meals_kitchen_changed" = "Kitchen changed";
+"meals_swap_until" = "Can be changed until %@";
+"meals_pick_kitchen_title" = "Change the kitchen for week %lld";
+"meals_pick_kitchen_note" = "Kitchens that deliver to your address on your days and meals, and aren't already in this rotation. A week's kitchen can be changed once.";
+"meals_no_swap_options" = "No other kitchen can cook this week right now.";
+"meals_same_price" = "Same price";
+"meals_pay_more" = "+%@ to pay now";
+"meals_credit_back" = "%@ back to your wallet";
+"meals_current_week_price" = "Current week: %@";
+"meals_new_kitchen" = "New kitchen";
+"meals_confirm_change" = "Confirm change";
+"meals_swap_confirm" = "Change this week's kitchen to %@? This can't be undone.";
+"meals_swap_yes" = "Change";
+"meals_open_week" = "Meals and dish choices";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

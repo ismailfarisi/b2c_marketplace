@@ -1964,6 +1964,76 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /rotations/{rotationId}/weeks/{week}/options:
+    get:
+      tags: [subscriptions]
+      operationId: listRotationSwapOptions
+      summary: Kitchens one future rotation week could change to
+      description: |
+        Kitchens on the rotation that deliver to the rotation's address on its
+        delivery days and meal slots and are not already cooking a week of it,
+        best rated first. Each carries its weekly price and the difference
+        against the week's current price. Answers 409 with code
+        `rotation_not_active`, `week_started`, `swap_cutoff_passed` or
+        `already_swapped` when the week cannot be changed.
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: week, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 4 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RotationSwapOptions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The week cannot be changed (code rotation_not_active, week_started, swap_cutoff_passed or already_swapped)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /rotations/{rotationId}/weeks/{week}/swap:
+    post:
+      tags: [subscriptions]
+      operationId: swapRotationWeek
+      summary: Change the kitchen of one future rotation week
+      description: |
+        Allowed while the rotation is active, for a week that starts at least
+        3 days from today in the kitchen's time zone, once per week. The
+        week's subscription is cancelled with its unearned money credited, and
+        a replacement subscription takes the same week and dates. A dearer
+        kitchen is charged the difference through the payment flow (the
+        `payment` intent); a cheaper one leaves the difference in the wallet.
+        Idempotent: repeating the swap returns the first result. Send an
+        `Idempotency-Key`.
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: week, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 4 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Swapped
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RotationSwapResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The week cannot be changed (code rotation_not_active, week_started, swap_cutoff_passed or already_swapped)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /me/addresses/{addressId}:
     patch:
       tags: [me]
@@ -7075,6 +7145,11 @@ components:
         subscription_id: { type: [string, "null"], format: uuid }
         subscription_no: { type: [string, "null"] }
         status: { type: [string, "null"] }
+        swappable:
+          type: boolean
+          description: The customer can still change this week's kitchen.
+        swapped: { type: boolean, description: This week's kitchen was changed once already. }
+        swap_until: { type: [string, "null"], format: date, description: Last day the kitchen can be changed. }
     RotationQuote:
       type: object
       required: [start_date, end_date, weeks, amount_minor, currency]
@@ -7141,6 +7216,49 @@ components:
             renewed_from_id: { type: [string, "null"], format: uuid }
             renewed_by_id: { type: [string, "null"], format: uuid }
             renewed_by_status: { type: [string, "null"] }
+    RotationSwapOption:
+      type: object
+      required: [branch_id, kitchen_name, cuisines, rating_count, plan_id, plan_name, price_minor, difference_minor, currency]
+      properties:
+        branch_id: { type: string, format: uuid }
+        kitchen_name: { type: string }
+        kitchen_name_ar: { type: [string, "null"] }
+        cuisines: { type: array, items: { type: string } }
+        cover_image_url: { type: [string, "null"] }
+        rating: { type: [number, "null"] }
+        rating_count: { type: integer }
+        plan_id: { type: string, format: uuid }
+        plan_name: { type: string }
+        price_minor: { type: integer, format: int64, description: Weekly rotation price, tax included. }
+        difference_minor:
+          type: integer
+          format: int64
+          description: price_minor less the week's current price; positive is charged, negative credited.
+        currency: { type: string }
+    RotationSwapOptions:
+      type: object
+      required: [week, current_price_minor, swap_until, currency, items]
+      properties:
+        week: { type: integer, minimum: 1, maximum: 4 }
+        current_price_minor: { type: integer, format: int64 }
+        swap_until: { type: string, format: date }
+        currency: { type: string }
+        items: { type: array, items: { $ref: "#/components/schemas/RotationSwapOption" } }
+    RotationSwapResult:
+      type: object
+      required: [rotation, due_minor, currency]
+      properties:
+        rotation: { $ref: "#/components/schemas/Rotation" }
+        due_minor:
+          type: integer
+          format: int64
+          description: Still to pay on the replacement week; 0 when the cancelled week's credit covered it.
+        currency: { type: string }
+        payment:
+          oneOf:
+            - $ref: "#/components/schemas/PaymentIntent"
+            - type: "null"
+          description: The intent collecting due_minor, when due_minor > 0.
     MealOption:
       type: object
       required: [id, name, allergens, is_default]

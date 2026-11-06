@@ -51,11 +51,14 @@ import type {
   Rotation,
   RotationInput,
   RotationQuote,
+  RotationSwapOptions,
+  RotationSwapResult,
   SetRotationRenewalBody,
   SetSubscriptionRenewalBody,
   SkipDeliveryBody,
   SubscriptionCreated,
   SubscriptionPreview,
+  SwapRotationWeekBody,
   UnauthorizedResponse,
   UnprocessableEntityResponse,
   UnskipDeliveryBody,
@@ -1446,3 +1449,158 @@ export function useGetMyRotation<TData = Awaited<ReturnType<typeof getMyRotation
 
 
 
+/**
+ * Kitchens on the rotation that deliver to the rotation's address on its
+delivery days and meal slots and are not already cooking a week of it,
+best rated first. Each carries its weekly price and the difference
+against the week's current price. Answers 409 with code
+`rotation_not_active`, `week_started`, `swap_cutoff_passed` or
+`already_swapped` when the week cannot be changed.
+
+ * @summary Kitchens one future rotation week could change to
+ */
+export const listRotationSwapOptions = (
+    rotationId: string,
+    week: number,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<RotationSwapOptions>(
+      {url: `/rotations/${rotationId}/weeks/${week}/options`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListRotationSwapOptionsQueryKey = (rotationId?: string,
+    week?: number,) => {
+    return [
+    `/rotations/${rotationId}/weeks/${week}/options`
+    ] as const;
+    }
+
+    
+export const getListRotationSwapOptionsQueryOptions = <TData = Awaited<ReturnType<typeof listRotationSwapOptions>>, TError = UnauthorizedResponse | NotFoundResponse | Problem>(rotationId: string,
+    week: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRotationSwapOptions>>, TError, TData>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRotationSwapOptionsQueryKey(rotationId,week);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRotationSwapOptions>>> = ({ signal }) => listRotationSwapOptions(rotationId,week, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(rotationId && week), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRotationSwapOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListRotationSwapOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof listRotationSwapOptions>>>
+export type ListRotationSwapOptionsQueryError = UnauthorizedResponse | NotFoundResponse | Problem
+
+
+/**
+ * @summary Kitchens one future rotation week could change to
+ */
+
+export function useListRotationSwapOptions<TData = Awaited<ReturnType<typeof listRotationSwapOptions>>, TError = UnauthorizedResponse | NotFoundResponse | Problem>(
+ rotationId: string,
+    week: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRotationSwapOptions>>, TError, TData>, }
+  
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListRotationSwapOptionsQueryOptions(rotationId,week,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * Allowed while the rotation is active, for a week that starts at least
+3 days from today in the kitchen's time zone, once per week. The
+week's subscription is cancelled with its unearned money credited, and
+a replacement subscription takes the same week and dates. A dearer
+kitchen is charged the difference through the payment flow (the
+`payment` intent); a cheaper one leaves the difference in the wallet.
+Idempotent: repeating the swap returns the first result. Send an
+`Idempotency-Key`.
+
+ * @summary Change the kitchen of one future rotation week
+ */
+export const swapRotationWeek = (
+    rotationId: string,
+    week: number,
+    swapRotationWeekBody: SwapRotationWeekBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<RotationSwapResult>(
+      {url: `/rotations/${rotationId}/weeks/${week}/swap`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: swapRotationWeekBody, signal
+    },
+      );
+    }
+  
+
+
+export const getSwapRotationWeekMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof swapRotationWeek>>, TError,{rotationId: string;week: number;data: SwapRotationWeekBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof swapRotationWeek>>, TError,{rotationId: string;week: number;data: SwapRotationWeekBody}, TContext> => {
+
+const mutationKey = ['swapRotationWeek'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof swapRotationWeek>>, {rotationId: string;week: number;data: SwapRotationWeekBody}> = (props) => {
+          const {rotationId,week,data} = props ?? {};
+
+          return  swapRotationWeek(rotationId,week,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SwapRotationWeekMutationResult = NonNullable<Awaited<ReturnType<typeof swapRotationWeek>>>
+    export type SwapRotationWeekMutationBody = SwapRotationWeekBody
+    export type SwapRotationWeekMutationError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse
+
+    /**
+ * @summary Change the kitchen of one future rotation week
+ */
+export const useSwapRotationWeek = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof swapRotationWeek>>, TError,{rotationId: string;week: number;data: SwapRotationWeekBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof swapRotationWeek>>,
+        TError,
+        {rotationId: string;week: number;data: SwapRotationWeekBody},
+        TContext
+      > => {
+
+      const mutationOptions = getSwapRotationWeekMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    

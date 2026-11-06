@@ -155,6 +155,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/rotations/{rotationId}/cancel", h.Rotations.Cancel)
 			r.Put("/rotations/{rotationId}/renewal", h.Rotations.SetRenewal)
 			r.Post("/rotations/{rotationId}/renew", h.Rotations.Renew)
+			r.Get("/rotations/{rotationId}/weeks/{week}/options", h.Rotations.SwapOptions)
+			r.Post("/rotations/{rotationId}/weeks/{week}/swap", h.Rotations.SwapWeek)
 			r.Get("/me/rotations", h.Rotations.Mine)
 			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
 		}

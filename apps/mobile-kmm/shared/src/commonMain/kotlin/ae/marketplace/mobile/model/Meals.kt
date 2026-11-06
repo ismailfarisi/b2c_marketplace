@@ -401,6 +401,12 @@ data class RotationWeek(
     @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
     @SerialName("price_minor") val priceMinor: Long,
     @SerialName("subscription_id") val subscriptionId: String? = null,
+    val status: String? = null,
+    /** The customer can still change this week's kitchen (until [swapUntil]). */
+    val swappable: Boolean = false,
+    /** This week's kitchen was changed once already. */
+    val swapped: Boolean = false,
+    @SerialName("swap_until") val swapUntil: String? = null,
 )
 
 @Serializable
@@ -429,3 +435,39 @@ data class Rotation(
 
 @Serializable
 data class RotationPage(val items: List<Rotation> = emptyList())
+
+/** A kitchen one rotation week could change to, and what that costs or credits. */
+@Serializable
+data class RotationSwapOption(
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("kitchen_name") val kitchenName: String,
+    @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    val cuisines: List<String> = emptyList(),
+    @SerialName("cover_image_url") val coverImageUrl: String? = null,
+    val rating: Double? = null,
+    @SerialName("rating_count") val ratingCount: Int = 0,
+    @SerialName("plan_id") val planId: String,
+    @SerialName("plan_name") val planName: String = "",
+    @SerialName("price_minor") val priceMinor: Long,
+    /** price_minor less the week's current price: positive is paid now, negative goes to the wallet. */
+    @SerialName("difference_minor") val differenceMinor: Long,
+    val currency: String = "AED",
+)
+
+@Serializable
+data class RotationSwapOptions(
+    val week: Int,
+    @SerialName("current_price_minor") val currentPriceMinor: Long,
+    @SerialName("swap_until") val swapUntil: String = "",
+    val currency: String = "AED",
+    val items: List<RotationSwapOption> = emptyList(),
+)
+
+@Serializable
+data class RotationSwapResult(
+    val rotation: Rotation,
+    @SerialName("due_minor") val dueMinor: Long = 0,
+    val currency: String = "AED",
+    /** Collects dueMinor when the new kitchen costs more. */
+    val payment: PaymentIntent? = null,
+)

@@ -77,6 +77,26 @@ const ROTATION: Record<string, { en: string; ar: string }> = {
     en: "This rotation was already cancelled.",
     ar: "تم إلغاء هذا التناوب مسبقًا.",
   },
+  rotation_not_active: {
+    en: "Only a running rotation can change kitchens.",
+    ar: "لا يمكن تغيير المطابخ إلا في تناوب جارٍ.",
+  },
+  week_started: {
+    en: "This week can no longer be changed.",
+    ar: "لم يعد بالإمكان تغيير هذا الأسبوع.",
+  },
+  swap_cutoff_passed: {
+    en: "A week's kitchen can be changed until 3 days before it starts.",
+    ar: "يمكن تغيير مطبخ الأسبوع حتى ٣ أيام قبل بدايته.",
+  },
+  already_swapped: {
+    en: "This week's kitchen has already been changed once.",
+    ar: "تم تغيير مطبخ هذا الأسبوع مرة من قبل.",
+  },
+  same_kitchen: {
+    en: "Choose a different kitchen for this week.",
+    ar: "اختر مطبخًا مختلفًا لهذا الأسبوع.",
+  },
 };
 
 /** One sentence for a failed rotation call, in the reader's language. */
