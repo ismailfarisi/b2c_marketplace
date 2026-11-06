@@ -686,4 +686,17 @@
     <string name="invoice_superseded">Superseded</string>
     <string name="invoice_share">Share</string>
     <string name="invoice_not_found">This invoice isn\'t on your account.</string>
+    <string name="meals_variety_low">Low variety</string>
+    <string name="meals_variety_good">Good variety</string>
+    <string name="meals_variety_great">Great variety</string>
+    <string name="meals_variety_hint_low">Your weeks may feel samey. Swapping a kitchen helps.</string>
+    <string name="meals_variety_hint_good">A decent mix. A small swap could make it even better.</string>
+    <string name="meals_variety_hint_great">Four different tastes across your month.</string>
+    <string name="meals_variety_advisory">This is only advice. You can still start any four kitchens.</string>
+    <string name="meals_variety_same_cuisine">%1$d of your kitchens cook %2$s food.</string>
+    <string name="meals_variety_repeated_dish">%1$s on %2$s comes from %3$d kitchens.</string>
+    <string name="meals_variety_across_weeks">%1$s shows up in %2$d of your weeks.</string>
+    <string name="meals_balanced">Build a balanced rotation for me</string>
+    <string name="meals_balancing">Finding four different kitchens…</string>
+    <string name="meals_balanced_none">There aren\'t enough rotation kitchens near this address for a balanced pick yet. Choose your own four.</string>
 </resources>

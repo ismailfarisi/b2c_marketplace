@@ -18,6 +18,8 @@ import ae.marketplace.mobile.model.ReviewPage
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationInput
 import ae.marketplace.mobile.model.RotationPage
+import ae.marketplace.mobile.model.RotationSuggestion
+import ae.marketplace.mobile.model.RotationSuggestionInput
 import ae.marketplace.mobile.model.SubscribeInput
 import ae.marketplace.mobile.model.Subscribed
 import ae.marketplace.mobile.model.SubscriptionPage
@@ -138,6 +140,10 @@ class MealsApi(private val client: HttpClient) {
 
     suspend fun previewRotation(input: RotationInput): Rotation =
         client.post("rotations/preview") { json(input) }.body()
+
+    /** Four balanced kitchens for the address, quoted like preview. Creates nothing. */
+    suspend fun suggestRotation(input: RotationSuggestionInput): RotationSuggestion =
+        client.post("rotations/suggestion") { json(input) }.body()
 
     /** [idempotencyKey] is one UUID per builder draft, so a retried create is not a second rotation. */
     suspend fun createRotation(input: RotationInput, idempotencyKey: String): Rotation =

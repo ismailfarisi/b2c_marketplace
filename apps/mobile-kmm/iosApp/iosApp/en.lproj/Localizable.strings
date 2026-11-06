@@ -502,6 +502,19 @@
 "invoice_superseded" = "Superseded";
 "invoice_share" = "Share";
 "invoice_not_found" = "This invoice isn't on your account.";
+"meals_variety_low" = "Low variety";
+"meals_variety_good" = "Good variety";
+"meals_variety_great" = "Great variety";
+"meals_variety_hint_low" = "Your weeks may feel samey. Swapping a kitchen helps.";
+"meals_variety_hint_good" = "A decent mix. A small swap could make it even better.";
+"meals_variety_hint_great" = "Four different tastes across your month.";
+"meals_variety_advisory" = "This is only advice. You can still start any four kitchens.";
+"meals_variety_same_cuisine" = "%lld of your kitchens cook %@ food.";
+"meals_variety_repeated_dish" = "%@ on %@ comes from %lld kitchens.";
+"meals_variety_across_weeks" = "%@ shows up in %lld of your weeks.";
+"meals_balanced" = "Build a balanced rotation for me";
+"meals_balancing" = "Finding four different kitchens…";
+"meals_balanced_none" = "There aren't enough rotation kitchens near this address for a balanced pick yet. Choose your own four.";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

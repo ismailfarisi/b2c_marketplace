@@ -502,5 +502,18 @@
 "invoice_superseded" = "مستبدلة";
 "invoice_share" = "مشاركة";
 "invoice_not_found" = "هذه الفاتورة ليست في حسابك.";
+"meals_variety_low" = "تنوّع قليل";
+"meals_variety_good" = "تنوّع جيد";
+"meals_variety_great" = "تنوّع ممتاز";
+"meals_variety_hint_low" = "قد تتشابه أسابيعك. استبدال مطبخ واحد يساعد.";
+"meals_variety_hint_good" = "مزيج جيد. تبديل بسيط قد يجعله أفضل.";
+"meals_variety_hint_great" = "أربعة مذاقات مختلفة على مدار الشهر.";
+"meals_variety_advisory" = "هذه مجرد نصيحة، ويمكنك بدء التناوب بأي أربعة مطابخ.";
+"meals_variety_same_cuisine" = "%lld من مطابخك تطبخ المطبخ %@.";
+"meals_variety_repeated_dish" = "%@ يوم %@ يأتي من %lld مطابخ.";
+"meals_variety_across_weeks" = "%@ يتكرر في %lld من أسابيعك.";
+"meals_balanced" = "اختر لي تناوبًا متوازنًا";
+"meals_balancing" = "نبحث عن أربعة مطابخ مختلفة…";
+"meals_balanced_none" = "لا توجد مطابخ تناوب كافية قرب هذا العنوان لاختيار متوازن بعد. اختر مطابخك الأربعة بنفسك.";
 
 "action_back" = "رجوع";
