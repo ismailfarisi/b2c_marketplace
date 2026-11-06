@@ -7,6 +7,7 @@ import { use, useState } from "react";
 
 import { LoadError } from "@/components/load-error";
 import { AccountSections } from "@/components/meals/account";
+import { NextWeekCard, RecapCard } from "@/components/meals/next-week";
 import {
   CustomerShell,
   STATUS,
@@ -19,6 +20,7 @@ import { tokenStore } from "@/lib/token-store";
 import {
   deleteAccount,
   getMyReferrals,
+  listMyRotationRecaps,
   listMyRotations,
   listMySubscriptions,
 } from "@/lib/customer-api";
@@ -75,6 +77,15 @@ export default function MySubscriptionsPage({
     queryFn: listMyRotations,
   });
   const rotations = rq.data?.items ?? [];
+  // A recap that fails to load only hides the recap (with a Retry); the
+  // rotations still show.
+  const recaps = useQuery({
+    queryKey: ["me", "rotation-recaps"],
+    queryFn: listMyRotationRecaps,
+    enabled: rotations.length > 0,
+  });
+  const recapFor = (id: string) =>
+    recaps.data?.items.find((x) => x.rotation_id === id);
   const singles = items.filter((s) => s.rotation_id == null);
   const money = (amount: number, currency: string) =>
     formatMoney({ amount, currency }, locale);
@@ -87,6 +98,7 @@ export default function MySubscriptionsPage({
   return (
     <CustomerShell locale={locale}>
       <h1>{t.title}</h1>
+      <NextWeekCard locale={locale} />
       <p>
         <Link href={`/${locale}/invoices`}>{t.invoices}</Link>
       </p>
@@ -143,9 +155,22 @@ export default function MySubscriptionsPage({
                     );
                   })}
                 </ol>
+                {(() => {
+                  const recap = recapFor(r.id);
+                  return recap ? (
+                    <RecapCard locale={locale} recap={recap} />
+                  ) : null;
+                })()}
               </li>
             ))}
           </ul>
+          {recaps.isError && (
+            <LoadError
+              error={recaps.error}
+              onRetry={() => void recaps.refetch()}
+              locale={locale}
+            />
+          )}
         </section>
       )}
       {q.isPending || rq.isPending ? (
@@ -249,8 +274,14 @@ function DeleteAccount({ locale }: { locale: "en" | "ar" }) {
       window.location.href = `/${locale}?deleted=1`;
     } catch (e) {
       const coded = e instanceof ApiError && e.status === 409;
-      setError(coded ? problemMessage(e, locale) : (networkMessage(e, locale) ?? t.failed));
-      setNeedsSupport(e instanceof ApiError && e.problem?.code === "owns_vendor");
+      setError(
+        coded
+          ? problemMessage(e, locale)
+          : (networkMessage(e, locale) ?? t.failed),
+      );
+      setNeedsSupport(
+        e instanceof ApiError && e.problem?.code === "owns_vendor",
+      );
       setBusy(false);
     }
   };
@@ -266,15 +297,29 @@ function DeleteAccount({ locale }: { locale: "en" | "ar" }) {
       )}
       {confirming ? (
         <div className="ms-delete-row">
-          <button type="button" className="ms-cta ms-cta-danger" disabled={busy} onClick={remove}>
+          <button
+            type="button"
+            className="ms-cta ms-cta-danger"
+            disabled={busy}
+            onClick={remove}
+          >
             {busy ? t.busy : t.confirm}
           </button>
-          <button type="button" className="ms-cta ms-cta-quiet" disabled={busy} onClick={() => setConfirming(false)}>
+          <button
+            type="button"
+            className="ms-cta ms-cta-quiet"
+            disabled={busy}
+            onClick={() => setConfirming(false)}
+          >
             {t.keep}
           </button>
         </div>
       ) : (
-        <button type="button" className="ms-link-danger" onClick={() => setConfirming(true)}>
+        <button
+          type="button"
+          className="ms-link-danger"
+          onClick={() => setConfirming(true)}
+        >
           {t.start}
         </button>
       )}
@@ -293,7 +338,8 @@ const INVITE = {
     whatsapp: "Share on WhatsApp",
     share: (friend: string, link: string) =>
       `Home-style meals delivered every day. Get ${friend} off your first plan with my link: ${link}`,
-    stats: (p: number, r: number) => `${p} waiting for a first delivery · ${r} earned`,
+    stats: (p: number, r: number) =>
+      `${p} waiting for a first delivery · ${r} earned`,
     vouchers: "Your vouchers",
     voucherUse: "Enter it as a promo code at checkout.",
     until: (d: string) => `until ${d}`,
@@ -322,10 +368,14 @@ const INVITE = {
 function InviteCard({ locale }: { locale: "en" | "ar" }) {
   const t = INVITE[locale];
   const [copied, setCopied] = useState(false);
-  const q = useQuery({ queryKey: ["me", "referrals"], queryFn: getMyReferrals });
+  const q = useQuery({
+    queryKey: ["me", "referrals"],
+    queryFn: getMyReferrals,
+  });
   const d = q.data;
   if (!d || (!d.active && d.vouchers.length === 0)) return null;
-  const money = (amount: number) => formatMoney({ amount, currency: d.currency }, locale);
+  const money = (amount: number) =>
+    formatMoney({ amount, currency: d.currency }, locale);
   const link =
     d.code && typeof window !== "undefined"
       ? `${window.location.origin}/${locale}?ref=${d.code}`
@@ -335,7 +385,9 @@ function InviteCard({ locale }: { locale: "en" | "ar" }) {
       {d.active && d.code && (
         <>
           <h2 id="ms-invite-title">{t.title(money(d.reward_amount_minor))}</h2>
-          <p>{t.body(money(d.friend_amount_minor), money(d.reward_amount_minor))}</p>
+          <p>
+            {t.body(money(d.friend_amount_minor), money(d.reward_amount_minor))}
+          </p>
           <div className="ms-invite-row">
             <span className="ms-invite-code">
               <span className="ms-sub">{t.code}</span>
@@ -345,7 +397,9 @@ function InviteCard({ locale }: { locale: "en" | "ar" }) {
               type="button"
               className="ms-cta ms-cta-quiet"
               onClick={() => {
-                navigator.clipboard?.writeText(link).then(() => setCopied(true));
+                navigator.clipboard
+                  ?.writeText(link)
+                  .then(() => setCopied(true));
               }}
             >
               {copied ? t.copied : t.copy}
