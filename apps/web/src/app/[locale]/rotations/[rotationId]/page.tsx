@@ -14,6 +14,7 @@ import {
   STATUS,
   asLocale,
   type Locale,
+  formatDay,
   formatRange,
 } from "@/components/meals/shell";
 import { problemMessage } from "@/lib/problem";
@@ -21,10 +22,13 @@ import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import {
   cancelRotation,
   getMyRotation,
+  listRotationSwapOptions,
   payRotation,
   renewRotation,
   setRotationRenewal,
+  swapRotationWeek,
   type Rotation,
+  type RotationSwapOption,
 } from "@/lib/customer-api";
 
 const COPY = {
@@ -66,6 +70,25 @@ const COPY = {
     loading: "Loading…",
     notFound: "Rotation not found.",
     failed: "Could not load this rotation.",
+    changeKitchen: "Change kitchen",
+    changeUntil: (d: string) => `Can be changed until ${d}`,
+    kitchenChanged: "Kitchen changed",
+    pickTitle: (n: number) => `Change the kitchen for week ${n}`,
+    pickNote:
+      "Kitchens that deliver to your address on your days and meals, and aren't already in this rotation. A week's kitchen can be changed once.",
+    noOptions: "No other kitchen can cook this week right now.",
+    samePrice: "Same price",
+    payMore: (m: string) => `+${m} to pay now`,
+    creditBack: (m: string) => `${m} back to your wallet`,
+    currentPrice: (m: string) => `Current week: ${m}`,
+    rated: (r: string, n: number) => `${r} ★ · ${n}`,
+    unrated: "New kitchen",
+    confirmSwap: "Confirm change",
+    swapping: "Changing…",
+    swapConfirm: (k: string) => `Change this week's kitchen to ${k}? This can't be undone.`,
+    swapFailed: "Could not change the kitchen. Try again.",
+    swapPaid: "Kitchen changed. Finish the payment to confirm the week.",
+    close: "Close",
   },
   ar: {
     back: "اشتراكاتي",
@@ -105,6 +128,25 @@ const COPY = {
     loading: "جارٍ التحميل…",
     notFound: "التناوب غير موجود.",
     failed: "تعذر تحميل هذا التناوب.",
+    changeKitchen: "تغيير المطبخ",
+    changeUntil: (d: string) => `يمكن التغيير حتى ${d}`,
+    kitchenChanged: "تم تغيير المطبخ",
+    pickTitle: (n: number) => `تغيير مطبخ الأسبوع ${n}`,
+    pickNote:
+      "مطابخ توصل إلى عنوانك في أيامك ووجباتك وليست ضمن هذا التناوب بعد. يمكن تغيير مطبخ الأسبوع مرة واحدة.",
+    noOptions: "لا يوجد مطبخ آخر يمكنه الطبخ لهذا الأسبوع حاليًا.",
+    samePrice: "نفس السعر",
+    payMore: (m: string) => `+${m} تُدفع الآن`,
+    creditBack: (m: string) => `${m} تعود إلى محفظتك`,
+    currentPrice: (m: string) => `الأسبوع الحالي: ${m}`,
+    rated: (r: string, n: number) => `${r} ★ · ${n}`,
+    unrated: "مطبخ جديد",
+    confirmSwap: "تأكيد التغيير",
+    swapping: "جارٍ التغيير…",
+    swapConfirm: (k: string) => `تغيير مطبخ هذا الأسبوع إلى ${k}؟ لا يمكن التراجع عن ذلك.`,
+    swapFailed: "تعذر تغيير المطبخ. حاول مرة أخرى.",
+    swapPaid: "تم تغيير المطبخ. أكمل الدفع لتأكيد الأسبوع.",
+    close: "إغلاق",
   },
 };
 type Copy = (typeof COPY)["en"];
@@ -172,6 +214,7 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
   });
   const money = (n: number) =>
     formatMoney({ amount: n, currency: r.currency }, locale);
+  const [picking, setPicking] = useState<number | null>(null);
 
   return (
     <div className="ms-detail">
@@ -237,11 +280,38 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
                   </span>
                 )}
                 <span>{money(w.price_minor)}</span>
+                {w.swappable && (
+                  <button
+                    type="button"
+                    className="ms-cta ms-cta-quiet"
+                    aria-expanded={picking === w.week}
+                    onClick={() =>
+                      setPicking(picking === w.week ? null : w.week)
+                    }
+                  >
+                    {t.changeKitchen}
+                  </button>
+                )}
+                {w.swapped && <span className="ms-sub">{t.kitchenChanged}</span>}
               </span>
             </li>
           ))}
         </ol>
       </section>
+
+      {picking !== null && (
+        <SwapPicker
+          r={r}
+          week={picking}
+          locale={locale}
+          t={t}
+          onClose={() => setPicking(null)}
+          onDone={async () => {
+            setPicking(null);
+            await refresh();
+          }}
+        />
+      )}
 
       <Renewal r={r} locale={locale} t={t} onDone={refresh} />
 
@@ -276,6 +346,146 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
         </details>
       )}
     </div>
+  );
+}
+
+/**
+ * The eligible kitchens for one future week and what changing costs or
+ * credits. The API decides eligibility (address, days, meals, not already in
+ * the rotation, the 3-day cutoff) so the page only shows what it is given.
+ */
+function SwapPicker({
+  r,
+  week,
+  locale,
+  t,
+  onClose,
+  onDone,
+}: {
+  r: Rotation;
+  week: number;
+  locale: Locale;
+  t: Copy;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const q = useQuery({
+    queryKey: ["me", "rotation", r.id, "swap-options", week],
+    queryFn: () => listRotationSwapOptions(r.id, week),
+  });
+  const [planId, setPlanId] = useState<string | null>(null);
+  const key = useIdempotencyKey();
+  const swap = useMutation({
+    mutationFn: (id: string) =>
+      swapRotationWeek(r.id, week, id, { headers: key.headers() }),
+    onSuccess: async (res) => {
+      key.reset();
+      const redirect = res.payment?.redirect_url;
+      if (redirect) {
+        window.location.assign(redirect);
+        return;
+      }
+      await onDone();
+    },
+  });
+  const money = (n: number) =>
+    formatMoney({ amount: n, currency: r.currency }, locale);
+  const name = (o: RotationSwapOption) =>
+    (locale === "ar" && o.kitchen_name_ar) || o.kitchen_name;
+  const difference = (n: number) =>
+    n === 0
+      ? t.samePrice
+      : n > 0
+        ? t.payMore(money(n))
+        : t.creditBack(money(-n));
+  const current = r.weeks.find((w) => w.week === week);
+  const chosen = q.data?.items.find((o) => o.plan_id === planId) ?? null;
+
+  return (
+    <section className="ms-callout" aria-live="polite">
+      <h2>{t.pickTitle(week)}</h2>
+      <p className="ms-sub">{t.pickNote}</p>
+      {current && (
+        <p className="ms-sub">
+          {t.currentPrice(money(current.price_minor))}
+          {current.swap_until &&
+            ` · ${t.changeUntil(formatDay(locale, current.swap_until))}`}
+        </p>
+      )}
+      {q.isPending ? (
+        <p className="ms-note">{t.loading}</p>
+      ) : q.isError ? (
+        <LoadError
+          error={q.error}
+          onRetry={() => void q.refetch()}
+          locale={locale}
+        />
+      ) : q.data.items.length === 0 ? (
+        <p className="ms-empty">{t.noOptions}</p>
+      ) : (
+        <div className="ms-list" role="radiogroup" aria-label={t.pickTitle(week)}>
+          {q.data.items.map((o) => (
+            <label
+              key={o.plan_id}
+              className={`ms-option${planId === o.plan_id ? " on" : ""}`}
+            >
+              <input
+                type="radio"
+                name="swap-plan"
+                checked={planId === o.plan_id}
+                onChange={() => setPlanId(o.plan_id)}
+                disabled={swap.isPending}
+              />
+              <span className="ms-week-body">
+                <strong dir="auto">{name(o)}</strong>
+                <span className="ms-sub">
+                  {o.rating !== null
+                    ? t.rated(o.rating.toFixed(1), o.rating_count)
+                    : t.unrated}
+                  {o.cuisines.length > 0 && ` · ${o.cuisines.join(", ")}`}
+                </span>
+              </span>
+              <span className="ms-sub-side">
+                <span>{money(o.price_minor)}</span>
+                <span className={o.difference_minor > 0 ? "ms-bad" : "ms-ok"}>
+                  {difference(o.difference_minor)}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+      {swap.isError && (
+        <p className="ms-bad" role="alert">
+          {rotationProblem(swap.error, locale, t.swapFailed)}
+        </p>
+      )}
+      <div className="ms-actions">
+        <button
+          type="button"
+          className="ms-cta"
+          disabled={!chosen || swap.isPending}
+          onClick={() => {
+            if (chosen && window.confirm(t.swapConfirm(name(chosen))))
+              swap.mutate(chosen.plan_id);
+          }}
+        >
+          {swap.isPending
+            ? t.swapping
+            : chosen
+              ? `${t.confirmSwap} · ${difference(chosen.difference_minor)}`
+              : t.confirmSwap}
+        </button>
+        <button
+          type="button"
+          className="ms-cta ms-cta-quiet"
+          disabled={swap.isPending}
+          onClick={onClose}
+        >
+          {t.close}
+        </button>
+      </div>
+    </section>
   );
 }
 

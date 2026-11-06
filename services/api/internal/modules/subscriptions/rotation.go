@@ -46,6 +46,12 @@ type RotationWeek struct {
 	SubscriptionID *uuid.UUID `json:"subscription_id"`
 	SubscriptionNo *string    `json:"subscription_no"`
 	Status         *string    `json:"status"`
+	// Swappable says the customer can still change this week's kitchen; see
+	// SwapRotationWeek. SwapUntil is the last day they can.
+	Swappable bool    `json:"swappable"`
+	Swapped   bool    `json:"swapped"`
+	SwapUntil *string `json:"swap_until"`
+	tz        string
 }
 
 // RotationQuote is what the customer sees before paying: who cooks which week
@@ -515,6 +521,7 @@ func (s *Service) MyRotations(ctx context.Context, userID uuid.UUID) ([]Rotation
 		if out[i].Weeks, err = s.rotationWeeks(ctx, out[i].ID); err != nil {
 			return nil, err
 		}
+		markSwappable(&out[i], time.Now())
 	}
 	return out, nil
 }
@@ -528,21 +535,27 @@ func (s *Service) MyRotation(ctx context.Context, userID, id uuid.UUID) (Rotatio
 	if err != nil {
 		return r, fmt.Errorf("subscriptions: load rotation: %w", err)
 	}
-	r.Weeks, err = s.rotationWeeks(ctx, id)
-	return r, err
+	if r.Weeks, err = s.rotationWeeks(ctx, id); err != nil {
+		return r, err
+	}
+	markSwappable(&r, time.Now())
+	return r, nil
 }
 
 func (s *Service) rotationWeeks(ctx context.Context, id uuid.UUID) ([]RotationWeek, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT s.rotation_week, s.start_date, s.end_date, s.branch_id, b.name, b.name_ar,
+		SELECT DISTINCT ON (s.rotation_week)
+		       s.rotation_week, s.start_date, s.end_date, s.branch_id, b.name, b.name_ar,
 		       s.plan_id, p.name, COALESCE(c.amount_minor, 0),
-		       s.id, s.subscription_no, s.status
+		       s.id, s.subscription_no, s.status, s.timezone, sw.id IS NOT NULL
 		  FROM subscriptions s
 		  JOIN vendor_branches b ON b.id = s.branch_id
 		  JOIN subscription_plans p ON p.id = s.plan_id
 		  LEFT JOIN subscription_cycles c ON c.subscription_id = s.id AND c.cycle_no = 1
+		  LEFT JOIN meal_rotation_swaps sw ON sw.rotation_id = s.rotation_id AND sw.rotation_week = s.rotation_week
 		 WHERE s.rotation_id = $1
-		 ORDER BY s.rotation_week`, id)
+		 -- A swapped week keeps its cancelled subscription; the live one is the week.
+		 ORDER BY s.rotation_week, s.status = 'cancelled', s.created_at DESC`, id)
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: rotation weeks: %w", err)
 	}
@@ -554,7 +567,7 @@ func (s *Service) rotationWeeks(ctx context.Context, id uuid.UUID) ([]RotationWe
 		var subID uuid.UUID
 		var no, status string
 		if err := rows.Scan(&w.Week, &start, &end, &w.BranchID, &w.KitchenName, &w.KitchenNameAr,
-			&w.PlanID, &w.PlanName, &w.PriceMinor, &subID, &no, &status); err != nil {
+			&w.PlanID, &w.PlanName, &w.PriceMinor, &subID, &no, &status, &w.tz, &w.Swapped); err != nil {
 			return nil, fmt.Errorf("subscriptions: scan rotation week: %w", err)
 		}
 		w.StartsOn, w.EndsOn = start.Format("2006-01-02"), end.Format("2006-01-02")

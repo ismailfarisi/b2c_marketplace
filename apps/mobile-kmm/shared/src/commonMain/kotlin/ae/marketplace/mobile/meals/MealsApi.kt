@@ -20,6 +20,8 @@ import ae.marketplace.mobile.model.RenewalProposal
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationInput
 import ae.marketplace.mobile.model.RotationPage
+import ae.marketplace.mobile.model.RotationSwapOptions
+import ae.marketplace.mobile.model.RotationSwapResult
 import ae.marketplace.mobile.model.SubscribeInput
 import ae.marketplace.mobile.model.Subscribed
 import ae.marketplace.mobile.model.SubscriptionPage
@@ -198,6 +200,17 @@ class MealsApi(private val client: HttpClient) {
         client.post("rotations/$id/cancel") { json(ReasonBody(reason)) }
     }
 
+    /** Kitchens one future rotation week could change to, best rated first. */
+    suspend fun rotationSwapOptions(id: String, week: Int): RotationSwapOptions =
+        client.get("rotations/$id/weeks/$week/options").body()
+
+    /** Changes one future week's kitchen; a dearer kitchen's difference is paid on the spot. */
+    suspend fun swapRotationWeek(id: String, week: Int, planId: String, idempotencyKey: String): RotationSwapResult =
+        client.post("rotations/$id/weeks/$week/swap") {
+            header("Idempotency-Key", idempotencyKey)
+            json(SwapWeekBody(planId))
+        }.body()
+
     suspend fun setRotationRenewal(id: String, auto: Boolean) {
         client.put("rotations/$id/renewal") { json(AutoBody(auto)) }
     }
@@ -220,5 +233,6 @@ class MealsApi(private val client: HttpClient) {
 @Serializable private data class SkipBody(val date: String, @SerialName("meal_slot") val mealSlot: String)
 @Serializable private data class PauseBody(@SerialName("from_date") val from: String, @SerialName("to_date") val to: String)
 @Serializable private data class ReasonBody(val reason: String)
+@Serializable private data class SwapWeekBody(@SerialName("plan_id") val planId: String)
 @Serializable private data class AutoBody(val auto: Boolean)
 @Serializable private data class ReviewBody(val rating: Int, val comment: String)

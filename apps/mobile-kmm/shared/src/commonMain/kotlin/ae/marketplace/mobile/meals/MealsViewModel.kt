@@ -16,6 +16,7 @@ import ae.marketplace.mobile.model.ProposalKitchen
 import ae.marketplace.mobile.model.PromoOffer
 import ae.marketplace.mobile.model.RenewalProposal
 import ae.marketplace.mobile.model.Rotation
+import ae.marketplace.mobile.model.RotationSwapOptions
 import ae.marketplace.mobile.model.RotationInput
 import ae.marketplace.mobile.model.ScheduleRule
 import ae.marketplace.mobile.model.SubscribeInput
@@ -248,6 +249,29 @@ data class SubscriptionUiState(
     val tasteError: Failure? = null,
 )
 
+/**
+ * One rotation: its four weeks, and the kitchens one week could change to
+ * while [picking] is set. [busy] covers every call so a second tap is ignored.
+ */
+data class RotationDetailUiState(
+    /** The rotation being shown, kept so a failed open can be retried. */
+    val id: String? = null,
+    val rotation: Rotation? = null,
+    val loading: Boolean = false,
+    val error: Failure? = null,
+    val busy: Boolean = false,
+    val actionError: Failure? = null,
+    /** The week whose kitchen is being changed, with its options once loaded. */
+    val picking: Int? = null,
+    val options: RotationSwapOptions? = null,
+    val optionsLoading: Boolean = false,
+    val optionsError: Failure? = null,
+    /** Set when a dearer kitchen needs the difference paid on the provider's page. */
+    val paymentUrl: String? = null,
+    /** Set once the rotation is cancelled, for the screen to leave. */
+    val cancelled: Boolean = false,
+)
+
 data class ReviewUiState(
     val data: MyReview? = null,
     val loading: Boolean = false,
@@ -283,6 +307,9 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     private val _sub = MutableStateFlow(SubscriptionUiState())
     val sub: StateFlow<SubscriptionUiState> = _sub.asStateFlow()
+
+    private val _rotationDetail = MutableStateFlow(RotationDetailUiState())
+    val rotationDetail: StateFlow<RotationDetailUiState> = _rotationDetail.asStateFlow()
 
     private val _collection = MutableStateFlow(CollectionUiState())
     val collection: StateFlow<CollectionUiState> = _collection.asStateFlow()
@@ -1137,6 +1164,110 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     fun dismissRotationError() = _mine.update { it.copy(actionError = null) }
 
+    // --- one rotation ---------------------------------------------------------
+
+    fun openRotation(id: String) {
+        _rotationDetail.value = RotationDetailUiState(id = id, loading = true)
+        reloadRotation(id)
+    }
+
+    fun retryOpenRotation() {
+        val id = _rotationDetail.value.id ?: return
+        _rotationDetail.update { it.copy(loading = true, error = null) }
+        reloadRotation(id)
+    }
+
+    private fun reloadRotation(id: String) {
+        viewModelScope.launch {
+            try {
+                val r = api.rotation(id)
+                _rotationDetail.update { it.copy(rotation = r, loading = false, error = null) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _rotationDetail.update { it.copy(loading = false, error = e.toFailure()) }
+            }
+        }
+    }
+
+    /** Opens the kitchen picker for [week] and loads what it could change to. */
+    fun pickWeekKitchen(week: Int) {
+        val id = _rotationDetail.value.id ?: return
+        _rotationDetail.update { it.copy(picking = week, options = null, optionsLoading = true, optionsError = null, actionError = null) }
+        loadSwapOptions(id, week)
+    }
+
+    fun retrySwapOptions() {
+        val s = _rotationDetail.value
+        val id = s.id ?: return
+        val week = s.picking ?: return
+        _rotationDetail.update { it.copy(optionsLoading = true, optionsError = null) }
+        loadSwapOptions(id, week)
+    }
+
+    fun closeWeekPicker() = _rotationDetail.update { it.copy(picking = null, options = null, optionsError = null) }
+
+    private fun loadSwapOptions(id: String, week: Int) {
+        viewModelScope.launch {
+            try {
+                val o = api.rotationSwapOptions(id, week)
+                _rotationDetail.update { if (it.picking == week) it.copy(options = o, optionsLoading = false) else it }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _rotationDetail.update { if (it.picking == week) it.copy(optionsLoading = false, optionsError = e.toFailure()) else it }
+            }
+        }
+    }
+
+    /**
+     * Changes the picked week's kitchen to [planId]. A dearer kitchen hands
+     * back the provider's page for the difference; the week shows as awaiting
+     * payment until it is paid.
+     */
+    fun swapWeekKitchen(planId: String) {
+        val s = _rotationDetail.value
+        val id = s.id ?: return
+        val week = s.picking ?: return
+        rotationDetailAction(id) {
+            val res = api.swapRotationWeek(id, week, planId, newIdempotencyKey())
+            _rotationDetail.update {
+                it.copy(rotation = res.rotation, picking = null, options = null, paymentUrl = res.payment?.redirectUrl)
+            }
+        }
+    }
+
+    /** Cancels the open rotation; My meals reloads so its card agrees. */
+    fun cancelOpenRotation() {
+        val id = _rotationDetail.value.id ?: return
+        rotationDetailAction(id) {
+            api.cancelRotation(id, "customer_request")
+            _rotationDetail.update { it.copy(cancelled = true) }
+        }
+    }
+
+    fun dismissRotationDetailError() = _rotationDetail.update { it.copy(actionError = null) }
+
+    fun clearRotationPaymentUrl() = _rotationDetail.update { it.copy(paymentUrl = null) }
+
+    private fun rotationDetailAction(id: String, block: suspend () -> Unit) {
+        if (_rotationDetail.value.busy) return
+        _rotationDetail.update { it.copy(busy = true, actionError = null) }
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _rotationDetail.update { it.copy(actionError = e.toFailure()) }
+            } finally {
+                _rotationDetail.update { it.copy(busy = false) }
+            }
+            reloadRotation(id)
+            loadMine(force = true)
+        }
+    }
+
     /** Drops the account's own data when the session ends. */
     fun forget() {
         _mine.value = MyMealsUiState()
@@ -1144,6 +1275,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _renew.value = RenewUiState()
         _kitchen.update { it.copy(taste = null, tasteError = null) }
         _rotation.update { it.copy(adventure = null) }
+        _rotationDetail.value = RotationDetailUiState()
         _checkout.update { it.copy(addresses = emptyList(), addressId = null) }
     }
 

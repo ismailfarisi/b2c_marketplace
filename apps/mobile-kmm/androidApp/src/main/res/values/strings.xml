@@ -729,4 +729,23 @@
     <string name="meals_undo">Undo</string>
     <string name="account_meal_prefs">Meal preferences</string>
     <string name="account_adventure">How adventurous should your next rotation be?</string>
+
+    <!-- Rotation detail: the four weeks and changing one week's kitchen -->
+    <string name="meals_rotation_detail_title">4-kitchen rotation</string>
+    <string name="meals_rotation_total">Total · %1$s</string>
+    <string name="meals_change_kitchen">Change kitchen</string>
+    <string name="meals_kitchen_changed">Kitchen changed</string>
+    <string name="meals_swap_until">Can be changed until %1$s</string>
+    <string name="meals_pick_kitchen_title">Change the kitchen for week %1$d</string>
+    <string name="meals_pick_kitchen_note">Kitchens that deliver to your address on your days and meals, and aren\'t already in this rotation. A week\'s kitchen can be changed once.</string>
+    <string name="meals_no_swap_options">No other kitchen can cook this week right now.</string>
+    <string name="meals_same_price">Same price</string>
+    <string name="meals_pay_more">+%1$s to pay now</string>
+    <string name="meals_credit_back">%1$s back to your wallet</string>
+    <string name="meals_current_week_price">Current week: %1$s</string>
+    <string name="meals_new_kitchen">New kitchen</string>
+    <string name="meals_confirm_change">Confirm change</string>
+    <string name="meals_swap_confirm">Change this week\'s kitchen to %1$s? This can\'t be undone.</string>
+    <string name="meals_swap_yes">Change</string>
+    <string name="meals_open_week">Meals and dish choices</string>
 </resources>
