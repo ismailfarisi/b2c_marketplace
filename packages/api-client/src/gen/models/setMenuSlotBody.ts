@@ -23,6 +23,12 @@ import type { SetMenuSlotBodyDefaultDishId } from './setMenuSlotBodyDefaultDishI
 import type { SetMenuSlotBodyAlternativeDishId } from './setMenuSlotBodyAlternativeDishId';
 
 export type SetMenuSlotBody = {
+  /**
+   * Week of the menu cycle the cell is in.
+   * @minimum 1
+   * @maximum 4
+   */
+  week?: number;
   default_dish_id?: SetMenuSlotBodyDefaultDishId;
   alternative_dish_id?: SetMenuSlotBodyAlternativeDishId;
 };

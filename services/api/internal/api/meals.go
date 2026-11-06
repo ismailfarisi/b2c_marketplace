@@ -90,7 +90,7 @@ func (h *MealsHandlers) TomorrowDishes(w http.ResponseWriter, r *http.Request) {
 	items := []kitchen.DayDish{}
 	for i := 1; i <= 7; i++ {
 		d := today.AddDate(0, 0, i)
-		got, err := h.Kitchen.DishesOn(r.Context(), f, int(d.Weekday()))
+		got, err := h.Kitchen.DishesOn(r.Context(), f, d)
 		if err != nil {
 			httpx.WriteProblem(w, r, err)
 			return

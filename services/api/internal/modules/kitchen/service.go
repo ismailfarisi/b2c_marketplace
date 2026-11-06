@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -160,45 +161,69 @@ func weeklyCycle(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (uuid.UUID,
 	return id, nil
 }
 
+// cycleWeekSQL is CycleWeek in SQL: which week (1..weeks) of the cycle the
+// date expression `day` falls in, with floor division so dates before the
+// anchor count backwards.
+func cycleWeekSQL(anchor, weeks, day string) string {
+	return "((((floor((" + day + " - " + anchor + ") / 7.0)::int) % " + weeks + " + " + weeks + ") % " + weeks + ") + 1)"
+}
+
+// WeeklyMenu is the vendor's view of the branch's menu: every stored week up
+// to MaxMenuWeeks, including weeks being prepared before the kitchen turns
+// them on. Weeks says how many of them customers are served.
 func (s *Service) WeeklyMenu(ctx context.Context, branchID uuid.UUID) (WeeklyMenu, error) {
-	menu := WeeklyMenu{Slots: []MenuSlot{}}
+	menu := WeeklyMenu{Weeks: 1, CurrentWeek: 1, Slots: []MenuSlot{}}
+	var anchor time.Time
 	err := s.pool.QueryRow(ctx, `
-		SELECT id FROM menu_cycles WHERE branch_id = $1 AND is_active
-		 ORDER BY created_at LIMIT 1`, branchID).Scan(&menu.CycleID)
+		SELECT c.id, c.weeks, c.anchor_date,
+		       `+cycleWeekSQL("c.anchor_date", "c.weeks", "(now() AT TIME ZONE COALESCE(b.timezone, 'Asia/Dubai'))::date")+`,
+		       (now() AT TIME ZONE COALESCE(b.timezone, 'Asia/Dubai'))::date
+		  FROM menu_cycles c
+		  JOIN vendor_branches b ON b.id = c.branch_id
+		 WHERE c.branch_id = $1 AND c.is_active
+		 ORDER BY c.created_at LIMIT 1`, branchID).Scan(&menu.CycleID, &menu.Weeks, &anchor, &menu.CurrentWeek, &menu.today)
 	if errors.Is(err, pgx.ErrNoRows) {
+		menu.today = time.Now().UTC()
 		return menu, nil
 	}
 	if err != nil {
 		return menu, fmt.Errorf("kitchen: load cycle: %w", err)
 	}
+	a := anchor.Format(time.DateOnly)
+	menu.AnchorDate = &a
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT cd.weekday, di.meal_slot, di.is_default,
+		SELECT cd.week_no, cd.weekday, di.meal_slot, di.is_default,
 		       m.id, m.name, m.name_ar, m.allergens, m.calories, m.image_url, m.is_active
 		  FROM menu_cycle_days cd
 		  JOIN menu_day_items di ON di.cycle_day_id = cd.id
 		  JOIN menu_items m ON m.id = di.menu_item_id
-		 WHERE cd.cycle_id = $1 AND cd.week_no = 1
-		 ORDER BY cd.weekday, di.meal_slot, di.is_default DESC, di.sort_order`, menu.CycleID.UUID)
+		 WHERE cd.cycle_id = $1 AND cd.week_no <= $2
+		 ORDER BY cd.week_no, cd.weekday, di.meal_slot, di.is_default DESC, di.sort_order`,
+		menu.CycleID.UUID, max(menu.Weeks, MaxMenuWeeks))
 	if err != nil {
 		return menu, fmt.Errorf("kitchen: load menu: %w", err)
 	}
 	defer rows.Close()
 
-	index := map[MenuGap]int{}
+	type cell struct {
+		week, weekday int
+		slot          string
+	}
+	index := map[cell]int{}
 	for rows.Next() {
-		var weekday int
+		var week, weekday int
 		var slot string
 		var isDefault bool
 		var c MenuChoice
-		if err := rows.Scan(&weekday, &slot, &isDefault,
+		if err := rows.Scan(&week, &weekday, &slot, &isDefault,
 			&c.DishID, &c.Name, &c.NameAr, &c.Allergens, &c.Calories, &c.ImageURL, &c.IsActive); err != nil {
 			return menu, fmt.Errorf("kitchen: scan menu: %w", err)
 		}
-		key := MenuGap{weekday, slot}
+		key := cell{week, weekday, slot}
 		i, ok := index[key]
 		if !ok {
-			menu.Slots = append(menu.Slots, MenuSlot{Weekday: weekday, Slot: slot})
+			menu.Slots = append(menu.Slots, MenuSlot{Week: week, Weekday: weekday, Slot: slot})
 			i = len(menu.Slots) - 1
 			index[key] = i
 		}
@@ -214,6 +239,9 @@ func (s *Service) WeeklyMenu(ctx context.Context, branchID uuid.UUID) (WeeklyMen
 		return menu, err
 	}
 	slices.SortStableFunc(menu.Slots, func(a, b MenuSlot) int {
+		if a.Week != b.Week {
+			return a.Week - b.Week
+		}
 		if a.Weekday != b.Weekday {
 			return a.Weekday - b.Weekday
 		}
@@ -222,11 +250,174 @@ func (s *Service) WeeklyMenu(ctx context.Context, branchID uuid.UUID) (WeeklyMen
 	return menu, nil
 }
 
+// LiveWeek is the menu as served in one cycle week: that week's cells only,
+// renumbered nowhere — Week stays the cycle week.
+func (m WeeklyMenu) LiveWeek(week int) []MenuSlot {
+	out := []MenuSlot{}
+	for _, sl := range m.Slots {
+		if max(sl.Week, 1) == week {
+			out = append(out, sl)
+		}
+	}
+	return out
+}
+
+// Calendar lays the live menu out over `weeks` calendar weeks starting with
+// the Sunday on or before `from`: each date takes the cells of the cycle week
+// it falls in, so a menu anchored mid-week still serves the right dishes.
+func (m WeeklyMenu) Calendar(from time.Time, weeks int) []MenuWeek {
+	anchor := from
+	if m.AnchorDate != nil {
+		if a, err := time.Parse(time.DateOnly, *m.AnchorDate); err == nil {
+			anchor = a
+		}
+	}
+	sunday := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
+	sunday = sunday.AddDate(0, 0, -int(sunday.Weekday()))
+	out := make([]MenuWeek, 0, weeks)
+	for i := 0; i < weeks; i++ {
+		start := sunday.AddDate(0, 0, 7*i)
+		mw := MenuWeek{StartsOn: start.Format(time.DateOnly), Slots: []MenuSlot{}}
+		for d := 0; d < 7; d++ {
+			week := CycleWeek(anchor, max(m.Weeks, 1), start.AddDate(0, 0, d))
+			for _, sl := range m.Slots {
+				if max(sl.Week, 1) == week && sl.Weekday == d {
+					mw.Slots = append(mw.Slots, sl)
+				}
+			}
+		}
+		out = append(out, mw)
+	}
+	return out
+}
+
+func validMenuWeek(week int) error {
+	if week < 1 || week > MaxMenuWeeks {
+		return &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "week", Code: "invalid_week", Message: fmt.Sprintf("1 to %d", MaxMenuWeeks)}}}
+	}
+	return nil
+}
+
+// SetMenuWeeks changes how many weeks the menu rotates through. Every week
+// being turned on must already cover every day and meal a live plan delivers:
+// a subscriber in week 3 is paying for lunch whether or not week 3 has one.
+//
+// The anchor moves so the week customers eat this week keeps its number
+// (when it still exists), and otherwise this week becomes week 1: changing
+// the length of a menu never swaps the dishes already promised for today.
+// Weeks beyond the new length are kept as a draft, not deleted.
+func (s *Service) SetMenuWeeks(ctx context.Context, branchID uuid.UUID, weeks int) (WeeklyMenu, error) {
+	if weeks < 1 || weeks > MaxMenuWeeks {
+		return WeeklyMenu{}, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "weeks", Code: "invalid_weeks", Message: fmt.Sprintf("1 to %d", MaxMenuWeeks)}}}
+	}
+	menu, err := s.WeeklyMenu(ctx, branchID)
+	if err != nil {
+		return WeeklyMenu{}, err
+	}
+	plans, err := s.ListPlans(ctx, branchID)
+	if err != nil {
+		return WeeklyMenu{}, err
+	}
+	if gaps := WeekGaps(plans, menu, weeks); len(gaps) > 0 {
+		fields := make([]httpx.FieldError, 0, len(gaps))
+		for _, g := range gaps {
+			fields = append(fields, httpx.FieldError{Field: "weeks", Code: "week_incomplete",
+				Message: fmt.Sprintf("week %d, %s %s has no dish", g.Week, weekdayNames[g.Weekday], g.Slot)})
+		}
+		return WeeklyMenu{}, &httpx.ValidationError{Fields: fields}
+	}
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		cycleID, err := weeklyCycle(ctx, tx, branchID)
+		if err != nil {
+			return err
+		}
+		// keep = the week served today if it survives, else 1; the anchor is
+		// this week's Sunday moved back (keep-1) weeks.
+		_, err = tx.Exec(ctx, `
+			WITH t AS (
+			    SELECT (now() AT TIME ZONE COALESCE(b.timezone, 'Asia/Dubai'))::date AS today
+			      FROM vendor_branches b WHERE b.id = $3
+			), cur AS (
+			    SELECT c.id, t.today - extract(dow FROM t.today)::int AS sunday,
+			           `+cycleWeekSQL("c.anchor_date", "c.weeks", "t.today")+` AS week
+			      FROM menu_cycles c, t WHERE c.id = $1
+			)
+			UPDATE menu_cycles c
+			   SET weeks = $2::int,
+			       anchor_date = cur.sunday - 7 * (CASE WHEN cur.week <= $2::int THEN cur.week ELSE 1 END - 1),
+			       updated_at = now()
+			  FROM cur WHERE c.id = cur.id`, cycleID, weeks, branchID)
+		if err != nil {
+			return fmt.Errorf("kitchen: set menu weeks: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return WeeklyMenu{}, err
+	}
+	return s.WeeklyMenu(ctx, branchID)
+}
+
+var weekdayNames = [7]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+
+// CopyMenuWeek fills an empty week with a copy of another week's cells, the
+// quick start for a second week: copy week 1, then change a few dishes.
+func (s *Service) CopyMenuWeek(ctx context.Context, branchID uuid.UUID, from, to int) (WeeklyMenu, error) {
+	if err := validMenuWeek(to); err != nil {
+		return WeeklyMenu{}, err
+	}
+	if from < 1 || from > MaxMenuWeeks || from == to {
+		return WeeklyMenu{}, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "from_week", Code: "invalid_week", Message: "a different week, 1 to 4"}}}
+	}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		cycleID, err := weeklyCycle(ctx, tx, branchID)
+		if err != nil {
+			return err
+		}
+		var filled bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM menu_cycle_days cd JOIN menu_day_items di ON di.cycle_day_id = cd.id
+			                WHERE cd.cycle_id = $1 AND cd.week_no = $2)`, cycleID, to).Scan(&filled); err != nil {
+			return fmt.Errorf("kitchen: check week: %w", err)
+		}
+		if filled {
+			return httpx.Coded(httpx.ErrConflict, "week_not_empty",
+				"That week already has dishes. Clear it before copying another week into it.")
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO menu_cycle_days (cycle_id, week_no, weekday)
+			SELECT cycle_id, $3, weekday FROM menu_cycle_days WHERE cycle_id = $1 AND week_no = $2
+			ON CONFLICT (cycle_id, week_no, weekday) DO NOTHING`, cycleID, from, to); err != nil {
+			return fmt.Errorf("kitchen: copy days: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO menu_day_items (cycle_day_id, menu_item_id, meal_slot, portion_cap, is_default, sort_order)
+			SELECT dst.id, di.menu_item_id, di.meal_slot, di.portion_cap, di.is_default, di.sort_order
+			  FROM menu_cycle_days src
+			  JOIN menu_day_items di ON di.cycle_day_id = src.id
+			  JOIN menu_cycle_days dst ON dst.cycle_id = src.cycle_id AND dst.week_no = $3 AND dst.weekday = src.weekday
+			 WHERE src.cycle_id = $1 AND src.week_no = $2`, cycleID, from, to); err != nil {
+			return fmt.Errorf("kitchen: copy dishes: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return WeeklyMenu{}, err
+	}
+	return s.WeeklyMenu(ctx, branchID)
+}
+
 // SetMenuSlot replaces one cell of the weekly grid. Both dishes must belong to
 // the branch and be active: an archived dish is one the kitchen has stopped
 // cooking.
-func (s *Service) SetMenuSlot(ctx context.Context, branchID uuid.UUID, weekday int, slot string, def, alt uuid.NullUUID) (WeeklyMenu, error) {
+func (s *Service) SetMenuSlot(ctx context.Context, branchID uuid.UUID, week, weekday int, slot string, def, alt uuid.NullUUID) (WeeklyMenu, error) {
 	if err := ValidateMenuSlot(weekday, slot, def, alt); err != nil {
+		return WeeklyMenu{}, err
+	}
+	if err := validMenuWeek(week); err != nil {
 		return WeeklyMenu{}, err
 	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -255,9 +446,9 @@ func (s *Service) SetMenuSlot(ctx context.Context, branchID uuid.UUID, weekday i
 		}
 		var dayID uuid.UUID
 		err = tx.QueryRow(ctx, `
-			INSERT INTO menu_cycle_days (cycle_id, week_no, weekday) VALUES ($1, 1, $2)
+			INSERT INTO menu_cycle_days (cycle_id, week_no, weekday) VALUES ($1, $3, $2)
 			ON CONFLICT (cycle_id, week_no, weekday) DO UPDATE SET weekday = EXCLUDED.weekday
-			RETURNING id`, cycleID, weekday).Scan(&dayID)
+			RETURNING id`, cycleID, weekday, week).Scan(&dayID)
 		if err != nil {
 			return fmt.Errorf("kitchen: upsert day: %w", err)
 		}
@@ -622,5 +813,6 @@ func (s *Service) Overview(ctx context.Context, branchID uuid.UUID) (Overview, e
 		return o, err
 	}
 	o.MenuGaps = MenuGaps(plans, menu)
+	o.MenuWeeks = max(menu.Weeks, 1)
 	return o, nil
 }

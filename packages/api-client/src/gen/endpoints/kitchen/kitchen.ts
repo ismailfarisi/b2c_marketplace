@@ -34,6 +34,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CopyMenuWeekBody,
   Dish,
   DishInput,
   ForbiddenResponse,
@@ -49,7 +50,9 @@ import type {
   ListMyBranches200,
   MealSlot,
   NotFoundResponse,
+  Problem,
   SetMenuSlotBody,
+  SetMenuWeeksBody,
   UnprocessableEntityResponse,
   WeeklyMenu
 } from '../../models';
@@ -743,6 +746,142 @@ export const useSetMenuSlot = <TError = ForbiddenResponse | NotFoundResponse | U
       > => {
 
       const mutationOptions = getSetMenuSlotMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * 1 to 4. Every week being served must already have a default dish for
+every weekday and meal slot a live plan delivers, or it is a 422 listing
+the empty cells. The week customers eat this week keeps its number;
+weeks beyond the new length are kept as a draft.
+
+ * @summary Set how many weeks the menu rotates through
+ */
+export const setMenuWeeks = (
+    branchId: string,
+    setMenuWeeksBody: SetMenuWeeksBody,
+ ) => {
+      
+      
+      return apiFetch<WeeklyMenu>(
+      {url: `/branches/${branchId}/menu/weeks`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: setMenuWeeksBody
+    },
+      );
+    }
+  
+
+
+export const getSetMenuWeeksMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMenuWeeks>>, TError,{branchId: string;data: SetMenuWeeksBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof setMenuWeeks>>, TError,{branchId: string;data: SetMenuWeeksBody}, TContext> => {
+
+const mutationKey = ['setMenuWeeks'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setMenuWeeks>>, {branchId: string;data: SetMenuWeeksBody}> = (props) => {
+          const {branchId,data} = props ?? {};
+
+          return  setMenuWeeks(branchId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetMenuWeeksMutationResult = NonNullable<Awaited<ReturnType<typeof setMenuWeeks>>>
+    export type SetMenuWeeksMutationBody = SetMenuWeeksBody
+    export type SetMenuWeeksMutationError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary Set how many weeks the menu rotates through
+ */
+export const useSetMenuWeeks = <TError = ForbiddenResponse | NotFoundResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMenuWeeks>>, TError,{branchId: string;data: SetMenuWeeksBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setMenuWeeks>>,
+        TError,
+        {branchId: string;data: SetMenuWeeksBody},
+        TContext
+      > => {
+
+      const mutationOptions = getSetMenuWeeksMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * A 409 (week_not_empty) when the target week already has dishes.
+ * @summary Fill an empty menu week with a copy of another week
+ */
+export const copyMenuWeek = (
+    branchId: string,
+    week: number,
+    copyMenuWeekBody: CopyMenuWeekBody,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<WeeklyMenu>(
+      {url: `/branches/${branchId}/menu/weeks/${week}/copy`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: copyMenuWeekBody, signal
+    },
+      );
+    }
+  
+
+
+export const getCopyMenuWeekMutationOptions = <TError = ForbiddenResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyMenuWeek>>, TError,{branchId: string;week: number;data: CopyMenuWeekBody}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof copyMenuWeek>>, TError,{branchId: string;week: number;data: CopyMenuWeekBody}, TContext> => {
+
+const mutationKey = ['copyMenuWeek'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof copyMenuWeek>>, {branchId: string;week: number;data: CopyMenuWeekBody}> = (props) => {
+          const {branchId,week,data} = props ?? {};
+
+          return  copyMenuWeek(branchId,week,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CopyMenuWeekMutationResult = NonNullable<Awaited<ReturnType<typeof copyMenuWeek>>>
+    export type CopyMenuWeekMutationBody = CopyMenuWeekBody
+    export type CopyMenuWeekMutationError = ForbiddenResponse | NotFoundResponse | Problem | UnprocessableEntityResponse
+
+    /**
+ * @summary Fill an empty menu week with a copy of another week
+ */
+export const useCopyMenuWeek = <TError = ForbiddenResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyMenuWeek>>, TError,{branchId: string;week: number;data: CopyMenuWeekBody}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof copyMenuWeek>>,
+        TError,
+        {branchId: string;week: number;data: CopyMenuWeekBody},
+        TContext
+      > => {
+
+      const mutationOptions = getCopyMenuWeekMutationOptions(options);
 
       return useMutation(mutationOptions);
     }

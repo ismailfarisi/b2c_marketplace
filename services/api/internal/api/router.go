@@ -298,6 +298,8 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/branches/{branchId}/dishes", h.Kitchen.CreateDish)
 			r.Put("/branches/{branchId}/dishes/{dishId}", h.Kitchen.UpdateDish)
 			r.Get("/branches/{branchId}/menu", h.Kitchen.Menu)
+			r.Put("/branches/{branchId}/menu/weeks", h.Kitchen.SetMenuWeeks)
+			r.Post("/branches/{branchId}/menu/weeks/{week}/copy", h.Kitchen.CopyMenuWeek)
 			r.Put("/branches/{branchId}/menu/{weekday}/{slot}", h.Kitchen.SetMenuSlot)
 			r.Get("/branches/{branchId}/plans", h.Kitchen.ListPlans)
 			r.Post("/branches/{branchId}/plans", h.Kitchen.CreatePlan)

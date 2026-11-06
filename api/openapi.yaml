@@ -3624,6 +3624,7 @@ paths:
             schema:
               type: object
               properties:
+                week: { type: integer, minimum: 1, maximum: 4, default: 1, description: Week of the menu cycle the cell is in. }
                 default_dish_id: { type: [string, "null"], format: uuid }
                 alternative_dish_id: { type: [string, "null"], format: uuid }
       responses:
@@ -3634,6 +3635,72 @@ paths:
               schema: { $ref: "#/components/schemas/WeeklyMenu" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /branches/{branchId}/menu/weeks:
+    put:
+      tags: [kitchen]
+      operationId: setMenuWeeks
+      summary: Set how many weeks the menu rotates through
+      description: |
+        1 to 4. Every week being served must already have a default dish for
+        every weekday and meal slot a live plan delivers, or it is a 422 listing
+        the empty cells. The week customers eat this week keeps its number;
+        weeks beyond the new length are kept as a draft.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weeks]
+              properties:
+                weeks: { type: integer, minimum: 1, maximum: 4 }
+      responses:
+        "200":
+          description: The whole menu after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyMenu" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /branches/{branchId}/menu/weeks/{week}/copy:
+    post:
+      tags: [kitchen]
+      operationId: copyMenuWeek
+      summary: Fill an empty menu week with a copy of another week
+      description: A 409 (week_not_empty) when the target week already has dishes.
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - { name: week, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 4 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_week]
+              properties:
+                from_week: { type: integer, minimum: 1, maximum: 4 }
+      responses:
+        "200":
+          description: The whole menu after the copy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyMenu" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The target week already has dishes (code week_not_empty)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /branches/{branchId}/plans:
@@ -6890,15 +6957,30 @@ components:
       type: object
       properties:
         cycle_id: { type: [string, "null"], format: uuid }
+        weeks: { type: integer, minimum: 1, description: Weeks the menu runs before it repeats. }
+        anchor_date: { type: [string, "null"], format: date, description: The date the cycle's week 1 begins. }
+        current_week: { type: integer, minimum: 1, description: The cycle week the kitchen's today falls in. }
         slots:
           type: array
-          items:
-            type: object
-            properties:
-              weekday: { type: integer, minimum: 0, maximum: 6, description: 0 is Sunday. }
-              slot: { $ref: "#/components/schemas/MealSlot" }
-              default: { oneOf: [{ $ref: "#/components/schemas/MenuChoice" }, { type: "null" }] }
-              alternative: { oneOf: [{ $ref: "#/components/schemas/MenuChoice" }, { type: "null" }] }
+          items: { $ref: "#/components/schemas/MenuSlot" }
+
+    MenuSlot:
+      type: object
+      properties:
+        week: { type: integer, minimum: 1, description: Week of the menu cycle. }
+        weekday: { type: integer, minimum: 0, maximum: 6, description: 0 is Sunday. }
+        slot: { $ref: "#/components/schemas/MealSlot" }
+        default: { oneOf: [{ $ref: "#/components/schemas/MenuChoice" }, { type: "null" }] }
+        alternative: { oneOf: [{ $ref: "#/components/schemas/MenuChoice" }, { type: "null" }] }
+
+    MenuWeek:
+      type: object
+      description: One calendar week of a kitchen's menu, the dishes it cooks from starts_on (a Sunday).
+      properties:
+        starts_on: { type: string, format: date }
+        slots:
+          type: array
+          items: { $ref: "#/components/schemas/MenuSlot" }
 
     PlanTierInput:
       type: object
@@ -7388,6 +7470,10 @@ components:
           type: array
           description: Up to four default dishes from this week's menu, photographed ones first.
           items: { $ref: "#/components/schemas/DishThumb" }
+        menu_weeks:
+          type: integer
+          minimum: 1
+          description: Weeks the menu runs before a dish repeats on the same day ("No repeats for N weeks" above 1).
     PublicKitchenDetail:
       allOf:
         - $ref: "#/components/schemas/PublicKitchen"
@@ -7405,6 +7491,10 @@ components:
                   starts_at: { type: string }
                   ends_at: { type: string }
             menu: { $ref: "#/components/schemas/WeeklyMenu" }
+            menu_calendar:
+              type: array
+              description: The menu over real dates, this week first, one entry per week up to menu_weeks.
+              items: { $ref: "#/components/schemas/MenuWeek" }
             plan_list:
               type: array
               items: { $ref: "#/components/schemas/KitchenPlan" }
@@ -7430,6 +7520,8 @@ components:
             properties:
               weekday: { type: integer }
               slot: { $ref: "#/components/schemas/MealSlot" }
+              week: { type: integer, minimum: 1 }
+        menu_weeks: { type: integer, minimum: 1, description: Weeks the live menu runs before repeating. }
 
     Membership:
       type: object

@@ -22,6 +22,7 @@ Conventions:
 import type { PublicKitchenDetailAllOfDeliversHere } from './publicKitchenDetailAllOfDeliversHere';
 import type { PublicKitchenDetailAllOfDeliveryWindowsItem } from './publicKitchenDetailAllOfDeliveryWindowsItem';
 import type { WeeklyMenu } from './weeklyMenu';
+import type { MenuWeek } from './menuWeek';
 import type { KitchenPlan } from './kitchenPlan';
 import type { PublicKitchenDetailAllOfPopularPlanId } from './publicKitchenDetailAllOfPopularPlanId';
 
@@ -29,6 +30,8 @@ export type PublicKitchenDetailAllOf = {
   delivers_here?: PublicKitchenDetailAllOfDeliversHere;
   delivery_windows: PublicKitchenDetailAllOfDeliveryWindowsItem[];
   menu: WeeklyMenu;
+  /** The menu over real dates, this week first, one entry per week up to menu_weeks. */
+  menu_calendar?: MenuWeek[];
   plan_list: KitchenPlan[];
   /** Plan with the most active subscribers, when more than one plan is on sale. */
   popular_plan_id?: PublicKitchenDetailAllOfPopularPlanId;

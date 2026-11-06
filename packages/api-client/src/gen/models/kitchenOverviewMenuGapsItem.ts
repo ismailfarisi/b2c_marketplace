@@ -24,4 +24,6 @@ import type { MealSlot } from './mealSlot';
 export type KitchenOverviewMenuGapsItem = {
   weekday?: number;
   slot?: MealSlot;
+  /** @minimum 1 */
+  week?: number;
 };

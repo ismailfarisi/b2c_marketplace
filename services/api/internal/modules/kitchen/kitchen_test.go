@@ -147,7 +147,7 @@ func TestMenuGaps(t *testing.T) {
 		{Weekday: 2, Slot: "lunch", Default: &MenuChoice{IsActive: true}},
 	}}
 	got := MenuGaps(plans, menu)
-	want := []MenuGap{{1, "dinner"}, {2, "dinner"}}
+	want := []MenuGap{{Weekday: 1, Slot: "dinner", Week: 1}, {Weekday: 2, Slot: "dinner", Week: 1}}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("gaps = %v, want %v", got, want)
 	}

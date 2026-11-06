@@ -31,4 +31,9 @@ export interface KitchenOverview {
   profile_complete?: boolean;
   /** Weekday/slot cells a live plan delivers but the menu leaves without a default dish. */
   menu_gaps?: KitchenOverviewMenuGapsItem[];
+  /**
+   * Weeks the live menu runs before repeating.
+   * @minimum 1
+   */
+  menu_weeks?: number;
 }

@@ -19,6 +19,11 @@ Conventions:
 
  * OpenAPI spec version: 0.1.0
  */
-import type { MenuChoice } from './menuChoice';
 
-export type WeeklyMenuSlotsItemDefault = MenuChoice | null;
+export type CopyMenuWeekBody = {
+  /**
+   * @minimum 1
+   * @maximum 4
+   */
+  from_week: number;
+};

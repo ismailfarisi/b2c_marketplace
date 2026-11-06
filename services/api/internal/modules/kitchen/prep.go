@@ -19,7 +19,8 @@ type PrepLine struct {
 }
 
 // PrepSheet counts the day's subscription meals by dish: the customer's pick
-// where they made one, otherwise that weekday's default dish.
+// where they made one, otherwise the default dish for that date's cycle week
+// and weekday.
 func (s *Service) PrepSheet(ctx context.Context, branchID uuid.UUID, date time.Time) ([]PrepLine, error) {
 	rows, err := s.pool.Query(ctx, `
 		WITH f AS (
@@ -30,12 +31,12 @@ func (s *Service) PrepSheet(ctx context.Context, branchID uuid.UUID, date time.T
 		       AND f.subscription_id IS NOT NULL AND f.status <> 'cancelled'
 		), def AS (
 		    SELECT DISTINCT ON (di.meal_slot) di.meal_slot, di.menu_item_id
-		      FROM menu_cycle_days cd
+		      FROM (SELECT id, weeks, anchor_date FROM menu_cycles
+		             WHERE branch_id = $1 AND is_active ORDER BY created_at LIMIT 1) c
+		      JOIN menu_cycle_days cd ON cd.cycle_id = c.id
 		      JOIN menu_day_items di ON di.cycle_day_id = cd.id
 		      JOIN menu_items m ON m.id = di.menu_item_id AND m.is_active
-		     WHERE cd.cycle_id = (SELECT id FROM menu_cycles
-		                           WHERE branch_id = $1 AND is_active ORDER BY created_at LIMIT 1)
-		       AND cd.week_no = 1
+		     WHERE cd.week_no = `+cycleWeekSQL("c.anchor_date", "c.weeks", "$2::date")+`
 		       AND cd.weekday = extract(dow FROM $2::date)::int
 		     ORDER BY di.meal_slot, di.is_default DESC, di.sort_order
 		)

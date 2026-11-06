@@ -55,4 +55,9 @@ export interface PublicKitchen {
   rotation_week_price_minor?: PublicKitchenRotationWeekPriceMinor;
   /** Up to four default dishes from this week's menu, photographed ones first. */
   week_dishes?: DishThumb[];
+  /**
+   * Weeks the menu runs before a dish repeats on the same day ("No repeats for N weeks" above 1).
+   * @minimum 1
+   */
+  menu_weeks?: number;
 }

@@ -161,6 +161,7 @@ func (h *KitchenHandlers) SetMenuSlot(w http.ResponseWriter, r *http.Request) {
 		weekday = -1
 	}
 	var body struct {
+		Week              *int          `json:"week"`
 		DefaultDishID     uuid.NullUUID `json:"default_dish_id"`
 		AlternativeDishID uuid.NullUUID `json:"alternative_dish_id"`
 	}
@@ -168,8 +169,60 @@ func (h *KitchenHandlers) SetMenuSlot(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
-	m, err := h.Kitchen.SetMenuSlot(r.Context(), branchID, weekday, chi.URLParam(r, "slot"),
+	week := 1
+	if body.Week != nil {
+		week = *body.Week
+	}
+	m, err := h.Kitchen.SetMenuSlot(r.Context(), branchID, week, weekday, chi.URLParam(r, "slot"),
 		body.DefaultDishID, body.AlternativeDishID)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", m)
+}
+
+// SetMenuWeeks answers PUT /branches/{branchId}/menu/weeks: how many weeks
+// the menu rotates through before it repeats.
+func (h *KitchenHandlers) SetMenuWeeks(w http.ResponseWriter, r *http.Request) {
+	branchID, ok := h.authorise(w, r, true)
+	if !ok {
+		return
+	}
+	var body struct {
+		Weeks int `json:"weeks"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	m, err := h.Kitchen.SetMenuWeeks(r.Context(), branchID, body.Weeks)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", m)
+}
+
+// CopyMenuWeek answers POST /branches/{branchId}/menu/weeks/{week}/copy:
+// fill an empty week with another week's dishes.
+func (h *KitchenHandlers) CopyMenuWeek(w http.ResponseWriter, r *http.Request) {
+	branchID, ok := h.authorise(w, r, true)
+	if !ok {
+		return
+	}
+	week, err := strconv.Atoi(chi.URLParam(r, "week"))
+	if err != nil {
+		week = -1
+	}
+	var body struct {
+		FromWeek int `json:"from_week"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	m, err := h.Kitchen.CopyMenuWeek(r.Context(), branchID, body.FromWeek, week)
 	if err != nil {
 		httpx.WriteProblem(w, r, err)
 		return

@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -89,6 +90,8 @@ type MenuChoice struct {
 // MenuSlot is one cell of the weekly grid. Weekday 0 is Sunday, matching the
 // scheduler and the rest of the schema.
 type MenuSlot struct {
+	// Week of the menu cycle (1..weeks). A one-week menu only has week 1.
+	Week        int         `json:"week"`
 	Weekday     int         `json:"weekday"`
 	Slot        string      `json:"slot"`
 	Default     *MenuChoice `json:"default"`
@@ -97,7 +100,28 @@ type MenuSlot struct {
 
 type WeeklyMenu struct {
 	CycleID uuid.NullUUID `json:"cycle_id"`
-	Slots   []MenuSlot    `json:"slots"`
+	// How many weeks the menu cycle runs before it repeats; 1 when the kitchen
+	// serves the same week forever.
+	Weeks int `json:"weeks"`
+	// The date the cycle's week 1 begins (a Sunday for menus edited here).
+	AnchorDate *string `json:"anchor_date"`
+	// The cycle week the kitchen's today falls in.
+	CurrentWeek int        `json:"current_week"`
+	Slots       []MenuSlot `json:"slots"`
+
+	today time.Time // the branch's calendar date when loaded
+}
+
+// MaxMenuWeeks is how many weeks the vendor portal lets a kitchen rotate
+// through. The schema allows eight; four is a month of different lunches,
+// which is what subscribers ask for and what a home kitchen can plan.
+const MaxMenuWeeks = 4
+
+// MenuWeek is one calendar week of a kitchen's menu as a customer sees it:
+// the dishes it cooks between StartsOn (a Sunday) and the Saturday after.
+type MenuWeek struct {
+	StartsOn string     `json:"starts_on"`
+	Slots    []MenuSlot `json:"slots"`
 }
 
 type Tier struct {
@@ -213,6 +237,8 @@ type ProfileInput struct {
 type MenuGap struct {
 	Weekday int    `json:"weekday"`
 	Slot    string `json:"slot"`
+	// Week of the menu cycle the gap is in; always 1 on a one-week menu.
+	Week int `json:"week"`
 }
 
 type Overview struct {
@@ -224,6 +250,9 @@ type Overview struct {
 	ActiveDishes      int       `json:"active_dishes"`
 	MenuGaps          []MenuGap `json:"menu_gaps"`
 	ProfileComplete   bool      `json:"profile_complete"`
+	// Weeks the live menu runs before repeating, for the "add a week-2 menu"
+	// nudge to kitchens whose subscribers eat the same week forever.
+	MenuWeeks int `json:"menu_weeks"`
 }
 
 // ── validation ─────────────────────────────────────────────────────────────
@@ -461,13 +490,21 @@ func NormaliseProfile(in ProfileInput) (ProfileInput, error) {
 	return in, errs.err()
 }
 
-// MenuGaps lists the (weekday, slot) cells that a plan delivers but the menu
-// has no default dish for, in weekday then slot order.
+// MenuGaps lists the (week, weekday, slot) cells that a plan delivers but the
+// menu has no default dish for, in week, weekday then slot order. Every live
+// week of a multi-week menu must cover every delivery day.
 func MenuGaps(plans []Plan, menu WeeklyMenu) []MenuGap {
+	weeks := max(menu.Weeks, 1)
+	return WeekGaps(plans, menu, weeks)
+}
+
+// WeekGaps is MenuGaps for the first `weeks` weeks of the menu, whether or
+// not they are live yet: what the portal checks before it extends a menu.
+func WeekGaps(plans []Plan, menu WeeklyMenu, weeks int) []MenuGap {
 	filled := map[MenuGap]bool{}
 	for _, s := range menu.Slots {
 		if s.Default != nil && s.Default.IsActive {
-			filled[MenuGap{s.Weekday, s.Slot}] = true
+			filled[MenuGap{Weekday: s.Weekday, Slot: s.Slot, Week: max(s.Week, 1)}] = true
 		}
 	}
 	need := map[MenuGap]bool{}
@@ -477,16 +514,17 @@ func MenuGaps(plans []Plan, menu WeeklyMenu) []MenuGap {
 		}
 		for _, d := range p.DeliveryWeekdays {
 			for _, s := range p.MealSlots {
-				need[MenuGap{d, s}] = true
+				need[MenuGap{Weekday: d, Slot: s}] = true
 			}
 		}
 	}
 	gaps := []MenuGap{}
-	for d := 0; d <= 6; d++ {
-		for _, s := range Slots {
-			g := MenuGap{d, s}
-			if need[g] && !filled[g] {
-				gaps = append(gaps, g)
+	for w := 1; w <= weeks; w++ {
+		for d := 0; d <= 6; d++ {
+			for _, s := range Slots {
+				if need[MenuGap{Weekday: d, Slot: s}] && !filled[MenuGap{Weekday: d, Slot: s, Week: w}] {
+					gaps = append(gaps, MenuGap{Weekday: d, Slot: s, Week: w})
+				}
 			}
 		}
 	}

@@ -19,18 +19,8 @@ Conventions:
 
  * OpenAPI spec version: 0.1.0
  */
-import type { MealSlot } from './mealSlot';
-import type { WeeklyMenuSlotsItemDefault } from './weeklyMenuSlotsItemDefault';
-import type { WeeklyMenuSlotsItemAlternative } from './weeklyMenuSlotsItemAlternative';
 
-export type WeeklyMenuSlotsItem = {
-  /**
-   * 0 is Sunday.
-   * @minimum 0
-   * @maximum 6
-   */
-  weekday?: number;
-  slot?: MealSlot;
-  default?: WeeklyMenuSlotsItemDefault;
-  alternative?: WeeklyMenuSlotsItemAlternative;
-};
+/**
+ * The date the cycle's week 1 begins.
+ */
+export type WeeklyMenuAnchorDate = string | null;

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -49,6 +50,9 @@ type PublicKitchen struct {
 	// Up to four dishes from this week's menu, photographed ones first, so a
 	// card shows food rather than only a kitchen name.
 	WeekDishes []DishThumb `json:"week_dishes"`
+	// Weeks the kitchen's menu runs before a dish repeats on the same day;
+	// above 1 the storefront says "No repeats for N weeks".
+	MenuWeeks int `json:"menu_weeks"`
 }
 
 // DishThumb is a dish shown as a thumbnail on a kitchen card.
@@ -75,7 +79,9 @@ const publicKitchenColumns = `
 	b.kitchen_description, b.kitchen_description_ar, b.cuisines, b.dietary_tags,
 	b.cover_image_url, b.city, b.rating::float8, b.rating_count, v.default_currency,
 	p.slots, p.plans, p.from_price, p.rotation_price, p.meal_price,
-	(b.food_safety_verified_at IS NOT NULL AND b.food_safety_expires_on >= CURRENT_DATE)`
+	(b.food_safety_verified_at IS NOT NULL AND b.food_safety_expires_on >= CURRENT_DATE),
+	COALESCE((SELECT c.weeks FROM menu_cycles c WHERE c.branch_id = b.id AND c.is_active
+	           ORDER BY c.created_at LIMIT 1), 1)::int`
 
 // livePlans aggregates the plans on sale per branch. Joined LATERAL so a
 // branch with none drops out of the result rather than showing zeroes.
@@ -99,7 +105,8 @@ func scanPublicKitchen(row pgx.Row) (PublicKitchen, error) {
 	err := row.Scan(&k.BranchID, &k.VendorID, &k.Name, &k.NameAr, &k.VendorName, &k.VendorNameAr,
 		&k.Description, &k.DescriptionAr, &k.Cuisines, &k.DietaryTags,
 		&k.CoverImageURL, &k.City, &k.Rating, &k.RatingCount, &k.Currency,
-		&k.MealSlots, &k.Plans, &k.FromPriceMinor, &k.RotationWeekPriceMinor, &k.FromMealPriceMinor, &k.FoodSafetyVerified)
+		&k.MealSlots, &k.Plans, &k.FromPriceMinor, &k.RotationWeekPriceMinor, &k.FromMealPriceMinor, &k.FoodSafetyVerified,
+		&k.MenuWeeks)
 	return k, err
 }
 
@@ -137,7 +144,7 @@ func (s *Service) Discover(ctx context.Context, f DiscoverFilter) ([]PublicKitch
 		            JOIN menu_cycle_days cd ON cd.cycle_id = c.id
 		            JOIN menu_day_items di ON di.cycle_day_id = cd.id
 		            JOIN menu_items mi ON mi.id = di.menu_item_id AND mi.is_active
-		           WHERE c.branch_id = b.id AND c.is_active
+		           WHERE c.branch_id = b.id AND c.is_active AND cd.week_no <= c.weeks
 		             AND (mi.name ILIKE '%' || $4 || '%' OR search_fold(mi.name_ar) LIKE '%' || search_fold($4) || '%')))
 		   AND ($5 = '' OR $5 = ANY (p.slots))
 		   AND ($6 = '' OR $6 = ANY (b.cuisines))
@@ -176,7 +183,8 @@ func branchIDs(ks []PublicKitchen) []uuid.UUID {
 }
 
 // attachWeekDishes fills WeekDishes from each kitchen's default dishes in
-// week 1 of its active menu, photographed dishes first, then by weekday.
+// the cycle week its active menu serves today (in the branch's timezone),
+// photographed dishes first, then by weekday.
 func (s *Service) attachWeekDishes(ctx context.Context, ks []PublicKitchen) error {
 	for i := range ks {
 		ks[i].WeekDishes = []DishThumb{}
@@ -190,7 +198,9 @@ func (s *Service) attachWeekDishes(ctx context.Context, ks []PublicKitchen) erro
 		         row_number() OVER (PARTITION BY c.branch_id
 		             ORDER BY (mi.image_url IS NULL), min(cd.weekday), mi.name) AS rn
 		    FROM menu_cycles c
-		    JOIN menu_cycle_days cd ON cd.cycle_id = c.id AND cd.week_no = 1
+		    JOIN vendor_branches b ON b.id = c.branch_id
+		    JOIN menu_cycle_days cd ON cd.cycle_id = c.id
+		     AND cd.week_no = `+cycleWeekSQL("c.anchor_date", "c.weeks", "(now() AT TIME ZONE COALESCE(b.timezone, 'Asia/Dubai'))::date")+`
 		    JOIN menu_day_items di ON di.cycle_day_id = cd.id AND di.is_default
 		    JOIN menu_items mi ON mi.id = di.menu_item_id AND mi.is_active
 		   WHERE c.branch_id = ANY($1) AND c.is_active
@@ -238,10 +248,12 @@ type DayDish struct {
 
 const maxDayDishes = 24
 
-// DishesOn lists the default dishes delivered on a weekday (0 = Sunday) by
-// the kitchens Discover returns for f: only slots a live plan delivers that
-// day, photographed dishes first, then in the kitchens' discovery order.
-func (s *Service) DishesOn(ctx context.Context, f DiscoverFilter, weekday int) ([]DayDish, error) {
+// DishesOn lists the default dishes delivered on a date by the kitchens
+// Discover returns for f: that date's cycle week and weekday, only slots a
+// live plan delivers that day, photographed dishes first, then in the
+// kitchens' discovery order.
+func (s *Service) DishesOn(ctx context.Context, f DiscoverFilter, day time.Time) ([]DayDish, error) {
+	weekday := int(day.Weekday())
 	ks, err := s.Discover(ctx, f)
 	if err != nil {
 		return nil, err
@@ -257,7 +269,8 @@ func (s *Service) DishesOn(ctx context.Context, f DiscoverFilter, weekday int) (
 		                WHERE a.cycle_day_id = di.cycle_day_id AND a.meal_slot = di.meal_slot
 		                  AND NOT a.is_default)
 		  FROM menu_cycles c
-		  JOIN menu_cycle_days cd ON cd.cycle_id = c.id AND cd.week_no = 1 AND cd.weekday = $2
+		  JOIN menu_cycle_days cd ON cd.cycle_id = c.id AND cd.weekday = $2
+		   AND cd.week_no = `+cycleWeekSQL("c.anchor_date", "c.weeks", "$4::date")+`
 		  JOIN menu_day_items di ON di.cycle_day_id = cd.id AND di.is_default
 		  JOIN menu_items mi ON mi.id = di.menu_item_id AND mi.is_active
 		 WHERE c.branch_id = ANY($1) AND c.is_active
@@ -265,7 +278,7 @@ func (s *Service) DishesOn(ctx context.Context, f DiscoverFilter, weekday int) (
 		                WHERE sp.branch_id = c.branch_id AND sp.service_type = $3 AND sp.is_active
 		                  AND $2 = ANY (sp.delivery_weekdays) AND di.meal_slot = ANY (sp.meal_slots))
 		 ORDER BY (mi.image_url IS NULL), array_position($1, c.branch_id), di.sort_order`,
-		branchIDs(ks), weekday, planServiceType)
+		branchIDs(ks), weekday, planServiceType, day.Format(time.DateOnly))
 	if err != nil {
 		return nil, fmt.Errorf("kitchen: dishes on day: %w", err)
 	}
@@ -297,10 +310,15 @@ type PublicKitchenDetail struct {
 	PublicKitchen
 	// Nil when the customer did not share a location, or the kitchen has not
 	// drawn its delivery area yet.
-	DeliversHere    *bool      `json:"delivers_here"`
-	DeliveryWindows []Window   `json:"delivery_windows"`
-	Menu            WeeklyMenu `json:"menu"`
-	PlanList        []Plan     `json:"plan_list"`
+	DeliversHere    *bool    `json:"delivers_here"`
+	DeliveryWindows []Window `json:"delivery_windows"`
+	// This week's menu, the cycle week the kitchen serves today. A multi-week
+	// kitchen's next weeks are in MenuCalendar.
+	Menu WeeklyMenu `json:"menu"`
+	// The menu laid over real dates: this week first, then one entry per
+	// further week up to MenuWeeks, so "Next week" shows next week's dishes.
+	MenuCalendar []MenuWeek `json:"menu_calendar"`
+	PlanList     []Plan     `json:"plan_list"`
 	// The plan with the most active subscribers, when the kitchen sells more
 	// than one and somebody subscribes. Counts themselves stay private.
 	PopularPlanID *uuid.UUID `json:"popular_plan_id"`
@@ -329,7 +347,7 @@ func (s *Service) PublicKitchen(ctx context.Context, branchID uuid.UUID, lat, ln
 		&d.Description, &d.DescriptionAr, &d.Cuisines, &d.DietaryTags,
 		&d.CoverImageURL, &d.City, &d.Rating, &d.RatingCount, &d.Currency,
 		&d.MealSlots, &d.Plans, &d.FromPriceMinor, &d.RotationWeekPriceMinor, &d.FromMealPriceMinor, &d.FoodSafetyVerified,
-		&d.DeliversHere)
+		&d.MenuWeeks, &d.DeliversHere)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PublicKitchenDetail{}, httpx.ErrNotFound
 	}
@@ -357,11 +375,13 @@ func (s *Service) PublicKitchen(ctx context.Context, branchID uuid.UUID, lat, ln
 		if sl.Default != nil && !sl.Default.IsActive {
 			sl.Default, sl.Alternative = sl.Alternative, nil
 		}
-		if sl.Default != nil {
+		if sl.Default != nil && sl.Week <= max(menu.Weeks, 1) {
 			slots = append(slots, sl)
 		}
 	}
 	menu.Slots = slots
+	d.MenuCalendar = menu.Calendar(menu.today, max(menu.Weeks, 1))
+	menu.Slots = menu.LiveWeek(menu.CurrentWeek)
 	d.Menu = menu
 
 	plans, err := s.ListPlans(ctx, branchID)

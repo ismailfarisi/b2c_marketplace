@@ -20,9 +20,22 @@ Conventions:
  * OpenAPI spec version: 0.1.0
  */
 import type { WeeklyMenuCycleId } from './weeklyMenuCycleId';
-import type { WeeklyMenuSlotsItem } from './weeklyMenuSlotsItem';
+import type { WeeklyMenuAnchorDate } from './weeklyMenuAnchorDate';
+import type { MenuSlot } from './menuSlot';
 
 export interface WeeklyMenu {
   cycle_id?: WeeklyMenuCycleId;
-  slots?: WeeklyMenuSlotsItem[];
+  /**
+   * Weeks the menu runs before it repeats.
+   * @minimum 1
+   */
+  weeks?: number;
+  /** The date the cycle's week 1 begins. */
+  anchor_date?: WeeklyMenuAnchorDate;
+  /**
+   * The cycle week the kitchen's today falls in.
+   * @minimum 1
+   */
+  current_week?: number;
+  slots?: MenuSlot[];
 }

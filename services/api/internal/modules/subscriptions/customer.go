@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/kitchen"
 	"github.com/marketplace/api/internal/platform/postgres"
 )
 
@@ -245,8 +246,23 @@ func myCycles(ctx context.Context, tx pgx.Tx, subID uuid.UUID) ([]MyCycle, error
 }
 
 type menuKey struct {
+	week    int
 	weekday int
 	slot    string
+}
+
+// cycleMenu is a kitchen's active menu cycle: every live week's dishes, and
+// the anchor and length that say which week a date falls in.
+type cycleMenu struct {
+	anchor time.Time
+	weeks  int
+	dishes map[menuKey][]Dish
+}
+
+// on is the dish options for one delivery: the cycle week the date falls
+// in, its weekday and the slot.
+func (m cycleMenu) on(day time.Time, slot string) []Dish {
+	return m.dishes[menuKey{kitchen.CycleWeek(m.anchor, m.weeks, day), int(day.Weekday()), slot}]
 }
 
 // upcoming plans the meals between from and to and attaches each day's dish
@@ -326,7 +342,7 @@ func (s *Service) upcoming(ctx context.Context, tx pgx.Tx, live *Live, from, to,
 		cutoff := CutoffAt(o.Date, live.CutoffHours, live.Location)
 		m := UpcomingMeal{
 			Date: date, Weekday: int(o.Date.Weekday()), Slot: o.Slot,
-			WindowLabel: w.label, Options: menu[menuKey{int(o.Date.Weekday()), o.Slot}],
+			WindowLabel: w.label, Options: menu.on(o.Date, o.Slot),
 			ChosenBy: "default", CutoffAt: cutoff, Locked: !now.Before(cutoff),
 		}
 		if m.Options == nil {
@@ -407,30 +423,40 @@ func CutoffAt(day time.Time, cutoffHours int, loc *time.Location) time.Time {
 	return dayIn(day, loc).Add(-time.Duration(cutoffHours) * time.Hour)
 }
 
-// branchMenu is the kitchen's active weekly menu, active dishes only, default
-// first. Mirrors kitchen.WeeklyMenu without importing it.
-func branchMenu(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (map[menuKey][]Dish, error) {
+// branchMenu is the kitchen's active menu cycle, active dishes only, default
+// first. Mirrors kitchen.WeeklyMenu without importing its service.
+func branchMenu(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (cycleMenu, error) {
+	menu := cycleMenu{weeks: 1, dishes: map[menuKey][]Dish{}}
+	err := tx.QueryRow(ctx, `
+		SELECT anchor_date, weeks FROM menu_cycles
+		 WHERE branch_id = $1 AND is_active ORDER BY created_at LIMIT 1`, branchID).Scan(&menu.anchor, &menu.weeks)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return menu, nil
+	}
+	if err != nil {
+		return menu, fmt.Errorf("subscriptions: load menu cycle: %w", err)
+	}
 	rows, err := tx.Query(ctx, `
-		SELECT cd.weekday, di.meal_slot, di.is_default,
+		SELECT cd.week_no, cd.weekday, di.meal_slot, di.is_default,
 		       m.id, m.name, m.name_ar, m.allergens, m.calories
 		  FROM menu_cycles c
-		  JOIN menu_cycle_days cd ON cd.cycle_id = c.id AND cd.week_no = 1
+		  JOIN menu_cycle_days cd ON cd.cycle_id = c.id AND cd.week_no <= c.weeks
 		  JOIN menu_day_items di ON di.cycle_day_id = cd.id
 		  JOIN menu_items m ON m.id = di.menu_item_id AND m.is_active
 		 WHERE c.id = (SELECT id FROM menu_cycles
 		                WHERE branch_id = $1 AND is_active ORDER BY created_at LIMIT 1)
-		 ORDER BY cd.weekday, di.meal_slot, di.is_default DESC, di.sort_order`, branchID)
+		 ORDER BY cd.week_no, cd.weekday, di.meal_slot, di.is_default DESC, di.sort_order`, branchID)
 	if err != nil {
-		return nil, fmt.Errorf("subscriptions: load menu: %w", err)
+		return menu, fmt.Errorf("subscriptions: load menu: %w", err)
 	}
 	defer rows.Close()
-	out := map[menuKey][]Dish{}
+	out := menu.dishes
 	for rows.Next() {
 		var k menuKey
 		var d Dish
-		if err := rows.Scan(&k.weekday, &k.slot, &d.IsDefault,
+		if err := rows.Scan(&k.week, &k.weekday, &k.slot, &d.IsDefault,
 			&d.ID, &d.Name, &d.NameAr, &d.Allergens, &d.Calories); err != nil {
-			return nil, fmt.Errorf("subscriptions: scan menu: %w", err)
+			return menu, fmt.Errorf("subscriptions: scan menu: %w", err)
 		}
 		if d.Allergens == nil {
 			d.Allergens = []string{}
@@ -438,7 +464,7 @@ func branchMenu(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (map[menuKey
 		out[k] = append(out[k], d)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return menu, err
 	}
 	// An inactive default leaves the alternative standing in for it.
 	for k, ds := range out {
@@ -447,7 +473,7 @@ func branchMenu(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (map[menuKey
 			out[k] = ds
 		}
 	}
-	return out, nil
+	return menu, nil
 }
 
 type window struct {
