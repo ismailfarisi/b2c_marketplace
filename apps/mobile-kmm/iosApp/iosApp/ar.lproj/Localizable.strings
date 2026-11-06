@@ -502,5 +502,9 @@
 "invoice_superseded" = "مستبدلة";
 "invoice_share" = "مشاركة";
 "invoice_not_found" = "هذه الفاتورة ليست في حسابك.";
+"meals_no_repeats" = "بلا تكرار لمدة %lld أسابيع";
+"meals_this_week" = "هذا الأسبوع";
+"meals_next_week" = "الأسبوع القادم";
+"meals_in_weeks" = "بعد %lld أسابيع";
 
 "action_back" = "رجوع";

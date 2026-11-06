@@ -67,4 +67,25 @@ class KitchenMenuTest {
         assertEquals("غلوتين، سمسم، مكسرات", KitchenMenu.allergenLine(d, arabic = true))
         assertEquals("new thing", KitchenMenu.allergen("new_thing", arabic = false))
     }
+
+    @Test
+    fun multiWeekMenuTabsUseTheCalendar() {
+        val k = kitchen.copy(
+            menuWeeks = 2,
+            menuCalendar = listOf(
+                ae.marketplace.mobile.model.MenuWeek("2026-11-08", listOf(MenuSlot(1, "lunch", dish("kabsa"), week = 2))),
+                ae.marketplace.mobile.model.MenuWeek("2026-11-15", listOf(MenuSlot(3, "lunch", dish("biryani"), dish("dal")))),
+            ),
+        )
+        assertEquals(2, KitchenMenu.menuWeeks(k).size)
+        assertEquals("kabsa", KitchenMenu.weekSlots(k, 0).single().default?.name)
+        assertEquals(listOf(3), KitchenMenu.servedDaysIn(KitchenMenu.weekSlots(k, 1)))
+        assertEquals(3, KitchenMenu.openingDay(KitchenMenu.weekSlots(k, 1), 1))
+        assertTrue(KitchenMenu.hasChoiceIn(KitchenMenu.weekSlots(k, 1), 3))
+        assertEquals("8 Nov – 14 Nov", KitchenMenu.weekRange("2026-11-08", arabic = false))
+        assertEquals("29 نوفمبر – 5 ديسمبر", KitchenMenu.weekRange("2026-11-29", arabic = true))
+        // A one-week kitchen keeps its single menu.
+        assertTrue(KitchenMenu.menuWeeks(kitchen).isEmpty())
+        assertEquals(kitchen.menu.slots, KitchenMenu.weekSlots(kitchen, 0))
+    }
 }

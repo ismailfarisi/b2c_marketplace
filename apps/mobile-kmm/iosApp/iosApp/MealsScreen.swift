@@ -95,6 +95,15 @@ private struct ChosenPlace: Codable, Equatable {
 private var mealsLocale: Locale { Locale(identifier: isArabicLocale ? "ar" : "en") }
 
 /// The API counts Sunday as 0, which is also where `weekdaySymbols` starts.
+/// "This week", "Next week", "In 3 weeks" for a multi-week menu's tab.
+private func weekTitle(_ index: Int) -> String {
+    switch index {
+    case 0: return NSLocalizedString("meals_this_week", comment: "")
+    case 1: return NSLocalizedString("meals_next_week", comment: "")
+    default: return tr("meals_in_weeks", index)
+    }
+}
+
 private func weekday(_ day: Int32, full: Bool = false) -> String {
     let f = DateFormatter()
     f.locale = mealsLocale
@@ -513,6 +522,19 @@ private struct RatingText: View {
                 .font(.system(size: TypeScale.caption, weight: .semibold))
                 .foregroundStyle(Warm.leaf)
         }
+    }
+}
+
+private struct VarietyBadge: View {
+    let weeks: Int
+
+    var body: some View {
+        Text("↻ " + tr("meals_no_repeats", weeks))
+            .font(.system(size: TypeScale.caption, weight: .bold))
+            .foregroundStyle(Warm.ink)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Warm.saffron.opacity(0.25), in: Capsule())
     }
 }
 
@@ -1058,6 +1080,7 @@ private struct KitchenCard: View {
                                 .padding(.vertical, 5)
                                 .background(Warm.leafSoft, in: Capsule())
                         }
+                        if k.menuWeeks > 1 { VarietyBadge(weeks: Int(k.menuWeeks)) }
                     }
                     .padding(Space.medium)
                 }
@@ -1214,13 +1237,16 @@ private struct KitchenBody: View {
     let onSubscribe: (MealPlan) -> Void
 
     @State private var day: Int32?
+    @State private var weekIndex: Int = 0
     /// Plan-area rows currently on screen; the sticky bar hides while any is.
     @State private var planRows: Set<String> = []
 
     var body: some View {
-        let byDay = Dictionary(grouping: k.menu.slots, by: { $0.weekday })
+        let menuWeeks = KitchenMenu.shared.menuWeeks(k: k)
+        let weekSlots = KitchenMenu.shared.weekSlots(k: k, index: Int32(weekIndex))
+        let byDay = Dictionary(grouping: weekSlots, by: { $0.weekday })
         let days = byDay.keys.sorted()
-        let opening = KitchenMenu.shared.defaultDay(k: k).map { $0.int32Value } ?? days.first
+        let opening = KitchenMenu.shared.openingDay(slots: weekSlots, weekIndex: Int32(weekIndex)).map { $0.int32Value } ?? days.first
         let selected = day.flatMap { byDay[$0] != nil ? $0 : nil } ?? opening
         let name = pick(k.name, k.nameAr)
         let dishPhoto = k.menu.slots.compactMap { $0.`default`?.imageUrl ?? $0.alternative?.imageUrl }.first
@@ -1262,6 +1288,7 @@ private struct KitchenBody: View {
                             HStack(spacing: Space.small) {
                                 RatingText(rating: k.rating, count: k.ratingCount)
                                 if k.foodSafetyVerified { VerifiedBadge() }
+                                if k.menuWeeks > 1 { VarietyBadge(weeks: Int(k.menuWeeks)) }
                             }
                             if !offers.isEmpty { OfferChips(offers: offers) }
                             if let d = k.description_ {
@@ -1275,10 +1302,25 @@ private struct KitchenBody: View {
 
                         if !days.isEmpty {
                             SectionTitle(text: NSLocalizedString("meals_weekly_menu", comment: ""))
+                            if !menuWeeks.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: Space.small) {
+                                        ForEach(Array(menuWeeks.enumerated()), id: \.offset) { i, w in
+                                            DayChip(label: weekTitle(i) + " · " + KitchenMenu.shared.weekRange(startsOn: w.startsOn, arabic: isArabicLocale),
+                                                    selected: i == weekIndex, hasChoice: false) {
+                                                weekIndex = i
+                                                day = nil
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, Space.edge)
+                                    .padding(.bottom, Space.small)
+                                }
+                            }
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: Space.small) {
                                     ForEach(days, id: \.self) { d in
-                                        DayChip(label: weekday(d), selected: d == selected, hasChoice: KitchenMenu.shared.hasChoice(k: k, day: d)) { day = d }
+                                        DayChip(label: weekday(d), selected: d == selected, hasChoice: KitchenMenu.shared.hasChoiceIn(slots: weekSlots, day: d)) { day = d }
                                     }
                                 }
                                 .padding(.horizontal, Space.edge)

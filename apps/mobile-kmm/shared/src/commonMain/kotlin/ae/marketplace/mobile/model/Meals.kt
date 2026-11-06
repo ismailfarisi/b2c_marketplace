@@ -35,6 +35,8 @@ data class Kitchen(
     @SerialName("rotation_week_price_minor") val rotationWeekPriceMinor: Long? = null,
     @SerialName("food_safety_verified") val foodSafetyVerified: Boolean = false,
     @SerialName("week_dishes") val weekDishes: List<DishThumb> = emptyList(),
+    /** Weeks the menu runs before a dish repeats; above 1 the card says "No repeats for N weeks". */
+    @SerialName("menu_weeks") val menuWeeks: Int = 1,
 )
 
 /** One of this week's default dishes, photographed ones first. */
@@ -91,6 +93,9 @@ data class KitchenDetail(
     @SerialName("delivers_here") val deliversHere: Boolean? = null,
     @SerialName("delivery_windows") val deliveryWindows: List<DeliveryWindow> = emptyList(),
     val menu: WeeklyMenu = WeeklyMenu(),
+    @SerialName("menu_weeks") val menuWeeks: Int = 1,
+    /** The menu over real dates: this week first, one entry per week up to [menuWeeks]. */
+    @SerialName("menu_calendar") val menuCalendar: List<MenuWeek> = emptyList(),
     @SerialName("plan_list") val plans: List<MealPlan> = emptyList(),
     @SerialName("popular_plan_id") val popularPlanId: String? = null,
 )
@@ -104,7 +109,18 @@ data class DeliveryWindow(
 )
 
 @Serializable
-data class WeeklyMenu(val slots: List<MenuSlot> = emptyList())
+data class WeeklyMenu(
+    val slots: List<MenuSlot> = emptyList(),
+    val weeks: Int = 1,
+    @SerialName("current_week") val currentWeek: Int = 1,
+)
+
+/** One calendar week of a kitchen's menu, from [startsOn] (a Sunday, yyyy-mm-dd). */
+@Serializable
+data class MenuWeek(
+    @SerialName("starts_on") val startsOn: String,
+    val slots: List<MenuSlot> = emptyList(),
+)
 
 @Serializable
 data class MenuSlot(
@@ -112,6 +128,8 @@ data class MenuSlot(
     val slot: String,
     val default: MenuChoice? = null,
     val alternative: MenuChoice? = null,
+    /** Week of the menu cycle, 1 on a one-week menu. */
+    val week: Int = 1,
 )
 
 @Serializable

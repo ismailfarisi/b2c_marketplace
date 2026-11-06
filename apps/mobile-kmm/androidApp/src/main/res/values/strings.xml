@@ -686,4 +686,9 @@
     <string name="invoice_superseded">Superseded</string>
     <string name="invoice_share">Share</string>
     <string name="invoice_not_found">This invoice isn\'t on your account.</string>
+    <!-- Multi-week kitchen menus -->
+    <string name="meals_no_repeats">No repeats for %1$d weeks</string>
+    <string name="meals_this_week">This week</string>
+    <string name="meals_next_week">Next week</string>
+    <string name="meals_in_weeks">In %1$d weeks</string>
 </resources>

@@ -502,6 +502,10 @@
 "invoice_superseded" = "Superseded";
 "invoice_share" = "Share";
 "invoice_not_found" = "This invoice isn't on your account.";
+"meals_no_repeats" = "No repeats for %lld weeks";
+"meals_this_week" = "This week";
+"meals_next_week" = "Next week";
+"meals_in_weeks" = "In %lld weeks";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

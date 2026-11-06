@@ -600,6 +600,7 @@ internal fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
                         modifier = Modifier.background(M.LeafSoft, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
+                if (k.menuWeeks > 1) VarietyBadge(k.menuWeeks)
             }
         }
         Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -680,6 +681,17 @@ private fun RatingText(rating: Double?, count: Int) {
 }
 
 @Composable
+private fun VarietyBadge(weeks: Int) {
+    Text(
+        "↻ " + stringResource(R.string.meals_no_repeats, weeks),
+        color = M.Ink,
+        fontSize = Type.Caption,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.background(M.SaffronSoft, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 4.dp),
+    )
+}
+
+@Composable
 private fun VerifiedBadge() {
     Text(
         "✓ " + stringResource(R.string.meals_verified),
@@ -722,8 +734,13 @@ private fun KitchenBody(
 ) {
     val reviews = state.reviews
     val name = pick(k.name, k.nameAr, arabic)
-    val byDay = remember(k) { k.menu.slots.groupBy { it.weekday }.toSortedMap() }
-    var day by remember(k) { mutableStateOf(ae.marketplace.mobile.meals.KitchenMenu.defaultDay(k) ?: byDay.keys.firstOrNull()) }
+    val menuWeeks = remember(k) { ae.marketplace.mobile.meals.KitchenMenu.menuWeeks(k) }
+    var weekIndex by remember(k) { mutableStateOf(0) }
+    val weekSlots = remember(k, weekIndex) { ae.marketplace.mobile.meals.KitchenMenu.weekSlots(k, weekIndex) }
+    val byDay = remember(k, weekIndex) { weekSlots.groupBy { it.weekday }.toSortedMap() }
+    var day by remember(k, weekIndex) {
+        mutableStateOf(ae.marketplace.mobile.meals.KitchenMenu.openingDay(weekSlots, weekIndex) ?: byDay.keys.firstOrNull())
+    }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     // hero, info, then (menu title, tabs, day, week) when there is a menu.
@@ -777,6 +794,7 @@ private fun KitchenBody(
                         )
                         RatingText(k.rating, k.ratingCount)
                         if (k.foodSafetyVerified) VerifiedBadge()
+                        if (k.menuWeeks > 1) VarietyBadge(k.menuWeeks)
                     }
                     OfferChips(state.offers, arabic)
                     k.description?.let { Text(pick(it, k.descriptionAr, arabic), color = M.Muted, fontSize = Type.Body) }
@@ -788,7 +806,22 @@ private fun KitchenBody(
             if (byDay.isNotEmpty()) {
                 item(key = "menuTitle") { SectionTitle(stringResource(R.string.meals_weekly_menu)) }
                 item(key = "tabs") {
-                    if (k.menu.slots.any { it.alternative != null }) {
+                    if (menuWeeks.isNotEmpty()) {
+                        Row(
+                            Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.Edge).padding(bottom = Space.Small),
+                            horizontalArrangement = Arrangement.spacedBy(Space.Small),
+                        ) {
+                            menuWeeks.forEachIndexed { i, w ->
+                                val title = when (i) {
+                                    0 -> stringResource(R.string.meals_this_week)
+                                    1 -> stringResource(R.string.meals_next_week)
+                                    else -> stringResource(R.string.meals_in_weeks, i)
+                                }
+                                DayChip(title + " · " + ae.marketplace.mobile.meals.KitchenMenu.weekRange(w.startsOn, arabic), weekIndex == i, false) { weekIndex = i }
+                            }
+                        }
+                    }
+                    if (weekSlots.any { it.alternative != null }) {
                         Text(
                             stringResource(R.string.meals_choice_help),
                             color = M.Muted,
@@ -800,7 +833,7 @@ private fun KitchenBody(
                         Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.Edge),
                         horizontalArrangement = Arrangement.spacedBy(Space.Small),
                     ) {
-                        byDay.keys.forEach { d -> DayChip(weekday(d, arabic), day == d, ae.marketplace.mobile.meals.KitchenMenu.hasChoice(k, d)) { day = d } }
+                        byDay.keys.forEach { d -> DayChip(weekday(d, arabic), day == d, ae.marketplace.mobile.meals.KitchenMenu.hasChoiceIn(weekSlots, d)) { day = d } }
                     }
                 }
                 item(key = "day") {

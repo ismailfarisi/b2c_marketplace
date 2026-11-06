@@ -2,7 +2,10 @@ package ae.marketplace.mobile.meals
 
 import ae.marketplace.mobile.model.KitchenDetail
 import ae.marketplace.mobile.model.MenuChoice
+import ae.marketplace.mobile.model.MenuSlot
+import ae.marketplace.mobile.model.MenuWeek
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.plus
@@ -35,6 +38,43 @@ object KitchenMenu {
     /** True when a slot on [day] offers a second main to choose from. */
     fun hasChoice(k: KitchenDetail, day: Int): Boolean =
         k.menu.slots.any { it.weekday == day && it.default != null && it.alternative != null }
+
+    /**
+     * The calendar weeks a multi-week kitchen's page tabs between ("This week",
+     * "Next week", ...), this week first. Empty for a one-week menu, which
+     * keeps the single weekly menu.
+     */
+    fun menuWeeks(k: KitchenDetail): List<MenuWeek> =
+        if (k.menuWeeks > 1 && k.menuCalendar.size > 1) k.menuCalendar else emptyList()
+
+    /** The cells shown under week tab [index]: that calendar week, or the live menu. */
+    fun weekSlots(k: KitchenDetail, index: Int): List<MenuSlot> =
+        menuWeeks(k).getOrNull(index)?.slots ?: k.menu.slots
+
+    /** Weekdays of [slots] that have a dish, Sunday first. */
+    fun servedDaysIn(slots: List<MenuSlot>): List<Int> =
+        slots.filter { it.default != null }.map { it.weekday }.distinct().sorted()
+
+    /** The day a week tab opens on: this week from Dubai-tomorrow, later weeks from their first day. */
+    fun openingDay(slots: List<MenuSlot>, weekIndex: Int): Int? = openingDayAt(slots, weekIndex, Clock.System.now())
+
+    fun openingDayAt(slots: List<MenuSlot>, weekIndex: Int, now: Instant): Int? =
+        if (weekIndex == 0) defaultDay(servedDaysIn(slots), dubaiTomorrowWeekday(now)) else servedDaysIn(slots).firstOrNull()
+
+    fun hasChoiceIn(slots: List<MenuSlot>, day: Int): Boolean =
+        slots.any { it.weekday == day && it.default != null && it.alternative != null }
+
+    private val monthsEn = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    private val monthsAr = listOf("يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر")
+
+    /** "8 Nov – 14 Nov" for the week starting [startsOn]; the input unchanged when it is not a date. */
+    fun weekRange(startsOn: String, arabic: Boolean): String {
+        val start = runCatching { LocalDate.parse(startsOn) }.getOrNull() ?: return startsOn
+        val end = start.plus(DatePeriod(days = 6))
+        val months = if (arabic) monthsAr else monthsEn
+        fun fmt(d: LocalDate) = "${d.day} ${months[d.month.ordinal]}"
+        return "${fmt(start)} – ${fmt(end)}"
+    }
 
     /** "20%" from 2000 basis points; up to two decimals ("12.5%"). */
     fun percent(bp: Int): String {
