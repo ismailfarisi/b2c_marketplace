@@ -1956,6 +1956,28 @@ a.ms-offer:focus-visible {
 .ms-safety::before {
   content: "✓";
 }
+.ms-variety {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  background: var(--ms-saffron-soft);
+  color: var(--ms-saffron-ink);
+  padding: 0.15rem 0.6rem;
+  font-weight: 700;
+}
+.ms-variety::before {
+  content: "↻";
+}
+.ms-weeks .ms-day {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+.ms-weeks .ms-day small {
+  font-weight: 500;
+  opacity: 0.8;
+}
 .ms-reviews {
   list-style: none;
   margin: 0;

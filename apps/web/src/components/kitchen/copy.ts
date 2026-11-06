@@ -9,7 +9,8 @@
 
 export type ConsoleLocale = "en" | "ar";
 
-export const consoleLocale = (locale: string): ConsoleLocale => (locale === "ar" ? "ar" : "en");
+export const consoleLocale = (locale: string): ConsoleLocale =>
+  locale === "ar" ? "ar" : "en";
 
 const en = {
   brand: "Kitchen",
@@ -18,7 +19,12 @@ const en = {
     sections: "Sections",
     branch: "Branch",
     menuToggle: "Menu",
-    groups: { kitchen: "Kitchen", operations: "Operations", money: "Money", settings: "Settings" },
+    groups: {
+      kitchen: "Kitchen",
+      operations: "Operations",
+      money: "Money",
+      settings: "Settings",
+    },
     overview: "Overview",
     menu: "Weekly menu",
     dishes: "Dishes",
@@ -29,7 +35,10 @@ const en = {
     payouts: "Payouts",
     profile: "Kitchen profile",
   },
-  roles: { owner: "Owner", manager: "Manager", staff: "Staff" } as Record<string, string>,
+  roles: { owner: "Owner", manager: "Manager", staff: "Staff" } as Record<
+    string,
+    string
+  >,
   vendorStatus: (s: string) => `vendor ${s}`,
   readOnly:
     "You are signed in as staff, so this portal is read-only. An owner or manager can change the menu, plans and profile.",
@@ -42,7 +51,8 @@ const en = {
   saved: "Saved.",
   edit: "Edit",
   errors: {
-    offline: "Can't reach the kitchen portal. Check your connection and try again.",
+    offline:
+      "Can't reach the kitchen portal. Check your connection and try again.",
     failed: "Request failed.",
     request: "request",
   },
@@ -70,14 +80,16 @@ const en = {
     checking: "Checking…",
     signIn: "Sign in",
     changeNumber: "Change number",
-    devNote: "Development: OTP_DEV_ECHO is on, so no SMS is sent — the code is written to the API log.",
+    devNote:
+      "Development: OTP_DEV_ECHO is on, so no SMS is sent — the code is written to the API log.",
     phoneLabel: "Phone number",
     countryLabel: "Country code",
     sending: "Sending…",
     sendCode: "Send code",
     note: "The same account you use as a customer. Kitchen access is granted by the kitchen's owner and checked on the server on every call.",
     phoneRejected: (why: string) => `That number was not accepted: ${why}`,
-    tooManyCodes: "Too many codes have been requested for this number in the last hour. Wait, then try again.",
+    tooManyCodes:
+      "Too many codes have been requested for this number in the last hour. Wait, then try again.",
     sendFailed: "The code could not be sent. Check the number and try again.",
     wrongCode: "That code is not right, or it has expired. Request a new one.",
     tooManyAttempts: "Too many attempts. Request a new code.",
@@ -135,7 +147,8 @@ const en = {
   },
   dishes: {
     title: "Dishes",
-    noPhoto: (n: number) => (n === 1 ? "1 dish has no photo." : `${n} dishes have no photo.`),
+    noPhoto: (n: number) =>
+      n === 1 ? "1 dish has no photo." : `${n} dishes have no photo.`,
     noPhotoBody:
       "Customers see your dish photos on your kitchen card, in the “On the menu tomorrow” row and on your weekly menu. Dishes without one show a plain tile. Add a photo link with Edit.",
     edit: "Edit dish",
@@ -155,7 +168,8 @@ const en = {
     archived: "archived",
     archive: "Archive",
     restore: "Restore",
-    archiveHint: (n: number) => `On ${n} menu slot(s) — archiving leaves them showing a dish you no longer cook`,
+    archiveHint: (n: number) =>
+      `On ${n} menu slot(s) — archiving leaves them showing a dish you no longer cook`,
     archiveConfirm: (name: string, n: number) =>
       `${name} is on ${n} menu slot(s). Archive it anyway? Replace it on the weekly menu afterwards.`,
     name: "Name",
@@ -191,6 +205,26 @@ const en = {
     noChoice: "— no choice, default only —",
     save: "Save",
     clear: "Clear slot",
+  },
+  menuWeeks: {
+    title: "Weeks before the menu repeats",
+    week: (n: number) => `Week ${n}`,
+    weeks: (n: number) =>
+      n === 1 ? "1 week (same menu every week)" : `${n} weeks`,
+    live: "Live",
+    draft: "Draft",
+    thisWeek: "Customers eat this week",
+    copy: (n: number) => `Copy week ${n}`,
+    copying: "Copying…",
+    empty: "This week has no dishes yet. Start from week 1 and change a few.",
+    save: (n: number) => `Serve ${n} week${n === 1 ? "" : "s"}`,
+    incomplete: (n: number) =>
+      `${n} empty slot${n === 1 ? "" : "s"} to fill before serving these weeks`,
+    gapsIn: (n: number) => `Week ${n}`,
+    nudgeTitle: "Add a second week",
+    nudge:
+      "Subscribers see this menu every week. Add a week-2 menu so they don't get bored.",
+    nudgeLink: "Open the menu editor",
   },
   plans: {
     title: "Plans",
@@ -239,7 +273,10 @@ const en = {
     tiersHint: "optional variants at their own price, e.g. large portion",
     tierName: "Name",
     portion: "Portion",
-    portions: { small: "small", regular: "regular", large: "large" } as Record<string, string>,
+    portions: { small: "small", regular: "regular", large: "large" } as Record<
+      string,
+      string
+    >,
     tierDays: "Days/week",
     tierMeals: "Meals/day",
     tierPrice: "Price / cycle",
@@ -273,7 +310,8 @@ const en = {
     dispatch: "Dispatch",
     planning: "Planning…",
     plan: "Plan routes",
-    planned: (routes: number, stops: number) => `${routes} routes, ${stops} stops`,
+    planned: (routes: number, stops: number) =>
+      `${routes} routes, ${stops} stops`,
     late: (n: number) => ` · ${n} already late`,
     noRoute: (n: number) => `${n} stops have no route`,
     driver: "Driver",
@@ -315,7 +353,8 @@ const en = {
     average: (avg: string, n: number) => `${avg} / 5 from ${n} published`,
     onlyCustomers: "Only customers who have had a delivery can rate you.",
     empty: "No reviews yet.",
-    hidden: (reason: string | null | undefined) => ` · hidden by staff${reason ? `: ${reason}` : ""}`,
+    hidden: (reason: string | null | undefined) =>
+      ` · hidden by staff${reason ? `: ${reason}` : ""}`,
     placeholder: "Public reply (optional)",
     update: "Update reply",
     reply: "Reply",
@@ -323,7 +362,8 @@ const en = {
   payouts: {
     title: "Statements",
     note: "Commission and VAT are deducted before payout",
-    empty: "No statements yet. The first closes at the end of your first week of deliveries.",
+    empty:
+      "No statements yet. The first closes at the end of your first week of deliveries.",
     reference: "Reference",
     period: "Period",
     gross: "Gross",
@@ -370,7 +410,12 @@ const ar: ConsoleCopy = {
     sections: "الأقسام",
     branch: "الفرع",
     menuToggle: "القائمة",
-    groups: { kitchen: "المطبخ", operations: "العمليات", money: "المال", settings: "الإعدادات" },
+    groups: {
+      kitchen: "المطبخ",
+      operations: "العمليات",
+      money: "المال",
+      settings: "الإعدادات",
+    },
     overview: "نظرة عامة",
     menu: "القائمة الأسبوعية",
     dishes: "الأطباق",
@@ -383,7 +428,8 @@ const ar: ConsoleCopy = {
   },
   roles: { owner: "مالك", manager: "مدير", staff: "موظف" },
   vendorStatus: (s: string) => `حالة البائع: ${ar.statuses[s] ?? s}`,
-  readOnly: "أنت مسجّل كموظف، لذا البوابة للعرض فقط. يمكن للمالك أو المدير تعديل القائمة والخطط والملف.",
+  readOnly:
+    "أنت مسجّل كموظف، لذا البوابة للعرض فقط. يمكن للمالك أو المدير تعديل القائمة والخطط والملف.",
   signOut: "تسجيل الخروج",
   signingOut: "جارٍ تسجيل الخروج…",
   retry: "حاول مرة أخرى",
@@ -421,20 +467,30 @@ const ar: ConsoleCopy = {
     checking: "جارٍ التحقق…",
     signIn: "تسجيل الدخول",
     changeNumber: "تغيير الرقم",
-    devNote: "بيئة التطوير: OTP_DEV_ECHO مفعّل، لذا لا تُرسل رسالة نصية ويُكتب الرمز في سجل الخادم.",
+    devNote:
+      "بيئة التطوير: OTP_DEV_ECHO مفعّل، لذا لا تُرسل رسالة نصية ويُكتب الرمز في سجل الخادم.",
     phoneLabel: "رقم الهاتف",
     countryLabel: "رمز الدولة",
     sending: "جارٍ الإرسال…",
     sendCode: "أرسل الرمز",
     note: "نفس الحساب الذي تستخدمه كعميل. يمنح مالك المطبخ صلاحية الدخول، ويتحقق الخادم منها في كل طلب.",
     phoneRejected: (why: string) => `لم يُقبل هذا الرقم: ${why}`,
-    tooManyCodes: "طُلبت رموز كثيرة لهذا الرقم خلال الساعة الماضية. انتظر ثم حاول مرة أخرى.",
+    tooManyCodes:
+      "طُلبت رموز كثيرة لهذا الرقم خلال الساعة الماضية. انتظر ثم حاول مرة أخرى.",
     sendFailed: "تعذر إرسال الرمز. تحقق من الرقم وحاول مرة أخرى.",
     wrongCode: "الرمز غير صحيح أو منتهي الصلاحية. اطلب رمزًا جديدًا.",
     tooManyAttempts: "محاولات كثيرة. اطلب رمزًا جديدًا.",
     verifyFailed: "تعذر التحقق من الرمز. حاول مرة أخرى.",
   },
-  weekdays: ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
+  weekdays: [
+    "الأحد",
+    "الاثنين",
+    "الثلاثاء",
+    "الأربعاء",
+    "الخميس",
+    "الجمعة",
+    "السبت",
+  ],
   slots: {
     breakfast: "الفطور",
     lunch: "الغداء",
@@ -486,7 +542,8 @@ const ar: ConsoleCopy = {
   },
   dishes: {
     title: "الأطباق",
-    noPhoto: (n: number) => (n === 1 ? "طبق واحد بلا صورة." : `${n} أطباق بلا صور.`),
+    noPhoto: (n: number) =>
+      n === 1 ? "طبق واحد بلا صورة." : `${n} أطباق بلا صور.`,
     noPhotoBody:
       "يرى العملاء صور أطباقك في بطاقة مطبخك وفي صف «على القائمة غدًا» وفي قائمتك الأسبوعية. الأطباق بلا صورة تظهر كمربع فارغ. أضف رابط صورة من «تعديل».",
     edit: "تعديل الطبق",
@@ -506,7 +563,8 @@ const ar: ConsoleCopy = {
     archived: "مؤرشف",
     archive: "أرشفة",
     restore: "استعادة",
-    archiveHint: (n: number) => `في ${n} من خانات القائمة — الأرشفة تتركها تعرض طبقًا لم تعد تطبخه`,
+    archiveHint: (n: number) =>
+      `في ${n} من خانات القائمة — الأرشفة تتركها تعرض طبقًا لم تعد تطبخه`,
     archiveConfirm: (name: string, n: number) =>
       `${name} موجود في ${n} من خانات القائمة. هل تريد أرشفته؟ استبدله في القائمة الأسبوعية بعد ذلك.`,
     name: "الاسم",
@@ -542,6 +600,36 @@ const ar: ConsoleCopy = {
     noChoice: "— بلا خيار، الافتراضي فقط —",
     save: "احفظ",
     clear: "أفرغ الخانة",
+  },
+  menuWeeks: {
+    title: "عدد الأسابيع قبل تكرار القائمة",
+    week: (n: number) => `الأسبوع ${n}`,
+    weeks: (n: number) =>
+      n === 1
+        ? "أسبوع واحد (القائمة نفسها كل أسبوع)"
+        : n === 2
+          ? "أسبوعان"
+          : `${n} أسابيع`,
+    live: "مفعّل",
+    draft: "مسودة",
+    thisWeek: "يأكله العملاء هذا الأسبوع",
+    copy: (n: number) => `انسخ الأسبوع ${n}`,
+    copying: "جارٍ النسخ…",
+    empty:
+      "لا أطباق في هذا الأسبوع بعد. ابدأ من الأسبوع الأول وغيّر بعض الأطباق.",
+    save: (n: number) =>
+      n === 1
+        ? "قدّم أسبوعًا واحدًا"
+        : n === 2
+          ? "قدّم أسبوعين"
+          : `قدّم ${n} أسابيع`,
+    incomplete: (n: number) =>
+      `${n} من الخانات فارغة، املأها قبل تقديم هذه الأسابيع`,
+    gapsIn: (n: number) => `الأسبوع ${n}`,
+    nudgeTitle: "أضف أسبوعًا ثانيًا",
+    nudge:
+      "يرى المشتركون هذه القائمة كل أسبوع. أضف قائمة للأسبوع الثاني حتى لا يملّوا.",
+    nudgeLink: "افتح محرر القائمة",
   },
   plans: {
     title: "الخطط",
@@ -666,7 +754,8 @@ const ar: ConsoleCopy = {
     average: (avg: string, n: number) => `${avg} / 5 من ${n} تقييمًا منشورًا`,
     onlyCustomers: "يمكن فقط للعملاء الذين استلموا توصيلًا تقييمك.",
     empty: "لا توجد تقييمات بعد.",
-    hidden: (reason: string | null | undefined) => ` · أخفاه فريق المنصة${reason ? `: ${reason}` : ""}`,
+    hidden: (reason: string | null | undefined) =>
+      ` · أخفاه فريق المنصة${reason ? `: ${reason}` : ""}`,
     placeholder: "رد علني (اختياري)",
     update: "حدّث الرد",
     reply: "رد",
@@ -714,7 +803,9 @@ const ar: ConsoleCopy = {
 
 export const CONSOLE_COPY: Record<ConsoleLocale, ConsoleCopy> = { en, ar };
 
-export const consoleCopy = (locale: string): ConsoleCopy => CONSOLE_COPY[consoleLocale(locale)];
+export const consoleCopy = (locale: string): ConsoleCopy =>
+  CONSOLE_COPY[consoleLocale(locale)];
 
 /** An enum label, falling back to the raw key for values added server-side later. */
-export const label = (map: Record<string, string>, key: string): string => map[key] ?? key.replace(/_/g, " ");
+export const label = (map: Record<string, string>, key: string): string =>
+  map[key] ?? key.replace(/_/g, " ");

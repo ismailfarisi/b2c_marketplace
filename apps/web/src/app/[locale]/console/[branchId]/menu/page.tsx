@@ -6,8 +6,23 @@ import { useState } from "react";
 
 import { Panel } from "@/components/admin/detail";
 import { label } from "@/components/kitchen/copy";
-import { ConsoleError, errorText, useBranch } from "@/components/kitchen/portal";
-import { getMenu, listDishes, listPlans, setMenuSlot, SLOTS, type MenuSlot, type Slot } from "@/lib/vendor-api";
+import {
+  ConsoleError,
+  errorText,
+  useBranch,
+} from "@/components/kitchen/portal";
+import {
+  copyMenuWeek,
+  getMenu,
+  listDishes,
+  listPlans,
+  MAX_MENU_WEEKS,
+  setMenuSlot,
+  setMenuWeeks,
+  SLOTS,
+  type MenuSlot,
+  type Slot,
+} from "@/lib/vendor-api";
 
 /**
  * The weekly menu: for each weekday and meal, one default dish and optionally
@@ -17,6 +32,11 @@ import { getMenu, listDishes, listPlans, setMenuSlot, SLOTS, type MenuSlot, type
  *
  * Cells a live plan delivers but the menu leaves empty are highlighted: those
  * are meals a subscriber is paying for with nothing to cook.
+ *
+ * A menu can rotate through 1–4 weeks so subscribers do not eat the same
+ * Monday lunch forever. Weeks beyond the live count are a draft the kitchen
+ * fills (often by copying week 1) before it serves them; serving N weeks is
+ * refused until every delivery day of every week has a dish.
  */
 export default function MenuPage() {
   const branch = useBranch();
@@ -24,14 +44,41 @@ export default function MenuPage() {
   const c = t.menu;
   const qc = useQueryClient();
   const id = branch.branch_id;
-  const menu = useQuery({ queryKey: ["vendor", "menu", id], queryFn: () => getMenu(id) });
-  const dishes = useQuery({ queryKey: ["vendor", "dishes", id], queryFn: () => listDishes(id) });
-  const plans = useQuery({ queryKey: ["vendor", "plans", id], queryFn: () => listPlans(id) });
-  const [selected, setSelected] = useState<{ weekday: number; slot: Slot } | null>(null);
+  const menu = useQuery({
+    queryKey: ["vendor", "menu", id],
+    queryFn: () => getMenu(id),
+  });
+  const dishes = useQuery({
+    queryKey: ["vendor", "dishes", id],
+    queryFn: () => listDishes(id),
+  });
+  const plans = useQuery({
+    queryKey: ["vendor", "plans", id],
+    queryFn: () => listPlans(id),
+  });
+  const [selected, setSelected] = useState<{
+    weekday: number;
+    slot: Slot;
+  } | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [week, setWeek] = useState(1);
+  const [draftWeeks, setDraftWeeks] = useState<number | null>(null);
+  const w = t.menuWeeks;
+  const liveWeeks = Math.max(menu.data?.weeks ?? 1, 1);
+  const storedWeeks = Math.max(
+    liveWeeks,
+    ...(menu.data?.slots ?? []).map((s) => s.week || 1),
+  );
+  const targetWeeks = draftWeeks ?? liveWeeks;
+  const tabWeeks = Math.min(MAX_MENU_WEEKS, Math.max(targetWeeks, storedWeeks));
+  const viewWeek = Math.min(week, tabWeeks);
 
+  const allCells = new Map<string, MenuSlot>();
+  for (const s of menu.data?.slots ?? [])
+    allCells.set(`${s.week || 1}:${s.weekday}:${s.slot}`, s);
   const cells = new Map<string, MenuSlot>();
-  for (const s of menu.data?.slots ?? []) cells.set(`${s.weekday}:${s.slot}`, s);
+  for (const s of menu.data?.slots ?? [])
+    if ((s.week || 1) === viewWeek) cells.set(`${s.weekday}:${s.slot}`, s);
 
   const needed = new Set<string>();
   const planSlots = new Set<Slot>();
@@ -42,13 +89,26 @@ export default function MenuPage() {
       for (const d of p.delivery_weekdays) needed.add(`${d}:${s}`);
     }
   }
-  const used = new Set<Slot>([...planSlots, ...(menu.data?.slots ?? []).map((s) => s.slot)]);
+  const used = new Set<Slot>([
+    ...planSlots,
+    ...(menu.data?.slots ?? []).map((s) => s.slot),
+  ]);
   const rows = showAll ? [...SLOTS] : SLOTS.filter((s) => used.has(s));
   if (rows.length === 0) rows.push("lunch");
 
   const save = useMutation({
-    mutationFn: (v: { weekday: number; slot: Slot; def: string | null; alt: string | null }) =>
-      setMenuSlot(id, v.weekday, v.slot, { default_dish_id: v.def, alternative_dish_id: v.alt }),
+    mutationFn: (v: {
+      week: number;
+      weekday: number;
+      slot: Slot;
+      def: string | null;
+      alt: string | null;
+    }) =>
+      setMenuSlot(id, v.weekday, v.slot, {
+        week: v.week,
+        default_dish_id: v.def,
+        alternative_dish_id: v.alt,
+      }),
     onSuccess: (m) => {
       qc.setQueryData(["vendor", "menu", id], m);
       qc.invalidateQueries({ queryKey: ["vendor", "overview", id] });
@@ -56,21 +116,169 @@ export default function MenuPage() {
       setSelected(null);
     },
   });
+  const copy = useMutation({
+    mutationFn: (to: number) => copyMenuWeek(id, to, 1),
+    onSuccess: (m) => qc.setQueryData(["vendor", "menu", id], m),
+  });
+  const serve = useMutation({
+    mutationFn: (n: number) => setMenuWeeks(id, n),
+    onSuccess: (m) => {
+      qc.setQueryData(["vendor", "menu", id], m);
+      qc.invalidateQueries({ queryKey: ["vendor", "overview", id] });
+      setDraftWeeks(null);
+    },
+  });
 
-  if (menu.error) return <ConsoleError error={menu.error} onRetry={() => void menu.refetch()} locale={locale} />;
+  if (menu.error)
+    return (
+      <ConsoleError
+        error={menu.error}
+        onRetry={() => void menu.refetch()}
+        locale={locale}
+      />
+    );
   const activeDishes = (dishes.data?.items ?? []).filter((d) => d.is_active);
   const gapCount = [...needed].filter((k) => !cells.get(k)?.default).length;
-  const sel = selected ? cells.get(`${selected.weekday}:${selected.slot}`) : undefined;
+  const sel = selected
+    ? cells.get(`${selected.weekday}:${selected.slot}`)
+    : undefined;
+  // Every cell a live plan delivers, in every week about to be served.
+  const targetGaps: Array<{ week: number; key: string }> = [];
+  for (let n = 1; n <= targetWeeks; n++) {
+    for (const k of needed)
+      if (!allCells.get(`${n}:${k}`)?.default?.is_active)
+        targetGaps.push({ week: n, key: k });
+  }
+  const weekEmpty = viewWeek > 1 && cells.size === 0;
+  const pickWeek = (n: number) => {
+    save.reset();
+    setSelected(null);
+    setWeek(n);
+  };
 
   return (
     <>
       <section className="panel">
         <header className="panel-head">
-          <h3>{c.title}</h3>
-          {gapCount > 0 ? <span className="tag warn">{c.gaps(gapCount)}</span> : null}
+          <h3>{w.title}</h3>
+          <div className="spacer" />
+          <select
+            className="field"
+            aria-label={w.title}
+            value={targetWeeks}
+            disabled={!branch.editable || serve.isPending}
+            onChange={(e) => {
+              serve.reset();
+              const n = Number(e.target.value);
+              setDraftWeeks(n === liveWeeks ? null : n);
+              if (n > tabWeeks) pickWeek(n);
+            }}
+          >
+            {Array.from({ length: MAX_MENU_WEEKS }, (_, i) => i + 1).map(
+              (n) => (
+                <option key={n} value={n}>
+                  {w.weeks(n)}
+                </option>
+              ),
+            )}
+          </select>
+        </header>
+        <div className="panel-body">
+          <div className="vp-chips" role="tablist" aria-label={w.title}>
+            {Array.from({ length: tabWeeks }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="tab"
+                className="vp-chip"
+                aria-selected={n === viewWeek}
+                aria-pressed={n === viewWeek}
+                onClick={() => pickWeek(n)}
+              >
+                {w.week(n)} · {n <= liveWeeks ? w.live : w.draft}
+                {n <= liveWeeks &&
+                liveWeeks > 1 &&
+                n === menu.data?.current_week
+                  ? ` · ${w.thisWeek}`
+                  : ""}
+              </button>
+            ))}
+          </div>
+          {weekEmpty && branch.editable ? (
+            <p className="muted">
+              {w.empty}{" "}
+              <button
+                className="btn"
+                type="button"
+                disabled={copy.isPending}
+                onClick={() => copy.mutate(viewWeek)}
+              >
+                {copy.isPending ? w.copying : w.copy(1)}
+              </button>
+              {copy.error ? (
+                <span className="danger"> {errorText(copy.error, locale)}</span>
+              ) : null}
+            </p>
+          ) : null}
+          {draftWeeks !== null && branch.editable ? (
+            <div className="vp-actions wide">
+              {targetGaps.length > 0 ? (
+                <span className="tag warn">
+                  {w.incomplete(targetGaps.length)}
+                </span>
+              ) : null}
+              {targetGaps.length > 0 ? (
+                <span className="vp-chips">
+                  {[...new Set(targetGaps.map((g) => g.week))].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className="vp-chip"
+                      onClick={() => pickWeek(n)}
+                    >
+                      {w.gapsIn(n)}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
+              <button
+                className="btn primary"
+                type="button"
+                disabled={targetGaps.length > 0 || serve.isPending}
+                onClick={() => serve.mutate(targetWeeks)}
+              >
+                {serve.isPending ? t.saving : w.save(targetWeeks)}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                disabled={serve.isPending}
+                onClick={() => setDraftWeeks(null)}
+              >
+                {t.neverMind}
+              </button>
+              {serve.error ? (
+                <span className="danger">{errorText(serve.error, locale)}</span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel">
+        <header className="panel-head">
+          <h3>{liveWeeks > 1 || tabWeeks > 1 ? w.week(viewWeek) : c.title}</h3>
+          {gapCount > 0 ? (
+            <span className="tag warn">{c.gaps(gapCount)}</span>
+          ) : null}
           <div className="spacer" />
           <label className="muted">
-            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> {c.showAll}
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+            />{" "}
+            {c.showAll}
           </label>
         </header>
         <div className="panel-body table-wrap">
@@ -93,7 +301,8 @@ export default function MenuPage() {
                     {t.weekdays.map((_, weekday) => {
                       const k = `${weekday}:${slot}`;
                       const c = cells.get(k);
-                      const isSel = selected?.weekday === weekday && selected.slot === slot;
+                      const isSel =
+                        selected?.weekday === weekday && selected.slot === slot;
                       const cls = [
                         "menu-cell",
                         c?.default ? "filled" : "",
@@ -124,7 +333,13 @@ export default function MenuPage() {
                                 ) : null}
                               </>
                             ) : (
-                              <span className="empty">{needed.has(k) ? t.menu.needsDish : branch.editable ? t.menu.add : "—"}</span>
+                              <span className="empty">
+                                {needed.has(k)
+                                  ? t.menu.needsDish
+                                  : branch.editable
+                                    ? t.menu.add
+                                    : "—"}
+                              </span>
                             )}
                           </button>
                         </td>
@@ -140,8 +355,8 @@ export default function MenuPage() {
 
       {selected && branch.editable ? (
         <SlotEditor
-          key={`${selected.weekday}:${selected.slot}`}
-          title={`${t.weekdays[selected.weekday] ?? ""} ${label(t.slots, selected.slot)}`}
+          key={`${viewWeek}:${selected.weekday}:${selected.slot}`}
+          title={`${tabWeeks > 1 ? `${w.week(viewWeek)} · ` : ""}${t.weekdays[selected.weekday] ?? ""} ${label(t.slots, selected.slot)}`}
           dishes={activeDishes}
           initialDefault={sel?.default?.dish_id ?? ""}
           initialAlt={sel?.alternative?.dish_id ?? ""}
@@ -149,7 +364,9 @@ export default function MenuPage() {
           error={save.error}
           dishesHref={`${branch.base}/dishes`}
           onCancel={() => setSelected(null)}
-          onSave={(def, alt) => save.mutate({ ...selected, def, alt })}
+          onSave={(def, alt) =>
+            save.mutate({ ...selected, week: viewWeek, def, alt })
+          }
         />
       ) : null}
     </>
@@ -218,7 +435,12 @@ function SlotEditor({
           </label>
           <label>
             {c.alternative} <span className="hint">{c.alternativeHint}</span>
-            <select className="field" value={alt} onChange={(e) => setAlt(e.target.value)} disabled={!def}>
+            <select
+              className="field"
+              value={alt}
+              onChange={(e) => setAlt(e.target.value)}
+              disabled={!def}
+            >
               <option value="">{c.noChoice}</option>
               {dishes
                 .filter((d) => d.id !== def)
@@ -233,10 +455,17 @@ function SlotEditor({
             <button className="btn primary" type="submit" disabled={busy}>
               {busy ? t.saving : def ? c.save : c.clear}
             </button>
-            <button className="btn" type="button" onClick={onCancel} disabled={busy}>
+            <button
+              className="btn"
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+            >
               {t.neverMind}
             </button>
-            {error ? <span className="danger">{errorText(error, locale)}</span> : null}
+            {error ? (
+              <span className="danger">{errorText(error, locale)}</span>
+            ) : null}
           </div>
         </form>
       )}

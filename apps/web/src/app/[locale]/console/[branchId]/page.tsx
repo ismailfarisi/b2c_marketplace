@@ -32,7 +32,13 @@ export default function OverviewPage() {
   });
 
   if (overview.error) {
-    return <ConsoleError error={overview.error} onRetry={() => void overview.refetch()} locale={locale} />;
+    return (
+      <ConsoleError
+        error={overview.error}
+        onRetry={() => void overview.refetch()}
+        locale={locale}
+      />
+    );
   }
   const o = overview.data;
   const s = today.data;
@@ -44,7 +50,10 @@ export default function OverviewPage() {
         { done: o.active_plans > 0, label: c.stepPlan, href: "/plans" },
         {
           done: o.active_plans > 0 && o.menu_gaps.length === 0,
-          label: o.menu_gaps.length > 0 ? c.stepGaps(o.menu_gaps.length) : c.stepMenu,
+          label:
+            o.menu_gaps.length > 0
+              ? c.stepGaps(o.menu_gaps.length)
+              : c.stepMenu,
           href: "/menu",
         },
       ]
@@ -57,20 +66,40 @@ export default function OverviewPage() {
         <Stat k={c.activeSubscribers} v={o?.active_subscribers} />
         <Stat k={c.paused} v={o?.paused_subscribers} />
         <Stat k={c.awaitingPayment} v={o?.pending_payment} />
-        <Stat k={c.livePlans} v={o?.active_plans} sub={o ? c.inRotation(o.rotation_plans) : undefined} />
+        <Stat
+          k={c.livePlans}
+          v={o?.active_plans}
+          sub={o ? c.inRotation(o.rotation_plans) : undefined}
+        />
         <Stat k={c.dishes} v={o?.active_dishes} />
       </div>
 
       {o && !setupDone ? (
-        <Panel title={c.getReady} note={c.doneOf(steps.filter((s) => s.done).length, steps.length)}>
+        <Panel
+          title={c.getReady}
+          note={c.doneOf(steps.filter((s) => s.done).length, steps.length)}
+        >
           <ul className="vp-checklist">
             {steps.map((s) => (
               <li key={s.href} className={s.done ? "done" : "todo"}>
                 <span className="mark">{s.done ? "✓" : "•"}</span>
-                {s.done ? <span>{s.label}</span> : <Link href={`${branch.base}${s.href}`}>{s.label}</Link>}
+                {s.done ? (
+                  <span>{s.label}</span>
+                ) : (
+                  <Link href={`${branch.base}${s.href}`}>{s.label}</Link>
+                )}
               </li>
             ))}
           </ul>
+        </Panel>
+      ) : null}
+
+      {o && o.active_subscribers > 0 && o.menu_weeks <= 1 ? (
+        <Panel title={t.menuWeeks.nudgeTitle}>
+          <p>
+            {t.menuWeeks.nudge}{" "}
+            <Link href={`${branch.base}/menu`}>{t.menuWeeks.nudgeLink}</Link>
+          </p>
         </Panel>
       ) : null}
 
@@ -78,7 +107,12 @@ export default function OverviewPage() {
         <Panel title={c.menuGaps} note={c.menuGapsNote}>
           <div className="vp-chips">
             {o.menu_gaps.map((g) => (
-              <Link key={`${g.weekday}-${g.slot}`} className="tag warn" href={`${branch.base}/menu`}>
+              <Link
+                key={`${g.week}-${g.weekday}-${g.slot}`}
+                className="tag warn"
+                href={`${branch.base}/menu`}
+              >
+                {o.menu_weeks > 1 ? `${t.menuWeeks.week(g.week)} · ` : ""}
                 {t.weekdays[g.weekday]} {label(t.slots, g.slot)}
               </Link>
             ))}
@@ -86,9 +120,18 @@ export default function OverviewPage() {
         </Panel>
       ) : null}
 
-      <Panel title={c.today} note={<Link href={`${branch.base}/deliveries`}>{c.openDeliveries}</Link>}>
+      <Panel
+        title={c.today}
+        note={
+          <Link href={`${branch.base}/deliveries`}>{c.openDeliveries}</Link>
+        }
+      >
         {today.error ? (
-          <ConsoleError error={today.error} onRetry={() => void today.refetch()} locale={locale} />
+          <ConsoleError
+            error={today.error}
+            onRetry={() => void today.refetch()}
+            locale={locale}
+          />
         ) : (
           <div className="stats">
             <Stat k={c.scheduled} v={s?.scheduled} />
@@ -98,7 +141,14 @@ export default function OverviewPage() {
             <Stat k={c.noDriver} v={s?.unassigned} breached={!!s?.unassigned} />
             <Stat
               k={c.payable}
-              v={s ? formatMoney({ amount: s.payable_minor, currency: s.currency }, locale === "ar" ? "ar" : "en") : undefined}
+              v={
+                s
+                  ? formatMoney(
+                      { amount: s.payable_minor, currency: s.currency },
+                      locale === "ar" ? "ar" : "en",
+                    )
+                  : undefined
+              }
             />
           </div>
         )}

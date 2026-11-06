@@ -10,14 +10,18 @@ import { DishPhoto, shortMoney } from "@/components/meals/food";
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell } from "@/components/meals/shell";
 import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
-import { RatingBadge, SafetyBadge } from "@/components/meals/trust";
+import {
+  RatingBadge,
+  SafetyBadge,
+  VarietyBadge,
+} from "@/components/meals/trust";
 import {
   getKitchenOffers,
   getKitchenReviews,
   getMealKitchen,
   type PublicKitchenDetail,
 } from "@/lib/meals-api";
-import type { MenuChoice } from "@/lib/vendor-api";
+import type { MenuChoice, MenuSlot } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
 import { allergenLine } from "@/components/meals/allergens";
 import { LoadError } from "@/components/load-error";
@@ -71,6 +75,12 @@ const COPY = {
     retry: "Try again",
     loading: "Loading…",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    menuWeeksNote: (n: number) =>
+      `A different menu each week for ${n} weeks, then it starts again. Where two dishes are listed you choose one before the cutoff.`,
+    menuWeeksTabs: "Menu weeks",
+    thisWeek: "This week",
+    nextWeek: "Next week",
+    inWeeks: (n: number) => `In ${n} weeks`,
     slot: {
       breakfast: "Breakfast",
       lunch: "Lunch",
@@ -137,6 +147,12 @@ const COPY = {
       "الجمعة",
       "السبت",
     ],
+    menuWeeksNote: (n: number) =>
+      `قائمة مختلفة كل أسبوع لمدة ${n === 2 ? "أسبوعين" : `${n} أسابيع`}، ثم تبدأ من جديد. عند وجود طبقين تختار أحدهما قبل الموعد النهائي.`,
+    menuWeeksTabs: "أسابيع القائمة",
+    thisWeek: "هذا الأسبوع",
+    nextWeek: "الأسبوع القادم",
+    inWeeks: (n: number) => (n === 2 ? "بعد أسبوعين" : `بعد ${n} أسابيع`),
     slot: {
       breakfast: "فطور",
       lunch: "غداء",
@@ -197,7 +213,12 @@ function DishCard({
   );
 }
 
-function Menu({
+/**
+ * A multi-week kitchen's menu by real calendar week: "This week", "Next
+ * week" and so on up to the cycle length, each with its dates, so a customer
+ * sees which dishes land on which days before subscribing.
+ */
+function MenuByWeek({
   k,
   locale,
   t,
@@ -206,19 +227,96 @@ function Menu({
   locale: "en" | "ar";
   t: Copy;
 }) {
-  const slots = [...new Set(k.menu.slots.map((s) => s.slot))];
+  const weeks = k.menu_calendar ?? [];
+  const [picked, setPicked] = useState(0);
+  if (k.menu_weeks <= 1 || weeks.length <= 1)
+    return <Menu slots={k.menu.slots} locale={locale} t={t} />;
+  const i = Math.min(picked, weeks.length - 1);
+  const fmt = new Intl.DateTimeFormat(locale === "ar" ? "ar" : "en", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+  const range = (startsOn: string) => {
+    const a = new Date(`${startsOn}T00:00:00Z`);
+    const b = new Date(a.getTime() + 6 * 86_400_000);
+    return `${fmt.format(a)} – ${fmt.format(b)}`;
+  };
+  const name = (n: number) =>
+    n === 0 ? t.thisWeek : n === 1 ? t.nextWeek : t.inWeeks(n);
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    let j = i;
+    if (step) j += locale === "ar" ? -step : step;
+    else if (e.key === "Home") j = 0;
+    else if (e.key === "End") j = weeks.length - 1;
+    else return;
+    e.preventDefault();
+    j = (j + weeks.length) % weeks.length;
+    setPicked(j);
+    e.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      [j]?.focus();
+  };
+  return (
+    <>
+      <div
+        className="ms-days ms-weeks"
+        role="tablist"
+        aria-label={t.menuWeeksTabs}
+      >
+        {weeks.map((w, n) => (
+          <button
+            key={w.starts_on}
+            type="button"
+            role="tab"
+            aria-selected={n === i}
+            tabIndex={n === i ? 0 : -1}
+            className={n === i ? "ms-day on" : "ms-day"}
+            onClick={() => setPicked(n)}
+            onKeyDown={onTabKey}
+          >
+            <b>{name(n)}</b> <small>{range(w.starts_on)}</small>
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">
+        <Menu
+          key={weeks[i]!.starts_on}
+          slots={weeks[i]!.slots}
+          fromTomorrow={i === 0}
+          locale={locale}
+          t={t}
+        />
+      </div>
+    </>
+  );
+}
+
+function Menu({
+  slots: cells,
+  fromTomorrow = true,
+  locale,
+  t,
+}: {
+  slots: MenuSlot[];
+  fromTomorrow?: boolean;
+  locale: "en" | "ar";
+  t: Copy;
+}) {
+  const slots = [...new Set(cells.map((s) => s.slot))];
   const days = [0, 1, 2, 3, 4, 5, 6].filter((d) =>
-    k.menu.slots.some((s) => s.weekday === d && s.default),
+    cells.some((s) => s.weekday === d && s.default),
   );
   const [picked, setPicked] = useState<number | null>(null);
   if (slots.length === 0 || days.length === 0)
     return <p className="ms-note">{t.noMenu}</p>;
-  const from = dubaiTomorrowWeekday();
+  const from = fromTomorrow ? dubaiTomorrowWeekday() : 0;
   const day =
     picked ??
     [...days].sort((a, b) => ((a - from + 7) % 7) - ((b - from + 7) % 7))[0]!;
   const cell = (d: number, slot: string) =>
-    k.menu.slots.find((s) => s.weekday === d && s.slot === slot);
+    cells.find((s) => s.weekday === d && s.slot === slot);
   const dishName = (d: MenuChoice) => (locale === "ar" && d.name_ar) || d.name;
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
     const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
@@ -401,7 +499,9 @@ export default function KitchenPage({
             className="ms-khero-img"
           />
           <div className="ms-khero-copy">
-            {(k.rating_count > 0 || k.food_safety_verified) && (
+            {(k.rating_count > 0 ||
+              k.food_safety_verified ||
+              k.menu_weeks > 1) && (
               <div className="ms-kc-badges ms-khero-badges">
                 <RatingBadge
                   rating={k.rating}
@@ -409,6 +509,7 @@ export default function KitchenPage({
                   locale={locale}
                 />
                 {k.food_safety_verified && <SafetyBadge locale={locale} />}
+                <VarietyBadge weeks={k.menu_weeks} locale={locale} />
               </div>
             )}
             <h1 dir="auto">{name}</h1>
@@ -448,8 +549,10 @@ export default function KitchenPage({
 
             <section className="ms-k-menu">
               <h2>{t.menu}</h2>
-              <p className="ms-sub">{t.menuNote}</p>
-              <Menu k={k} locale={locale} t={t} />
+              <p className="ms-sub">
+                {k.menu_weeks > 1 ? t.menuWeeksNote(k.menu_weeks) : t.menuNote}
+              </p>
+              <MenuByWeek k={k} locale={locale} t={t} />
             </section>
 
             <section className="ms-k-reviews">

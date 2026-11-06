@@ -30,9 +30,17 @@ export interface BranchAccess {
  * browser's: a dispatcher abroad or a late-night session must not plan the
  * wrong date. Falls back to the market zone when the branch sends none.
  */
-export function branchToday(timezone?: string | undefined, now: Date = new Date()): string {
+export function branchToday(
+  timezone?: string | undefined,
+  now: Date = new Date(),
+): string {
   const fmt = (tz: string) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
   try {
     return fmt(timezone || "Asia/Dubai");
   } catch {
@@ -105,6 +113,8 @@ export interface MenuChoice {
 }
 
 export interface MenuSlot {
+  /** Week of the menu cycle, 1..weeks. */
+  week: number;
   weekday: number;
   slot: Slot;
   default: MenuChoice | null;
@@ -113,8 +123,16 @@ export interface MenuSlot {
 
 export interface WeeklyMenu {
   cycle_id: string | null;
+  /** Weeks the menu runs before it repeats. */
+  weeks: number;
+  anchor_date: string | null;
+  /** The cycle week the kitchen's today falls in. */
+  current_week: number;
   slots: MenuSlot[];
 }
+
+/** The most weeks a menu can rotate through in the portal. */
+export const MAX_MENU_WEEKS = 4;
 
 export interface Tier {
   id: string;
@@ -231,8 +249,9 @@ export interface Overview {
   active_plans: number;
   rotation_plans: number;
   active_dishes: number;
-  menu_gaps: Array<{ weekday: number; slot: Slot }>;
+  menu_gaps: Array<{ weekday: number; slot: Slot; week: number }>;
   profile_complete: boolean;
+  menu_weeks: number;
 }
 
 // ── calls ───────────────────────────────────────────────────────────────────
@@ -259,7 +278,11 @@ export const listDishes = (branchId: string) =>
     method: "GET",
   });
 
-export const createDish = (branchId: string, body: DishInput, opts?: CallOptions) =>
+export const createDish = (
+  branchId: string,
+  body: DishInput,
+  opts?: CallOptions,
+) =>
   apiFetch<Dish>({
     url: `/branches/${branchId}/dishes`,
     method: "POST",
@@ -281,12 +304,34 @@ export const setMenuSlot = (
   branchId: string,
   weekday: number,
   slot: Slot,
-  body: { default_dish_id: string | null; alternative_dish_id: string | null },
+  body: {
+    week?: number;
+    default_dish_id: string | null;
+    alternative_dish_id: string | null;
+  },
 ) =>
   apiFetch<WeeklyMenu>({
     url: `/branches/${branchId}/menu/${weekday}/${slot}`,
     method: "PUT",
     data: body,
+  });
+
+export const setMenuWeeks = (branchId: string, weeks: number) =>
+  apiFetch<WeeklyMenu>({
+    url: `/branches/${branchId}/menu/weeks`,
+    method: "PUT",
+    data: { weeks },
+  });
+
+export const copyMenuWeek = (
+  branchId: string,
+  week: number,
+  fromWeek: number,
+) =>
+  apiFetch<WeeklyMenu>({
+    url: `/branches/${branchId}/menu/weeks/${week}/copy`,
+    method: "POST",
+    data: { from_week: fromWeek },
   });
 
 export const listPlans = (branchId: string) =>
@@ -295,7 +340,11 @@ export const listPlans = (branchId: string) =>
     method: "GET",
   });
 
-export const createPlan = (branchId: string, body: PlanInput, opts?: CallOptions) =>
+export const createPlan = (
+  branchId: string,
+  body: PlanInput,
+  opts?: CallOptions,
+) =>
   apiFetch<Plan>({
     url: `/branches/${branchId}/plans`,
     method: "POST",
@@ -370,7 +419,12 @@ export const listBranchReviews = (branchId: string) =>
     method: "GET",
   });
 
-export const replyToReview = (branchId: string, reviewId: string, reply: string, opts?: CallOptions) =>
+export const replyToReview = (
+  branchId: string,
+  reviewId: string,
+  reply: string,
+  opts?: CallOptions,
+) =>
   apiFetch<BranchReview>({
     url: `/branches/${branchId}/reviews/${reviewId}/reply`,
     method: "PUT",

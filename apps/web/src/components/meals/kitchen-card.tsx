@@ -3,7 +3,11 @@ import Link from "next/link";
 import { KitchenCover } from "@/components/meals/cover";
 import { DishPhoto, dishName, shortMoney } from "@/components/meals/food";
 import { arKitchens, arKitchensDeliver } from "@/components/meals/home-copy";
-import { RatingBadge, SafetyBadge } from "@/components/meals/trust";
+import {
+  RatingBadge,
+  SafetyBadge,
+  VarietyBadge,
+} from "@/components/meals/trust";
 import type { Banner, HomeSection, PublicKitchen } from "@/lib/meals-api";
 
 /** Kitchen card and copy shared by the home page and collection pages. */
@@ -163,7 +167,9 @@ export function KitchenCard({
             <strong>{money(k.from_meal_price_minor)}</strong>{" "}
             <span className="ms-sub">{t.perMeal}</span>
           </span>
-          {(k.rating_count > 0 || k.food_safety_verified) && (
+          {(k.rating_count > 0 ||
+            k.food_safety_verified ||
+            k.menu_weeks > 1) && (
             <span className="ms-kc-badges">
               <RatingBadge
                 rating={k.rating}
@@ -171,6 +177,7 @@ export function KitchenCard({
                 locale={locale}
               />
               {k.food_safety_verified && <SafetyBadge locale={locale} />}
+              <VarietyBadge weeks={k.menu_weeks} locale={locale} />
             </span>
           )}
         </div>

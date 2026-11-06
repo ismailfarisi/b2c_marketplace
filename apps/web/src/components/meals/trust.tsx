@@ -27,6 +27,26 @@ export function RatingBadge({
   );
 }
 
+/** A multi-week menu: the same day does not repeat a dish for `weeks` weeks. */
+export function VarietyBadge({
+  weeks,
+  locale,
+}: {
+  weeks: number;
+  locale: Locale;
+}) {
+  if (weeks <= 1) return null;
+  return (
+    <span className="ms-variety">
+      {locale === "ar"
+        ? weeks === 2
+          ? "بلا تكرار لمدة أسبوعين"
+          : `بلا تكرار لمدة ${weeks} أسابيع`
+        : `No repeats for ${weeks} weeks`}
+    </span>
+  );
+}
+
 export function SafetyBadge({ locale }: { locale: Locale }) {
   return (
     <span className="ms-safety">

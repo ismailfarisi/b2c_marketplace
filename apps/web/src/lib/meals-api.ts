@@ -1,6 +1,6 @@
 import { apiFetch } from "@marketplace/api-client";
 
-import type { DeliveryWindow, Plan, WeeklyMenu } from "./vendor-api";
+import type { DeliveryWindow, MenuSlot, Plan, WeeklyMenu } from "./vendor-api";
 
 /**
  * The meals storefront. Anonymous, like the feed: a kitchen link shared in a
@@ -32,6 +32,14 @@ export interface PublicKitchen {
   food_safety_verified: boolean;
   /** Up to four dishes from this week's menu, photographed ones first. */
   week_dishes: DishThumb[];
+  /** Weeks the menu runs before a dish repeats; above 1, "No repeats for N weeks". */
+  menu_weeks: number;
+}
+
+/** One calendar week of a kitchen's menu, from `starts_on` (a Sunday). */
+export interface MenuWeek {
+  starts_on: string;
+  slots: MenuSlot[];
 }
 
 export interface DishThumb {
@@ -67,6 +75,8 @@ export interface PublicKitchenDetail extends PublicKitchen {
   delivers_here: boolean | null;
   delivery_windows: DeliveryWindow[];
   menu: WeeklyMenu;
+  /** This week first, then one entry per further week up to menu_weeks. */
+  menu_calendar?: MenuWeek[];
   plan_list: Plan[];
   /** The plan most customers pick, when the kitchen sells more than one. */
   popular_plan_id: string | null;
