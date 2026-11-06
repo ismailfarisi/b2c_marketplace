@@ -3498,3 +3498,58 @@ body {
 .ms .ms-support-thread small {
   opacity: 0.7;
 }
+
+/* Rotation variety check: advisory meter in the builder's summary. */
+.ms-variety {
+  margin-block: 0.8rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.75rem;
+  background: var(--ms-tag);
+  display: grid;
+  gap: 0.35rem;
+}
+.ms-variety p {
+  margin: 0;
+}
+.ms-variety-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.ms-variety-bar {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.ms-variety-bar span {
+  inline-size: 1.4rem;
+  block-size: 0.45rem;
+  border-radius: 999px;
+  background: var(--ms-line);
+}
+.ms-variety-low .ms-variety-bar span.on {
+  background: var(--ms-accent);
+}
+.ms-variety-good .ms-variety-bar span.on {
+  background: var(--ms-saffron);
+}
+.ms-variety-great .ms-variety-bar span.on {
+  background: var(--ms-ok);
+}
+.ms-variety-great {
+  background: var(--ms-ok-soft);
+}
+.ms-variety-good {
+  background: var(--ms-saffron-soft);
+}
+.ms-variety-warnings {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  font-size: 0.9rem;
+}
+.ms-balanced {
+  margin-block-end: 0.75rem;
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
