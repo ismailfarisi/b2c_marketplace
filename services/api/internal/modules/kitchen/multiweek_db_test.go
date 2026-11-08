@@ -121,6 +121,10 @@ func TestMultiWeekMenuServesWeekTwo(t *testing.T) {
 	if k.MenuWeeks != 2 || k.Menu.CurrentWeek != 2 || len(k.MenuCalendar) != 2 {
 		t.Fatalf("menu_weeks=%d current=%d calendar=%d", k.MenuWeeks, k.Menu.CurrentWeek, len(k.MenuCalendar))
 	}
+	// Two weeks of different dishes: honest "No repeats for 2 weeks".
+	if k.NoRepeatWeeks != 2 {
+		t.Errorf("no_repeat_weeks=%d with distinct weeks, want 2", k.NoRepeatWeeks)
+	}
 	if sl := k.MenuCalendar[0].Slots; len(sl) == 0 || sl[0].Default.Name != "Week two kabsa" {
 		t.Errorf("this week's calendar = %+v", sl)
 	}
@@ -170,12 +174,24 @@ func TestMultiWeekMenuServesWeekTwo(t *testing.T) {
 	if got := dishOn(monday); got != "Week two kabsa" {
 		t.Errorf("after extending, this Monday serves %q", got)
 	}
+
+	// A kitchen that copies one week's menu into the next keeps its cycle
+	// length (the tabs still show every week) but has no variety to advertise.
+	if _, err := pool.Exec(ctx, `
+		UPDATE menu_day_items i SET menu_item_id = $2
+		  FROM menu_cycle_days d WHERE d.id = i.cycle_day_id AND d.cycle_id = $1 AND d.week_no = 2`,
+		cycleID, week1); err != nil {
+		t.Fatal(err)
+	}
+	k, err = s.PublicKitchen(ctx, branchID, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.MenuWeeks != 3 || k.NoRepeatWeeks != 1 {
+		t.Errorf("copied week: menu_weeks=%d no_repeat_weeks=%d, want 3 and 1", k.MenuWeeks, k.NoRepeatWeeks)
+	}
 }
 
-// Shrinking the menu to one week must not leave customers with a week-2 dish
-// nobody will cook: their future picks fall back to the default in the same
-// transaction, and each affected subscription gets one reset event. Picks the
-// one-week menu still serves, and days already fulfilled, stay.
 func TestShrinkingTheMenuResetsOrphanedSelections(t *testing.T) {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {

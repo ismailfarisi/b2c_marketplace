@@ -53,6 +53,13 @@ type MySubscription struct {
 	// cooks one of its weeks; on the guest subscription, where it came from.
 	GuestWeek *GuestWeekLink `json:"guest_week"`
 	GuestOf   *GuestWeekLink `json:"guest_of"`
+
+	// What the pending order actually collects: the cycle's price less the
+	// wallet credit already applied to it (a guest week pays the paused
+	// week's credit in first). The Pay button shows due_minor, not
+	// amount_minor, or a customer owing AED 20 is asked for AED 160.
+	WalletAppliedMinor int64 `json:"wallet_applied_minor"`
+	DueMinor           int64 `json:"due_minor"`
 }
 
 // Dish is one option a customer can be served on a given day.
@@ -138,7 +145,9 @@ const mySelect = `
 	       s.rotation_id, s.rotation_week, s.renewal_mode,
 	       (SELECT n.id FROM subscriptions n
 	         WHERE n.renewed_from_id = s.id AND n.status <> 'cancelled' LIMIT 1),
-	       co.name
+	       co.name,
+	       COALESCE((SELECT gw.wallet_minor FROM subscription_guest_weeks gw
+	                  WHERE gw.guest_subscription_id = s.id AND gw.wallet_posted_at IS NOT NULL), 0)
 	  FROM subscriptions s
 	  JOIN vendor_branches b ON b.id = s.branch_id
 	  JOIN subscription_plans p ON p.id = s.plan_id
@@ -156,9 +165,11 @@ func scanMine(row pgx.Row) (MySubscription, error) {
 	if err := row.Scan(&m.ID, &m.SubscriptionNo, &m.Status, &m.BranchID, &m.KitchenName,
 		&m.KitchenNameAr, &m.PlanName, &m.PlanNameAr, &start, &end,
 		&m.CycleNo, &cycleEnd, &m.AmountMinor, &m.Currency, &m.PendingOrderID,
-		&m.RotationID, &m.RotationWeek, &m.RenewalMode, &m.RenewedByID, &m.CompanyName); err != nil {
+		&m.RotationID, &m.RotationWeek, &m.RenewalMode, &m.RenewedByID, &m.CompanyName,
+		&m.WalletAppliedMinor); err != nil {
 		return m, err
 	}
+	m.DueMinor = max(m.AmountMinor-m.WalletAppliedMinor, 0)
 	m.CanRenew = m.CompanyName == nil && canRenew(m.Status, m.RenewalMode, m.RotationID, m.RenewedByID)
 	m.StartDate = start.Format("2006-01-02")
 	m.EndDate = datePtr(end)

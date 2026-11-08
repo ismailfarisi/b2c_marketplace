@@ -50,9 +50,15 @@ type PublicKitchen struct {
 	// Up to four dishes from this week's menu, photographed ones first, so a
 	// card shows food rather than only a kitchen name.
 	WeekDishes []DishThumb `json:"week_dishes"`
-	// Weeks the kitchen's menu runs before a dish repeats on the same day;
-	// above 1 the storefront says "No repeats for N weeks".
+	// Weeks the kitchen's menu runs before it starts over; the week tabs on
+	// the kitchen page follow it.
 	MenuWeeks int `json:"menu_weeks"`
+	// Weeks a customer can go without the same default dish on the same
+	// weekday and slot: the menu length when every week differs, smaller when
+	// a kitchen copied a week (1 when two adjacent weeks share a dish). The
+	// "No repeats for N weeks" badge reads this, not menu_weeks, so a menu
+	// copied into every week is not sold as variety.
+	NoRepeatWeeks int `json:"no_repeat_weeks"`
 }
 
 // DishThumb is a dish shown as a thumbnail on a kitchen card.
@@ -81,7 +87,25 @@ const publicKitchenColumns = `
 	p.slots, p.plans, p.from_price, p.rotation_price, p.meal_price,
 	(b.food_safety_verified_at IS NOT NULL AND b.food_safety_expires_on >= CURRENT_DATE),
 	COALESCE((SELECT c.weeks FROM menu_cycles c WHERE c.branch_id = b.id AND c.is_active
+	           ORDER BY c.created_at LIMIT 1), 1)::int,
+	COALESCE((SELECT ` + noRepeatWeeks + ` FROM menu_cycles c WHERE c.branch_id = b.id AND c.is_active
 	           ORDER BY c.created_at LIMIT 1), 1)::int`
+
+// noRepeatWeeks is, for the menu cycle c, how many weeks pass before a default
+// dish comes back on the same weekday and slot. Each pair of weeks sharing a
+// default dish in one cell is a repeat; the gap between them is counted around
+// the cycle (week 4 is followed by week 1 again), and the shortest gap is the
+// honest number of repeat-free weeks. No repeat at all gives the cycle length.
+const noRepeatWeeks = `
+	LEAST(c.weeks, COALESCE((
+		SELECT min(LEAST(d2.week_no - d1.week_no, c.weeks - (d2.week_no - d1.week_no)))
+		  FROM menu_cycle_days d1
+		  JOIN menu_day_items i1 ON i1.cycle_day_id = d1.id AND i1.is_default
+		  JOIN menu_cycle_days d2 ON d2.cycle_id = d1.cycle_id AND d2.weekday = d1.weekday
+		                        AND d2.week_no > d1.week_no AND d2.week_no <= c.weeks
+		  JOIN menu_day_items i2 ON i2.cycle_day_id = d2.id AND i2.is_default
+		                        AND i2.meal_slot = i1.meal_slot AND i2.menu_item_id = i1.menu_item_id
+		 WHERE d1.cycle_id = c.id), c.weeks))`
 
 // livePlans aggregates the plans on sale per branch. Joined LATERAL so a
 // branch with none drops out of the result rather than showing zeroes.
@@ -106,7 +130,7 @@ func scanPublicKitchen(row pgx.Row) (PublicKitchen, error) {
 		&k.Description, &k.DescriptionAr, &k.Cuisines, &k.DietaryTags,
 		&k.CoverImageURL, &k.City, &k.Rating, &k.RatingCount, &k.Currency,
 		&k.MealSlots, &k.Plans, &k.FromPriceMinor, &k.RotationWeekPriceMinor, &k.FromMealPriceMinor, &k.FoodSafetyVerified,
-		&k.MenuWeeks)
+		&k.MenuWeeks, &k.NoRepeatWeeks)
 	return k, err
 }
 
@@ -347,7 +371,7 @@ func (s *Service) PublicKitchen(ctx context.Context, branchID uuid.UUID, lat, ln
 		&d.Description, &d.DescriptionAr, &d.Cuisines, &d.DietaryTags,
 		&d.CoverImageURL, &d.City, &d.Rating, &d.RatingCount, &d.Currency,
 		&d.MealSlots, &d.Plans, &d.FromPriceMinor, &d.RotationWeekPriceMinor, &d.FromMealPriceMinor, &d.FoodSafetyVerified,
-		&d.MenuWeeks, &d.DeliversHere)
+		&d.MenuWeeks, &d.NoRepeatWeeks, &d.DeliversHere)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PublicKitchenDetail{}, httpx.ErrNotFound
 	}

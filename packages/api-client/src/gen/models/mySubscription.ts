@@ -48,6 +48,10 @@ export interface MySubscription {
   currency: string;
   /** Set while the current cycle's billing order is unpaid; pay it with createPaymentIntent. */
   pending_order_id?: MySubscriptionPendingOrderId;
+  /** Wallet credit already applied to the current cycle (a guest week's paused-week credit). */
+  wallet_applied_minor?: number;
+  /** What the pending order collects, amount_minor less wallet_applied_minor. Show this on Pay. */
+  due_minor?: number;
   /** Set when this subscription is one week of a four-kitchen rotation. */
   rotation_id?: MySubscriptionRotationId;
   /**

@@ -56,8 +56,13 @@ export interface PublicKitchen {
   /** Up to four default dishes from this week's menu, photographed ones first. */
   week_dishes?: DishThumb[];
   /**
-   * Weeks the menu runs before a dish repeats on the same day ("No repeats for N weeks" above 1).
+   * Weeks the menu runs before it starts over; the kitchen page's week tabs follow it.
    * @minimum 1
    */
   menu_weeks?: number;
+  /**
+   * Weeks a customer goes without the same default dish on the same weekday and slot: menu_weeks when every week differs, smaller when a week was copied (1 when two adjacent weeks share a dish). The "No repeats for N weeks" badge shows this above 1.
+   * @minimum 1
+   */
+  no_repeat_weeks?: number;
 }
