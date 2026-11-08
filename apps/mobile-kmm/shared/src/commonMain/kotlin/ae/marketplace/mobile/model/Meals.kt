@@ -517,6 +517,7 @@ data class RotationWeek(
     @SerialName("ends_on") val endsOn: String,
     @SerialName("kitchen_name") val kitchenName: String,
     @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
+    @SerialName("plan_id") val planId: String = "",
     @SerialName("price_minor") val priceMinor: Long,
     @SerialName("subscription_id") val subscriptionId: String? = null,
     val status: String? = null,
