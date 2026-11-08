@@ -523,6 +523,8 @@ data class RotationWeek(
     /** This week's kitchen was changed once already. */
     val swapped: Boolean = false,
     @SerialName("swap_until") val swapUntil: String? = null,
+    /** Still owed on a swapped-in week; repeating the swap retries the payment. */
+    @SerialName("due_minor") val dueMinor: Long? = null,
 )
 
 @Serializable

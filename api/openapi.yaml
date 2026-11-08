@@ -7578,6 +7578,14 @@ components:
           description: The customer can still change this week's kitchen.
         swapped: { type: boolean, description: This week's kitchen was changed once already. }
         swap_until: { type: [string, "null"], format: date, description: Last day the kitchen can be changed. }
+        due_minor:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            What a swapped-in week still owes when its dearer kitchen's
+            difference was not collected. Repeating the swap with the same
+            plan_id retries the payment. Unpaid past the swap cutoff, the week
+            is voided and the money returned to the wallet.
     RotationQuote:
       type: object
       required: [start_date, end_date, weeks, amount_minor, currency]

@@ -2628,6 +2628,18 @@ private struct RotationWeekCard: View {
                         .font(.system(size: TypeScale.caption)).foregroundStyle(MP.textFaint)
                 }
             }
+            if let due = w.dueMinor?.int64Value, due > 0 {
+                PrimaryButton(
+                    label: String(format: NSLocalizedString("meals_pay_difference", comment: ""), money(due, currency)),
+                    enabled: !busy
+                ) {
+                    if busy { return }
+                    vm.payWeekDifference(week: w.week)
+                }
+                .padding(.top, Space.small)
+                Text(String(format: NSLocalizedString("meals_pay_difference_note", comment: ""), shortDate(w.swapUntil ?? w.startsOn)))
+                    .font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+            }
             if let id = w.subscriptionId {
                 Button { onOpen(id) } label: {
                     Text("meals_open_week").font(.system(size: TypeScale.secondary)).foregroundStyle(Warm.chilli)

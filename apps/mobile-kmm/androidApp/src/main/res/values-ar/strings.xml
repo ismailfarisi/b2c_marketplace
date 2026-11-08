@@ -681,6 +681,8 @@
     <string name="meals_change_kitchen">تغيير المطبخ</string>
     <string name="meals_kitchen_changed">تم تغيير المطبخ</string>
     <string name="meals_swap_until">يمكن التغيير حتى %1$s</string>
+    <string name="meals_pay_difference">ادفع الفرق · %1$s</string>
+    <string name="meals_pay_difference_note">يُحجز هذا المطبخ فقط بعد دفع الفرق، قبل %1$s. بعد ذلك يُلغى الأسبوع ويعود المال إلى محفظتك.</string>
     <string name="meals_pick_kitchen_title">تغيير مطبخ الأسبوع %1$d</string>
     <string name="meals_pick_kitchen_note">مطابخ توصل إلى عنوانك في أيامك ووجباتك وليست ضمن هذا التناوب بعد. يمكن تغيير مطبخ الأسبوع مرة واحدة.</string>
     <string name="meals_no_swap_options">لا يوجد مطبخ آخر يمكنه الطبخ لهذا الأسبوع حاليًا.</string>

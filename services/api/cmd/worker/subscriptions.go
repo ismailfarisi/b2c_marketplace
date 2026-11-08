@@ -145,6 +145,9 @@ func sendMealMessages(ctx context.Context, svc *subscriptions.Service) {
 	if _, err := svc.SendRecapNotices(ctx, time.Now(), 500); err != nil {
 		slog.ErrorContext(ctx, "recap notices failed", "error", err)
 	}
+	if _, err := svc.VoidUnpaidSwaps(ctx, time.Now(), 200); err != nil {
+		slog.ErrorContext(ctx, "unpaid swaps failed", "error", err)
+	}
 }
 
 // runDunning walks the retry schedule on unpaid cycles.

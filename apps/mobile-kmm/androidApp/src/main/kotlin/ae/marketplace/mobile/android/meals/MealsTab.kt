@@ -1986,6 +1986,20 @@ private fun RotationWeekCard(
             )
             w.swapUntil?.let { Text(stringResource(R.string.meals_swap_until, shortDate(it, arabic)), color = M.Faint, fontSize = Type.Caption) }
         }
+        val due = w.dueMinor ?: 0L
+        if (due > 0L) {
+            PrimaryButton(
+                stringResource(R.string.meals_pay_difference, money(due, currency)),
+                { if (!busy) vm.payWeekDifference(w.week) },
+                enabled = !busy,
+                modifier = Modifier.padding(top = Space.Small),
+            )
+            Text(
+                stringResource(R.string.meals_pay_difference_note, shortDate(w.swapUntil ?: w.startsOn, arabic)),
+                color = M.Muted,
+                fontSize = Type.Caption,
+            )
+        }
         w.subscriptionId?.let { id ->
             Text(
                 stringResource(R.string.meals_open_week),

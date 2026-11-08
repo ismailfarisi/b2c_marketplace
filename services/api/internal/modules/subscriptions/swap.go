@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -547,4 +549,96 @@ func markSwappable(r *Rotation, now time.Time) {
 		}
 		w.Swappable = !w.Swapped && swapOpen(r.Status, status, start, loc, now) == nil
 	}
+}
+
+// VoidUnpaidSwaps clears swapped-in weeks whose dearer kitchen's difference
+// was never paid once the swap cutoff for that week has passed in the
+// kitchen's time zone. Until then the customer can still pay (repeating the
+// swap retries the payment); after it, the new kitchen would have to shop for
+// a week nobody confirmed. The replacement subscription is cancelled the way
+// any unpaid one is, which voids its order and returns the wallet money
+// applied to it, so the week's whole price is back in the wallet (the old
+// week's share went there when the swap cancelled it). The rotation's total
+// drops by the week, and the customer is told why the week is empty.
+func (s *Service) VoidUnpaidSwaps(ctx context.Context, now time.Time, batch int) (int, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT sw.id, sw.rotation_id, sw.rotation_week, sw.new_subscription_id, sw.new_amount_minor,
+		       sw.currency, s.user_id, s.start_date, s.timezone, b.name, b.name_ar
+		  FROM meal_rotation_swaps sw
+		  JOIN subscriptions s ON s.id = sw.new_subscription_id
+		  JOIN vendor_branches b ON b.id = s.branch_id
+		 WHERE sw.voided_at IS NULL AND s.status = 'pending_payment'
+		 ORDER BY s.start_date
+		 LIMIT $1`, batch)
+	if err != nil {
+		return 0, fmt.Errorf("subscriptions: unpaid swaps: %w", err)
+	}
+	type cand struct {
+		id, rotationID, subID, userID uuid.UUID
+		week                          int
+		amount                        int64
+		currency, tz, name            string
+		nameAr                        *string
+		start                         time.Time
+	}
+	var cands []cand
+	for rows.Next() {
+		var c cand
+		if err := rows.Scan(&c.id, &c.rotationID, &c.week, &c.subID, &c.amount, &c.currency,
+			&c.userID, &c.start, &c.tz, &c.name, &c.nameAr); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("subscriptions: scan unpaid swap: %w", err)
+		}
+		cands = append(cands, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	voided := 0
+	for _, c := range cands {
+		loc, err := time.LoadLocation(c.tz)
+		if err != nil {
+			loc = time.UTC
+		}
+		start := time.Date(c.start.Year(), c.start.Month(), c.start.Day(), 0, 0, 0, 0, loc)
+		if !dayIn(now, loc).After(swapUntil(start)) {
+			continue
+		}
+		err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+			tag, err := tx.Exec(ctx, `
+				UPDATE meal_rotation_swaps SET voided_at = now()
+				 WHERE id = $1 AND voided_at IS NULL`, c.id)
+			if err != nil {
+				return fmt.Errorf("subscriptions: void swap: %w", err)
+			}
+			if tag.RowsAffected() == 0 {
+				return nil
+			}
+			if err := s.cancelInTx(ctx, tx, c.subID, uuid.NullUUID{}, "system", uuid.Nil,
+				"kitchen change not paid for", ""); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE meal_rotations SET amount_minor = greatest(amount_minor - $2, 0), updated_at = now()
+				 WHERE id = $1`, c.rotationID, c.amount); err != nil {
+				return fmt.Errorf("subscriptions: swap total: %w", err)
+			}
+			nameAr := c.name
+			if c.nameAr != nil && *c.nameAr != "" {
+				nameAr = *c.nameAr
+			}
+			return s.notifyOn(ctx, tx, c.userID, "meals.swap_unpaid", []string{"push"}, map[string]string{
+				"week": strconv.Itoa(c.week), "kitchen": c.name, "kitchen_ar": nameAr,
+				"amount": formatAmount(c.amount, c.currency),
+				"link":   "/en/rotations/" + c.rotationID.String(),
+			}, "meals-swap-unpaid:"+c.id.String())
+		})
+		if err != nil {
+			slog.ErrorContext(ctx, "void unpaid swap failed", "swap_id", c.id, "error", err)
+			continue
+		}
+		voided++
+	}
+	return voided, nil
 }

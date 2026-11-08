@@ -34,6 +34,7 @@ import {
   swapRotationWeek,
   type Rotation,
   type RotationSwapOption,
+  type RotationWeek,
 } from "@/lib/customer-api";
 
 const COPY = {
@@ -96,6 +97,9 @@ const COPY = {
     swapConfirm: (k: string) => `Change this week's kitchen to ${k}? This can't be undone.`,
     swapFailed: "Could not change the kitchen. Try again.",
     swapPaid: "Kitchen changed. Finish the payment to confirm the week.",
+    payDifference: (m: string) => `Pay the difference · ${m}`,
+    payDifferenceNote: (d: string) =>
+      `This kitchen is only booked once the difference is paid, by ${d}. After that the week is cleared and the money goes back to your wallet.`,
     close: "Close",
   },
   ar: {
@@ -157,6 +161,9 @@ const COPY = {
     swapConfirm: (k: string) => `تغيير مطبخ هذا الأسبوع إلى ${k}؟ لا يمكن التراجع عن ذلك.`,
     swapFailed: "تعذر تغيير المطبخ. حاول مرة أخرى.",
     swapPaid: "تم تغيير المطبخ. أكمل الدفع لتأكيد الأسبوع.",
+    payDifference: (m: string) => `ادفع الفرق · ${m}`,
+    payDifferenceNote: (d: string) =>
+      `يُحجز هذا المطبخ فقط بعد دفع الفرق، قبل ${d}. بعد ذلك يُلغى الأسبوع ويعود المال إلى محفظتك.`,
     close: "إغلاق",
   },
 };
@@ -236,6 +243,22 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
   const money = (n: number) =>
     formatMoney({ amount: n, currency: r.currency }, locale);
   const [picking, setPicking] = useState<number | null>(null);
+  // A dearer swap whose difference was never collected: repeating the swap
+  // with the same kitchen gives back the same order and a fresh payment.
+  const payDiffKey = useIdempotencyKey();
+  const payDiff = useMutation({
+    mutationFn: (w: RotationWeek) =>
+      swapRotationWeek(r.id, w.week, w.plan_id, { headers: payDiffKey.headers() }),
+    onSuccess: async (res) => {
+      payDiffKey.reset();
+      const redirect = res.payment?.redirect_url;
+      if (redirect) {
+        window.location.assign(redirect);
+        return;
+      }
+      await refresh();
+    },
+  });
 
   return (
     <div className="ms-detail">
@@ -314,6 +337,32 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
                   </button>
                 )}
                 {w.swapped && <span className="ms-sub">{t.kitchenChanged}</span>}
+                {!!w.due_minor && w.due_minor > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      className="ms-cta"
+                      disabled={payDiff.isPending}
+                      onClick={() => {
+                        if (!payDiff.isPending) payDiff.mutate(w);
+                      }}
+                    >
+                      {payDiff.isPending && payDiff.variables?.week === w.week
+                        ? t.paying
+                        : t.payDifference(money(w.due_minor))}
+                    </button>
+                    <span className="ms-sub">
+                      {t.payDifferenceNote(
+                        formatDay(locale, w.swap_until ?? w.starts_on),
+                      )}
+                    </span>
+                    {payDiff.isError && payDiff.variables?.week === w.week && (
+                      <span className="ms-bad" role="alert">
+                        {rotationProblem(payDiff.error, locale, t.payFailed)}
+                      </span>
+                    )}
+                  </>
+                )}
               </span>
             </li>
           ))}

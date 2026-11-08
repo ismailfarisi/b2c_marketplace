@@ -433,6 +433,8 @@ export interface RotationWeek {
   swappable?: boolean;
   swapped?: boolean;
   swap_until?: string | null;
+  /** Still owed on a swapped-in week; repeating the swap retries the payment. */
+  due_minor?: number | null;
 }
 
 export interface RotationQuote {

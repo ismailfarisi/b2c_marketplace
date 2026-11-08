@@ -955,7 +955,7 @@ func (s *Service) cancelInTx(ctx context.Context, tx pgx.Tx, subID uuid.UUID, ow
 		}
 
 		return s.repo.RecordEvent(ctx, tx, subID, "cancelled", live.Status, "cancelled",
-			actorType, uuid.NullUUID{UUID: actorID, Valid: true},
+			actorType, uuid.NullUUID{UUID: actorID, Valid: actorID != uuid.Nil},
 			mustJSON(map[string]any{"reason": reason}))
 	}
 }

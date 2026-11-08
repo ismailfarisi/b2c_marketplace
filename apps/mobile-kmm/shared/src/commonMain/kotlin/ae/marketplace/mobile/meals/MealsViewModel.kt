@@ -1358,6 +1358,22 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         }
     }
 
+    /**
+     * Retries the payment for a swapped-in week whose dearer kitchen's
+     * difference was not collected: the same swap again returns the same
+     * order and a fresh provider page. Nothing to do once it is paid.
+     */
+    fun payWeekDifference(week: Int) {
+        val s = _rotationDetail.value
+        val id = s.id ?: return
+        val w = s.rotation?.weeks?.firstOrNull { it.week == week } ?: return
+        if ((w.dueMinor ?: 0L) <= 0L) return
+        rotationDetailAction(id) {
+            val res = api.swapRotationWeek(id, week, w.planId, newIdempotencyKey())
+            _rotationDetail.update { it.copy(rotation = res.rotation, paymentUrl = res.payment?.redirectUrl) }
+        }
+    }
+
     /** Cancels the open rotation; My meals reloads so its card agrees. */
     fun cancelOpenRotation(reasonCode: String?, note: String) {
         val id = _rotationDetail.value.id ?: return

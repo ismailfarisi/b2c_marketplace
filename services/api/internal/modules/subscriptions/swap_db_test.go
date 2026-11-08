@@ -554,3 +554,72 @@ func TestSwapWeekKeepsNeighbouringRotationsApart(t *testing.T) {
 		t.Fatalf("%d swap records after refusals, want 0", n)
 	}
 }
+
+// A dearer swap nobody paid for is cleared by the worker once the week's swap
+// cutoff passes: the replacement week is cancelled, the whole week's money is
+// back in the wallet, the rotation total drops by the week and the customer is
+// told. Before the cutoff the week is left alone, so the payment can still be
+// retried.
+func TestVoidUnpaidSwapsClearsTheWeekAfterTheCutoff(t *testing.T) {
+	f := newSwapFixture(t, 7)
+	ctx := context.Background()
+	notes := &recordingNotifier{}
+	f.svc.notifier = notes
+	before := f.week(t, 3)
+
+	res, err := f.svc.SwapRotationWeek(ctx, f.userID, f.rotation.ID, 3, f.plans[swapDearer])
+	if err != nil {
+		t.Fatalf("swap: %v", err)
+	}
+	after := f.week(t, 3)
+	total := f.total(t)
+
+	// Still inside the swap window: nothing happens.
+	if n, err := f.svc.VoidUnpaidSwaps(ctx, time.Now(), 100); err != nil || n != 0 {
+		t.Fatalf("void before cutoff: %d, %v; want 0, nil", n, err)
+	}
+	if s := f.subStatus(t, *after.SubscriptionID); s != "pending_payment" {
+		t.Fatalf("new week %s before the cutoff, want pending_payment", s)
+	}
+
+	// The day after the cutoff in the kitchen's zone.
+	start, _ := time.Parse("2006-01-02", after.StartsOn)
+	later := start.AddDate(0, 0, -SwapCutoffDays+1).Add(12 * time.Hour)
+	// Other tests' unpaid swaps may be swept along; ours has to be among them.
+	n, err := f.svc.VoidUnpaidSwaps(ctx, later, 100)
+	if err != nil || n < 1 {
+		t.Fatalf("void after cutoff: %d, %v; want at least 1, nil", n, err)
+	}
+	if s := f.subStatus(t, *after.SubscriptionID); s != "cancelled" {
+		t.Fatalf("new week %s after the cutoff, want cancelled", s)
+	}
+	if got := f.total(t); got != total-f.prices[swapDearer] {
+		t.Fatalf("rotation total %d, want %d", got, total-f.prices[swapDearer])
+	}
+	// The old week's credit was applied to the new week and comes back whole.
+	if bal := f.wallet(t); bal != before.PriceMinor {
+		t.Fatalf("wallet %d, want the week's price %d back", bal, before.PriceMinor)
+	}
+	var status string
+	if err := f.pool.QueryRow(ctx, `SELECT status FROM orders WHERE id = $1`, res.OrderID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "cancelled" {
+		t.Fatalf("order %s, want cancelled", status)
+	}
+	sent := notes.forUser(f.userID, "meals.swap_unpaid")
+	if len(sent) != 1 || sent[0].params["week"] != "3" {
+		t.Fatalf("notices %+v, want one for week 3", sent)
+	}
+	// Idempotent: a second sweep leaves it alone.
+	if _, err := f.svc.VoidUnpaidSwaps(ctx, later, 100); err != nil {
+		t.Fatalf("second sweep: %v", err)
+	}
+	if n := f.count(t, `SELECT count(*) FROM subscription_events WHERE subscription_id = $1 AND event_type = 'cancelled'`,
+		*after.SubscriptionID); n != 1 {
+		t.Fatalf("%d cancellation events, want 1", n)
+	}
+	if w := f.week(t, 3); w.DueMinor != nil || w.Swappable {
+		t.Fatalf("voided week still shows due=%v swappable=%v", w.DueMinor, w.Swappable)
+	}
+}

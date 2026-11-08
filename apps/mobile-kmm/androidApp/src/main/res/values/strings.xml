@@ -743,6 +743,8 @@
     <string name="meals_change_kitchen">Change kitchen</string>
     <string name="meals_kitchen_changed">Kitchen changed</string>
     <string name="meals_swap_until">Can be changed until %1$s</string>
+    <string name="meals_pay_difference">Pay the difference · %1$s</string>
+    <string name="meals_pay_difference_note">This kitchen is only booked once the difference is paid, by %1$s. After that the week is cleared and the money goes back to your wallet.</string>
     <string name="meals_pick_kitchen_title">Change the kitchen for week %1$d</string>
     <string name="meals_pick_kitchen_note">Kitchens that deliver to your address on your days and meals, and aren\'t already in this rotation. A week\'s kitchen can be changed once.</string>
     <string name="meals_no_swap_options">No other kitchen can cook this week right now.</string>
