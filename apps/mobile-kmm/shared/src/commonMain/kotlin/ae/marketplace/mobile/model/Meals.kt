@@ -1,5 +1,9 @@
 package ae.marketplace.mobile.model
 
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.math.roundToInt
@@ -548,6 +552,16 @@ data class Rotation(
 
     /** Paid and ran (or running), not renewed yet: what POST rotations/{id}/renew accepts. */
     val renewable: Boolean get() = renewedById == null && (status == "active" || status == "completed")
+
+    /**
+     * When the renew button is worth showing: renewable and in the month's last
+     * two weeks (or over). Earlier the card has nothing to decide yet.
+     */
+    fun renewalNear(today: LocalDate): Boolean =
+        renewable && LocalDate.parse(endDate).toEpochDays() - today.toEpochDays() < 14
+
+    /** Swift has no default arguments: today in Dubai, where delivery days are counted. */
+    fun renewalNear(): Boolean = renewalNear(Clock.System.todayIn(TimeZone.of("Asia/Dubai")))
 }
 
 @Serializable

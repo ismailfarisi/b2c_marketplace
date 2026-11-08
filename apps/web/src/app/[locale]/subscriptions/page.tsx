@@ -66,6 +66,12 @@ const COPY = {
   },
 };
 
+/** True in the rotation's last two weeks (and after), when renewing makes sense. */
+function renewalNear(endDate: string): boolean {
+  const end = new Date(`${endDate}T00:00:00`);
+  return end.getTime() - Date.now() < 14 * 86_400_000;
+}
+
 export default function MySubscriptionsPage({
   params,
 }: {
@@ -161,20 +167,20 @@ export default function MySubscriptionsPage({
                     );
                   })}
                 </ol>
-                {!r.renewed_by_id &&
-                  (r.status === "active" || r.status === "completed") && (
+                {(() => {
+                  const recap = recapFor(r.id);
+                  if (recap) return <RecapCard locale={locale} recap={recap} />;
+                  // Without a recap (its CTA renews), one quiet renew link,
+                  // and only once the month is in its last two weeks.
+                  return !r.renewed_by_id &&
+                    (r.status === "active" || r.status === "completed") &&
+                    renewalNear(r.end_date) ? (
                     <Link
                       className="ms-cta ms-cta-quiet ms-rot-renew"
                       href={`/${locale}/rotations/${r.id}/renew`}
                     >
                       {t.renewFresh}
                     </Link>
-                  )}
-
-                {(() => {
-                  const recap = recapFor(r.id);
-                  return recap ? (
-                    <RecapCard locale={locale} recap={recap} />
                   ) : null;
                 })()}
               </li>

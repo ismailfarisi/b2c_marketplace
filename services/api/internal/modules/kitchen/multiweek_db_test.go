@@ -31,6 +31,9 @@ func TestMultiWeekMenuServesWeekTwo(t *testing.T) {
 	n := rand.IntN(100_000_000)
 	vendorID, branchID := uuid.New(), uuid.New()
 	week1, week2 := uuid.New(), uuid.New()
+	// Discover caps its list, so on a database full of other kitchens this
+	// one is found by name.
+	kitchenName := fmt.Sprintf("Multiweek %d", n)
 	// Anchor the cycle on last week's Sunday, so this week is week 2.
 	var thisSunday time.Time
 	if err := pool.QueryRow(ctx, `
@@ -45,9 +48,9 @@ func TestMultiWeekMenuServesWeekTwo(t *testing.T) {
 	}{
 		{`INSERT INTO vendors (id, slug, legal_name, trade_name, status) VALUES ($1, $2, 'T LLC', 'T', 'active')`,
 			[]any{vendorID, fmt.Sprintf("multiweek-%d", n)}},
-		{`INSERT INTO vendor_branches (id, vendor_id, name, timezone, point) VALUES ($1, $2, 'T', 'Asia/Dubai',
+		{`INSERT INTO vendor_branches (id, vendor_id, name, timezone, point) VALUES ($1, $2, $3, 'Asia/Dubai',
 			ST_SetSRID(ST_MakePoint(55.23, 25.14), 4326)::geography)`,
-			[]any{branchID, vendorID}},
+			[]any{branchID, vendorID, kitchenName}},
 		{`INSERT INTO subscription_plans (branch_id, service_type, name, cycle_days, days_per_week,
 			cutoff_hours, price_minor, delivery_weekdays, meal_slots)
 			VALUES ($1, $2, 'T plan', 7, 5, 12, 70000, '{0,1,2,3,4}', '{lunch}')`,
@@ -86,7 +89,7 @@ func TestMultiWeekMenuServesWeekTwo(t *testing.T) {
 	s := NewService(pool)
 	dishOn := func(day time.Time) string {
 		t.Helper()
-		ds, err := s.DishesOn(ctx, DiscoverFilter{}, day)
+		ds, err := s.DishesOn(ctx, DiscoverFilter{Query: kitchenName}, day)
 		if err != nil {
 			t.Fatal(err)
 		}

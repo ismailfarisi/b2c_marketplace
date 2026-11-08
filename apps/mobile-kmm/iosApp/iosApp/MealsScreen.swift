@@ -2236,7 +2236,8 @@ private struct RotationCard: View {
                 .disabled(busy)
                 .padding(.vertical, Space.small)
             }
-            if r.renewable {
+            // A recap carries its own renew CTA; otherwise one button, near the end of the month.
+            if recap == nil && r.renewalNear() {
                 PrimaryButton(label: NSLocalizedString("meals_renew_fresh", comment: ""), enabled: !busy) { onRenew(r.id) }
                     .padding(.top, Space.small)
                 Button { vm.renewRotation(id: r.id) } label: {
@@ -2708,6 +2709,7 @@ private struct SubscriptionPage: View {
     @State private var current: SubscriptionUiState?
     private var s: SubscriptionUiState { current ?? vm.sub.value }
     @State private var confirming = false
+    @State private var scrollToSaveControls = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2731,7 +2733,8 @@ private struct SubscriptionPage: View {
                     onRotationBuilder: { confirming = false; onRotation() },
                     onChangeWeek: { confirming = false },
                     onCancel: { code, note in confirming = false; vm.cancel(reasonCode: code, note: note) },
-                    onClose: { confirming = false }
+                    onClose: { confirming = false },
+                    onSaveControls: { confirming = false; scrollToSaveControls = true }
                 )
             }
         }
@@ -2744,6 +2747,7 @@ private struct SubscriptionPage: View {
     }
 
     private func content(_ sub: MySubscription) -> some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 CardBox {
@@ -2796,6 +2800,7 @@ private struct SubscriptionPage: View {
                 }
                 if sub.rotationId == nil {
                     GuestWeekCard(sub: sub, state: s, vm: vm, onOpen: onOpen, onRotation: onRotation)
+                        .id("save-controls")
                 }
                 if sub.rotationId == nil && sub.status == "active" && sub.pauseAllowanceDays > 0 {
                     PauseCard(sub: sub, busy: s.busy, vm: vm)
@@ -2809,6 +2814,13 @@ private struct SubscriptionPage: View {
                 }
                 Color.clear.frame(height: navBarHeight + Space.xl)
             }
+        }
+        .onChange(of: scrollToSaveControls) { go in
+            if go {
+                withAnimation { proxy.scrollTo("save-controls", anchor: .top) }
+                scrollToSaveControls = false
+            }
+        }
         }
     }
 }
@@ -3221,8 +3233,11 @@ private struct CancelReasonsSheet: View {
     let canGuestWeek: Bool
     let onRotationBuilder: () -> Void
     let onChangeWeek: () -> Void
-    let onCancel: (String, String) -> Void
+    let onCancel: (String?, String) -> Void
     let onClose: () -> Void
+    /// Save offers point at the pause / guest-week cards on the page behind
+    /// the sheet; the page scrolls to them when this is set.
+    var onSaveControls: () -> Void = {}
 
     @State private var code: String?
     @State private var note = ""
@@ -3249,14 +3264,15 @@ private struct CancelReasonsSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(MP.line, lineWidth: 1))
                     saveOption(c)
                 }
-                Button { if let c = code { onCancel(c, note) } } label: {
+                // The reason is optional: nobody is kept subscribed for not saying why.
+                Button { onCancel(code, note) } label: {
                     Text(title)
                         .font(.system(size: TypeScale.body, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(code == nil || busy ? MP.bad.opacity(0.35) : MP.bad, in: RoundedRectangle(cornerRadius: 12))
+                        .background(busy ? MP.bad.opacity(0.35) : MP.bad, in: RoundedRectangle(cornerRadius: 12))
                 }
-                .disabled(code == nil || busy)
+                .disabled(busy)
                 SecondaryButton(label: NSLocalizedString("meals_keep", comment: ""), action: onClose)
             }
             .padding(Space.edge)
@@ -3293,7 +3309,7 @@ private struct CancelReasonsSheet: View {
     private var pause: some View {
         if canPause {
             Text("meals_save_pause").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
-            SecondaryButton(label: NSLocalizedString("meals_save_pause_btn", comment: ""), action: onClose)
+            SecondaryButton(label: NSLocalizedString("meals_save_pause_btn", comment: ""), action: onSaveControls)
         }
     }
 
@@ -3309,7 +3325,7 @@ private struct CancelReasonsSheet: View {
                     } else {
                         Text("meals_save_bored_single").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.text)
                         if canGuestWeek {
-                            SecondaryButton(label: NSLocalizedString("meals_save_guest_week", comment: ""), action: onClose)
+                            SecondaryButton(label: NSLocalizedString("meals_save_guest_week", comment: ""), action: onSaveControls)
                         }
                         SecondaryButton(label: NSLocalizedString("meals_save_rotation", comment: ""), action: onRotationBuilder)
                     }

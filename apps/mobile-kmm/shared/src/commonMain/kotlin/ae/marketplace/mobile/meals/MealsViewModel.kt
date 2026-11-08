@@ -1144,7 +1144,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     fun cancel() = act { api.cancel(it, "customer_request") }
 
     /** Cancel with one of CancelReasons and an optional note. */
-    fun cancel(reasonCode: String, note: String) = act { api.cancel(it, reasonCode, note.trim(), newIdempotencyKey()) }
+    fun cancel(reasonCode: String?, note: String) = act { api.cancel(it, reasonCode, note.trim(), newIdempotencyKey()) }
 
     /** "Try a different kitchen next week": one of the offer's options. */
     fun startGuestWeek(planId: String) = act { id ->
@@ -1249,7 +1249,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         rotationAction(id, onFailure = { setLocalRefresh(id, !on) }) { api.setRotationRefresh(id, on) }
     }
 
-    fun cancelRotation(id: String, reasonCode: String, note: String) =
+    fun cancelRotation(id: String, reasonCode: String?, note: String) =
         rotationAction(id) { api.cancelRotation(id, reasonCode, note.trim(), newIdempotencyKey()) }
 
     fun loadRotationCheaperPlans(id: String) {

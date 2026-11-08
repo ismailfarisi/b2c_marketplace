@@ -1540,7 +1540,8 @@ private fun RotationCard(
                 )
             }
         }
-        if (r.renewable) {
+        // A recap carries its own renew CTA; otherwise one button, near the end of the month.
+        if (recap == null && r.renewalNear()) {
             PrimaryButton(stringResource(R.string.meals_renew_fresh), { onRenew(r.id) }, enabled = !busy, modifier = Modifier.padding(top = Space.Small))
             Text(
                 stringResource(R.string.meals_renew_rotation),
@@ -1762,13 +1763,20 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
     val arabic = rememberArabic()
     LaunchedEffect(s.paymentUrl) { s.paymentUrl?.let(openPayment) }
     val sub = s.subscription
+    val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // The save offers in the cancel sheet point at the pause and guest-week
+    // cards, which sit at the end of this page: bring them into view.
+    val showSaveControls: () -> Unit = {
+        scope.launch { list.animateScrollToItem((list.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+    }
     Column(Modifier.fillMaxSize()) {
         TopBar(sub?.let { pick(it.kitchenName, it.kitchenNameAr, arabic) } ?: "", onBack)
         val failure = s.error
         when {
             sub == null && failure != null -> FailureBlock(failure, onRetry = vm::retryOpen)
             sub == null -> LoadingBlock()
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> LazyColumn(Modifier.fillMaxSize(), state = list) {
                 item {
                     Card {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1831,8 +1839,8 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                             cheaperLoading = s.cheaperLoading,
                             cheaperError = s.cheaperError,
                             onLoadCheaper = vm::loadCheaperPlans,
-                            onPause = { confirming = false },
-                            onGuestWeek = { confirming = false },
+                            onPause = { confirming = false; showSaveControls() },
+                            onGuestWeek = { confirming = false; showSaveControls() },
                             onRotationBuilder = { confirming = false; onRotation() },
                             onChangeWeek = { confirming = false },
                             onCancel = { code, note -> confirming = false; vm.cancel(code, note) },

@@ -81,7 +81,7 @@ internal fun CancelReasonsDialog(
     onGuestWeek: () -> Unit,
     onRotationBuilder: () -> Unit,
     onChangeWeek: () -> Unit,
-    onCancel: (code: String, note: String) -> Unit,
+    onCancel: (code: String?, note: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var code by remember { mutableStateOf<String?>(null) }
@@ -139,10 +139,11 @@ internal fun CancelReasonsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { code?.let { onCancel(it, note) } }, enabled = code != null && !busy) {
+            // The reason is optional: nobody is kept subscribed for not saying why.
+            TextButton(onClick = { onCancel(code, note) }, enabled = !busy) {
                 Text(
                     stringResource(if (rotation) R.string.meals_cancel_rotation else R.string.meals_cancel),
-                    color = if (code != null && !busy) Palette.Bad else M.Faint,
+                    color = if (!busy) Palette.Bad else M.Faint,
                 )
             }
         },

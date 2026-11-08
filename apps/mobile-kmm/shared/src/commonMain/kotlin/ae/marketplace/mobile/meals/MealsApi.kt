@@ -147,10 +147,10 @@ class MealsApi(private val client: HttpClient) {
     }
 
     /** Cancel with a structured reason (CancelReasons) and an optional note. */
-    suspend fun cancel(id: String, reasonCode: String, note: String, idempotencyKey: String) {
+    suspend fun cancel(id: String, reasonCode: String?, note: String, idempotencyKey: String) {
         client.post("subscriptions/$id/cancel") {
             header("Idempotency-Key", idempotencyKey)
-            json(ReasonBody(reason = note, reasonCode = reasonCode))
+            json(ReasonBody(reason = note, reasonCode = reasonCode?.takeIf { it.isNotBlank() }))
         }
     }
 
@@ -251,10 +251,10 @@ class MealsApi(private val client: HttpClient) {
             json(PlanBody(planId))
         }.body()
 
-    suspend fun cancelRotation(id: String, reasonCode: String, note: String, idempotencyKey: String) {
+    suspend fun cancelRotation(id: String, reasonCode: String?, note: String, idempotencyKey: String) {
         client.post("rotations/$id/cancel") {
             header("Idempotency-Key", idempotencyKey)
-            json(ReasonBody(reason = note, reasonCode = reasonCode))
+            json(ReasonBody(reason = note, reasonCode = reasonCode?.takeIf { it.isNotBlank() }))
         }
     }
 
