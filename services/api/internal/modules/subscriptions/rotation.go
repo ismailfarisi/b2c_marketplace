@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +31,9 @@ type RotationInput struct {
 	Promo     promo.Ref
 	// RefreshOnRenew: renewals take the proposal's fresh kitchens.
 	RefreshOnRenew bool
+	// ContinuesRotation: a renewal or swap whose start date the previous
+	// rotation fixed, so the kitchens' order cutoff is not re-checked.
+	ContinuesRotation bool
 }
 
 // RotationWeek is one week of a rotation and the kitchen the platform gave it.
@@ -105,6 +109,34 @@ func rotationInvalid(field, code, msg string) error {
 	return &httpx.ValidationError{Fields: []httpx.FieldError{{Field: field, Code: code, Message: msg}}}
 }
 
+// validateSchedule rejects weekdays outside Sunday(0)..Saturday(6), blank meal
+// slots and repeats, so a bad schedule gets a field error instead of an empty
+// menu or a 500 from the week builder.
+func validateSchedule(weekdays []int, slots []string) error {
+	seenDays := map[int]bool{}
+	for _, d := range weekdays {
+		if d < 0 || d > 6 {
+			return rotationInvalid("delivery_weekdays", "invalid_weekday",
+				"weekdays run from 0 (Sunday) to 6 (Saturday)")
+		}
+		if seenDays[d] {
+			return rotationInvalid("delivery_weekdays", "duplicate", "each weekday once")
+		}
+		seenDays[d] = true
+	}
+	seenSlots := map[string]bool{}
+	for _, slot := range slots {
+		if strings.TrimSpace(slot) == "" {
+			return rotationInvalid("meal_slots", "empty_slot", "meal slots cannot be blank")
+		}
+		if seenSlots[slot] {
+			return rotationInvalid("meal_slots", "duplicate", "each meal once")
+		}
+		seenSlots[slot] = true
+	}
+	return nil
+}
+
 // prepareRotation loads and checks the four plans: each in the rotation, four
 // different kitchens, every one able to cook the chosen days and meals, and
 // every one delivering to the address.
@@ -116,6 +148,9 @@ func (s *Service) prepareRotation(ctx context.Context, tx pgx.Tx, in RotationInp
 	if len(in.Weekdays) == 0 || len(in.Slots) == 0 {
 		return nil, time.Time{}, nil, rotationInvalid("schedule", "required",
 			"choose the delivery days and meals")
+	}
+	if err := validateSchedule(in.Weekdays, in.Slots); err != nil {
+		return nil, time.Time{}, nil, err
 	}
 
 	plans := make([]rotationPlan, 0, RotationKitchens)
@@ -159,6 +194,20 @@ func (s *Service) prepareRotation(ctx context.Context, tx pgx.Tx, in RotationInp
 	if start.Before(dayIn(time.Now(), loc)) {
 		return nil, time.Time{}, nil, rotationInvalid("start_date", "in_the_past",
 			"a rotation cannot start before today")
+	}
+	// Every kitchen must still be able to take week 1's first order, so the
+	// longest cutoff among the four decides the earliest start. Renewals and
+	// swaps start on a date the previous rotation already fixed.
+	if !in.ContinuesRotation {
+		cutoff := 0
+		for _, p := range plans {
+			cutoff = max(cutoff, p.CutoffHours)
+		}
+		if earliest := EarliestStart(cutoff, loc, time.Now()); start.Before(earliest) {
+			return nil, time.Time{}, nil, rotationInvalid("start_date", "too_soon",
+				"the first delivery must be on or after "+earliest.Format("2006-01-02")+
+					", a kitchen's cutoff for earlier days has passed")
+		}
 	}
 
 	for i := range plans {

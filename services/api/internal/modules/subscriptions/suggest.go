@@ -105,6 +105,9 @@ func (c suggestCandidate) serves(weekdays []int, slots []string) bool {
 // SuggestRotation picks four eligible, well-rated kitchens delivering to the
 // address with the most cuisine variety in one price band, and quotes them.
 func (s *Service) SuggestRotation(ctx context.Context, in SuggestInput) (RotationSuggestion, error) {
+	if err := validateSchedule(in.Weekdays, in.Slots); err != nil {
+		return RotationSuggestion{}, err
+	}
 	cands, err := s.suggestCandidates(ctx, in.UserID, in.AddressID)
 	if err != nil {
 		return RotationSuggestion{}, err

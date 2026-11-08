@@ -706,7 +706,9 @@
     <string name="meals_variety_advisory">هذه مجرد نصيحة، ويمكنك بدء التناوب بأي أربعة مطابخ.</string>
     <string name="meals_variety_same_cuisine">%1$d من مطابخك تقدّم أكلات %2$s.</string>
     <string name="meals_variety_repeated_dish">%1$s يوم %2$s يأتي من %3$d مطابخ.</string>
+    <string name="meals_variety_repeated_dish_two">%1$s يوم %2$s يأتي من مطبخين.</string>
     <string name="meals_variety_across_weeks">%1$s يتكرر في %2$d من أسابيعك.</string>
+    <string name="meals_variety_across_weeks_two">%1$s يتكرر في أسبوعين من أسابيعك.</string>
     <string name="meals_balanced">اختر لي تناوبًا متوازنًا</string>
     <string name="meals_balancing">نبحث عن أربعة مطابخ مختلفة…</string>
     <string name="meals_balanced_none">لا توجد مطابخ تناوب كافية قرب هذا العنوان لاختيار متوازن بعد. اختر مطابخك الأربعة بنفسك.</string>

@@ -483,6 +483,7 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 	in := RotationInput{
 		UserID: userID, AddressID: addressID, PlanIDs: plans, StartDate: start,
 		Weekdays: r.Weekdays, Slots: r.MealSlots, RefreshOnRenew: r.RefreshOnRenew,
+		ContinuesRotation: true,
 	}
 	if replacing != nil {
 		// The edited kitchens must be good before the renewal they replace

@@ -1400,8 +1400,12 @@ private fun VarietyCard(v: RotationVariety, arabic: Boolean) {
                         R.string.meals_variety_same_cuisine, w.kitchens,
                         w.cuisines.joinToString(if (arabic) " و" else " and ") { MealTags.label(it, arabic) },
                     )
-                    "repeated_dish" -> stringResource(R.string.meals_variety_repeated_dish, dish, weekday(w.weekday ?: 0, arabic), w.kitchens)
-                    else -> stringResource(R.string.meals_variety_across_weeks, dish, w.kitchens)
+                    "repeated_dish" ->
+                        if (w.kitchens == 2) stringResource(R.string.meals_variety_repeated_dish_two, dish, weekday(w.weekday ?: 0, arabic))
+                        else stringResource(R.string.meals_variety_repeated_dish, dish, weekday(w.weekday ?: 0, arabic), w.kitchens)
+                    else ->
+                        if (w.kitchens == 2) stringResource(R.string.meals_variety_across_weeks_two, dish)
+                        else stringResource(R.string.meals_variety_across_weeks, dish, w.kitchens)
                 },
                 color = M.Ink,
                 fontSize = Type.Secondary,

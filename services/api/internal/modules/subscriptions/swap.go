@@ -349,7 +349,7 @@ func (s *Service) SwapRotationWeek(ctx context.Context, userID, rotationID uuid.
 			return rotationInvalid("plan_id", "same_kitchen", "choose a different kitchen for this week")
 		}
 		in := RotationInput{UserID: userID, AddressID: t.addressID, PlanIDs: []uuid.UUID{planID},
-			StartDate: t.target.start, Weekdays: t.weekdays, Slots: t.slots}
+			StartDate: t.target.start, Weekdays: t.weekdays, Slots: t.slots, ContinuesRotation: true}
 		for _, o := range t.others {
 			in.PlanIDs = append(in.PlanIDs, o.planID)
 		}

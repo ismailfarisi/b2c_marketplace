@@ -83,6 +83,10 @@ func newSwapFixture(t *testing.T, startIn int) swapFixture {
 
 	loc, _ := time.LoadLocation("Asia/Dubai")
 	start := dayIn(time.Now(), loc).AddDate(0, 0, startIn)
+	// Never before the kitchens' 12-hour cutoff allows, whatever the clock says.
+	if earliest := EarliestStart(12, loc, time.Now()); start.Before(earliest) {
+		start = earliest
+	}
 	r, err := f.svc.CreateRotation(ctx, RotationInput{
 		UserID: f.userID, AddressID: f.addressID, PlanIDs: f.plans[:RotationKitchens],
 		StartDate: start, Weekdays: []int{0, 1, 2, 3, 4}, Slots: []string{"lunch"},

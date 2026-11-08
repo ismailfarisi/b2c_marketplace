@@ -112,6 +112,12 @@ func TestSuggestRotationEligibility(t *testing.T) {
 	if _, err := f.svc.SuggestRotation(ctx, SuggestInput{UserID: f.userID, AddressID: f.addressID}); fieldCode(err, "address_id") != "not_enough_kitchens" {
 		t.Fatalf("empty area: %v", err)
 	}
+	if _, err := f.svc.SuggestRotation(ctx, SuggestInput{UserID: f.userID, AddressID: f.addressID, Weekdays: []int{7}}); fieldCode(err, "delivery_weekdays") != "invalid_weekday" {
+		t.Fatalf("weekday 7: %v", err)
+	}
+	if _, err := f.svc.SuggestRotation(ctx, SuggestInput{UserID: f.userID, AddressID: f.addressID, Slots: []string{"lunch", "lunch"}}); fieldCode(err, "meal_slots") != "duplicate" {
+		t.Fatalf("duplicate slot: %v", err)
+	}
 
 	ineligible := map[uuid.UUID]string{}
 	add := func(name string, k suggestKitchen) {

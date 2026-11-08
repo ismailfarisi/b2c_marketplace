@@ -2041,8 +2041,10 @@ private struct VarietyBox: View {
             let names = w.cuisines.map { tagLabel($0) }.joined(separator: isArabicLocale ? " و" : " and ")
             return tr("meals_variety_same_cuisine", Int(w.kitchens), names)
         case "repeated_dish":
+            if w.kitchens == 2 { return tr("meals_variety_repeated_dish_two", dish, weekday(w.weekday?.int32Value ?? 0)) }
             return tr("meals_variety_repeated_dish", dish, weekday(w.weekday?.int32Value ?? 0), Int(w.kitchens))
         default:
+            if w.kitchens == 2 { return tr("meals_variety_across_weeks_two", dish) }
             return tr("meals_variety_across_weeks", dish, Int(w.kitchens))
         }
     }

@@ -1,6 +1,12 @@
 package subscriptions
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/marketplace/api/internal/httpx"
+)
 
 func ptr[T any](v T) *T { return &v }
 
@@ -116,6 +122,11 @@ func TestNormalizeDishName(t *testing.T) {
 		{"فتة", "فته"},
 		{"شوربة عدس ٢", "شوربه عدس 2"},
 		{"حلوى", "حلوي"},
+		{"چکن بریانی", "جكن برياني"},
+		{"کڑاہی گوشت", "كراهي كوشت"},
+		{"کھانا ۲", "كهانا 2"},
+		{"دجاج وبطاطس", "دجاج بطاطس"},
+		{"چائے", "جائي"},
 	}
 	for _, c := range cases {
 		if got, want := NormalizeDishName(c.a), NormalizeDishName(c.b); got != want || got == "" {
@@ -125,7 +136,44 @@ func TestNormalizeDishName(t *testing.T) {
 	if NormalizeDishName("Fish curry") == NormalizeDishName("Chicken curry") {
 		t.Error("different dishes must not match")
 	}
+	if NormalizeDishName("ورق عنب") != NormalizeDishName("ورق العنب") || NormalizeDishName("ورق عنب") == NormalizeDishName("رق عنب") {
+		t.Errorf("short words keep a leading waw: %q", NormalizeDishName("ورق عنب"))
+	}
 	if NormalizeDishName("Grass") != "grass" {
 		t.Errorf("ss words keep their s: %q", NormalizeDishName("Grass"))
+	}
+}
+
+func TestNormalizeCuisinesAliases(t *testing.T) {
+	got := normalizeCuisines([]string{"Arab", "Arabian", "arabic", "Desi", "North Indian", "Pinoy", "BBQ", "Thai"})
+	want := []string{"arabic", "indian", "filipino", "grills", "thai"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("normalizeCuisines = %v, want %v", got, want)
+	}
+}
+
+func TestValidateSchedule(t *testing.T) {
+	cases := []struct {
+		days  []int
+		slots []string
+		code  string
+	}{
+		{[]int{0, 2, 4}, []string{"lunch"}, ""},
+		{nil, nil, ""},
+		{[]int{7}, []string{"lunch"}, "invalid_weekday"},
+		{[]int{-1}, []string{"lunch"}, "invalid_weekday"},
+		{[]int{1, 1}, []string{"lunch"}, "duplicate"},
+		{[]int{1}, []string{" "}, "empty_slot"},
+		{[]int{1}, []string{"lunch", "lunch"}, "duplicate"},
+	}
+	for _, c := range cases {
+		err := validateSchedule(c.days, c.slots)
+		var ve *httpx.ValidationError
+		switch {
+		case c.code == "" && err != nil:
+			t.Errorf("%v %v: unexpected %v", c.days, c.slots, err)
+		case c.code != "" && (!errors.As(err, &ve) || ve.Fields[0].Code != c.code):
+			t.Errorf("%v %v: got %v, want %s", c.days, c.slots, err, c.code)
+		}
 	}
 }

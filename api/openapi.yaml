@@ -1906,7 +1906,11 @@ paths:
         Checks the four plans the same way createRotation does (all in the
         rotation, four different kitchens, the schedule fits every plan, every
         kitchen delivers to the address) and returns the week order the
-        platform would assign. Creates nothing.
+        platform would assign. Creates nothing. Validation codes: on
+        `delivery_weekdays` `invalid_weekday` (outside 0 Sunday..6 Saturday)
+        and `duplicate`; on `meal_slots` `empty_slot` and `duplicate`; on
+        `start_date` `in_the_past` and `too_soon` (before the earliest day the
+        longest kitchen cutoff still allows; the message names that day).
       requestBody:
         required: true
         content:
@@ -1932,7 +1936,9 @@ paths:
         similar weekly price band, and quotes them exactly like
         previewRotation. Leave delivery_weekdays or meal_slots out to use the
         schedule most kitchens share. Creates nothing; the variety check is
-        advisory and never blocks buying any rotation.
+        advisory and never blocks buying any rotation. A given schedule is
+        validated like previewRotation (`invalid_weekday`, `duplicate`,
+        `empty_slot`).
       requestBody:
         required: true
         content:

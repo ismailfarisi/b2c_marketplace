@@ -38,9 +38,13 @@ export const VARIETY_COPY = {
     sameCuisine: (cuisines: string, n: number) =>
       `${n} من مطابخك تقدّم أكلات ${cuisines}.`,
     repeatedDish: (dish: string, day: string, n: number) =>
-      `${dish} يأتي من ${n} مطابخ في أيام ${day}.`,
+      n === 2
+        ? `${dish} يأتي من مطبخين في أيام ${day}.`
+        : `${dish} يأتي من ${n} مطابخ في أيام ${day}.`,
     acrossWeeks: (dish: string, n: number) =>
-      `${dish} يتكرر في ${n} من أسابيعك.`,
+      n === 2
+        ? `${dish} يتكرر في أسبوعين من أسابيعك.`
+        : `${dish} يتكرر في ${n} من أسابيعك.`,
     and: " و",
   },
 };

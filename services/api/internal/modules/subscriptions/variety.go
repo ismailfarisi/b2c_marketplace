@@ -95,11 +95,42 @@ func ScoreVariety(kitchens []VarietyKitchen) Variety {
 	return v
 }
 
+// cuisineAliases maps the spellings kitchens type into the canonical tag, so
+// "Arab", "Arabian" and "arabic" count as one cuisine when balancing a
+// rotation. Keep in step with tagLabel in apps/web and MealTags in the KMM
+// shared module, which label the same canonical tags.
+var cuisineAliases = map[string]string{
+	"arab": "arabic", "arabian": "arabic", "khaleeji": "arabic", "gulf": "arabic", "emirati": "arabic",
+	"desi": "indian", "north_indian": "indian", "south_indian": "indian",
+	"lebanon": "lebanese", "levant": "lebanese", "levantine": "lebanese", "syrian": "lebanese",
+	"filipino": "filipino", "pinoy": "filipino", "philippine": "filipino",
+	"italy": "italian", "pizza": "italian", "pasta": "italian",
+	"china": "chinese", "cantonese": "chinese", "szechuan": "chinese", "sichuan": "chinese",
+	"thailand": "thai", "japan": "japanese", "sushi": "japanese",
+	"turkey": "turkish", "iran": "persian", "iranian": "persian", "farsi": "persian",
+	"mexico": "mexican", "tex_mex": "mexican",
+	"mediterranean_diet": "mediterranean", "greek": "mediterranean",
+	"veg": "vegetarian", "veggie": "vegetarian", "plant_based": "vegan",
+	"keto": "healthy", "low_carb": "healthy", "diet": "healthy", "fitness": "healthy",
+	"grill": "grills", "grilled": "grills", "bbq": "grills", "barbecue": "grills", "mashawi": "grills",
+	"seafood": "seafood", "fish": "seafood",
+	"international": "international", "fusion": "international", "mixed": "international",
+}
+
+// normalizeCuisine folds case, spacing and known aliases into one tag.
+func normalizeCuisine(c string) string {
+	c = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(c)), " ", "_")
+	c = strings.ReplaceAll(c, "-", "_")
+	if canon, ok := cuisineAliases[c]; ok {
+		return canon
+	}
+	return c
+}
+
 func normalizeCuisines(in []string) []string {
 	out := []string{}
 	for _, c := range in {
-		c = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(c)), " ", "_")
-		c = strings.ReplaceAll(c, "-", "_")
+		c = normalizeCuisine(c)
 		if c != "" && !containsString(out, c) {
 			out = append(out, c)
 		}
@@ -331,12 +362,34 @@ func NormalizeDishName(name string) string {
 			continue
 		case r == 'أ' || r == 'إ' || r == 'آ' || r == 'ٱ':
 			r = 'ا'
-		case r == 'ى' || r == 'ئ':
+		case r == 'ى' || r == 'ئ' || r == 'ی' || r == 'ے' || r == 'ۓ':
+			// Arabic alef maqsura and the Urdu/Persian yeh forms.
 			r = 'ي'
-		case r == 'ة':
+		case r == 'ة' || r == 'ۃ' || r == 'ہ' || r == 'ھ' || r == 'ۀ':
+			// Ta marbuta and the Urdu heh forms.
 			r = 'ه'
 		case r == 'ؤ':
 			r = 'و'
+		case r == 'ک' || r == 'ڪ':
+			r = 'ك'
+		case r == 'گ':
+			r = 'ك'
+		case r == 'چ':
+			r = 'ج'
+		case r == 'پ':
+			r = 'ب'
+		case r == 'ژ':
+			r = 'ز'
+		case r == 'ڈ':
+			r = 'د'
+		case r == 'ڑ':
+			r = 'ر'
+		case r == 'ٹ':
+			r = 'ت'
+		case r == 'ں':
+			r = 'ن'
+		case r >= '۰' && r <= '۹':
+			r = '0' + (r - '۰')
 		case r >= '٠' && r <= '٩':
 			r = '0' + (r - '٠')
 		}
@@ -368,6 +421,11 @@ func stemDishWord(w string) string {
 			if len(runes)-len(p) >= 2 && string(runes[:len(p)]) == prefix {
 				return string(runes[len(p):])
 			}
+		}
+		// A leading "و" is "and" glued to the word ("وبطاطس" = "and potatoes"),
+		// as long as three letters remain so words like "ورق" keep theirs.
+		if runes[0] == 'و' && len(runes)-1 >= 3 {
+			return string(runes[1:])
 		}
 		return w
 	}
