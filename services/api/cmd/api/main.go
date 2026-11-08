@@ -225,7 +225,7 @@ func run() error {
 	kycSvc := kyc.NewService(pool)
 	payoutsSvc := payouts.NewService(pool, nil, app.PayoutGate{KYC: kycSvc})
 
-	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool), Console: consoleSvc, Reviews: reviewsSvc}
+	handlers.Kitchen = &api.KitchenHandlers{Kitchen: kitchen.NewService(pool).WithNotifier(notifySvc), Console: consoleSvc, Reviews: reviewsSvc}
 	merchSvc := merch.NewService(pool, handlers.Kitchen.Kitchen)
 	handlers.Meals = &api.MealsHandlers{Kitchen: handlers.Kitchen.Kitchen, Merch: merchSvc, Promos: promoSvc, Reviews: reviewsSvc}
 	handlers.Addresses = &api.AddressHandlers{Addresses: addresses.NewService(pool)}

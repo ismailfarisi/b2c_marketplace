@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/marketplace/api/internal/modules/notify"
 	"slices"
 	"time"
 
@@ -20,10 +21,23 @@ import (
 const planServiceType = "meals_subscription"
 
 type Service struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	notifier SelectionResetNotifier
 }
 
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+
+// SelectionResetNotifier tells a customer their chosen dishes fell back to the
+// default after the kitchen changed its menu cycle (see SetMenuWeeks).
+type SelectionResetNotifier interface {
+	Enqueue(ctx context.Context, tx pgx.Tx, m notify.Message) (uuid.UUID, error)
+}
+
+// WithNotifier makes menu-cycle changes notify affected customers.
+func (s *Service) WithNotifier(n SelectionResetNotifier) *Service {
+	s.notifier = n
+	return s
+}
 
 // ── dishes ─────────────────────────────────────────────────────────────────
 
@@ -352,12 +366,77 @@ func (s *Service) SetMenuWeeks(ctx context.Context, branchID uuid.UUID, weeks in
 		if err != nil {
 			return fmt.Errorf("kitchen: set menu weeks: %w", err)
 		}
-		return nil
+		return s.resetOrphanedSelections(ctx, tx, branchID, cycleID)
 	})
 	if err != nil {
 		return WeeklyMenu{}, err
 	}
 	return s.WeeklyMenu(ctx, branchID)
+}
+
+// resetOrphanedSelections drops customers' future picks that the new cycle
+// no longer serves on their day (a week-2 dish after the menu shrank to one
+// week) in the same transaction as the change, so the day falls back to the
+// default instead of a dish that is not cooked. Each affected subscription
+// gets one menu.selections_reset event for the notification worker.
+func (s *Service) resetOrphanedSelections(ctx context.Context, tx pgx.Tx, branchID, cycleID uuid.UUID) error {
+	rows, err := tx.Query(ctx, `
+		WITH gone AS (
+		    DELETE FROM subscription_meal_selections sel
+		     USING subscriptions s, menu_cycles c
+		     WHERE s.id = sel.subscription_id AND s.branch_id = $1 AND c.id = $2
+		       AND sel.chosen_by = 'customer' AND sel.fulfillment_id IS NULL
+		       AND sel.service_date >= (now() AT TIME ZONE COALESCE(s.timezone, 'Asia/Dubai'))::date
+		       AND NOT EXISTS (
+		           SELECT 1 FROM menu_cycle_days cd
+		             JOIN menu_day_items di ON di.cycle_day_id = cd.id
+		            WHERE cd.cycle_id = c.id
+		              AND cd.week_no = `+cycleWeekSQL("c.anchor_date", "c.weeks", "sel.service_date")+`
+		              AND cd.weekday = extract(dow FROM sel.service_date)::int
+		              AND di.meal_slot = sel.meal_slot
+		              AND di.menu_item_id = sel.menu_item_id)
+		    RETURNING sel.subscription_id, s.user_id, sel.service_date
+		), per_sub AS (
+		    SELECT subscription_id, user_id, count(*) AS n, min(service_date) AS first_date
+		      FROM gone GROUP BY subscription_id, user_id
+		)
+		INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, idempotency_key)
+		SELECT 'subscription', subscription_id, 'menu.selections_reset',
+		       jsonb_build_object('subscription_id', subscription_id, 'user_id', user_id,
+		                          'branch_id', $1::uuid, 'count', n, 'first_date', first_date),
+		       format('subscription:%s:menu.selections_reset:%s', subscription_id, clock_timestamp())
+		  FROM per_sub
+		RETURNING aggregate_id, payload->>'user_id', payload->>'count', payload->>'first_date',
+		          (SELECT name FROM vendor_branches WHERE id = $1)`, branchID, cycleID)
+	if err != nil {
+		return fmt.Errorf("kitchen: reset orphaned selections: %w", err)
+	}
+	type reset struct {
+		subID, userID, count, firstDate, kitchen string
+	}
+	var resets []reset
+	for rows.Next() {
+		var r reset
+		if err := rows.Scan(&r.subID, &r.userID, &r.count, &r.firstDate, &r.kitchen); err != nil {
+			rows.Close()
+			return fmt.Errorf("kitchen: scan reset: %w", err)
+		}
+		resets = append(resets, r)
+	}
+	rows.Close()
+	if s.notifier == nil {
+		return nil
+	}
+	for _, r := range resets {
+		if _, err := s.notifier.Enqueue(ctx, tx, notify.Message{
+			UserID: r.userID, TemplateKey: "menu.selections_reset", Category: notify.CategoryTransactional,
+			Params:    map[string]string{"kitchen": r.kitchen, "count": r.count, "first_date": r.firstDate, "link": "/en/meals/" + r.subID},
+			DedupeKey: "menu-selections-reset:" + r.subID + ":" + r.firstDate,
+		}); err != nil {
+			return fmt.Errorf("kitchen: notify selection reset: %w", err)
+		}
+	}
+	return nil
 }
 
 var weekdayNames = [7]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
