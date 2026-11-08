@@ -247,6 +247,13 @@ func (s *Service) previewFor(ctx context.Context, tx pgx.Tx, subID uuid.UUID, no
 		p.RotationWeek = rotWeek
 	}
 
+	// The same call the kitchen's prep sheet and the subscription page make:
+	// a default the customer marked "not again" moves to another dish of the
+	// day when there is one, so the preview names what will actually arrive.
+	avoided, err := avoidedDishes(ctx, tx, live.UserID)
+	if err != nil {
+		return nil, err
+	}
 	for _, m := range meals {
 		day, err := time.ParseInLocation("2006-01-02", m.Date, loc)
 		if err != nil {
@@ -257,9 +264,51 @@ func (s *Service) previewFor(ctx context.Context, tx pgx.Tx, subID uuid.UUID, no
 			d.Chosen = m.ChosenID != nil && *m.ChosenID == d.ID
 			pm.Dishes = append(pm.Dishes, d)
 		}
+		preferPreviewDefault(pm.Dishes, avoided)
 		p.Meals = append(p.Meals, pm)
 	}
 	return p, nil
+}
+
+// preferPreviewDefault is preferDefault for preview dishes.
+func preferPreviewDefault(ds []PreviewDish, avoided map[uuid.UUID]bool) {
+	cur := -1
+	for i, d := range ds {
+		if d.IsDefault {
+			cur = i
+			break
+		}
+	}
+	if cur < 0 || !avoided[ds[cur].ID] {
+		return
+	}
+	for i, d := range ds {
+		if !avoided[d.ID] {
+			ds[cur].IsDefault = false
+			ds[i].IsDefault = true
+			return
+		}
+	}
+}
+
+// previewServedDish is the dish a previewed meal will get: the chosen one, else the
+// default, else the first on the menu.
+func previewServedDish(m PreviewMeal) (PreviewDish, bool) {
+	if len(m.Dishes) == 0 {
+		return PreviewDish{}, false
+	}
+	d := m.Dishes[0]
+	for _, c := range m.Dishes {
+		if c.IsDefault {
+			d = c
+		}
+	}
+	for _, c := range m.Dishes {
+		if c.Chosen {
+			d = c
+		}
+	}
+	return d, true
 }
 
 // noticeDishes is the short "what's cooking" line for a notification: the
@@ -268,14 +317,9 @@ func noticeDishes(p NextWeekPreview) (en, ar string) {
 	var e, a []string
 	seen := map[uuid.UUID]bool{}
 	for _, m := range p.Meals {
-		if len(m.Dishes) == 0 {
+		d, ok := previewServedDish(m)
+		if !ok {
 			continue
-		}
-		d := m.Dishes[0]
-		for _, c := range m.Dishes {
-			if c.Chosen {
-				d = c
-			}
 		}
 		if seen[d.ID] {
 			continue

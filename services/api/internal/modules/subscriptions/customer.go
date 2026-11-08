@@ -505,32 +505,35 @@ func branchMenu(ctx context.Context, tx pgx.Tx, branchID uuid.UUID) (cycleMenu, 
 // when the day has another dish to stand in; a lone avoided dish stays the
 // default. The kitchen's prep sheet makes the same call.
 func avoidDishes(ctx context.Context, tx pgx.Tx, userID uuid.UUID, menu map[menuKey][]Dish) error {
-	rows, err := tx.Query(ctx, `
-		SELECT subject_id FROM meal_tastes
-		 WHERE user_id = $1 AND subject_kind = 'dish' AND sentiment = 'avoid'`, userID)
-	if err != nil {
-		return fmt.Errorf("subscriptions: avoided dishes: %w", err)
-	}
-	defer rows.Close()
-	avoided := map[uuid.UUID]bool{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return fmt.Errorf("subscriptions: scan avoided dish: %w", err)
-		}
-		avoided[id] = true
-	}
-	if err := rows.Err(); err != nil {
+	avoided, err := avoidedDishes(ctx, tx, userID)
+	if err != nil || len(avoided) == 0 {
 		return err
-	}
-	if len(avoided) == 0 {
-		return nil
 	}
 	for k, ds := range menu {
 		preferDefault(ds, avoided)
 		menu[k] = ds
 	}
 	return nil
+}
+
+// avoidedDishes is the set of dishes the customer marked "not again".
+func avoidedDishes(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (map[uuid.UUID]bool, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT subject_id FROM meal_tastes
+		 WHERE user_id = $1 AND subject_kind = 'dish' AND sentiment = 'avoid'`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions: avoided dishes: %w", err)
+	}
+	defer rows.Close()
+	avoided := map[uuid.UUID]bool{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("subscriptions: scan avoided dish: %w", err)
+		}
+		avoided[id] = true
+	}
+	return avoided, rows.Err()
 }
 
 // preferDefault makes the first non-avoided dish the default when the current

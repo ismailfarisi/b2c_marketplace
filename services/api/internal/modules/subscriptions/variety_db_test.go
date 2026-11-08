@@ -225,3 +225,79 @@ func TestRotationRecapCountsAndNotice(t *testing.T) {
 		t.Fatalf("want one recap push linking to renew, got %+v", got)
 	}
 }
+
+// A default dish the customer marked "not again" is not what the preview or
+// the Thursday notice name: the day's other dish stands in, as on the prep
+// sheet. A day with only the avoided dish keeps it.
+func TestNextWeekPreviewHonoursAvoidedDishes(t *testing.T) {
+	f := newSubFixture(t, 20)
+	ctx := context.Background()
+	dubai, _ := time.LoadLocation("Asia/Dubai")
+	branch := f.branchID(t)
+
+	today := dayIn(time.Now(), dubai)
+	thursday := today.AddDate(0, 0, (int(time.Thursday)-int(today.Weekday())+7)%7)
+	now := time.Date(thursday.Year(), thursday.Month(), thursday.Day(), 19, 0, 0, 0, dubai)
+	start := NextWeekStart(now, dubai)
+
+	sub, err := f.svc.Subscribe(ctx, f.input(start))
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	f.exec(t, `UPDATE subscriptions SET status = 'active' WHERE id = $1`, sub.ID)
+
+	cycle := uuid.New()
+	f.exec(t, `INSERT INTO menu_cycles (id, branch_id, name, weeks, anchor_date) VALUES ($1, $2, 'C', 1, $3)`, cycle, branch, start)
+	avoided, other := uuid.New(), uuid.New()
+	f.exec(t, `INSERT INTO menu_items (id, branch_id, name) VALUES ($1, $2, 'Okra stew'), ($3, $2, 'Grilled chicken')`, avoided, branch, other)
+	// Sunday has only the avoided dish; the other days have a stand-in.
+	for d := 0; d < 7; d++ {
+		day := uuid.New()
+		f.exec(t, `INSERT INTO menu_cycle_days (id, cycle_id, week_no, weekday) VALUES ($1, $2, 1, $3)`, day, cycle, d)
+		f.exec(t, `INSERT INTO menu_day_items (cycle_day_id, menu_item_id, meal_slot, is_default, sort_order) VALUES ($1, $2, 'lunch', true, 0)`, day, avoided)
+		if d != 0 {
+			f.exec(t, `INSERT INTO menu_day_items (cycle_day_id, menu_item_id, meal_slot, is_default, sort_order) VALUES ($1, $2, 'lunch', false, 1)`, day, other)
+		}
+	}
+	f.exec(t, `INSERT INTO meal_tastes (user_id, subject_kind, subject_id, sentiment) VALUES ($1, 'dish', $2, 'avoid')`, f.userID, avoided)
+
+	previews, err := f.svc.NextWeek(ctx, f.userID, now)
+	if err != nil {
+		t.Fatalf("next week: %v", err)
+	}
+	if len(previews) != 1 {
+		t.Fatalf("want 1 preview, got %d", len(previews))
+	}
+	p := previews[0]
+	if len(p.Meals) == 0 {
+		t.Fatal("preview has no meals")
+	}
+	for _, m := range p.Meals {
+		d, ok := previewServedDish(m)
+		if !ok {
+			t.Fatalf("%s: no dish", m.Date)
+		}
+		defaults := 0
+		for _, c := range m.Dishes {
+			if c.IsDefault {
+				defaults++
+			}
+		}
+		if defaults != 1 {
+			t.Fatalf("%s: %d defaults in %+v", m.Date, defaults, m.Dishes)
+		}
+		if m.Weekday == 0 {
+			if d.ID != avoided {
+				t.Fatalf("%s: a lone avoided dish should stay, got %+v", m.Date, d)
+			}
+			continue
+		}
+		if d.ID != other {
+			t.Fatalf("%s: served %+v, want the stand-in", m.Date, d)
+		}
+	}
+	en, _ := noticeDishes(p)
+	if !strings.Contains(en, "Grilled chicken") {
+		t.Fatalf("notice names %q, want the stand-in", en)
+	}
+}
