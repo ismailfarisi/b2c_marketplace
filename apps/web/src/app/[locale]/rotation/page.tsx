@@ -29,7 +29,7 @@ import { getMealKitchen, getMealKitchens } from "@/lib/meals-api";
 import type { Plan } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
 import { LoadError } from "@/components/load-error";
-import { rotationProblem } from "@/lib/rotation-problem";
+import { rotationCodes, rotationProblem } from "@/lib/rotation-problem";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import { VarietyMeter } from "@/components/meals/variety";
 
@@ -72,6 +72,7 @@ const COPY = {
       "We pick four well-rated kitchens near you with different cuisines and similar prices. You can still swap any of them.",
     balancedNone:
       "There aren't enough rotation kitchens near this address for a balanced pick yet. Choose your own four above.",
+    balancedFailed: "We couldn't suggest kitchens with these details.",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     slot: {
       breakfast: "Breakfast",
@@ -120,6 +121,7 @@ const COPY = {
       "نختار أربعة مطابخ قريبة منك وذات تقييم جيد، بمطابخ مختلفة وأسعار متقاربة. يمكنك استبدال أي منها.",
     balancedNone:
       "لا توجد مطابخ تناوب كافية قرب هذا العنوان لاختيار متوازن بعد. اختر مطابخك الأربعة بنفسك أعلاه.",
+    balancedFailed: "تعذّر اقتراح مطابخ بهذه التفاصيل.",
     weekdays: [
       "الأحد",
       "الاثنين",
@@ -379,8 +381,14 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
       setSuggesting(false);
     }
   }
+  // A 422 is only "nothing to suggest" when the API says so; a promo or
+  // address problem gets its own sentence.
   const suggestRefused =
-    suggestError instanceof ApiError && suggestError.status === 422;
+    suggestError instanceof ApiError &&
+    suggestError.status === 422 &&
+    rotationCodes(suggestError).includes("not_enough_kitchens");
+  const suggestInvalid =
+    !suggestRefused && suggestError instanceof ApiError && suggestError.status === 422;
 
   const list = kitchens.data?.items ?? [];
 
@@ -460,6 +468,10 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                     (suggestRefused ? (
                       <p className="ms-note" role="status">
                         {t.balancedNone}
+                      </p>
+                    ) : suggestInvalid ? (
+                      <p className="ms-bad" role="alert">
+                        {rotationProblem(suggestError, locale, t.balancedFailed)}
                       </p>
                     ) : (
                       <LoadError

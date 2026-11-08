@@ -49,6 +49,10 @@ const ROTATION: Record<string, { en: string; ar: string }> = {
     en: "One of these kitchens doesn't deliver to this address.",
     ar: "أحد هذه المطابخ لا يوصل إلى هذا العنوان.",
   },
+  not_enough_kitchens: {
+    en: "Not enough kitchens deliver to this address for a balanced month yet.",
+    ar: "لا توجد مطابخ كافية توصل إلى هذا العنوان لشهر متوازن بعد.",
+  },
   unknown: {
     en: "That promo code doesn't exist.",
     ar: "رمز الخصم هذا غير موجود.",
@@ -98,6 +102,15 @@ const ROTATION: Record<string, { en: string; ar: string }> = {
     ar: "اختر مطبخًا مختلفًا لهذا الأسبوع.",
   },
 };
+
+/** The stable codes a rotation refusal carries, field errors first. */
+export function rotationCodes(err: unknown): string[] {
+  if (!(err instanceof ApiError)) return [];
+  return [
+    ...(err.problem?.errors ?? []).map((e) => e.code),
+    err.problem?.code,
+  ].filter((c): c is string => !!c);
+}
 
 /** One sentence for a failed rotation call, in the reader's language. */
 export function rotationProblem(err: unknown, locale: Locale, fallback: string): string {

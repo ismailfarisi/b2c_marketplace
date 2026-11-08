@@ -1002,8 +1002,13 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
             } catch (e: Throwable) {
                 val f = e.toFailure()
                 _rotation.update {
-                    if (f is Failure.Rejected) it.copy(suggesting = false, suggestNone = true)
-                    else it.copy(suggesting = false, suggestError = f)
+                    // Only "no kitchens to suggest" is the quiet empty state; a
+                    // promo or address refusal is shown as the error it is.
+                    if (f is Failure.Rejected && f.fieldCodes.containsValue("not_enough_kitchens")) {
+                        it.copy(suggesting = false, suggestNone = true)
+                    } else {
+                        it.copy(suggesting = false, suggestError = f)
+                    }
                 }
             }
         }
