@@ -106,6 +106,10 @@ type MyCycle struct {
 type MyPause struct {
 	From string `json:"from_date"`
 	To   string `json:"to_date"`
+	// False for a pause already credited to the wallet, a guest week's
+	// among them: ending it early would need a wallet debit, so the clients
+	// do not offer to.
+	CanResume bool `json:"can_resume"`
 }
 
 // MyDetail is the customer's view of one of their subscriptions.
@@ -227,7 +231,10 @@ func (s *Service) MyDetail(ctx context.Context, userID, subID uuid.UUID, now tim
 		d.Pauses = []MyPause{}
 		for _, p := range live.Pauses {
 			if !p.Inactive && !p.To.Before(dayIn(now, live.Location)) {
-				d.Pauses = append(d.Pauses, MyPause{p.From.Format("2006-01-02"), p.To.Format("2006-01-02")})
+				d.Pauses = append(d.Pauses, MyPause{
+					From: p.From.Format("2006-01-02"), To: p.To.Format("2006-01-02"),
+					CanResume: p.Mode != "wallet",
+				})
 			}
 		}
 		d.Upcoming = []UpcomingMeal{}

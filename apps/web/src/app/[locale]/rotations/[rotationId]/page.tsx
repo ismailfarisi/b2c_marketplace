@@ -229,10 +229,13 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
   });
   const cancelKey = useIdempotencyKey();
   const cancel = useMutation({
-    mutationFn: (v: { code: CancellationReasonCode; note: string }) =>
+    mutationFn: (v: { code: CancellationReasonCode | null; note: string }) =>
       cancelRotation(
         r.id,
-        { reason_code: v.code, reason: v.note },
+        {
+          ...(v.code ? { reason_code: v.code } : {}),
+          ...(v.note ? { reason: v.note } : {}),
+        },
         { headers: cancelKey.headers() },
       ),
     onSuccess: async () => {

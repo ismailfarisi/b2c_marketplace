@@ -333,6 +333,22 @@ func TestGuestWeekOfferAndStart(t *testing.T) {
 	if !sawOrig || !sawGuest {
 		t.Fatalf("guest week links missing: orig %v guest %v", sawOrig, sawGuest)
 	}
+
+	// The guest week's pause was credited to the wallet, so the original's
+	// detail does not offer to resume it.
+	detail, err := f.svc.MyDetail(ctx, f.userID, f.subID, f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var guestPause *MyPause
+	for i := range detail.Pauses {
+		if detail.Pauses[i].From == f.weekStart {
+			guestPause = &detail.Pauses[i]
+		}
+	}
+	if guestPause == nil || guestPause.CanResume {
+		t.Fatalf("guest-week pause in detail = %+v, want one that cannot be resumed", guestPause)
+	}
 }
 
 func TestGuestWeekChargesTheDifferenceWhenTheGuestIsDearer(t *testing.T) {

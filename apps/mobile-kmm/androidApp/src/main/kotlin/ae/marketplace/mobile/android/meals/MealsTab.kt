@@ -1836,7 +1836,7 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                     }
                 }
                 if (sub.recent.isNotEmpty()) item { RecentDeliveriesCard(sub.recent, arabic) }
-                if (sub.rotationId == null && (sub.status == "paused" || sub.pauses.isNotEmpty())) {
+                if (sub.rotationId == null && sub.pauses.any { it.canResume }) {
                     item { ResumeCard(sub, s.busy, s.resumesOn, arabic, vm) }
                 }
                 if (sub.status != "pending_payment" && sub.status != "pending") {

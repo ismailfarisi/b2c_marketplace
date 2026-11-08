@@ -440,6 +440,8 @@ data class CheaperPlans(
 data class MyPause(
     @SerialName("from_date") val fromDate: String,
     @SerialName("to_date") val toDate: String,
+    /** False for a wallet-credited pause, a guest week's among them: it cannot be ended early. */
+    @SerialName("can_resume") val canResume: Boolean = true,
 )
 
 @Serializable

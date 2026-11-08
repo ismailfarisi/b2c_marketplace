@@ -3,7 +3,7 @@
 import { formatMoney } from "@marketplace/api-client";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Locale } from "@/components/meals/shell";
 import type { CancellationReasonCode, CheaperPlans } from "@/lib/customer-api";
@@ -11,8 +11,8 @@ import { problemMessage } from "@/lib/problem";
 
 // Boredom-aware cancellation. One question (why?), one honest save option that
 // fits the answer, and the cancel button right there under it the whole time.
-// No "are you sure" dialogs, no hidden buttons: a customer who wants out gets
-// out in one tap.
+// No "are you sure" dialogs, no hidden buttons, no required reason: a customer
+// who wants out gets out in one tap.
 
 export const CANCEL_REASONS: CancellationReasonCode[] = [
   "bored_of_food",
@@ -51,7 +51,7 @@ const COPY = {
     cancelSubscription: "Cancel subscription",
     cancelRotation: "Cancel rotation",
     cancelling: "Cancelling…",
-    pickFirst: "Pick a reason to continue.",
+    whyOptional: "Optional — it helps us pick better kitchens for you.",
   },
   ar: {
     why: "لماذا ترغب في الإلغاء؟",
@@ -80,7 +80,7 @@ const COPY = {
     cancelSubscription: "إلغاء الاشتراك",
     cancelRotation: "إلغاء التناوب",
     cancelling: "جارٍ الإلغاء…",
-    pickFirst: "اختر سببًا للمتابعة.",
+    whyOptional: "اختياري — يساعدنا على اختيار مطابخ أفضل لك.",
   },
 };
 
@@ -110,18 +110,26 @@ export function CancelFlow({
   locale: Locale;
   pending: boolean;
   error: string | null;
-  onCancel: (code: CancellationReasonCode, note: string) => void;
+  onCancel: (code: CancellationReasonCode | null, note: string) => void;
   saves: CancelSaves;
 }) {
   const t = COPY[locale];
   const [code, setCode] = useState<CancellationReasonCode | null>(null);
   const [note, setNote] = useState("");
   const title = kind === "rotation" ? t.cancelRotation : t.cancelSubscription;
+  // A second tap before React re-renders with pending=true must not fire a
+  // second cancel; the ref is synchronous where the prop is not.
+  const fired = useRef(false);
+  useEffect(() => {
+    if (!pending) fired.current = false;
+  }, [pending]);
 
   return (
     <details className="ms-danger">
       <summary>{title}</summary>
-      <p className="ms-sub">{t.why}</p>
+      <p className="ms-sub">
+        {t.why} {t.whyOptional}
+      </p>
       <div className="ms-chips ms-reasons" role="radiogroup" aria-label={t.why}>
         {CANCEL_REASONS.map((c) => (
           <button
@@ -130,7 +138,7 @@ export function CancelFlow({
             role="radio"
             aria-checked={code === c}
             className={code === c ? "on" : undefined}
-            onClick={() => setCode(c)}
+            onClick={() => setCode(code === c ? null : c)}
           >
             {t.reasons[c]}
           </button>
@@ -157,9 +165,13 @@ export function CancelFlow({
       <button
         type="button"
         className="ms-cta ms-cta-danger"
-        disabled={pending || !code}
-        title={code ? undefined : t.pickFirst}
-        onClick={() => code && onCancel(code, note.trim())}
+        disabled={pending}
+        aria-busy={pending || undefined}
+        onClick={() => {
+          if (fired.current || pending) return;
+          fired.current = true;
+          onCancel(code, note.trim());
+        }}
       >
         {pending ? t.cancelling : title}
       </button>

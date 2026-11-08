@@ -2828,7 +2828,7 @@ private struct SubscriptionPage: View {
                     }
                 }
                 RecentDeliveries(items: sub.recent)
-                if sub.rotationId == nil && (sub.status == "paused" || !sub.pauses.isEmpty) {
+                if sub.rotationId == nil && sub.pauses.contains(where: { $0.canResume }) {
                     ResumeCard(sub: sub, busy: s.busy, resumesOn: s.resumesOn, vm: vm)
                 }
                 if sub.status != "pending_payment" && sub.status != "pending" {

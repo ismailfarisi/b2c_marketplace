@@ -306,7 +306,8 @@ export interface MySubscriptionDetail extends MySubscription {
     amount_minor: number;
     currency: string;
   }>;
-  pauses: Array<{ from_date: string; to_date: string }>;
+  /** `can_resume` is false for a wallet-credited pause, a guest week's among them. */
+  pauses: Array<{ from_date: string; to_date: string; can_resume?: boolean }>;
 }
 
 export const listMySubscriptions = () =>

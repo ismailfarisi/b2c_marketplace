@@ -7966,6 +7966,11 @@ components:
                 properties:
                   from_date: { type: string, format: date }
                   to_date: { type: string, format: date }
+                  can_resume:
+                    type: boolean
+                    description: >-
+                      False for a pause already credited to the wallet (a guest
+                      week's among them), which cannot be ended early.
     CancellationReasonCode:
       type: string
       description: Structured answer to "why are you leaving?", stored next to the free-text note.

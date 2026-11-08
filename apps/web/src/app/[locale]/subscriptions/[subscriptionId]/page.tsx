@@ -468,7 +468,7 @@ function Detail({
               </li>
             ))}
           </ul>
-          {!s.rotation_id && (
+          {!s.rotation_id && s.pauses.some((p) => p.can_resume !== false) && (
             <Resume s={s} locale={locale} t={t} onDone={refresh} />
           )}
         </section>
@@ -912,10 +912,13 @@ function Cancel({
   const [error, setError] = useState<string | null>(null);
   const key = useIdempotencyKey();
   const m = useMutation({
-    mutationFn: (v: { code: CancellationReasonCode; note: string }) =>
+    mutationFn: (v: { code: CancellationReasonCode | null; note: string }) =>
       cancelSubscription(
         s.id,
-        { reason_code: v.code, reason: v.note },
+        {
+          ...(v.code ? { reason_code: v.code } : {}),
+          ...(v.note ? { reason: v.note } : {}),
+        },
         { headers: key.headers() },
       ),
     onSuccess: async () => {
