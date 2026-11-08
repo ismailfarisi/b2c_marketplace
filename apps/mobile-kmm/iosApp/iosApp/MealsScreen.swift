@@ -3177,7 +3177,7 @@ private struct NextWeekEmptyCard: View {
                 Text(tr("meals_next_week_none")).font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(MP.text)
                 Text(tr("meals_next_week_none_hint")).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                 Button(action: onFindKitchen) {
-                    Text(tr("meals_next_week_find")).font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(MP.chilli)
+                    Text(tr("meals_next_week_find")).font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.chilli)
                 }
                 .buttonStyle(.plain)
                 .padding(.top, Space.small)
