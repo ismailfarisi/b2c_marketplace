@@ -83,9 +83,9 @@ func ScoreVariety(kitchens []VarietyKitchen) Variety {
 
 	v.Score = max(0, min(100, score))
 	switch {
-	// "Great" with a warning underneath reads as a contradiction; any
-	// advisory caps the level at good.
-	case v.Score >= 85 && v.DistinctCuisines == n && len(v.Warnings) == 0:
+	// A mild cross-week repeat keeps "great"; the warning itself stays
+	// visible so the customer can still act on it.
+	case v.Score >= 85 && v.DistinctCuisines == n:
 		v.Level = VarietyGreat
 	case v.Score >= 55:
 		v.Level = VarietyGood
