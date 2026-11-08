@@ -46,6 +46,8 @@ type ProposalKitchen struct {
 	InCurrent bool `json:"in_current"`
 	// Favourite: the customer hearted this kitchen.
 	Favourite bool `json:"favourite"`
+	// Avoided: marked "Not again"; only a current kitchen can still be listed.
+	Avoided bool `json:"avoided,omitempty"`
 	// OwnRating is the customer's own review of the kitchen, 0 when none.
 	OwnRating int `json:"own_rating"`
 	// Reason says why it is proposed; empty on an eligible kitchen not proposed.
@@ -100,6 +102,20 @@ func (k ProposalKitchen) hasAny(set map[string]bool) bool {
 		}
 	}
 	return false
+}
+
+// firstIn is the cuisine the reason text names for a familiar kitchen: one
+// the customer actually knows, not whichever tag the kitchen listed first.
+func (k ProposalKitchen) firstIn(set map[string]bool) string {
+	for _, c := range k.Cuisines {
+		if set[c] {
+			return c
+		}
+	}
+	if len(k.Cuisines) > 0 {
+		return k.Cuisines[0]
+	}
+	return ""
 }
 
 func (k ProposalKitchen) firstNotIn(set map[string]bool) string {
@@ -195,7 +211,7 @@ func proposeKitchens(current, others []ProposalKitchen, tc tasteContext) []Propo
 		case !k.hasAny(tc.recent):
 			add(k, ReasonNewCuisine, k.firstNotIn(tc.recent))
 		default:
-			add(k, ReasonFamiliarCuisine, k.Cuisines[0])
+			add(k, ReasonFamiliarCuisine, k.firstIn(tc.familiar))
 		}
 	}
 
@@ -270,7 +286,7 @@ func capProposal(proposed, current, pool []ProposalKitchen, previousTotal int64,
 			if !k.hasAny(tc.recent) {
 				k.ReasonCuisine = k.firstNotIn(tc.recent)
 			} else if len(k.Cuisines) > 0 {
-				k.Reason, k.ReasonCuisine = ReasonFamiliarCuisine, k.Cuisines[0]
+				k.Reason, k.ReasonCuisine = ReasonFamiliarCuisine, k.firstIn(tc.familiar)
 			}
 			out[dear] = k
 			continue
@@ -638,6 +654,10 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 	out.Eligible = append(append([]ProposalKitchen{}, current...), others...)
 	for i := range out.Eligible {
 		out.Eligible[i].Reason, out.Eligible[i].ReasonCuisine = "", ""
+		out.Eligible[i].Avoided = tc.avoided[out.Eligible[i].BranchID]
+	}
+	for i := range out.Kitchens {
+		out.Kitchens[i].Avoided = tc.avoided[out.Kitchens[i].BranchID]
 	}
 	out.AmountMinor = proposalTotal(out.Kitchens)
 	if len(out.Kitchens) > 0 {

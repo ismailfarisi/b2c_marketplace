@@ -844,6 +844,8 @@ private fun KitchenBody(
                                 val title = when (i) {
                                     0 -> stringResource(R.string.meals_this_week)
                                     1 -> stringResource(R.string.meals_next_week)
+                                    // Arabic has a dual: "بعد أسبوعين", not "بعد 2 أسابيع".
+                                    2 -> stringResource(R.string.meals_in_two_weeks)
                                     else -> stringResource(R.string.meals_in_weeks, i)
                                 }
                                 DayChip(title + " · " + ae.marketplace.mobile.meals.KitchenMenu.weekRange(w.startsOn, arabic), weekIndex == i, false) { weekIndex = i }
@@ -1659,6 +1661,7 @@ private fun RotationRenewPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: ()
                                 k.rating?.let { append(" · ★ ").append(String.format("%.1f", it)) }
                                 if (k.inCurrent) append(" · ").append(stringResource(R.string.meals_in_rotation))
                                 if (k.favourite) append(" · ♥")
+                                if (k.avoided) append(" · ⊘ ").append(stringResource(R.string.meals_not_again))
                             }
                             val taken = k.planId in s.picks && s.picks.getOrNull(slot) != k.planId
                             Choice(pick(k.kitchenName, k.kitchenNameAr, arabic), detail, s.picks.getOrNull(slot) == k.planId) {

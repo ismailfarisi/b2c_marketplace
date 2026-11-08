@@ -651,6 +651,7 @@ export interface ProposalKitchen {
   currency: string;
   in_current: boolean;
   favourite: boolean;
+  avoided?: boolean;
   own_rating: number;
   reason: ProposalReason;
   reason_cuisine?: string;

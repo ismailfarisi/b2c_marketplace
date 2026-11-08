@@ -7708,6 +7708,7 @@ components:
         currency: { type: string }
         in_current: { type: boolean, description: Cooks in the rotation being renewed. }
         favourite: { type: boolean, description: The customer hearted this kitchen. }
+        avoided: { type: boolean, description: Marked "Not again"; only a current kitchen can still be listed. }
         own_rating: { type: integer, description: The customer's own rating, 0 when none. }
         reason:
           type: string

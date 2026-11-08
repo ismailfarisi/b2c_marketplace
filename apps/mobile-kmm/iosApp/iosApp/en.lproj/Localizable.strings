@@ -506,6 +506,7 @@
 "meals_this_week" = "This week";
 "meals_next_week" = "Next week";
 "meals_in_weeks" = "In %lld weeks";
+"meals_in_two_weeks" = "In 2 weeks";
 "meals_renew_fresh" = "Choose next kitchens";
 "meals_renew_title" = "Renew with fresh kitchens";
 "meals_renew_lede" = "Your next 4 weeks. We kept what you love and found new kitchens that deliver to you on the same days and meals.";

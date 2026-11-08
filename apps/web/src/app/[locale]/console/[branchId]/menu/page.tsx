@@ -23,6 +23,7 @@ import {
   type MenuSlot,
   type Slot,
 } from "@/lib/vendor-api";
+import { useBusyGuard } from "@/lib/use-busy-guard";
 
 /**
  * The weekly menu: for each weekday and meal, one default dish and optionally
@@ -96,6 +97,7 @@ export default function MenuPage() {
   const rows = showAll ? [...SLOTS] : SLOTS.filter((s) => used.has(s));
   if (rows.length === 0) rows.push("lunch");
 
+  const tap = useBusyGuard();
   const save = useMutation({
     mutationFn: (v: {
       week: number;
@@ -115,10 +117,12 @@ export default function MenuPage() {
       qc.invalidateQueries({ queryKey: ["vendor", "dishes", id] });
       setSelected(null);
     },
+    onSettled: tap.release,
   });
   const copy = useMutation({
     mutationFn: (to: number) => copyMenuWeek(id, to, 1),
     onSuccess: (m) => qc.setQueryData(["vendor", "menu", id], m),
+    onSettled: tap.release,
   });
   const serve = useMutation({
     mutationFn: (n: number) => setMenuWeeks(id, n),
@@ -127,6 +131,7 @@ export default function MenuPage() {
       qc.invalidateQueries({ queryKey: ["vendor", "overview", id] });
       setDraftWeeks(null);
     },
+    onSettled: tap.release,
   });
 
   if (menu.error)
@@ -211,7 +216,7 @@ export default function MenuPage() {
                 className="btn"
                 type="button"
                 disabled={copy.isPending}
-                onClick={() => copy.mutate(viewWeek)}
+                onClick={tap.guard(() => copy.mutate(viewWeek))}
               >
                 {copy.isPending ? w.copying : w.copy(1)}
               </button>
@@ -245,7 +250,7 @@ export default function MenuPage() {
                 className="btn primary"
                 type="button"
                 disabled={targetGaps.length > 0 || serve.isPending}
-                onClick={() => serve.mutate(targetWeeks)}
+                onClick={tap.guard(() => serve.mutate(targetWeeks))}
               >
                 {serve.isPending ? t.saving : w.save(targetWeeks)}
               </button>
@@ -364,8 +369,8 @@ export default function MenuPage() {
           error={save.error}
           dishesHref={`${branch.base}/dishes`}
           onCancel={() => setSelected(null)}
-          onSave={(def, alt) =>
-            save.mutate({ ...selected, week: viewWeek, def, alt })
+          onSave={tap.guard((def: string | null, alt: string | null) =>
+            save.mutate({ ...selected, week: viewWeek, def, alt }))
           }
         />
       ) : null}

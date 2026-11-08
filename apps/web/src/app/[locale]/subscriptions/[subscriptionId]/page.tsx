@@ -39,6 +39,7 @@ import {
   type MySubscriptionDetail,
   type UpcomingMeal,
 } from "@/lib/customer-api";
+import { useBusyGuard } from "@/lib/use-busy-guard";
 import { problemMessage } from "@/lib/problem";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
@@ -960,6 +961,7 @@ function NotAgain({ dishId, locale, t }: { dishId: string; locale: Locale; t: Co
       (x) => x.subject_kind === "dish" && x.subject_id === dishId && x.sentiment === "avoid",
     ) ?? false;
   const [error, setError] = useState<string | null>(null);
+  const tap = useBusyGuard();
   const flip = useMutation({
     mutationFn: async (on: boolean) => {
       if (on) await setMyTaste({ subject_kind: "dish", subject_id: dishId, sentiment: "avoid" });
@@ -971,6 +973,7 @@ function NotAgain({ dishId, locale, t }: { dishId: string; locale: Locale; t: Co
       await qc.invalidateQueries({ queryKey: ["me", "subscription"] });
     },
     onError: (err) => setError(problemMessage(err, locale) || t.tasteFailed),
+    onSettled: tap.release,
   });
   if (tastes.isPending || tastes.isError) return null;
   return (
@@ -982,7 +985,7 @@ function NotAgain({ dishId, locale, t }: { dishId: string; locale: Locale; t: Co
             type="button"
             className="ms-link"
             disabled={flip.isPending}
-            onClick={() => flip.mutate(false)}
+            onClick={tap.guard(() => flip.mutate(false))}
           >
             {t.undoAvoid}
           </button>
@@ -993,7 +996,7 @@ function NotAgain({ dishId, locale, t }: { dishId: string; locale: Locale; t: Co
           className="ms-link ms-taste-avoid"
           disabled={flip.isPending}
           aria-pressed={false}
-          onClick={() => flip.mutate(true)}
+          onClick={tap.guard(() => flip.mutate(true))}
         >
           {t.notAgain}
         </button>

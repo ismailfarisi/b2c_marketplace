@@ -3002,6 +3002,20 @@ body {
   overflow-x: auto;
   padding: 0.25rem 0.1rem 0.5rem;
   margin-block: 1rem;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 0.1rem;
+  scrollbar-width: none;
+}
+.ms-days::-webkit-scrollbar {
+  display: none;
+}
+.ms-days > * {
+  scroll-snap-align: start;
+}
+/* Week tabs are few and short: wrap rather than scroll. */
+.ms-days.ms-weeks {
+  flex-wrap: wrap;
+  overflow-x: visible;
 }
 .ms-day {
   flex: 0 0 auto;
@@ -3548,11 +3562,31 @@ body {
   font-weight: 600;
   margin-block-end: 6px;
 }
+/* The renewal list is one slot per row: four side-by-side 13rem columns
+   (the rotation card's layout) leave no room for a name, a price and a
+   button, and they overlap at desktop widths. */
+.ms-renew-weeks {
+  grid-template-columns: 1fr;
+}
 .ms-renew-weeks li.ms-renew-slot {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
+  padding: 0.75rem 1.25rem;
+}
+.ms-renew-weeks li + li {
+  border-inline-start: 0;
+  border-block-start: 1px solid var(--ms-line);
+}
+.ms-renew-weeks li.ms-renew-slot > span {
+  padding: 0;
+}
+.ms-renew-kitchen strong {
+  overflow-wrap: anywhere;
+}
+.ms-renew-price {
+  white-space: nowrap;
 }
 .ms-renew-kitchen,
 .ms-renew-price {

@@ -165,6 +165,9 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Get("/me/rotations", h.Rotations.Mine)
 			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
 			r.Get("/me/rotations/{rotationId}/renewal-proposal", h.Rotations.Proposal)
+			r.Get("/me/rotations/{rotationId}/cheaper-plans", h.Rotations.CheaperPlans)
+			r.Get("/me/next-week", h.Rotations.NextWeek)
+			r.Get("/me/rotation-recaps", h.Rotations.Recaps)
 		}
 		if h.Taste != nil {
 			r.Get("/me/tastes", h.Taste.List)
@@ -172,11 +175,6 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Delete("/me/tastes/{kind}/{subjectId}", h.Taste.Clear)
 			r.Get("/me/meal-preferences", h.Taste.Preferences)
 			r.Put("/me/meal-preferences", h.Taste.SetPreferences)
-
-			r.Get("/me/next-week", h.Rotations.NextWeek)
-			r.Get("/me/rotation-recaps", h.Rotations.Recaps)
-
-			r.Get("/me/rotations/{rotationId}/cheaper-plans", h.Rotations.CheaperPlans)
 		}
 		if h.Meals != nil && h.Meals.Promos != nil {
 			r.Get("/me/referrals", h.Meals.MyReferrals)

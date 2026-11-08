@@ -102,6 +102,8 @@ private func weekTitle(_ index: Int) -> String {
     switch index {
     case 0: return NSLocalizedString("meals_this_week", comment: "")
     case 1: return NSLocalizedString("meals_next_week", comment: "")
+    // Arabic has a dual: "بعد أسبوعين", not "بعد 2 أسابيع".
+    case 2: return NSLocalizedString("meals_in_two_weeks", comment: "")
     default: return tr("meals_in_weeks", index)
     }
 }
@@ -2317,6 +2319,7 @@ private func eligibleDetail(_ k: ProposalKitchen) -> String {
     var detail = money(k.weekPriceMinor, k.currency) + " " + NSLocalizedString("meals_per_week", comment: "") + starText(k.rating)
     if k.inCurrent { detail += " · " + NSLocalizedString("meals_in_rotation", comment: "") }
     if k.favourite { detail += " · ♥" }
+    if k.avoided { detail += " · ⊘ " + NSLocalizedString("meals_not_again", comment: "") }
     return detail
 }
 

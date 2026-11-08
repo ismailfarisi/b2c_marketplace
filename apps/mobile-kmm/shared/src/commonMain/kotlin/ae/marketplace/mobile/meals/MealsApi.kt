@@ -174,7 +174,11 @@ class MealsApi(private val client: HttpClient) {
         client.put("subscriptions/$id/renewal") { json(AutoBody(auto)) }
     }
 
-    suspend fun renew(id: String): Subscribed = client.post("subscriptions/$id/renew") { json(Empty()) }.body()
+    suspend fun renew(id: String, idempotencyKey: String? = null): Subscribed =
+        client.post("subscriptions/$id/renew") {
+            idempotencyKey?.let { header("Idempotency-Key", it) }
+            json(Empty())
+        }.body()
 
     suspend fun previewRotation(input: RotationInput): Rotation =
         client.post("rotations/preview") { json(input) }.body()
@@ -210,17 +214,23 @@ class MealsApi(private val client: HttpClient) {
 
     suspend fun tastes(): TastePage = client.get("me/tastes").body()
 
-    suspend fun setTaste(kind: String, subjectId: String, sentiment: String): Taste =
-        client.put("me/tastes") { json(TasteInput(kind, subjectId, sentiment)) }.body()
+    suspend fun setTaste(kind: String, subjectId: String, sentiment: String, idempotencyKey: String? = null): Taste =
+        client.put("me/tastes") {
+            idempotencyKey?.let { header("Idempotency-Key", it) }
+            json(TasteInput(kind, subjectId, sentiment))
+        }.body()
 
-    suspend fun clearTaste(kind: String, subjectId: String) {
-        client.delete("me/tastes/$kind/$subjectId")
+    suspend fun clearTaste(kind: String, subjectId: String, idempotencyKey: String? = null) {
+        client.delete("me/tastes/$kind/$subjectId") { idempotencyKey?.let { header("Idempotency-Key", it) } }
     }
 
     suspend fun mealPreferences(): MealPreferences = client.get("me/meal-preferences").body()
 
-    suspend fun setMealPreferences(adventure: String): MealPreferences =
-        client.put("me/meal-preferences") { json(MealPreferences(adventure)) }.body()
+    suspend fun setMealPreferences(adventure: String, idempotencyKey: String? = null): MealPreferences =
+        client.put("me/meal-preferences") {
+            idempotencyKey?.let { header("Idempotency-Key", it) }
+            json(MealPreferences(adventure))
+        }.body()
 
     suspend fun payRotation(id: String): PaymentIntent =
         client.post("rotations/$id/payment-intent") {

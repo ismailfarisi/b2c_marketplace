@@ -629,6 +629,7 @@
     <string name="meals_this_week">هذا الأسبوع</string>
     <string name="meals_next_week">الأسبوع القادم</string>
     <string name="meals_in_weeks">بعد %1$d أسابيع</string>
+    <string name="meals_in_two_weeks">بعد أسبوعين</string>
 
     <!-- Variety at renewal: proposal, taste memory, adventure setting -->
     <string name="meals_renew_fresh">اختر المطابخ التالية</string>

@@ -19,6 +19,7 @@ import {
   type RenewalProposal,
 } from "@/lib/customer-api";
 import { rotationProblem } from "@/lib/rotation-problem";
+import { useBusyGuard } from "@/lib/use-busy-guard";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
 const COPY = {
@@ -35,6 +36,7 @@ const COPY = {
     cancelSwap: "Done",
     pickFor: (n: number) => `Pick a kitchen for week ${n}`,
     inRotation: "In your current rotation",
+    notAgain: "Not again",
     reasons: {
       loved: "You loved it",
       top_rated: "Your top rated",
@@ -81,6 +83,7 @@ const COPY = {
     cancelSwap: "تم",
     pickFor: (n: number) => `اختر مطبخًا للأسبوع ${n}`,
     inRotation: "في تناوبك الحالي",
+    notAgain: "ليس مجددًا",
     reasons: {
       loved: "أحببته",
       top_rated: "أعلى تقييم منك",
@@ -221,6 +224,7 @@ function Proposal({
   const repeats = new Set(chosen.map((k) => k.branch_id)).size < chosen.length;
 
   const renewKey = useIdempotencyKey();
+  const tap = useBusyGuard();
   const renew = useMutation({
     mutationFn: async () => {
       const next = await renewRotation(rotationId, {
@@ -239,6 +243,7 @@ function Proposal({
       await qc.invalidateQueries({ queryKey: ["me"] });
       router.push(`/${locale}/rotations/${next.id}`);
     },
+    onSettled: tap.release,
   });
   const adventure = useMutation({
     mutationFn: (a: Adventure) => setMealPreferences({ adventure: a }),
@@ -246,6 +251,7 @@ function Proposal({
       await qc.invalidateQueries({ queryKey: ["me", "meal-preferences"] });
       await onReload();
     },
+    onSettled: tap.release,
   });
 
   return (
@@ -265,7 +271,7 @@ function Proposal({
               aria-checked={proposal.adventure === a}
               className={proposal.adventure === a ? "on" : undefined}
               disabled={adventure.isPending || renew.isPending}
-              onClick={() => adventure.mutate(a)}
+              onClick={tap.guard(() => adventure.mutate(a))}
             >
               {t.adventures[a]}
             </button>
@@ -337,6 +343,7 @@ function Proposal({
                         {k.rating != null && ` · ★ ${k.rating.toFixed(1)} (${k.rating_count})`}
                         {k.in_current && ` · ${t.inRotation}`}
                         {k.favourite && " · ♥"}
+                        {k.avoided && ` · ⊘ ${t.notAgain}`}
                       </small>
                     </span>
                     <span>
@@ -360,7 +367,7 @@ function Proposal({
           type="button"
           className="ms-cta"
           disabled={!complete || renew.isPending || adventure.isPending}
-          onClick={() => renew.mutate()}
+          onClick={tap.guard(() => renew.mutate())}
         >
           {renew.isPending ? t.paying : t.pay(money(total))}
         </button>

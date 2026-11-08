@@ -1,6 +1,6 @@
 package ae.marketplace.mobile.model
 
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -561,6 +561,7 @@ data class Rotation(
         renewable && LocalDate.parse(endDate).toEpochDays() - today.toEpochDays() < 14
 
     /** Swift has no default arguments: today in Dubai, where delivery days are counted. */
+    @OptIn(kotlin.time.ExperimentalTime::class)
     fun renewalNear(): Boolean = renewalNear(Clock.System.todayIn(TimeZone.of("Asia/Dubai")))
 }
 
@@ -624,6 +625,8 @@ data class ProposalKitchen(
     val currency: String = "AED",
     @SerialName("in_current") val inCurrent: Boolean = false,
     val favourite: Boolean = false,
+    /** Marked "Not again"; only a current kitchen can still be listed. */
+    val avoided: Boolean = false,
     @SerialName("own_rating") val ownRating: Int = 0,
     /** loved, top_rated, kept, new_cuisine, familiar_cuisine, new_kitchen or empty. */
     val reason: String = "",

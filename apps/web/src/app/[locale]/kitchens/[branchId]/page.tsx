@@ -21,6 +21,7 @@ import {
   getMealKitchen,
   type PublicKitchenDetail,
 } from "@/lib/meals-api";
+import { useBusyGuard } from "@/lib/use-busy-guard";
 import type { MenuChoice, MenuSlot } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
 import { allergenLine } from "@/components/meals/allergens";
@@ -798,6 +799,7 @@ function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" 
     (x) => x.subject_kind === "kitchen" && x.subject_id === branchId,
   )?.sentiment;
   const [error, setError] = useState<string | null>(null);
+  const tap = useBusyGuard();
   const flip = useMutation({
     mutationFn: async (s: Sentiment | null) => {
       if (s) await setMyTaste({ subject_kind: "kitchen", subject_id: branchId, sentiment: s });
@@ -808,7 +810,9 @@ function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" 
       await qc.invalidateQueries({ queryKey: ["me", "tastes"] });
     },
     onError: (err) => setError(problemMessage(err, locale) || t.tasteFailed),
+    onSettled: tap.release,
   });
+  const set = (s: Sentiment | null) => tap.guard(() => flip.mutate(s));
   if (!hasSession) {
     return (
       <p className="ms-taste ms-sub">
@@ -823,23 +827,29 @@ function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" 
       {mark === "favourite" ? (
         <>
           <span className="ms-taste-on">♥ {t.hearted}</span>
-          <button type="button" className="ms-link" disabled={busy} onClick={() => flip.mutate(null)}>
+          <button type="button" className="ms-link" disabled={busy} onClick={set(null)}>
             {t.undoTaste}
+          </button>
+          <button type="button" className="ms-link" disabled={busy} onClick={set("avoid")}>
+            {t.notAgain}
           </button>
         </>
       ) : mark === "avoid" ? (
         <>
           <span className="ms-taste-on">⊘ {t.avoidedKitchen}</span>
-          <button type="button" className="ms-link" disabled={busy} onClick={() => flip.mutate(null)}>
+          <button type="button" className="ms-link" disabled={busy} onClick={set(null)}>
             {t.undoTaste}
+          </button>
+          <button type="button" className="ms-link" disabled={busy} onClick={set("favourite")}>
+            ♡ {t.heart}
           </button>
         </>
       ) : (
         <>
-          <button type="button" aria-pressed={false} disabled={busy} onClick={() => flip.mutate("favourite")}>
+          <button type="button" aria-pressed={false} disabled={busy} onClick={set("favourite")}>
             ♡ {t.heart}
           </button>
-          <button type="button" aria-pressed={false} disabled={busy} onClick={() => flip.mutate("avoid")}>
+          <button type="button" aria-pressed={false} disabled={busy} onClick={set("avoid")}>
             {t.notAgain}
           </button>
         </>

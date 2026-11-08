@@ -691,6 +691,7 @@
     <string name="meals_this_week">This week</string>
     <string name="meals_next_week">Next week</string>
     <string name="meals_in_weeks">In %1$d weeks</string>
+    <string name="meals_in_two_weeks">In 2 weeks</string>
 
     <!-- Variety at renewal: proposal, taste memory, adventure setting -->
     <string name="meals_renew_fresh">Choose next kitchens</string>

@@ -522,7 +522,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _kitchen.update { it.copy(taste = sentiment, tasteBusy = true, tasteError = null) }
         viewModelScope.launch {
             try {
-                if (sentiment == null) api.clearTaste("kitchen", branchId) else api.setTaste("kitchen", branchId, sentiment)
+                if (sentiment == null) api.clearTaste("kitchen", branchId, newIdempotencyKey()) else api.setTaste("kitchen", branchId, sentiment, newIdempotencyKey())
                 _kitchen.update { if (it.branchId == branchId) it.copy(tasteBusy = false) else it }
             } catch (e: CancellationException) {
                 throw e
@@ -547,7 +547,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _sub.update { it.copy(tasteBusy = it.tasteBusy + dishId, tasteError = null) }
         viewModelScope.launch {
             try {
-                if (avoid) api.setTaste("dish", dishId, "avoid") else api.clearTaste("dish", dishId)
+                if (avoid) api.setTaste("dish", dishId, "avoid", newIdempotencyKey()) else api.clearTaste("dish", dishId, newIdempotencyKey())
                 // The default dish moves off an avoided one: show the meals again.
                 reloadSubscription(subId)
             } catch (e: CancellationException) {
@@ -609,7 +609,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _renew.update { it.copy(busy = true, actionError = null) }
         viewModelScope.launch {
             try {
-                api.setMealPreferences(adventure)
+                api.setMealPreferences(adventure, newIdempotencyKey())
                 _rotation.update { it.copy(adventure = adventure) }
                 loadProposal(id)
             } catch (e: CancellationException) {
@@ -923,7 +923,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _rotation.update { it.copy(adventure = adventure) }
         viewModelScope.launch {
             try {
-                api.setMealPreferences(adventure)
+                api.setMealPreferences(adventure, newIdempotencyKey())
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {
@@ -1207,7 +1207,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     }
 
     fun renew() = act { id ->
-        val next = api.renew(id)
+        val next = api.renew(id, newIdempotencyKey())
         api.payOrder(next.orderId).redirectUrl?.let { url -> _sub.update { s -> s.copy(paymentUrl = url) } }
     }
 
@@ -1279,7 +1279,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     /** Prepares the next rotation and pays for it; if paying fails it waits on its card with Pay now. */
     fun renewRotation(id: String) = rotationAction(id) {
-        val next = api.renewRotation(id)
+        val next = api.renewRotation(id, idempotencyKey = newIdempotencyKey())
         api.payRotation(next.id).redirectUrl?.let { url -> _mine.update { it.copy(paymentUrl = url) } }
     }
 
@@ -1359,7 +1359,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     }
 
     /** Cancels the open rotation; My meals reloads so its card agrees. */
-    fun cancelOpenRotation(reasonCode: String, note: String) {
+    fun cancelOpenRotation(reasonCode: String?, note: String) {
         val id = _rotationDetail.value.id ?: return
         rotationDetailAction(id) {
             api.cancelRotation(id, reasonCode, note.trim(), newIdempotencyKey())

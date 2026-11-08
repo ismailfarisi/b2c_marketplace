@@ -213,6 +213,14 @@ func (s *Service) previewFor(ctx context.Context, tx pgx.Tx, subID uuid.UUID, no
 	if len(meals) == 0 {
 		return nil, nil
 	}
+	// The card's range ends on the last delivery, Thursday for a GCC plan,
+	// not on the calendar week's Saturday.
+	lastMeal := meals[len(meals)-1].Date
+	for _, m := range meals {
+		if m.Date > lastMeal {
+			lastMeal = m.Date
+		}
+	}
 	menu, err := s.previewMenu(ctx, tx, live.BranchID)
 	if err != nil {
 		return nil, err
@@ -220,7 +228,7 @@ func (s *Service) previewFor(ctx context.Context, tx pgx.Tx, subID uuid.UUID, no
 
 	p := &NextWeekPreview{
 		SubscriptionID: subID, BranchID: live.BranchID,
-		StartsOn: start.Format("2006-01-02"), EndsOn: end.Format("2006-01-02"),
+		StartsOn: start.Format("2006-01-02"), EndsOn: lastMeal,
 		MenuWeek: menu.week(start), Meals: []PreviewMeal{}, Cuisines: []string{}, loc: loc,
 	}
 	var rotID uuid.NullUUID

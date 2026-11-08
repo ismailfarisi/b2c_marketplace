@@ -506,6 +506,7 @@
 "meals_this_week" = "هذا الأسبوع";
 "meals_next_week" = "الأسبوع القادم";
 "meals_in_weeks" = "بعد %lld أسابيع";
+"meals_in_two_weeks" = "بعد أسبوعين";
 "meals_renew_fresh" = "اختر المطابخ التالية";
 "meals_renew_title" = "جدّد بمطابخ جديدة";
 "meals_renew_lede" = "أسابيعك الأربعة التالية. أبقينا ما تحبه ووجدنا مطابخ جديدة توصّل إليك في نفس الأيام والوجبات.";
