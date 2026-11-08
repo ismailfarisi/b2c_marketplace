@@ -638,9 +638,15 @@
     <string name="meals_renew_starts">يبدأ %1$s</string>
     <string name="meals_refresh_on_renew">مطابخ جديدة عند التجديد</string>
     <string name="meals_refresh_note">يحتفظ بمطبخين على الأكثر أحببتهما ويضيف مطابخ جديدة، في حدود ١٠٪ من سعر هذا التناوب. عند الإيقاف: نفس المطابخ الأربعة.</string>
+    <string name="meals_renew_note_same">نفس المطابخ الأربعة والعنوان والأيام والوجبات، بالسعر الأسبوعي الحالي لكل مطبخ.</string>
+    <string name="meals_renew_note_fresh">مطابخ جديدة في حدود ١٠٪ من سعر هذا التناوب، بنفس العنوان والأيام والوجبات. راجعها أولًا عبر «اختر المطابخ التالية».</string>
+    <string name="meals_edit_before_pay">تناوبك التالي جاهز. غيّر المطابخ قبل أن تدفع.</string>
     <string name="meals_swap">بدّل</string>
     <string name="meals_swap_done">تم</string>
-    <string name="meals_pick_for_week">اختر مطبخًا للأسبوع %1$d</string>
+    <string name="meals_pick_for_week">اختر المطبخ %1$d</string>
+    <string name="meals_kitchen_n">المطبخ %1$d</string>
+    <string name="meals_renew_order_note">يتحدد أي مطبخ يطبخ أي أسبوع عند الدفع بحسب حمل كل مطبخ. المطبخ الذي يطبخ أسبوعك الأخير لا يبدأ التناوب التالي أبدًا.</string>
+    <string name="meals_renew_too_few">لا توجد مطابخ كافية توصّل إليك الآن لتناوب كامل. جرّب منشئ التناوب أو عُد لاحقًا.</string>
     <string name="meals_in_rotation">في تناوبك الحالي</string>
     <string name="meals_reason_loved">أحببته</string>
     <string name="meals_reason_top_rated">أعلى تقييم منك</string>

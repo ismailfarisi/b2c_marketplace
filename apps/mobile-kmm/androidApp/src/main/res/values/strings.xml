@@ -700,9 +700,15 @@
     <string name="meals_renew_starts">Starts %1$s</string>
     <string name="meals_refresh_on_renew">Fresh kitchens at renewal</string>
     <string name="meals_refresh_note">Keeps up to two kitchens you loved and brings in new ones, within 10% of this rotation\'s price. Off: the same four kitchens again.</string>
+    <string name="meals_renew_note_same">Same 4 kitchens, address, days and meals, at each kitchen\'s current weekly price.</string>
+    <string name="meals_renew_note_fresh">Fresh kitchens within 10% of this rotation\'s price, same address, days and meals. Review them first with Choose next kitchens.</string>
+    <string name="meals_edit_before_pay">Your next rotation is ready. Change the kitchens before you pay.</string>
     <string name="meals_swap">Swap</string>
     <string name="meals_swap_done">Done</string>
-    <string name="meals_pick_for_week">Pick a kitchen for week %1$d</string>
+    <string name="meals_pick_for_week">Pick kitchen %1$d</string>
+    <string name="meals_kitchen_n">Kitchen %1$d</string>
+    <string name="meals_renew_order_note">Which kitchen cooks which week is set at checkout, by each kitchen\'s load. The kitchen that cooks your last week never starts the next rotation.</string>
+    <string name="meals_renew_too_few">Not enough kitchens deliver to you right now for a full rotation. Try the rotation builder, or come back later.</string>
     <string name="meals_in_rotation">In your current rotation</string>
     <string name="meals_reason_loved">You loved it</string>
     <string name="meals_reason_top_rated">Your top rated</string>

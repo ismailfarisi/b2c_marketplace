@@ -62,11 +62,14 @@ const COPY = {
       "Your next rotation keeps up to two kitchens you loved and brings in new ones that deliver to you, within 10% of this rotation's price. Off: the same four kitchens again.",
     renewFresh: "Choose next kitchens",
     autoNote:
-      "Your next 4 weeks, with the same kitchens, are set up 3 days before this rotation ends for you to pay with one tap. The kitchen that cooks the last week won't cook the first week of the next rotation.",
+      "Your next 4 weeks are set up 3 days before this rotation ends for you to pay with one tap. The kitchen that cooks the last week won't cook the first week of the next rotation.",
     renew: "Renew rotation",
     renewing: "Renewing…",
     renewNote:
       "Same 4 kitchens, address, days and meals, at each kitchen's current weekly price.",
+    renewNoteFresh:
+      "Fresh kitchens within 10% of this rotation's price, same address, days and meals. Review them first with Choose next kitchens.",
+    editBeforePay: "Change the kitchens before you pay.",
     nextReady: "Your next rotation is ready. Pay to keep your meals coming.",
     nextOn: "Your next rotation is booked.",
     viewNext: "View next rotation",
@@ -120,11 +123,14 @@ const COPY = {
       "يحتفظ تناوبك التالي بمطبخين على الأكثر أحببتهما ويضيف مطابخ جديدة توصّل إليك، في حدود ١٠٪ من سعر هذا التناوب. عند الإيقاف: نفس المطابخ الأربعة.",
     renewFresh: "اختر المطابخ التالية",
     autoNote:
-      "تُجهَّز الأسابيع الأربعة التالية بنفس المطابخ قبل انتهاء هذا التناوب بثلاثة أيام لتدفعها بلمسة واحدة. المطبخ الذي يطبخ الأسبوع الأخير لن يطبخ الأسبوع الأول من التناوب التالي.",
+      "تُجهَّز الأسابيع الأربعة التالية قبل انتهاء هذا التناوب بثلاثة أيام لتدفعها بلمسة واحدة. المطبخ الذي يطبخ الأسبوع الأخير لن يطبخ الأسبوع الأول من التناوب التالي.",
     renew: "جدّد التناوب",
     renewing: "جارٍ التجديد…",
     renewNote:
       "نفس المطابخ الأربعة والعنوان والأيام والوجبات، بالسعر الأسبوعي الحالي لكل مطبخ.",
+    renewNoteFresh:
+      "مطابخ جديدة في حدود ١٠٪ من سعر هذا التناوب، بنفس العنوان والأيام والوجبات. راجعها أولًا عبر «اختر المطابخ التالية».",
+    editBeforePay: "غيّر المطابخ قبل أن تدفع.",
     nextReady: "تناوبك التالي جاهز. ادفع لتستمر وجباتك.",
     nextOn: "تم حجز تناوبك التالي.",
     viewNext: "عرض التناوب التالي",
@@ -530,8 +536,12 @@ function Renewal({
     },
   });
   const running = r.status === "active" || r.status === "pending_payment";
+  // An unpaid automatic renewal can still be edited; a paid one stands.
+  const renewalPending =
+    !!r.renewed_by_id && r.renewed_by_status === "pending_payment";
   const canRenew =
-    !r.renewed_by_id && (r.status === "active" || r.status === "completed");
+    (!r.renewed_by_id || renewalPending) &&
+    (r.status === "active" || r.status === "completed");
   if (!running && !canRenew && !r.renewed_by_id) return null;
 
   return (
@@ -580,18 +590,27 @@ function Renewal({
           <Link className="ms-cta" href={`/${locale}/rotations/${r.id}/renew`}>
             {t.renewFresh}
           </Link>
-          <button
-            type="button"
-            className="ms-cta ms-cta-quiet"
-            disabled={renew.isPending}
-            onClick={() => {
-              toggle.reset();
-              renew.mutate();
-            }}
-          >
-            {renew.isPending ? t.renewing : t.renew}
-          </button>
-          <p className="ms-sub">{t.renewNote}</p>
+          {renewalPending ? (
+            <p className="ms-sub">{t.editBeforePay}</p>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="ms-cta ms-cta-quiet"
+                disabled={renew.isPending}
+                onClick={() => {
+                  if (renew.isPending) return;
+                  toggle.reset();
+                  renew.mutate();
+                }}
+              >
+                {renew.isPending ? t.renewing : t.renew}
+              </button>
+              <p className="ms-sub">
+                {r.refresh_on_renew ? t.renewNoteFresh : t.renewNote}
+              </p>
+            </>
+          )}
         </div>
       )}
       {toggle.isError && (

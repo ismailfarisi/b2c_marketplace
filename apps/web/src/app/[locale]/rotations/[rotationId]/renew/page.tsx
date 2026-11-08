@@ -28,13 +28,18 @@ const COPY = {
     title: "Renew with fresh kitchens",
     lede: "Your next 4 weeks. We kept what you love and found new kitchens that deliver to you on the same days and meals.",
     starts: (d: string) => `Starts ${d}`,
-    week: (n: number) => `Week ${n}`,
+    week: (n: number) => `Kitchen ${n}`,
+    orderNote:
+      "Which kitchen cooks which week is set at checkout, by each kitchen's load. The kitchen that cooks your last week never starts the next rotation.",
+    tooFew:
+      "Not enough kitchens deliver to you right now for a full rotation. Try the rotation builder, or come back later.",
+    builder: "Build a rotation",
     perWeek: "/ week",
     perMeal: (m: string) => `${m} per meal`,
     swap: "Swap",
     keep: "Keep",
     cancelSwap: "Done",
-    pickFor: (n: number) => `Pick a kitchen for week ${n}`,
+    pickFor: (n: number) => `Pick kitchen ${n}`,
     inRotation: "In your current rotation",
     notAgain: "Not again",
     reasons: {
@@ -75,15 +80,20 @@ const COPY = {
     title: "جدّد بمطابخ جديدة",
     lede: "أسابيعك الأربعة التالية. أبقينا ما تحبه ووجدنا مطابخ جديدة توصّل إليك في نفس الأيام والوجبات.",
     starts: (d: string) => `يبدأ ${d}`,
-    week: (n: number) => `الأسبوع ${n}`,
+    week: (n: number) => `المطبخ ${n}`,
+    orderNote:
+      "يتحدد أي مطبخ يطبخ أي أسبوع عند الدفع بحسب حمل كل مطبخ. المطبخ الذي يطبخ أسبوعك الأخير لا يبدأ التناوب التالي أبدًا.",
+    tooFew:
+      "لا توجد مطابخ كافية توصّل إليك الآن لتناوب كامل. جرّب منشئ التناوب أو عُد لاحقًا.",
+    builder: "أنشئ تناوبًا",
     perWeek: "/ أسبوع",
     perMeal: (m: string) => `${m} للوجبة`,
     swap: "بدّل",
     keep: "أبقِ",
     cancelSwap: "تم",
-    pickFor: (n: number) => `اختر مطبخًا للأسبوع ${n}`,
+    pickFor: (n: number) => `اختر المطبخ ${n}`,
     inRotation: "في تناوبك الحالي",
-    notAgain: "ليس مجددًا",
+    notAgain: "ليس مرة أخرى",
     reasons: {
       loved: "أحببته",
       top_rated: "أعلى تقييم منك",
@@ -285,6 +295,15 @@ function Proposal({
         )}
       </fieldset>
 
+      {proposal.kitchens.length < 4 && (
+        <section className="ms-renew-total" role="status">
+          <p className="ms-note">{t.tooFew}</p>
+          <Link className="ms-cta ms-cta-quiet" href={`/${locale}/rotation`}>
+            {t.builder}
+          </Link>
+        </section>
+      )}
+
       <ol className="ms-rot-weeks ms-renew-weeks">
         {chosen.map((k, i) => (
           <li key={`${i}-${k.plan_id}`} className="ms-renew-slot">
@@ -318,6 +337,7 @@ function Proposal({
         ))}
       </ol>
       {repeats && <p className="ms-note">{t.fewer}</p>}
+      <p className="ms-sub">{t.orderNote}</p>
 
       {swapping != null && (
         <section className="ms-renew-pick" aria-label={t.pickFor(swapping + 1)}>

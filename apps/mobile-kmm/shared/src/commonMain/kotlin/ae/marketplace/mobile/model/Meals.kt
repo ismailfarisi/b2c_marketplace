@@ -538,6 +538,8 @@ data class Rotation(
     val currency: String = "AED",
     @SerialName("auto_renew") val autoRenew: Boolean = false,
     @SerialName("renewed_by_id") val renewedById: String? = null,
+    /** Status of the rotation that renews this one; pending_payment can still be edited. */
+    @SerialName("renewed_by_status") val renewedByStatus: String? = null,
     /** Renewals propose fresh kitchens instead of the same four. */
     @SerialName("refresh_on_renew") val refreshOnRenew: Boolean = false,
 
@@ -550,8 +552,14 @@ data class Rotation(
     /** Running or awaiting payment: renewal can change and it can be cancelled. */
     val live: Boolean get() = status == "active" || awaitingPayment
 
-    /** Paid and ran (or running), not renewed yet: what POST rotations/{id}/renew accepts. */
-    val renewable: Boolean get() = renewedById == null && (status == "active" || status == "completed")
+    /** Renewed automatically but not paid yet: the kitchens can still be changed. */
+    val renewalPending: Boolean get() = renewedById != null && renewedByStatus == "pending_payment"
+
+    /**
+     * Paid and ran (or running), not renewed yet or renewed but unpaid: what
+     * POST rotations/{id}/renew accepts (an unpaid renewal only with edited kitchens).
+     */
+    val renewable: Boolean get() = (renewedById == null || renewalPending) && (status == "active" || status == "completed")
 
     /**
      * When the renew button is worth showing: renewable and in the month's last

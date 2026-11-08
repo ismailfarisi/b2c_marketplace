@@ -172,7 +172,8 @@ export default function MySubscriptionsPage({
                   if (recap) return <RecapCard locale={locale} recap={recap} />;
                   // Without a recap (its CTA renews), one quiet renew link,
                   // and only once the month is in its last two weeks.
-                  return !r.renewed_by_id &&
+                  return (!r.renewed_by_id ||
+                    r.renewed_by_status === "pending_payment") &&
                     (r.status === "active" || r.status === "completed") &&
                     renewalNear(r.end_date) ? (
                     <Link

@@ -9,8 +9,11 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class RotationStateTest {
-    private fun rotation(status: String, renewedBy: String? = null) =
-        Rotation(status = status, startDate = "2026-11-09", endDate = "2026-12-06", weeks = emptyList(), amountMinor = 0, renewedById = renewedBy)
+    private fun rotation(status: String, renewedBy: String? = null, renewedByStatus: String? = null) =
+        Rotation(
+            status = status, startDate = "2026-11-09", endDate = "2026-12-06", weeks = emptyList(), amountMinor = 0,
+            renewedById = renewedBy, renewedByStatus = renewedByStatus,
+        )
 
     @Test
     fun unpaidRotationIsPayableAndLive() {
@@ -26,7 +29,16 @@ class RotationStateTest {
         assertTrue(rotation("completed").renewable)
         assertFalse(rotation("cancelled").renewable)
         assertFalse(rotation("active", renewedBy = "next").renewable)
+        assertFalse(rotation("active", renewedBy = "next", renewedByStatus = "active").renewable)
         assertFalse(rotation("cancelled").live)
+    }
+
+    @Test
+    fun unpaidAutomaticRenewalCanStillBeEdited() {
+        val r = rotation("active", renewedBy = "next", renewedByStatus = "pending_payment")
+        assertTrue(r.renewalPending)
+        assertTrue(r.renewable)
+        assertFalse(rotation("active", renewedBy = "next", renewedByStatus = "active").renewalPending)
     }
 
     @Test

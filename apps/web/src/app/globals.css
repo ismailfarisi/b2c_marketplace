@@ -3571,9 +3571,40 @@ body {
 .ms-renew-weeks li.ms-renew-slot {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "no kitchen price swap";
   gap: 10px;
   align-items: center;
   padding: 0.75rem 1.25rem;
+}
+.ms-renew-slot .ms-week-no {
+  grid-area: no;
+}
+.ms-renew-slot .ms-renew-kitchen {
+  grid-area: kitchen;
+}
+.ms-renew-slot .ms-renew-price {
+  grid-area: price;
+}
+.ms-renew-slot .ms-cta {
+  grid-area: swap;
+}
+/* On a phone the name needs the row: price goes under it, the per-meal
+   line may wrap, only the amount stays on one line. */
+@media (max-width: 520px) {
+  .ms-renew-weeks li.ms-renew-slot {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "no kitchen swap"
+      "no price swap";
+    row-gap: 4px;
+  }
+  .ms-renew-price {
+    text-align: start;
+    white-space: normal;
+  }
+  .ms-renew-price strong {
+    white-space: nowrap;
+  }
 }
 .ms-renew-weeks li + li {
   border-inline-start: 0;

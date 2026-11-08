@@ -1515,6 +1515,7 @@ private fun RotationCard(
                 Text(stringResource(R.string.meals_refresh_on_renew), color = M.Ink, fontSize = Type.Body, modifier = Modifier.weight(1f))
                 RenewSwitch(r.refreshOnRenew, enabled = !busy) { vm.setRotationRefresh(r.id, it) }
             }
+            Text(stringResource(R.string.meals_refresh_note), color = M.Muted, fontSize = Type.Secondary)
             Text(
                 stringResource(R.string.meals_cancel_rotation),
                 color = if (busy) M.Faint else Palette.Bad,
@@ -1545,12 +1546,22 @@ private fun RotationCard(
         // A recap carries its own renew CTA; otherwise one button, near the end of the month.
         if (recap == null && r.renewalNear()) {
             PrimaryButton(stringResource(R.string.meals_renew_fresh), { onRenew(r.id) }, enabled = !busy, modifier = Modifier.padding(top = Space.Small))
-            Text(
-                stringResource(R.string.meals_renew_rotation),
-                color = if (busy) M.Faint else M.Muted,
-                fontSize = Type.Secondary,
-                modifier = Modifier.clickable(enabled = !busy) { vm.renewRotation(r.id) }.padding(vertical = Space.Small),
-            )
+            if (r.renewalPending) {
+                // An unpaid automatic renewal: only the kitchens can still change.
+                Text(stringResource(R.string.meals_edit_before_pay), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(vertical = Space.Small))
+            } else {
+                Text(
+                    stringResource(R.string.meals_renew_rotation),
+                    color = if (busy) M.Faint else M.Muted,
+                    fontSize = Type.Secondary,
+                    modifier = Modifier.clickable(enabled = !busy) { vm.renewRotation(r.id) }.padding(vertical = Space.Small),
+                )
+                Text(
+                    stringResource(if (r.refreshOnRenew) R.string.meals_renew_note_fresh else R.string.meals_renew_note_same),
+                    color = M.Muted,
+                    fontSize = Type.Secondary,
+                )
+            }
         }
     }
 }
@@ -1619,13 +1630,16 @@ private fun RotationRenewPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: ()
                         modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
                     )
                     AdventureChips(p.adventure, enabled = !s.busy, onPick = vm::setRenewalAdventure)
+                    if (p.kitchens.size < MealsViewModel.ROTATION_KITCHENS) {
+                        Card { Text(stringResource(R.string.meals_renew_too_few), color = M.Muted, fontSize = Type.Body) }
+                    }
                     chosen.forEachIndexed { i, k ->
                         Card {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(10.dp).background(Warm.Weeks[i.mod(Warm.Weeks.size)], RoundedCornerShape(50)))
                                 Column(Modifier.weight(1f).padding(start = Space.Small)) {
                                     Text(
-                                        stringResource(R.string.meals_week, i + 1) + " · " + pick(k.kitchenName, k.kitchenNameAr, arabic),
+                                        stringResource(R.string.meals_kitchen_n, i + 1) + " · " + pick(k.kitchenName, k.kitchenNameAr, arabic),
                                         color = M.Ink,
                                         fontSize = Type.Body,
                                         fontWeight = FontWeight.SemiBold,
@@ -1653,6 +1667,7 @@ private fun RotationRenewPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: ()
                     if (chosen.map { it.branchId }.toSet().size < chosen.size) {
                         Text(stringResource(R.string.meals_renew_repeats), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge))
                     }
+                    Text(stringResource(R.string.meals_renew_order_note), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge, vertical = Space.Small))
                     swapping?.let { slot ->
                         Label(stringResource(R.string.meals_pick_for_week, slot + 1))
                         p.eligible.forEach { k ->

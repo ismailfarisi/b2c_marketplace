@@ -2232,6 +2232,7 @@ private struct RotationCard: View {
                     .disabled(busy)
                 RefreshToggle(on: r.refreshOnRenew) { vm.setRotationRefresh(id: r.id, on: $0) }
                     .disabled(busy)
+                Text("meals_refresh_note").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                 Button { confirming = true } label: {
                     Text("meals_cancel_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(busy ? MP.textFaint : MP.bad)
                 }
@@ -2242,11 +2243,19 @@ private struct RotationCard: View {
             if recap == nil && r.renewalNear() {
                 PrimaryButton(label: NSLocalizedString("meals_renew_fresh", comment: ""), enabled: !busy) { onRenew(r.id) }
                     .padding(.top, Space.small)
-                Button { vm.renewRotation(id: r.id) } label: {
-                    Text("meals_renew_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(busy ? MP.textFaint : MP.textMuted)
+                if r.renewalPending {
+                    // An unpaid automatic renewal: only the kitchens can still change.
+                    Text("meals_edit_before_pay").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                        .padding(.vertical, Space.small)
+                } else {
+                    Button { vm.renewRotation(id: r.id) } label: {
+                        Text("meals_renew_rotation").font(.system(size: TypeScale.secondary)).foregroundStyle(busy ? MP.textFaint : MP.textMuted)
+                    }
+                    .disabled(busy)
+                    .padding(.vertical, Space.small)
+                    Text(LocalizedStringKey(r.refreshOnRenew ? "meals_renew_note_fresh" : "meals_renew_note_same"))
+                        .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                 }
-                .disabled(busy)
-                .padding(.vertical, Space.small)
             }
         }
         .sheet(isPresented: $confirming) {
@@ -2356,12 +2365,17 @@ private struct RotationRenewPage: View {
                             .padding(.horizontal, Space.edge)
                             .padding(.vertical, Space.small)
                         AdventureChips(current: p.adventure, enabled: !s.busy) { vm.setRenewalAdventure(adventure: $0) }
+                        if p.kitchens.count < 4 {
+                            CardBox {
+                                Text("meals_renew_too_few").font(.system(size: TypeScale.body)).foregroundStyle(MP.textMuted)
+                            }
+                        }
                         ForEach(Array(chosen.enumerated()), id: \.offset) { i, k in
                             CardBox {
                                 HStack(alignment: .top, spacing: Space.small) {
                                     Circle().fill(Warm.weeks[i % 4]).frame(width: 10, height: 10).padding(.top, 5)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(tr("meals_week", i + 1) + " · " + pick(k.kitchenName, k.kitchenNameAr))
+                                        Text(tr("meals_kitchen_n", i + 1) + " · " + pick(k.kitchenName, k.kitchenNameAr))
                                             .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
                                         Text(reasonLabel(k) + starText(k.rating))
                                             .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
@@ -2387,6 +2401,10 @@ private struct RotationRenewPage: View {
                                 .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                                 .padding(.horizontal, Space.edge)
                         }
+                        Text("meals_renew_order_note")
+                            .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                            .padding(.horizontal, Space.edge)
+                            .padding(.vertical, Space.small)
                         if let slot = swapping {
                             FieldLabel(text: tr("meals_pick_for_week", slot + 1))
                             ForEach(p.eligible, id: \.planId) { k in
