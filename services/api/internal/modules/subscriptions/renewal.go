@@ -445,15 +445,14 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 	if err != nil {
 		return Rotation{}, err
 	}
+	var replacing *uuid.UUID
 	if r.RenewedByID != nil {
 		// An automatic renewal nobody has paid for yet gives way to the
 		// customer's edited kitchens; a paid one stands.
 		if !renewalPending(r) || len(opts.PlanIDs) == 0 {
 			return Rotation{}, httpx.Coded(httpx.ErrConflict, "already_renewed", "This rotation has already been renewed.")
 		}
-		if err := s.CancelRotation(ctx, userID, *r.RenewedByID, "replaced by an edited renewal"); err != nil {
-			return Rotation{}, err
-		}
+		replacing = r.RenewedByID
 	}
 	if r.Status == "pending_payment" {
 		return Rotation{}, httpx.Coded(httpx.ErrConflict, "not_paid", "Pay for this rotation before renewing it.")
@@ -481,10 +480,33 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 	if err != nil {
 		return Rotation{}, err
 	}
-	return s.createRotation(ctx, RotationInput{
+	in := RotationInput{
 		UserID: userID, AddressID: addressID, PlanIDs: plans, StartDate: start,
 		Weekdays: r.Weekdays, Slots: r.MealSlots, RefreshOnRenew: r.RefreshOnRenew,
-	}, uuid.NullUUID{UUID: id, Valid: true}, notFirst)
+	}
+	if replacing != nil {
+		// The edited kitchens must be good before the renewal they replace
+		// is cancelled, or a bad plan id leaves the customer with nothing.
+		if err := s.checkRotation(ctx, in); err != nil {
+			return Rotation{}, err
+		}
+		if err := s.CancelRotation(ctx, userID, *replacing, "replaced by an edited renewal"); err != nil {
+			return Rotation{}, err
+		}
+	}
+	return s.createRotation(ctx, in, uuid.NullUUID{UUID: id, Valid: true}, notFirst)
+}
+
+// checkRotation runs the validation createRotation would, without creating
+// anything.
+func (s *Service) checkRotation(ctx context.Context, in RotationInput) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("subscriptions: check rotation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	_, _, _, err = s.prepareRotation(ctx, tx, in)
+	return err
 }
 
 // SetRotationRefresh turns fresh kitchens at renewal on or off for a rotation.

@@ -82,3 +82,61 @@ func testCappedProposalAvoids(t *testing.T, avoided, plain int) {
 		t.Fatalf("total %d over the cap %d", total, cap)
 	}
 }
+
+// Editing an unpaid renewal replaces it; a bad edit must not cancel it.
+func TestEditedRenewalIsValidatedBeforeTheOldOneGoes(t *testing.T) {
+	f := newSwapFixture(t, 1)
+	ctx := context.Background()
+	now := time.Now()
+
+	first, err := f.svc.RenewRotation(ctx, f.userID, f.rotation.ID, now, RenewOptions{})
+	if err != nil {
+		t.Fatalf("renew: %v", err)
+	}
+	if first.Status != "pending_payment" || first.RenewedFromID == nil || *first.RenewedFromID != f.rotation.ID {
+		t.Fatalf("renewal = %+v", first)
+	}
+
+	// Three plans, one of them twice: invalid.
+	bad := []uuid.UUID{f.plans[0], f.plans[1], f.plans[2], f.plans[2]}
+	if _, err := f.svc.RenewRotation(ctx, f.userID, f.rotation.ID, now, RenewOptions{PlanIDs: bad}); err == nil {
+		t.Fatal("an edit with the same kitchen twice must be rejected")
+	}
+	r, err := f.svc.MyRotation(ctx, f.userID, f.rotation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.RenewedByID == nil || *r.RenewedByID != first.ID || !renewalPending(r) {
+		t.Fatalf("the rejected edit cancelled the renewal: renewed_by=%v status=%v", r.RenewedByID, r.RenewedByStatus)
+	}
+	if _, err := f.svc.RenewRotation(ctx, f.userID, f.rotation.ID, now, RenewOptions{PlanIDs: []uuid.UUID{uuid.New(), f.plans[1], f.plans[2], f.plans[4]}}); err == nil {
+		t.Fatal("an edit with an unknown plan must be rejected")
+	}
+	var status string
+	if err := f.pool.QueryRow(ctx, `SELECT status FROM meal_rotations WHERE id = $1`, first.ID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "pending_payment" {
+		t.Fatalf("the rejected edit left the renewal %s", status)
+	}
+
+	good := []uuid.UUID{f.plans[0], f.plans[1], f.plans[4], f.plans[5]}
+	second, err := f.svc.RenewRotation(ctx, f.userID, f.rotation.ID, now, RenewOptions{PlanIDs: good})
+	if err != nil {
+		t.Fatalf("edited renew: %v", err)
+	}
+	if second.ID == first.ID {
+		t.Fatal("the edit must create a new renewal")
+	}
+	var oldStatus string
+	if err := f.pool.QueryRow(ctx, `SELECT status FROM meal_rotations WHERE id = $1`, first.ID).Scan(&oldStatus); err != nil {
+		t.Fatal(err)
+	}
+	if oldStatus != "cancelled" {
+		t.Fatalf("the replaced renewal is %s, want cancelled", oldStatus)
+	}
+	r, _ = f.svc.MyRotation(ctx, f.userID, f.rotation.ID)
+	if r.RenewedByID == nil || *r.RenewedByID != second.ID {
+		t.Fatalf("renewed_by = %v, want %s", r.RenewedByID, second.ID)
+	}
+}
