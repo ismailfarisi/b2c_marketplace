@@ -580,10 +580,12 @@ func (s *Service) recap(ctx context.Context, tx pgx.Tx, userID uuid.UUID, r reca
 		Kitchens:      []RecapKitchen{}, RenewPath: renewPath(r.id),
 	}
 	rows, err := tx.Query(ctx, `
-		SELECT s.rotation_week, b.id, b.name, b.name_ar, b.cover_image_url, COALESCE(b.cuisines, '{}')
+		SELECT DISTINCT ON (s.rotation_week)
+		       s.rotation_week, b.id, b.name, b.name_ar, b.cover_image_url, COALESCE(b.cuisines, '{}')
 		  FROM subscriptions s JOIN vendor_branches b ON b.id = s.branch_id
 		 WHERE s.rotation_id = $1 AND s.rotation_week IS NOT NULL
-		 ORDER BY s.rotation_week`, r.id)
+		 -- A swapped week keeps its cancelled subscription; the live one cooked.
+		 ORDER BY s.rotation_week, s.status = 'cancelled', s.created_at DESC`, r.id)
 	if err != nil {
 		return rc, err
 	}

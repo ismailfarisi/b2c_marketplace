@@ -305,18 +305,26 @@ type RenewOptions struct {
 	// PlanIDs is the customer's edited proposal: exactly four plans, checked
 	// like a new rotation. Empty keeps the default.
 	PlanIDs []uuid.UUID
-	// Refresh lets the renewal follow the rotation's refresh_on_renew setting
-	// and take the (price-capped) proposal; the worker sets it.
+	// Refresh is set by the worker; kept for callers, the rotation's own
+	// refresh_on_renew is what decides (see renewalPlans).
 	Refresh bool
+}
+
+// renewalPending says the rotation's renewal exists but has not been paid for:
+// the customer may still edit it (the edited renewal replaces it).
+func renewalPending(r Rotation) bool {
+	return r.RenewedByID != nil && r.RenewedByStatus != nil && *r.RenewedByStatus == "pending_payment"
 }
 
 // renewalPlans decides which four plans a renewal uses. propose is only called
 // when the rotation refreshes; with refresh off, the same kitchens come back.
+// The rotation's own refresh_on_renew decides, whoever renews it: a customer
+// tapping "Renew" gets the fresh kitchens the setting promised.
 func renewalPlans(r Rotation, opts RenewOptions, propose func() ([]uuid.UUID, error)) ([]uuid.UUID, error) {
 	if len(opts.PlanIDs) > 0 {
 		return opts.PlanIDs, nil
 	}
-	if opts.Refresh && r.RefreshOnRenew {
+	if r.RefreshOnRenew {
 		if ids, err := propose(); err == nil && len(ids) == RotationKitchens {
 			return ids, nil
 		} else if err != nil {
@@ -416,7 +424,7 @@ func (s *Service) RenewalProposal(ctx context.Context, userID, id uuid.UUID, now
 	if err != nil {
 		return RenewalProposal{}, err
 	}
-	if r.RenewedByID != nil {
+	if r.RenewedByID != nil && !renewalPending(r) {
 		return RenewalProposal{}, httpx.Coded(httpx.ErrConflict, "already_renewed", "This rotation has already been renewed.")
 	}
 	if r.Status == "pending_payment" {
@@ -492,7 +500,9 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 		SELECT b.cuisines, s.rotation_id IN ($2, (SELECT renewed_from_id FROM meal_rotations WHERE id = $2))
 		  FROM subscriptions s JOIN vendor_branches b ON b.id = s.branch_id
 		 WHERE s.user_id = $1 AND s.status IN ('active', 'completed', 'suspended', 'cancelled')
-		   AND EXISTS (SELECT 1 FROM subscription_cycles c WHERE c.subscription_id = s.id AND c.status = 'paid')`,
+		   AND EXISTS (SELECT 1 FROM subscription_cycles c WHERE c.subscription_id = s.id AND c.status = 'paid')
+		   -- A week swapped away before it started was never eaten.
+		   AND NOT EXISTS (SELECT 1 FROM meal_rotation_swaps sw WHERE sw.old_subscription_id = s.id)`,
 		userID, r.ID)
 	if err != nil {
 		return out, fmt.Errorf("subscriptions: eaten cuisines: %w", err)

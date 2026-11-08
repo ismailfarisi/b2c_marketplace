@@ -235,10 +235,11 @@ func TestRenewalPlansRefreshOnUsesProposal(t *testing.T) {
 	if err != nil || got[0] != want[0] || got[3] != want[3] {
 		t.Fatalf("refresh on should take the proposal, got %v (%v)", got, err)
 	}
-	// A manual renewal without an edited list keeps the kitchens even with refresh on.
-	got, _ = renewalPlans(r, RenewOptions{}, func() ([]uuid.UUID, error) { t.Fatal("not refreshing"); return nil, nil })
-	if got[0] != r.Weeks[0].PlanID {
-		t.Error("a plain renew keeps the same plans")
+	// A manual renewal without an edited list honours refresh_on_renew too:
+	// the customer was promised fresh kitchens.
+	got, _ = renewalPlans(r, RenewOptions{}, func() ([]uuid.UUID, error) { return want, nil })
+	if got[0] != want[0] {
+		t.Error("a plain renew with refresh on takes the proposal")
 	}
 	// The customer's own list wins over everything.
 	edited := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}

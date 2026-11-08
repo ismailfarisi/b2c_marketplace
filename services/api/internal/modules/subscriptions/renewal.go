@@ -446,7 +446,14 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 		return Rotation{}, err
 	}
 	if r.RenewedByID != nil {
-		return Rotation{}, httpx.Coded(httpx.ErrConflict, "already_renewed", "This rotation has already been renewed.")
+		// An automatic renewal nobody has paid for yet gives way to the
+		// customer's edited kitchens; a paid one stands.
+		if !renewalPending(r) || len(opts.PlanIDs) == 0 {
+			return Rotation{}, httpx.Coded(httpx.ErrConflict, "already_renewed", "This rotation has already been renewed.")
+		}
+		if err := s.CancelRotation(ctx, userID, *r.RenewedByID, "replaced by an edited renewal"); err != nil {
+			return Rotation{}, err
+		}
 	}
 	if r.Status == "pending_payment" {
 		return Rotation{}, httpx.Coded(httpx.ErrConflict, "not_paid", "Pay for this rotation before renewing it.")
