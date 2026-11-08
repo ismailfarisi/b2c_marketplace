@@ -12,6 +12,7 @@ import ae.marketplace.mobile.meals.SubscriptionUiState
 import ae.marketplace.mobile.model.CancelReasons
 import ae.marketplace.mobile.model.CheaperPlans
 import ae.marketplace.mobile.model.GuestWeekOption
+import ae.marketplace.mobile.model.MealTags
 import ae.marketplace.mobile.model.MySubscription
 import ae.marketplace.mobile.network.Failure
 import androidx.compose.foundation.background
@@ -296,7 +297,7 @@ private fun GuestOptionRow(o: GuestWeekOption, arabic: Boolean, selected: Boolea
             .padding(horizontal = Space.Medium, vertical = 10.dp),
     ) {
         Text(pick(o.kitchenName, o.kitchenNameAr, arabic), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
-        if (o.cuisines.isNotEmpty()) Text(o.cuisines.joinToString(" · "), color = M.Muted, fontSize = Type.Secondary)
+        if (o.cuisines.isNotEmpty()) Text(o.cuisines.joinToString(" · ") { MealTags.label(it, arabic) }, color = M.Muted, fontSize = Type.Secondary)
         Text(
             stringResource(R.string.meals_per_meal, money(o.perMealMinor, o.currency)) + " · " +
                 stringResource(R.string.meals_guest_week_price, money(o.weekMinor, o.currency)),

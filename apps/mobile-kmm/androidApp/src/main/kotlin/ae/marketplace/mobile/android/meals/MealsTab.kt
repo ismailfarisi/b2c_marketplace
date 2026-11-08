@@ -2052,7 +2052,7 @@ private fun SwapPickerCard(w: RotationWeek, currency: String, arabic: Boolean, s
                         val rating = o.rating
                         Text(
                             (if (rating != null) "%.1f ★ · %d".format(rating, o.ratingCount) else stringResource(R.string.meals_new_kitchen)) +
-                                (if (o.cuisines.isNotEmpty()) " · " + o.cuisines.joinToString(", ") else ""),
+                                (if (o.cuisines.isNotEmpty()) " · " + o.cuisines.joinToString(if (arabic) "، " else ", ") { MealTags.label(it, arabic) } else ""),
                             color = M.Muted,
                             fontSize = Type.Caption,
                         )

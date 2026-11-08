@@ -1286,6 +1286,10 @@ a.ms-cta {
   align-items: start;
   padding-block: 0.9rem;
 }
+/* The swap picker sits under its week, across the whole row. */
+.ms-timeline li > .ms-swap-picker {
+  grid-column: 1 / -1;
+}
 .ms-week-body {
   display: flex;
   flex-direction: column;

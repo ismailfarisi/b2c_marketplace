@@ -2732,7 +2732,7 @@ private struct SwapPickerCard: View {
     private func ratingLine(_ o: RotationSwapOption) -> String {
         let rated = o.rating.map { String(format: "%.1f ★ · %d", $0.doubleValue, Int(o.ratingCount)) }
             ?? NSLocalizedString("meals_new_kitchen", comment: "")
-        return o.cuisines.isEmpty ? rated : rated + " · " + o.cuisines.joined(separator: ", ")
+        return o.cuisines.isEmpty ? rated : rated + " · " + o.cuisines.map(tagLabel).joined(separator: isArabicLocale ? "، " : ", ")
     }
 }
 
@@ -3491,7 +3491,7 @@ private struct GuestOptionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(pick(o.kitchenName, o.kitchenNameAr)).font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
                 if !o.cuisines.isEmpty {
-                    Text(o.cuisines.joined(separator: " · ")).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                    Text(o.cuisines.map(tagLabel).joined(separator: " · ")).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
                 }
                 Text(tr("meals_per_meal", money(o.perMealMinor, o.currency)) + " · " + tr("meals_guest_week_price", money(o.weekMinor, o.currency)))
                     .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)

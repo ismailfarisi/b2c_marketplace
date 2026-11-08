@@ -2,14 +2,15 @@
 
 import { ApiError, formatMoney } from "@marketplace/api-client";
 
-import { LoadError } from "@/components/load-error";
+import { LoadError, OfflineError } from "@/components/load-error";
+import { tagLabel } from "@/components/meals/kitchen-card";
 import { CancelFlow } from "@/components/meals/cancel-reasons";
 import { RecapCard } from "@/components/meals/next-week";
 import { rotationProblem } from "@/lib/rotation-problem";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { use, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 
 import {
   CustomerShell,
@@ -367,24 +368,25 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
                   </>
                 )}
               </span>
+              {picking === w.week && (
+                // Under its own week, so on a phone the picker opens where
+                // the tap was rather than four cards further down.
+                <SwapPicker
+                  r={r}
+                  week={w.week}
+                  locale={locale}
+                  t={t}
+                  onClose={() => setPicking(null)}
+                  onDone={async () => {
+                    setPicking(null);
+                    await refresh();
+                  }}
+                />
+              )}
             </li>
           ))}
         </ol>
       </section>
-
-      {picking !== null && (
-        <SwapPicker
-          r={r}
-          week={picking}
-          locale={locale}
-          t={t}
-          onClose={() => setPicking(null)}
-          onDone={async () => {
-            setPicking(null);
-            await refresh();
-          }}
-        />
-      )}
 
       {recap && <RecapCard locale={locale} recap={recap} />}
       <Renewal r={r} locale={locale} t={t} onDone={refresh} />
@@ -437,6 +439,13 @@ function SwapPicker({
   });
   const [planId, setPlanId] = useState<string | null>(null);
   const key = useIdempotencyKey();
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
+  // A double-click must not send the same swap twice; the mutation's
+  // isPending is not yet true on the second click, so a ref guards it.
+  const inFlight = useRef(false);
   const swap = useMutation({
     mutationFn: (id: string) =>
       swapRotationWeek(r.id, week, id, { headers: key.headers() }),
@@ -448,6 +457,9 @@ function SwapPicker({
         return;
       }
       await onDone();
+    },
+    onSettled: () => {
+      inFlight.current = false;
     },
   });
   const money = (n: number) =>
@@ -464,8 +476,10 @@ function SwapPicker({
   const chosen = q.data?.items.find((o) => o.plan_id === planId) ?? null;
 
   return (
-    <section className="ms-callout" aria-live="polite">
-      <h2>{t.pickTitle(week)}</h2>
+    <section className="ms-callout ms-swap-picker" aria-live="polite">
+      <h2 ref={heading} tabIndex={-1}>
+        {t.pickTitle(week)}
+      </h2>
       <p className="ms-sub">{t.pickNote}</p>
       {current && (
         <p className="ms-sub">
@@ -474,7 +488,13 @@ function SwapPicker({
             ` · ${t.changeUntil(formatDay(locale, current.swap_until))}`}
         </p>
       )}
-      {q.isPending ? (
+      {q.isPending && q.fetchStatus === "paused" ? (
+        <LoadError
+          error={new OfflineError()}
+          onRetry={() => void q.refetch()}
+          locale={locale}
+        />
+      ) : q.isPending ? (
         <p className="ms-note">{t.loading}</p>
       ) : q.isError ? (
         <LoadError
@@ -504,7 +524,8 @@ function SwapPicker({
                   {o.rating !== null
                     ? t.rated(o.rating.toFixed(1), o.rating_count)
                     : t.unrated}
-                  {o.cuisines.length > 0 && ` · ${o.cuisines.join(", ")}`}
+                  {o.cuisines.length > 0 &&
+                    ` · ${o.cuisines.map((c) => tagLabel(c, locale)).join(locale === "ar" ? "، " : ", ")}`}
                 </span>
               </span>
               <span className="ms-sub-side">
@@ -528,8 +549,13 @@ function SwapPicker({
           className="ms-cta"
           disabled={!chosen || swap.isPending}
           onClick={() => {
-            if (chosen && window.confirm(t.swapConfirm(name(chosen))))
+            if (!chosen || inFlight.current) return;
+            inFlight.current = true;
+            if (window.confirm(t.swapConfirm(name(chosen)))) {
               swap.mutate(chosen.plan_id);
+            } else {
+              inFlight.current = false;
+            }
           }}
         >
           {swap.isPending
