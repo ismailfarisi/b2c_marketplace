@@ -8,8 +8,14 @@ import { use, useEffect, useState, type FormEvent } from "react";
 
 import { LoadError } from "@/components/load-error";
 import { CancelFlow } from "@/components/meals/cancel-reasons";
-import { DeliveryStatus, RecentDeliveries } from "@/components/meals/delivery-status";
-import { GUEST_WEEK_ANCHOR, GuestWeekCard } from "@/components/meals/guest-week";
+import {
+  DeliveryStatus,
+  RecentDeliveries,
+} from "@/components/meals/delivery-status";
+import {
+  GUEST_WEEK_ANCHOR,
+  GuestWeekCard,
+} from "@/components/meals/guest-week";
 import { RateKitchen } from "@/components/meals/rate-kitchen";
 import {
   CustomerShell,
@@ -25,7 +31,6 @@ import {
   clearMyTaste,
   listMyTastes,
   setMyTaste,
-
   getCheaperPlans,
   getMySubscription,
   pauseSubscription,
@@ -84,7 +89,8 @@ const COPY = {
       `You can pause up to ${left} more day${left === 1 ? "" : "s"} this cycle. Paused days move to the end of the cycle.`,
     resume: "Resume deliveries",
     resuming: "Resuming…",
-    resumeNote: "Deliveries restart from the first day still before its cutoff.",
+    resumeNote:
+      "Deliveries restart from the first day still before its cutoff.",
     resumed: (d: string) => `Deliveries resume ${d}.`,
     cancelling: "Cancelling…",
     from: "From",
@@ -326,8 +332,7 @@ function Detail({
   const firstDelivery = s.upcoming[0]?.date ?? null;
   const meals = [...s.upcoming, ...(s.skipped ?? [])].sort(
     (a, b) =>
-      a.date.localeCompare(b.date) ||
-      a.cutoff_at.localeCompare(b.cutoff_at),
+      a.date.localeCompare(b.date) || a.cutoff_at.localeCompare(b.cutoff_at),
   );
   const money = (n: number) =>
     formatMoney({ amount: n, currency: s.currency }, locale);
@@ -421,7 +426,9 @@ function Detail({
             </p>
           )}
           {s.wallet_applied_minor > 0 && (
-            <p className="ms-note">{t.walletApplied(money(s.wallet_applied_minor))}</p>
+            <p className="ms-note">
+              {t.walletApplied(money(s.wallet_applied_minor))}
+            </p>
           )}
           <button
             type="button"
@@ -970,17 +977,34 @@ function Cancel({
  * replaces the avoid (and the other way round); tapping the active mark again
  * clears it.
  */
-function DishMarks({ dishId, locale, t }: { dishId: string; locale: Locale; t: Copy }) {
+function DishMarks({
+  dishId,
+  locale,
+  t,
+}: {
+  dishId: string;
+  locale: Locale;
+  t: Copy;
+}) {
   const qc = useQueryClient();
-  const tastes = useQuery({ queryKey: ["me", "tastes"], queryFn: listMyTastes });
+  const tastes = useQuery({
+    queryKey: ["me", "tastes"],
+    queryFn: listMyTastes,
+  });
   const mark =
-    tastes.data?.items.find((x) => x.subject_kind === "dish" && x.subject_id === dishId)
-      ?.sentiment ?? null;
+    tastes.data?.items.find(
+      (x) => x.subject_kind === "dish" && x.subject_id === dishId,
+    )?.sentiment ?? null;
   const [error, setError] = useState<string | null>(null);
   const tap = useBusyGuard();
   const flip = useMutation({
     mutationFn: async (next: "favourite" | "avoid" | null) => {
-      if (next) await setMyTaste({ subject_kind: "dish", subject_id: dishId, sentiment: next });
+      if (next)
+        await setMyTaste({
+          subject_kind: "dish",
+          subject_id: dishId,
+          sentiment: next,
+        });
       else await clearMyTaste("dish", dishId);
     },
     onSuccess: async () => {
@@ -997,7 +1021,15 @@ function DishMarks({ dishId, locale, t }: { dishId: string; locale: Locale; t: C
     <span className="ms-taste">
       {mark === "favourite" ? (
         <>
-          <small className="ms-taste-on">♥ {t.loved}</small>{" "}
+          <button
+            type="button"
+            className="ms-link ms-taste-on"
+            disabled={busy}
+            aria-pressed={true}
+            onClick={tap.guard(() => flip.mutate(null))}
+          >
+            ♥ {t.loved}
+          </button>{" "}
           <button
             type="button"
             className="ms-link"

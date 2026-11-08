@@ -2148,7 +2148,7 @@ private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsV
             val saving = chosen in tasteBusy
             when (chosen) {
                 in loved -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
-                    Text("♥ " + stringResource(R.string.meals_dish_loved), color = M.Leaf, fontSize = Type.Caption, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text("♥ " + stringResource(R.string.meals_dish_loved), color = M.Leaf, fontSize = Type.Caption, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).clickable(enabled = !saving) { vm.setDishLoved(chosen, false) })
                     Text(
                         stringResource(R.string.meals_undo),
                         color = if (saving) M.Faint else M.Chilli,

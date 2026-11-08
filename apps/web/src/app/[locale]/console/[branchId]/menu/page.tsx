@@ -125,7 +125,8 @@ export default function MenuPage() {
   const copyKey = useIdempotencyKey();
   useEffect(() => copyKey.reset(), [viewWeek, copyKey]);
   const copy = useMutation({
-    mutationFn: (to: number) => copyMenuWeek(id, to, 1, { headers: copyKey.headers() }),
+    mutationFn: (to: number) =>
+      copyMenuWeek(id, to, 1, { headers: copyKey.headers() }),
     onSuccess: (m) => {
       copyKey.reset();
       qc.setQueryData(["vendor", "menu", id], m);
@@ -337,11 +338,16 @@ export default function MenuPage() {
                             {c?.default ? (
                               <>
                                 <span className="default" dir="auto">
-                                  {c.default.name}
+                                  {(locale === "ar" && c.default.name_ar) ||
+                                    c.default.name}
                                 </span>
                                 {c.alternative ? (
                                   <span className="alt" dir="auto">
-                                    {t.menu.or(c.alternative.name)}
+                                    {t.menu.or(
+                                      (locale === "ar" &&
+                                        c.alternative.name_ar) ||
+                                        c.alternative.name,
+                                    )}
                                   </span>
                                 ) : null}
                               </>
@@ -378,8 +384,8 @@ export default function MenuPage() {
           dishesHref={`${branch.base}/dishes`}
           onCancel={() => setSelected(null)}
           onSave={tap.guard((def: string | null, alt: string | null) =>
-            save.mutate({ ...selected, week: viewWeek, def, alt }))
-          }
+            save.mutate({ ...selected, week: viewWeek, def, alt }),
+          )}
         />
       ) : null}
     </>

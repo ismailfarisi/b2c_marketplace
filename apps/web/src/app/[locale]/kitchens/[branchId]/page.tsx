@@ -8,7 +8,11 @@ import { use, useEffect, useState, type KeyboardEvent } from "react";
 import { KitchenCover } from "@/components/meals/cover";
 import { DishPhoto, shortMoney } from "@/components/meals/food";
 import { useCustomerPoint } from "@/components/meals/location";
-import { CustomerShell, signInHref, useHasSession } from "@/components/meals/shell";
+import {
+  CustomerShell,
+  signInHref,
+  useHasSession,
+} from "@/components/meals/shell";
 import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
 import {
   RatingBadge,
@@ -26,7 +30,12 @@ import type { MenuChoice, MenuSlot } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
 import { allergenLine } from "@/components/meals/allergens";
 import { LoadError } from "@/components/load-error";
-import { clearMyTaste, listMyTastes, setMyTaste, type Sentiment } from "@/lib/customer-api";
+import {
+  clearMyTaste,
+  listMyTastes,
+  setMyTaste,
+  type Sentiment,
+} from "@/lib/customer-api";
 import { problemMessage } from "@/lib/problem";
 
 const COPY = {
@@ -87,6 +96,8 @@ const COPY = {
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     menuWeeksNote: (n: number) =>
       `A different menu each week for ${n} weeks, then it starts again. Where two dishes are listed you choose one before the cutoff.`,
+    menuCycleNote: (n: number) =>
+      `The menu runs in a ${n}-week cycle, then starts again. Where two dishes are listed you choose one before the cutoff.`,
     menuWeeksTabs: "Menu weeks",
     thisWeek: "This week",
     nextWeek: "Next week",
@@ -166,6 +177,8 @@ const COPY = {
     ],
     menuWeeksNote: (n: number) =>
       `قائمة مختلفة كل أسبوع لمدة ${n === 2 ? "أسبوعين" : `${n} أسابيع`}، ثم تبدأ من جديد. عند وجود طبقين تختار أحدهما قبل الموعد النهائي.`,
+    menuCycleNote: (n: number) =>
+      `تدور القائمة على ${n === 2 ? "أسبوعين" : `${n} أسابيع`}، ثم تبدأ من جديد. عند وجود طبقين تختار أحدهما قبل الموعد النهائي.`,
     menuWeeksTabs: "أسابيع القائمة",
     thisWeek: "هذا الأسبوع",
     nextWeek: "الأسبوع القادم",
@@ -568,7 +581,11 @@ export default function KitchenPage({
             <section className="ms-k-menu">
               <h2>{t.menu}</h2>
               <p className="ms-sub">
-                {k.menu_weeks > 1 ? t.menuWeeksNote(k.menu_weeks) : t.menuNote}
+                {k.menu_weeks <= 1
+                  ? t.menuNote
+                  : k.no_repeat_weeks >= k.menu_weeks
+                    ? t.menuWeeksNote(k.menu_weeks)
+                    : t.menuCycleNote(k.menu_weeks)}
               </p>
               <MenuByWeek k={k} locale={locale} t={t} />
             </section>
@@ -787,7 +804,15 @@ function mealsPerCycle(p: {
 }
 
 /** Heart or "not again" on the kitchen: remembered for renewal proposals. Signed out it points at sign-in. */
-function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" | "ar"; t: Copy }) {
+function KitchenTaste({
+  branchId,
+  locale,
+  t,
+}: {
+  branchId: string;
+  locale: "en" | "ar";
+  t: Copy;
+}) {
   const hasSession = useHasSession();
   const qc = useQueryClient();
   const tastes = useQuery({
@@ -802,7 +827,12 @@ function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" 
   const tap = useBusyGuard();
   const flip = useMutation({
     mutationFn: async (s: Sentiment | null) => {
-      if (s) await setMyTaste({ subject_kind: "kitchen", subject_id: branchId, sentiment: s });
+      if (s)
+        await setMyTaste({
+          subject_kind: "kitchen",
+          subject_id: branchId,
+          sentiment: s,
+        });
       else await clearMyTaste("kitchen", branchId);
     },
     onSuccess: async () => {
@@ -816,7 +846,9 @@ function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" 
   if (!hasSession) {
     return (
       <p className="ms-taste ms-sub">
-        <Link href={signInHref(locale, `/${locale}/kitchens/${branchId}`)}>♡ {t.tasteSignIn}</Link>
+        <Link href={signInHref(locale, `/${locale}/kitchens/${branchId}`)}>
+          ♡ {t.tasteSignIn}
+        </Link>
       </p>
     );
   }
@@ -827,29 +859,59 @@ function KitchenTaste({ branchId, locale, t }: { branchId: string; locale: "en" 
       {mark === "favourite" ? (
         <>
           <span className="ms-taste-on">♥ {t.hearted}</span>
-          <button type="button" className="ms-link" disabled={busy} onClick={set(null)}>
+          <button
+            type="button"
+            className="ms-link"
+            disabled={busy}
+            onClick={set(null)}
+          >
             {t.undoTaste}
           </button>
-          <button type="button" className="ms-link" disabled={busy} onClick={set("avoid")}>
+          <button
+            type="button"
+            className="ms-link"
+            disabled={busy}
+            onClick={set("avoid")}
+          >
             {t.notAgain}
           </button>
         </>
       ) : mark === "avoid" ? (
         <>
           <span className="ms-taste-on">⊘ {t.avoidedKitchen}</span>
-          <button type="button" className="ms-link" disabled={busy} onClick={set(null)}>
+          <button
+            type="button"
+            className="ms-link"
+            disabled={busy}
+            onClick={set(null)}
+          >
             {t.undoTaste}
           </button>
-          <button type="button" className="ms-link" disabled={busy} onClick={set("favourite")}>
+          <button
+            type="button"
+            className="ms-link"
+            disabled={busy}
+            onClick={set("favourite")}
+          >
             ♡ {t.heart}
           </button>
         </>
       ) : (
         <>
-          <button type="button" aria-pressed={false} disabled={busy} onClick={set("favourite")}>
+          <button
+            type="button"
+            aria-pressed={false}
+            disabled={busy}
+            onClick={set("favourite")}
+          >
             ♡ {t.heart}
           </button>
-          <button type="button" aria-pressed={false} disabled={busy} onClick={set("avoid")}>
+          <button
+            type="button"
+            aria-pressed={false}
+            disabled={busy}
+            onClick={set("avoid")}
+          >
             {t.notAgain}
           </button>
         </>

@@ -12,6 +12,7 @@ import {
   type GuestWeekOption,
   type MySubscriptionDetail,
 } from "@/lib/customer-api";
+import { tagLabel } from "@/components/meals/kitchen-card";
 import { problemMessage } from "@/lib/problem";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
@@ -46,7 +47,8 @@ const COPY = {
     guestOf: (own: string) => `A one-week guest from your ${own} subscription.`,
     backToOwn: "Back to my subscription",
     makeRotation: "Liked the change? Make it a rotation",
-    makeRotationLede: "Four kitchens, each cooking one week — never the same menu twice in a month.",
+    makeRotationLede:
+      "Four kitchens, each cooking one week — never the same menu twice in a month.",
     build: "Build my rotation",
   },
   ar: {
@@ -73,12 +75,14 @@ const COPY = {
     guestOf: (own: string) => `ضيف لأسبوع واحد من اشتراكك في ${own}.`,
     backToOwn: "العودة إلى اشتراكي",
     makeRotation: "أعجبك التغيير؟ اجعله تناوبًا",
-    makeRotationLede: "أربعة مطابخ، كل منها يطبخ أسبوعًا — لا تتكرر القائمة مرتين في الشهر.",
+    makeRotationLede:
+      "أربعة مطابخ، كل منها يطبخ أسبوعًا — لا تتكرر القائمة مرتين في الشهر.",
     build: "أنشئ تناوبي",
   },
 };
 
-const name = (locale: Locale, en: string, ar: string | null) => (locale === "ar" && ar) || en;
+const name = (locale: Locale, en: string, ar: string | null) =>
+  (locale === "ar" && ar) || en;
 
 export function GuestWeekCard({
   s,
@@ -90,7 +94,8 @@ export function GuestWeekCard({
   onDone: () => Promise<unknown>;
 }) {
   const t = COPY[locale];
-  const money = (n: number, c: string) => formatMoney({ amount: n, currency: c }, locale);
+  const money = (n: number, c: string) =>
+    formatMoney({ amount: n, currency: c }, locale);
   const own = name(locale, s.kitchen_name, s.kitchen_name_ar);
 
   if (s.guest_of) {
@@ -99,7 +104,10 @@ export function GuestWeekCard({
       <section className="ms-callout ms-guest" id={GUEST_WEEK_ANCHOR}>
         <strong>{t.guestWeek}</strong>
         <p>{t.guestOf(name(locale, g.kitchen_name, g.kitchen_name_ar))}</p>
-        <Link className="ms-link" href={`/${locale}/subscriptions/${g.subscription_id}`}>
+        <Link
+          className="ms-link"
+          href={`/${locale}/subscriptions/${g.subscription_id}`}
+        >
           {t.backToOwn}
         </Link>
       </section>
@@ -112,10 +120,21 @@ export function GuestWeekCard({
     return (
       <section className="ms-callout ms-guest" id={GUEST_WEEK_ANCHOR}>
         <strong>{t.guestWeek}</strong>
-        <p>{t.guestLede(guest, formatRange(locale, g.week_start, g.week_end), own)}</p>
-        {g.status === "pending_payment" && <p className="ms-sub">{t.guestPending}</p>}
+        <p>
+          {t.guestLede(
+            guest,
+            formatRange(locale, g.week_start, g.week_end),
+            own,
+          )}
+        </p>
+        {g.status === "pending_payment" && (
+          <p className="ms-sub">{t.guestPending}</p>
+        )}
         <div className="ms-actions">
-          <Link className="ms-cta ms-cta-quiet" href={`/${locale}/subscriptions/${g.guest_subscription_id}`}>
+          <Link
+            className="ms-cta ms-cta-quiet"
+            href={`/${locale}/subscriptions/${g.guest_subscription_id}`}
+          >
             {g.status === "pending_payment" ? t.pay : t.seeGuest}
           </Link>
         </div>
@@ -155,7 +174,8 @@ function Offer({
   const [doneWith, setDoneWith] = useState<string | null>(null);
   const key = useIdempotencyKey();
   const start = useMutation({
-    mutationFn: (id: string) => startGuestWeek(s.id, id, { headers: key.headers() }),
+    mutationFn: (id: string) =>
+      startGuestWeek(s.id, id, { headers: key.headers() }),
     onSuccess: async (_res, id) => {
       key.reset();
       const o = offer.options.find((x) => x.plan_id === id);
@@ -184,7 +204,11 @@ function Offer({
       <strong>{t.offer}</strong>
       <p>{t.offerLede(range, money(offer.credit_minor, offer.currency))}</p>
       <p className="ms-sub">{t.sameDays}</p>
-      <ul className="ms-list ms-guest-options" role="radiogroup" aria-label={t.offer}>
+      <ul
+        className="ms-list ms-guest-options"
+        role="radiogroup"
+        aria-label={t.offer}
+      >
         {offer.options.map((o) => (
           <li key={o.plan_id}>
             <button
@@ -196,11 +220,19 @@ function Offer({
               disabled={busy}
             >
               <span>
-                <strong dir="auto">{name(locale, o.kitchen_name, o.kitchen_name_ar)}</strong>
-                {o.cuisines.length > 0 && <span className="ms-sub"> · {o.cuisines.join(" · ")}</span>}
+                <strong dir="auto">
+                  {name(locale, o.kitchen_name, o.kitchen_name_ar)}
+                </strong>
+                {o.cuisines.length > 0 && (
+                  <span className="ms-sub">
+                    {" "}
+                    · {o.cuisines.map((c) => tagLabel(c, locale)).join(" · ")}
+                  </span>
+                )}
                 <span className="ms-sub">
                   <br />
-                  {t.perMeal(money(o.per_meal_minor, o.currency))} · {t.week(money(o.week_minor, o.currency))}
+                  {t.perMeal(money(o.per_meal_minor, o.currency))} ·{" "}
+                  {t.week(money(o.week_minor, o.currency))}
                 </span>
                 <span className="ms-sub">
                   <br />
@@ -230,7 +262,12 @@ function Offer({
         >
           {start.isPending ? t.starting : t.start}
         </button>
-        <button type="button" className="ms-cta ms-cta-quiet" disabled={busy} onClick={() => dismiss.mutate()}>
+        <button
+          type="button"
+          className="ms-cta ms-cta-quiet"
+          disabled={busy}
+          onClick={() => dismiss.mutate()}
+        >
           {t.notNow}
         </button>
       </div>
@@ -248,6 +285,7 @@ function Split({
   money: (n: number, c: string) => string;
 }) {
   if (o.due_minor > 0) return <>{t.due(money(o.due_minor, o.currency))}</>;
-  if (o.leftover_credit_minor > 0) return <>{t.leftover(money(o.leftover_credit_minor, o.currency))}</>;
+  if (o.leftover_credit_minor > 0)
+    return <>{t.leftover(money(o.leftover_credit_minor, o.currency))}</>;
   return <>{t.covered}</>;
 }

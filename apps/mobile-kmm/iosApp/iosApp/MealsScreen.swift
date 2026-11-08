@@ -3140,8 +3140,11 @@ private struct MealCard: View {
                 let saving = tasteBusy.contains(dish)
                 if loved.contains(dish) {
                     HStack(spacing: Space.small) {
-                        Text("♥ " + NSLocalizedString("meals_dish_loved", comment: ""))
-                            .font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(Warm.leaf)
+                        Button { vm.setDishLoved(dishId: dish, love: false) } label: {
+                            Text("♥ " + NSLocalizedString("meals_dish_loved", comment: ""))
+                                .font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(Warm.leaf)
+                        }
+                        .disabled(saving)
                         Spacer()
                         Button { vm.setDishLoved(dishId: dish, love: false) } label: {
                             Text("meals_undo").font(.system(size: TypeScale.secondary)).foregroundStyle(saving ? MP.textFaint : Warm.chilli)
