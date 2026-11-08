@@ -2777,7 +2777,7 @@ private struct SubscriptionPage: View {
                         PrimaryButton(label: NSLocalizedString("meals_pay_due", comment: ""), enabled: !s.busy) { vm.payPending() }
                     }
                     if sub.canRenew {
-                        PrimaryButton(label: NSLocalizedString("meals_renew", comment: ""), enabled: !s.busy) { vm.renew() }
+                        PrimaryButton(label: NSLocalizedString("meals_renew", comment: ""), enabled: !s.busy) { vm.renew_() }
                     }
                 }
                 if let failure = s.error {
