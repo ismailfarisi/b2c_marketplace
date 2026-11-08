@@ -1,3 +1,5 @@
+import { ApiError } from "@marketplace/api-client";
+
 /**
  * The first start date whose delivery cutoff is still ahead, in the kitchen's
  * timezone (Asia/Dubai unless given), as YYYY-MM-DD.
@@ -34,4 +36,16 @@ export function earliestStart(
     ),
   );
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The first allowed start date a `too_soon` refusal names, or null. The server
+ * is the authority on cutoffs; a checkout that was refused moves its date here
+ * instead of leaving the customer stuck on a day that can no longer be cooked.
+ */
+export function earliestFromTooSoon(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const field = err.problem?.errors?.find((e) => e.code === "too_soon");
+  if (!field) return null;
+  return /\d{4}-\d{2}-\d{2}/.exec(field.message ?? "")?.[0] ?? null;
 }

@@ -29,6 +29,7 @@ import { getMealKitchen, getMealKitchens } from "@/lib/meals-api";
 import type { Plan } from "@/lib/vendor-api";
 import { tagLabel } from "@/components/meals/kitchen-card";
 import { LoadError } from "@/components/load-error";
+import { earliestFromTooSoon, earliestStart } from "@/lib/earliest-start";
 import { rotationCodes, rotationProblem } from "@/lib/rotation-problem";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import { VarietyMeter } from "@/components/meals/variety";
@@ -146,15 +147,6 @@ const COPY = {
   },
 };
 type Copy = (typeof COPY)["en"];
-
-const isoDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-function earliestStart(cutoffHours: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + 1 + Math.floor(cutoffHours / 24));
-  return isoDate(d);
-}
 
 function toggle<T>(list: T[], v: T, max: number): T[] {
   if (list.includes(v)) return list.filter((x) => x !== v);
@@ -320,6 +312,14 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
     enabled: input != null,
     retry: false,
   });
+
+  // The server's cutoff rule is the one that counts: a quote refused as
+  // too_soon names the first allowed date, and the builder moves there rather
+  // than leaving checkout stuck on a day that can no longer be cooked.
+  const serverEarliest = earliestFromTooSoon(preview.error);
+  useEffect(() => {
+    if (serverEarliest) setStart((cur) => (cur >= serverEarliest ? cur : serverEarliest));
+  }, [serverEarliest]);
 
   if (addresses.isPending) return <p className="ms-note">{t.loading}</p>;
   if (addresses.isError)

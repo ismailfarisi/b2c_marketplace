@@ -47,6 +47,7 @@ const COPY = {
   en: {
     back: "My subscriptions",
     pay: "Pay now",
+    walletApplied: (amount: string) => `${amount} paid from your wallet credit`,
     paying: "Processing…",
     payNote: "Deliveries are scheduled once payment goes through.",
     payFailed: "The payment did not go through. Try again.",
@@ -66,6 +67,8 @@ const COPY = {
     yourPick: "Your pick",
     notAgain: "Not again",
     avoided: "Not again — we'll pick the other dish when there is one",
+    loveIt: "Loved it",
+    loved: "Loved it — remembered when your rotation renews",
     undoAvoid: "Undo",
     tasteFailed: "Could not save. Try again.",
     skip: "Skip this meal",
@@ -136,6 +139,7 @@ const COPY = {
   ar: {
     back: "اشتراكاتي",
     pay: "ادفع الآن",
+    walletApplied: (amount: string) => `${amount} مدفوعة من رصيد محفظتك`,
     paying: "جارٍ المعالجة…",
     payNote: "تُجدول التوصيلات بعد إتمام الدفع.",
     payFailed: "لم يتم الدفع. حاول مرة أخرى.",
@@ -154,6 +158,8 @@ const COPY = {
     yourPick: "اختيارك",
     notAgain: "ليس مرة أخرى",
     avoided: "ليس مرة أخرى — سنختار الطبق الآخر عندما يتوفر",
+    loveIt: "أحببته",
+    loved: "أحببته — سنتذكره عند تجديد تناوبك",
     undoAvoid: "تراجع",
     tasteFailed: "تعذر الحفظ. حاول مرة أخرى.",
     skip: "تخطي هذه الوجبة",
@@ -414,13 +420,16 @@ function Detail({
               {t.payPending}
             </p>
           )}
+          {s.wallet_applied_minor > 0 && (
+            <p className="ms-note">{t.walletApplied(money(s.wallet_applied_minor))}</p>
+          )}
           <button
             type="button"
             className="ms-cta"
             disabled={pay.isPending}
             onClick={() => pay.mutate()}
           >
-            {pay.isPending ? t.paying : `${t.pay} · ${money(s.amount_minor)}`}
+            {pay.isPending ? t.paying : `${t.pay} · ${money(s.due_minor)}`}
           </button>
         </section>
       )}
@@ -725,7 +734,7 @@ function Meal({
           <DeliveryStatus status={m.delivery_status} locale={locale} />
         )}
         {m.delivery_status === "completed" && chosen && (
-          <NotAgain dishId={chosen} locale={locale} t={t} />
+          <DishMarks dishId={chosen} locale={locale} t={t} />
         )}
         <small className="ms-sub">
           {m.locked
@@ -955,19 +964,23 @@ function Cancel({
   );
 }
 
-/** "Not again" on a dish that was delivered: remembered, and the default moves off it. */
-function NotAgain({ dishId, locale, t }: { dishId: string; locale: Locale; t: Copy }) {
+/**
+ * "Loved it" / "Not again" on a dish that was delivered. One mark at a time:
+ * the API keeps a single sentiment per dish, so hearting an avoided dish
+ * replaces the avoid (and the other way round); tapping the active mark again
+ * clears it.
+ */
+function DishMarks({ dishId, locale, t }: { dishId: string; locale: Locale; t: Copy }) {
   const qc = useQueryClient();
   const tastes = useQuery({ queryKey: ["me", "tastes"], queryFn: listMyTastes });
-  const avoided =
-    tastes.data?.items.some(
-      (x) => x.subject_kind === "dish" && x.subject_id === dishId && x.sentiment === "avoid",
-    ) ?? false;
+  const mark =
+    tastes.data?.items.find((x) => x.subject_kind === "dish" && x.subject_id === dishId)
+      ?.sentiment ?? null;
   const [error, setError] = useState<string | null>(null);
   const tap = useBusyGuard();
   const flip = useMutation({
-    mutationFn: async (on: boolean) => {
-      if (on) await setMyTaste({ subject_kind: "dish", subject_id: dishId, sentiment: "avoid" });
+    mutationFn: async (next: "favourite" | "avoid" | null) => {
+      if (next) await setMyTaste({ subject_kind: "dish", subject_id: dishId, sentiment: next });
       else await clearMyTaste("dish", dishId);
     },
     onSuccess: async () => {
@@ -979,30 +992,55 @@ function NotAgain({ dishId, locale, t }: { dishId: string; locale: Locale; t: Co
     onSettled: tap.release,
   });
   if (tastes.isPending || tastes.isError) return null;
+  const busy = flip.isPending;
   return (
     <span className="ms-taste">
-      {avoided ? (
+      {mark === "favourite" ? (
+        <>
+          <small className="ms-taste-on">♥ {t.loved}</small>{" "}
+          <button
+            type="button"
+            className="ms-link"
+            disabled={busy}
+            aria-pressed={true}
+            onClick={tap.guard(() => flip.mutate(null))}
+          >
+            {t.undoAvoid}
+          </button>
+        </>
+      ) : mark === "avoid" ? (
         <>
           <small className="ms-sub">{t.avoided}</small>{" "}
           <button
             type="button"
             className="ms-link"
-            disabled={flip.isPending}
-            onClick={tap.guard(() => flip.mutate(false))}
+            disabled={busy}
+            onClick={tap.guard(() => flip.mutate(null))}
           >
             {t.undoAvoid}
           </button>
         </>
       ) : (
-        <button
-          type="button"
-          className="ms-link ms-taste-avoid"
-          disabled={flip.isPending}
-          aria-pressed={false}
-          onClick={tap.guard(() => flip.mutate(true))}
-        >
-          {t.notAgain}
-        </button>
+        <>
+          <button
+            type="button"
+            className="ms-link ms-taste-love"
+            disabled={busy}
+            aria-pressed={false}
+            onClick={tap.guard(() => flip.mutate("favourite"))}
+          >
+            ♡ {t.loveIt}
+          </button>
+          <button
+            type="button"
+            className="ms-link ms-taste-avoid"
+            disabled={busy}
+            aria-pressed={false}
+            onClick={tap.guard(() => flip.mutate("avoid"))}
+          >
+            {t.notAgain}
+          </button>
+        </>
       )}
       {error && (
         <small className="ms-bad" role="alert">

@@ -169,7 +169,7 @@ export function KitchenCard({
           </span>
           {(k.rating_count > 0 ||
             k.food_safety_verified ||
-            k.menu_weeks > 1) && (
+            k.no_repeat_weeks > 1) && (
             <span className="ms-kc-badges">
               <RatingBadge
                 rating={k.rating}
@@ -177,7 +177,7 @@ export function KitchenCard({
                 locale={locale}
               />
               {k.food_safety_verified && <SafetyBadge locale={locale} />}
-              <VarietyBadge weeks={k.menu_weeks} locale={locale} />
+              <VarietyBadge weeks={k.no_repeat_weeks} locale={locale} />
             </span>
           )}
         </div>

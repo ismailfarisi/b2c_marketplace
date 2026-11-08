@@ -3554,6 +3554,9 @@ body {
 .ms-taste-avoid {
   color: var(--ms-muted, #76675b);
 }
+.ms-taste-love {
+  color: var(--ms-leaf, #276c44);
+}
 .ms-renew-page h1 {
   margin-block-end: 4px;
 }

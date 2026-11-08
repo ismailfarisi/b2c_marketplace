@@ -518,7 +518,7 @@ export default function KitchenPage({
           <div className="ms-khero-copy">
             {(k.rating_count > 0 ||
               k.food_safety_verified ||
-              k.menu_weeks > 1) && (
+              k.no_repeat_weeks > 1) && (
               <div className="ms-kc-badges ms-khero-badges">
                 <RatingBadge
                   rating={k.rating}
@@ -526,7 +526,7 @@ export default function KitchenPage({
                   locale={locale}
                 />
                 {k.food_safety_verified && <SafetyBadge locale={locale} />}
-                <VarietyBadge weeks={k.menu_weeks} locale={locale} />
+                <VarietyBadge weeks={k.no_repeat_weeks} locale={locale} />
               </div>
             )}
             <h1 dir="auto">{name}</h1>

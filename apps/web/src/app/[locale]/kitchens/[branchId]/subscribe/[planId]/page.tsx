@@ -28,7 +28,7 @@ import {
   forgetInvite,
   rememberedInvite,
 } from "@/lib/customer-api";
-import { earliestStart } from "@/lib/earliest-start";
+import { earliestFromTooSoon, earliestStart } from "@/lib/earliest-start";
 import { getMealKitchen } from "@/lib/meals-api";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
@@ -336,6 +336,12 @@ function Checkout({
   const previewProblem = preview.isError
     ? checkoutProblem(preview.error, locale)
     : null;
+  // A quote refused as too_soon names the server's first allowed date; the
+  // checkout moves there instead of staying stuck on a day past its cutoff.
+  const serverEarliest = earliestFromTooSoon(preview.error);
+  useEffect(() => {
+    if (serverEarliest) setStart((cur) => (cur >= serverEarliest ? cur : serverEarliest));
+  }, [serverEarliest]);
   const promoRejected = isPromoProblem(preview.error);
 
   if (kitchen.isPending || addresses.isPending)

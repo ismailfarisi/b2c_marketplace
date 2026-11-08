@@ -160,6 +160,10 @@ export interface MySubscription {
   amount_minor: number;
   currency: string;
   pending_order_id: string | null;
+  /** Wallet credit already applied to this cycle (a guest week's paused-week credit). */
+  wallet_applied_minor: number;
+  /** What the pending order collects: amount_minor less wallet_applied_minor. Pay shows this. */
+  due_minor: number;
   rotation_id: string | null;
   rotation_week: number | null;
   renewal_mode: "auto" | "manual" | "none";

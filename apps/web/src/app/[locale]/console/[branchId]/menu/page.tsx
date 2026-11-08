@@ -398,7 +398,7 @@ function SlotEditor({
   onCancel,
 }: {
   title: string;
-  dishes: Array<{ id: string; name: string }>;
+  dishes: Array<{ id: string; name: string; name_ar: string | null }>;
   initialDefault: string;
   initialAlt: string;
   busy: boolean;
@@ -409,6 +409,9 @@ function SlotEditor({
 }) {
   const { t, locale } = useBranch();
   const c = t.menu;
+  // The console reads in the vendor's language: an Arabic dish name when there is one.
+  const dishLabel = (d: { name: string; name_ar: string | null }) =>
+    (locale === "ar" && d.name_ar) || d.name;
   const [def, setDef] = useState(initialDefault);
   const [alt, setAlt] = useState(initialAlt);
   return (
@@ -441,7 +444,7 @@ function SlotEditor({
               <option value="">{c.none}</option>
               {dishes.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.name}
+                  {dishLabel(d)}
                 </option>
               ))}
             </select>
@@ -459,7 +462,7 @@ function SlotEditor({
                 .filter((d) => d.id !== def)
                 .map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.name}
+                    {dishLabel(d)}
                   </option>
                 ))}
             </select>

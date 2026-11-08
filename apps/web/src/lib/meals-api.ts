@@ -32,8 +32,14 @@ export interface PublicKitchen {
   food_safety_verified: boolean;
   /** Up to four dishes from this week's menu, photographed ones first. */
   week_dishes: DishThumb[];
-  /** Weeks the menu runs before a dish repeats; above 1, "No repeats for N weeks". */
+  /** Weeks the menu runs before it starts over; the week tabs follow it. */
   menu_weeks: number;
+  /**
+   * Weeks without the same default dish on the same weekday and slot: menu_weeks
+   * when every week differs, smaller when a week was copied. Above 1, "No
+   * repeats for N weeks".
+   */
+  no_repeat_weeks: number;
 }
 
 /** One calendar week of a kitchen's menu, from `starts_on` (a Sunday). */
