@@ -51,7 +51,11 @@ type RotationWeek struct {
 	Swappable bool    `json:"swappable"`
 	Swapped   bool    `json:"swapped"`
 	SwapUntil *string `json:"swap_until"`
-	tz        string
+	// DueMinor is what a swapped-in week still owes when its dearer
+	// kitchen's difference was not collected: repeating the swap with the
+	// same plan_id retries the payment.
+	DueMinor *int64 `json:"due_minor,omitempty"`
+	tz       string
 }
 
 // RotationQuote is what the customer sees before paying: who cooks which week
@@ -560,11 +564,15 @@ func (s *Service) rotationWeeks(ctx context.Context, id uuid.UUID) ([]RotationWe
 		SELECT DISTINCT ON (s.rotation_week)
 		       s.rotation_week, s.start_date, s.end_date, s.branch_id, b.name, b.name_ar,
 		       s.plan_id, p.name, COALESCE(c.amount_minor, 0),
-		       s.id, s.subscription_no, s.status, s.timezone, sw.id IS NOT NULL
+		       s.id, s.subscription_no, s.status, s.timezone, sw.id IS NOT NULL,
+		       CASE WHEN sw.new_subscription_id = s.id AND o.status = 'pending_payment'
+		            THEN q.authorized_minor END
 		  FROM subscriptions s
 		  JOIN vendor_branches b ON b.id = s.branch_id
 		  JOIN subscription_plans p ON p.id = s.plan_id
 		  LEFT JOIN subscription_cycles c ON c.subscription_id = s.id AND c.cycle_no = 1
+		  LEFT JOIN orders o ON o.id = c.order_id
+		  LEFT JOIN price_quotes q ON q.order_id = o.id AND q.superseded_by IS NULL
 		  LEFT JOIN meal_rotation_swaps sw ON sw.rotation_id = s.rotation_id AND sw.rotation_week = s.rotation_week
 		 WHERE s.rotation_id = $1
 		 -- A swapped week keeps its cancelled subscription; the live one is the week.
@@ -580,7 +588,7 @@ func (s *Service) rotationWeeks(ctx context.Context, id uuid.UUID) ([]RotationWe
 		var subID uuid.UUID
 		var no, status string
 		if err := rows.Scan(&w.Week, &start, &end, &w.BranchID, &w.KitchenName, &w.KitchenNameAr,
-			&w.PlanID, &w.PlanName, &w.PriceMinor, &subID, &no, &status, &w.tz, &w.Swapped); err != nil {
+			&w.PlanID, &w.PlanName, &w.PriceMinor, &subID, &no, &status, &w.tz, &w.Swapped, &w.DueMinor); err != nil {
 			return nil, fmt.Errorf("subscriptions: scan rotation week: %w", err)
 		}
 		w.StartsOn, w.EndsOn = start.Format("2006-01-02"), end.Format("2006-01-02")

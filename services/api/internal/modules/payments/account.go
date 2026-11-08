@@ -55,16 +55,22 @@ func (s *Service) authorizeOffGateway(ctx context.Context, userID, orderID uuid.
 		if err := charge(ctx, tx, quote.AuthorizeMinor, quote.Currency); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO payments (
-				order_id, quote_id, user_id, kind, status, provider,
-				provider_ref, amount_minor, currency
-			) VALUES ($1,$2,$3,'authorization','succeeded',$4,$5,$6,$7)
-			RETURNING id`,
-			orderID, quote.ID, userID, provider, accountRef,
-			quote.AuthorizeMinor, quote.Currency,
-		).Scan(&intent.ID); err != nil {
-			return fmt.Errorf("insert payment: %w", err)
+		// Nothing left to collect (the wallet already covered the whole
+		// order) means no payment row: payments_amount_positive forbids a
+		// zero row, and the order is confirmed on the strength of the ledger
+		// movement the charge callback made instead.
+		if quote.AuthorizeMinor > 0 {
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO payments (
+					order_id, quote_id, user_id, kind, status, provider,
+					provider_ref, amount_minor, currency
+				) VALUES ($1,$2,$3,'authorization','succeeded',$4,$5,$6,$7)
+				RETURNING id`,
+				orderID, quote.ID, userID, provider, accountRef,
+				quote.AuthorizeMinor, quote.Currency,
+			).Scan(&intent.ID); err != nil {
+				return fmt.Errorf("insert payment: %w", err)
+			}
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE price_quotes SET state = 'authorized' WHERE id = $1`, quote.ID); err != nil {
@@ -78,9 +84,13 @@ func (s *Service) authorizeOffGateway(ctx context.Context, userID, orderID uuid.
 		if err := activateSubscription(ctx, tx, orderID, userID); err != nil {
 			return err
 		}
+		var paymentID any
+		if intent.ID != uuid.Nil {
+			paymentID = intent.ID
+		}
 		return insertOutbox(ctx, tx, orderID, "order.confirmed", map[string]any{
 			"order_id":     orderID,
-			"payment_id":   intent.ID,
+			"payment_id":   paymentID,
 			"amount_minor": quote.AuthorizeMinor,
 			"currency":     quote.Currency,
 			"billed_to":    accountRef,

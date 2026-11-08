@@ -853,6 +853,12 @@ func (s *Service) cancelInTx(ctx context.Context, tx pgx.Tx, subID uuid.UUID, ow
 		if err := voidUnpaidCycles(ctx, tx, subID, 1); err != nil {
 			return err
 		}
+		// An unpaid guest week gives the original week back, see unwindGuestWeek.
+		if live.Status == "pending_payment" {
+			if err := s.unwindGuestWeek(ctx, tx, subID, time.Now()); err != nil {
+				return err
+			}
+		}
 
 		// Future work only. Meals already delivered stay delivered, and a
 		// cancellation that retroactively cancelled yesterday's fulfillment
@@ -881,7 +887,14 @@ func (s *Service) cancelInTx(ctx context.Context, tx pgx.Tx, subID uuid.UUID, ow
 			return fmt.Errorf("subscriptions: cancel load company: %w", err)
 		}
 		for _, c := range paid {
-			if unearned := c.AmountMinor - c.RecognisedMinor; unearned > 0 {
+			// Weeks already credited to the wallet by a pause (a guest week
+			// pauses with wallet credit) left deferred revenue then; counting
+			// them again here would refund the same week twice.
+			credited, _, err := ledger.CycleWalletMovements(ctx, tx, c.ID)
+			if err != nil {
+				return err
+			}
+			if unearned := c.AmountMinor - c.RecognisedMinor - credited; unearned > 0 {
 				credit := ledger.SubscriptionCredit{
 					SubscriptionID: subID, CycleID: c.ID, UserID: userID,
 					Currency: c.Currency, AmountMinor: unearned,

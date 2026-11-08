@@ -291,7 +291,10 @@ func (s *Service) SwapOptions(ctx context.Context, userID, rotationID uuid.UUID,
 // it; the new kitchen is paid as its meals go out.
 //
 // A week is swapped at most once; repeating the same swap returns the result
-// of the first.
+// of the first. If the first swap's difference was never collected (the
+// customer abandoned or failed the payment) the repeat returns the same
+// order and amount so the payment can be retried; payments.Authorize locks
+// the quote, so two retries cannot both record a hold.
 func (s *Service) SwapRotationWeek(ctx context.Context, userID, rotationID uuid.UUID, week int, planID uuid.UUID) (SwapResult, error) {
 	var res SwapResult
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -387,7 +390,7 @@ func (s *Service) SwapRotationWeek(ctx context.Context, userID, rotationID uuid.
 			return err
 		}
 		if due == 0 {
-			if err := activateSwapped(ctx, tx, subID, orderID, cycleID, userID); err != nil {
+			if err := activateSwapped(ctx, tx, subID, orderID, cycleID, userID, min(oldPrice, newPrice), p.Currency); err != nil {
 				return err
 			}
 		}
@@ -439,16 +442,35 @@ func (s *Service) swapDue(ctx context.Context, tx pgx.Tx, subID uuid.UUID) (uuid
 		return uuid.Nil, 0, "", fmt.Errorf("subscriptions: swap order: %w", err)
 	}
 	if status != "pending_payment" {
+		// Paid (or cancelled): nothing to collect, and nothing to authorize
+		// again.
 		due = 0
 	}
 	return orderID, due, currency, nil
 }
 
+// walletProvider mirrors payments.WalletProvider: the provider recorded on a
+// payment settled entirely from the customer's wallet.
+const walletProvider = "customer_wallet"
+
 // activateSwapped settles a replacement week paid entirely from the wallet,
 // the way a paid order activates a subscription.
-func activateSwapped(ctx context.Context, tx pgx.Tx, subID, orderID, cycleID, userID uuid.UUID) error {
-	if _, err := tx.Exec(ctx, `UPDATE price_quotes SET state = 'authorized' WHERE order_id = $1`, orderID); err != nil {
+func activateSwapped(ctx context.Context, tx pgx.Tx, subID, orderID, cycleID, userID uuid.UUID, walletMinor int64, currency string) error {
+	var quoteID uuid.UUID
+	if err := tx.QueryRow(ctx, `
+		UPDATE price_quotes SET state = 'authorized' WHERE order_id = $1 RETURNING id`, orderID).Scan(&quoteID); err != nil {
 		return fmt.Errorf("subscriptions: swap quote: %w", err)
+	}
+	// The same audit row payments.AuthorizeFromWallet writes, so a week paid
+	// entirely from the wallet shows up in payment history like any other.
+	if walletMinor > 0 {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO payments (order_id, quote_id, user_id, kind, status, provider, provider_ref, amount_minor, currency)
+			VALUES ($1, $2, $3, 'authorization', 'succeeded', $4, $5, $6, $7)`,
+			orderID, quoteID, userID, walletProvider, "wallet:"+userID.String()+":"+orderID.String(),
+			walletMinor, currency); err != nil {
+			return fmt.Errorf("subscriptions: swap wallet payment: %w", err)
+		}
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE orders SET status = 'confirmed', confirmed_at = now() WHERE id = $1`, orderID); err != nil {

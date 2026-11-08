@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/ledger"
 	"github.com/marketplace/api/internal/platform/postgres"
 	"github.com/marketplace/api/internal/seam/servicetype"
 )
@@ -181,18 +182,50 @@ func voidUnpaidCycles(ctx context.Context, tx pgx.Tx, subID uuid.UUID, fromCycle
 	rows, err := tx.Query(ctx, `
 		UPDATE subscription_cycles SET status = 'cancelled'
 		 WHERE subscription_id = $1 AND cycle_no >= $2 AND status IN ('pending', 'past_due')
-		RETURNING order_id`, subID, fromCycle)
+		RETURNING id, order_id, currency`, subID, fromCycle)
 	if err != nil {
 		return fmt.Errorf("subscriptions: void unpaid cycles: %w", err)
 	}
-	orders, err := pgx.CollectRows(rows, pgx.RowTo[*uuid.UUID])
+	type voided struct {
+		ID       uuid.UUID
+		OrderID  *uuid.UUID
+		Currency string
+	}
+	cycles, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (voided, error) {
+		var v voided
+		err := r.Scan(&v.ID, &v.OrderID, &v.Currency)
+		return v, err
+	})
 	if err != nil {
 		return fmt.Errorf("subscriptions: void renewal: %w", err)
 	}
-	ids := make([]uuid.UUID, 0, len(orders))
-	for _, o := range orders {
-		if o != nil {
-			ids = append(ids, *o)
+	if len(cycles) == 0 {
+		return nil
+	}
+	// Wallet money already applied to a cycle that will never be paid for
+	// (a swapped-in or guest week whose remainder was not settled) goes back
+	// to the wallet; otherwise it would sit in deferred revenue for meals
+	// nobody cooks.
+	var userID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT user_id FROM subscriptions WHERE id = $1`, subID).Scan(&userID); err != nil {
+		return fmt.Errorf("subscriptions: void owner: %w", err)
+	}
+	ids := make([]uuid.UUID, 0, len(cycles))
+	for _, c := range cycles {
+		if c.OrderID != nil {
+			ids = append(ids, *c.OrderID)
+		}
+		_, applied, err := ledger.CycleWalletMovements(ctx, tx, c.ID)
+		if err != nil {
+			return err
+		}
+		if applied > 0 {
+			if _, err := ledger.PostSubscriptionWalletReturned(ctx, tx, ledger.SubscriptionCredit{
+				SubscriptionID: subID, CycleID: c.ID, UserID: userID,
+				Currency: c.Currency, AmountMinor: applied, Reason: "unpaid subscription cycle",
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	if len(ids) == 0 {

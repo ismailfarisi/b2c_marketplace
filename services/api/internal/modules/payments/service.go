@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -72,6 +73,13 @@ func (s *Service) Authorize(ctx context.Context, userID, orderID uuid.UUID, idem
 	if err != nil {
 		return nil, err
 	}
+	if quote.AuthorizeMinor == 0 {
+		// Wallet credit already covers the order (a guest week or swapped
+		// week whose credit matched its price): nothing for the gateway to
+		// hold, so confirm it the way a wallet payment does.
+		return s.authorizeOffGateway(ctx, userID, orderID, WalletProvider, "wallet:"+userID.String(),
+			func(context.Context, pgx.Tx, int64, string) error { return nil })
+	}
 
 	result, err := s.provider.Authorize(ctx, AuthorizeInput{
 		OrderID:        orderID,
@@ -94,6 +102,22 @@ func (s *Service) Authorize(ctx context.Context, userID, orderID uuid.UUID, idem
 	}
 
 	err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		// Two requests can both read the quote as 'estimated' before either
+		// records its hold. Locking the quote here and re-checking its state
+		// makes the second one a conflict instead of a second succeeded
+		// authorization on the same order.
+		var state string
+		if err := tx.QueryRow(ctx,
+			`SELECT state FROM price_quotes WHERE id = $1 FOR UPDATE`, quote.ID).Scan(&state); err != nil {
+			return fmt.Errorf("lock quote: %w", err)
+		}
+		if state != "estimated" {
+			if result.Status == "authorized" && result.ProviderRef != "" {
+				slog.WarnContext(ctx, "payments: duplicate authorization hold left unrecorded",
+					"order_id", orderID, "provider_ref", result.ProviderRef)
+			}
+			return fmt.Errorf("%w: order is not awaiting authorization", httpx.ErrConflict)
+		}
 		err := tx.QueryRow(ctx, `
 			INSERT INTO payments (
 				order_id, quote_id, user_id, kind, status, provider,

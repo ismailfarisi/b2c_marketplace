@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/marketplace/api/internal/httpx"
+	"github.com/marketplace/api/internal/modules/payments"
 	"github.com/marketplace/api/internal/seam/servicetype"
 	"github.com/marketplace/api/internal/verticals/meals"
 )
@@ -413,5 +415,72 @@ func TestSwapOpenWindow(t *testing.T) {
 		if codeOf(err) != c.code {
 			t.Errorf("swapOpen(%s, %s, %s) = %v, want %q", c.status, c.week, c.start.Format("2006-01-02"), err, c.code)
 		}
+	}
+}
+
+// Paying the difference on a swapped week once is enough: a replay of the
+// swap afterwards owes nothing, and two authorizations racing on the order
+// record exactly one hold.
+func TestSwapWeekDifferenceIsCollectedOnce(t *testing.T) {
+	f := newSwapFixture(t, 7)
+	ctx := context.Background()
+	pay := payments.NewService(f.pool, payments.SandboxProvider{}, 1500, 500)
+
+	res, err := f.svc.SwapRotationWeek(ctx, f.userID, f.rotation.ID, 3, f.plans[swapDearer])
+	if err != nil {
+		t.Fatalf("swap: %v", err)
+	}
+	if res.DueMinor <= 0 {
+		t.Fatalf("due %d, want a difference to pay", res.DueMinor)
+	}
+	if w := f.week(t, 3); w.DueMinor == nil || *w.DueMinor != res.DueMinor {
+		t.Fatalf("rotation week shows due %v, want %d while unpaid", w.DueMinor, res.DueMinor)
+	}
+
+	// Two taps on "Pay" at once.
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = pay.Authorize(ctx, f.userID, res.OrderID, fmt.Sprintf("swap-%d", i))
+		}(i)
+	}
+	wg.Wait()
+	ok, conflict := 0, 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, httpx.ErrConflict):
+			conflict++
+		default:
+			t.Fatalf("authorize: %v", err)
+		}
+	}
+	if ok != 1 || conflict != 1 {
+		t.Fatalf("authorizations: %d ok, %d conflict; want exactly one of each", ok, conflict)
+	}
+	if n := f.count(t, `SELECT count(*) FROM payments WHERE order_id = $1 AND status <> 'failed'`, res.OrderID); n != 1 {
+		t.Fatalf("%d successful payments on the order, want 1", n)
+	}
+	if s := f.subStatus(t, *f.week(t, 3).SubscriptionID); s != "active" {
+		t.Fatalf("paid week is %s, want active", s)
+	}
+
+	again, err := f.svc.SwapRotationWeek(ctx, f.userID, f.rotation.ID, 3, f.plans[swapDearer])
+	if err != nil {
+		t.Fatalf("repeat swap: %v", err)
+	}
+	if again.OrderID != res.OrderID || again.DueMinor != 0 {
+		t.Fatalf("repeat after payment answered %v/%d, want %v/0", again.OrderID, again.DueMinor, res.OrderID)
+	}
+	if w := f.week(t, 3); w.DueMinor != nil {
+		t.Fatalf("paid week still shows due %d", *w.DueMinor)
+	}
+	// A late retry against the paid order is a conflict, never a second hold.
+	if _, err := pay.Authorize(ctx, f.userID, res.OrderID, "swap-late"); !errors.Is(err, httpx.ErrConflict) {
+		t.Fatalf("authorize after payment: %v, want conflict", err)
 	}
 }

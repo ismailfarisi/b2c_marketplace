@@ -14,36 +14,21 @@ import (
 
 	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/ledger"
+	"github.com/marketplace/api/internal/modules/payments"
 )
 
-// walletStub stands in for payments.Service: it records the off-gateway
-// confirmation and activates the order the way payments would.
+// walletStub wraps the real payments.Service so the test exercises the
+// off-gateway confirm path (and its payments_amount_positive constraint) while
+// still recording which orders were confirmed.
 type walletStub struct {
-	f      subFixture
+	real   *payments.Service
 	orders []uuid.UUID
 }
 
 func (w *walletStub) AuthorizeFromWallet(ctx context.Context, userID, orderID uuid.UUID,
 	charge func(ctx context.Context, tx pgx.Tx, amountMinor int64, currency string) error) error {
 	w.orders = append(w.orders, orderID)
-	tx, err := w.f.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err := charge(ctx, tx, 0, "AED"); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `
-		UPDATE subscription_cycles SET status = 'paid', paid_at = now() WHERE order_id = $1`, orderID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `
-		UPDATE subscriptions SET status = 'active'
-		 WHERE id = (SELECT subscription_id FROM subscription_cycles WHERE order_id = $1)`, orderID); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return w.real.AuthorizeFromWallet(ctx, userID, orderID, charge)
 }
 
 // guestFixture is a subFixture whose subscription is three weeks into a
@@ -60,12 +45,25 @@ type guestFixture struct {
 	guestBranch uuid.UUID
 	dearPlan    uuid.UUID
 	now         time.Time
+	// weekStart..weekEnd is the Sunday..Saturday after now: the guest week.
+	weekStart, weekEnd string
+}
+
+// nextWednesdayNoon is the first Wednesday 12:00 Gulf time strictly after t.
+func nextWednesdayNoon(t time.Time) time.Time {
+	gst := time.FixedZone("GST", 4*3600)
+	t = t.In(gst)
+	d := time.Date(t.Year(), t.Month(), t.Day(), 12, 0, 0, 0, gst)
+	for !d.After(t) || d.Weekday() != time.Wednesday {
+		d = d.AddDate(0, 0, 1)
+	}
+	return d
 }
 
 func newGuestFixture(t *testing.T, cutoffHours int) guestFixture {
 	t.Helper()
 	f := guestFixture{subFixture: newSubFixture(t, cutoffHours)}
-	f.wallet = &walletStub{f: f.subFixture}
+	f.wallet = &walletStub{real: payments.NewService(f.pool, payments.SandboxProvider{}, 1500, 500)}
 	f.svc.wallet = f.wallet
 	ctx := context.Background()
 
@@ -87,12 +85,17 @@ func newGuestFixture(t *testing.T, cutoffHours int) guestFixture {
 		}
 	}
 
-	// Wednesday noon in Dubai: next week starts in four days.
-	f.now = time.Date(2026, 11, 11, 12, 0, 0, 0, time.FixedZone("GST", 4*3600))
+	// The coming Wednesday noon in Dubai (never in the past, since Subscribe
+	// checks the real clock): next week starts in four days.
+	f.now = nextWednesdayNoon(time.Now())
+	f.weekStart = f.now.AddDate(0, 0, 4).Format("2006-01-02")
+	f.weekEnd = f.now.AddDate(0, 0, 10).Format("2006-01-02")
 	start := f.now.AddDate(0, 0, -17) // Sunday three weeks ago
 	cycleEnd := start.AddDate(0, 0, 27)
 
-	res, err := f.svc.Subscribe(ctx, f.input(f.now.AddDate(0, 0, 2)))
+	// Far enough out to clear any plan cutoff against the real clock; the
+	// fixture rewrites the dates below anyway.
+	res, err := f.svc.Subscribe(ctx, f.input(f.now.AddDate(0, 0, 9)))
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -201,8 +204,8 @@ func TestGuestWeekOfferAndStart(t *testing.T) {
 	if !offer.Eligible {
 		t.Fatalf("expected an eligible offer, got reason %q", offer.Reason)
 	}
-	if offer.WeekStart != "2026-11-15" || offer.WeekEnd != "2026-11-21" {
-		t.Fatalf("week = %s..%s, want 2026-11-15..2026-11-21", offer.WeekStart, offer.WeekEnd)
+	if offer.WeekStart != f.weekStart || offer.WeekEnd != f.weekEnd {
+		t.Fatalf("week = %s..%s, want %s..%s", offer.WeekStart, offer.WeekEnd, f.weekStart, f.weekEnd)
 	}
 	if offer.DeliveryDays != 7 || offer.Meals != 7 {
 		t.Fatalf("days/meals = %d/%d, want 7/7", offer.DeliveryDays, offer.Meals)
@@ -283,7 +286,7 @@ func TestGuestWeekOfferAndStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = origEnd
-	if guestStart.Format("2006-01-02") != "2026-11-15" || guestEnd.Format("2006-01-02") != "2026-11-21" {
+	if guestStart.Format("2006-01-02") != f.weekStart || guestEnd.Format("2006-01-02") != f.weekEnd {
 		t.Fatalf("guest dates %s..%s", guestStart, guestEnd)
 	}
 	if guestStatus != "active" || guestBranch != f.guestBranch.String() || guestAmount != 70000 {
@@ -295,7 +298,7 @@ func TestGuestWeekOfferAndStart(t *testing.T) {
 	var origThatWeek int
 	if err := f.pool.QueryRow(ctx, `
 		SELECT count(*) FROM fulfillments WHERE subscription_id = $1
-		   AND scheduled_date BETWEEN '2026-11-15' AND '2026-11-21' AND status <> 'cancelled'`, f.subID).Scan(&origThatWeek); err != nil {
+		   AND scheduled_date BETWEEN $2::date AND $3::date AND status <> 'cancelled'`, f.subID, f.weekStart, f.weekEnd).Scan(&origThatWeek); err != nil {
 		t.Fatal(err)
 	}
 	if origThatWeek != 0 {
@@ -478,5 +481,113 @@ func TestCancelPersistsReasonCode(t *testing.T) {
 	}
 	if bored < 1 {
 		t.Fatalf("breakdown = %+v, want bored_of_food counted", reasons)
+	}
+}
+
+func TestCancellingAnUnpaidGuestWeekGivesTheOriginalWeekBack(t *testing.T) {
+	f := newGuestFixture(t, 12)
+	ctx := context.Background()
+	dearerPlan, _ := f.addKitchen(t, "Dearer", 80500)
+
+	res, err := f.svc.StartGuestWeek(ctx, f.userID, f.subID, dearerPlan, f.now)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if res.Status != "pending_payment" {
+		t.Fatalf("expected a pending guest week, got %+v", res)
+	}
+	// Wallet: +70000 credit, -70000 applied to the guest week.
+	if bal := f.walletBalance(t); bal != 0 {
+		t.Fatalf("wallet before cancel = %d, want 0", bal)
+	}
+
+	// The customer never pays the difference and drops the guest week.
+	if err := f.svc.Cancel(ctx, f.userID, res.GuestSubscriptionID, "changed my mind"); err != nil {
+		t.Fatalf("cancel guest: %v", err)
+	}
+
+	var pauseState string
+	if err := f.pool.QueryRow(ctx, `
+		SELECT p.state FROM subscription_pauses p
+		  JOIN subscription_guest_weeks g ON g.pause_id = p.id
+		 WHERE g.guest_subscription_id = $1`, res.GuestSubscriptionID).Scan(&pauseState); err != nil {
+		t.Fatal(err)
+	}
+	if pauseState != "cancelled" {
+		t.Fatalf("original pause state = %s, want cancelled (still before cutoff)", pauseState)
+	}
+	var restored int
+	if err := f.pool.QueryRow(ctx, `
+		SELECT count(*) FROM fulfillments WHERE subscription_id = $1
+		   AND scheduled_date BETWEEN $2::date AND $3::date AND status = 'scheduled'`,
+		f.subID, f.weekStart, f.weekEnd).Scan(&restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored != 7 {
+		t.Fatalf("restored deliveries = %d, want 7", restored)
+	}
+	// Guest share returned (+70000), pause credit reversed (-70000): the
+	// customer is exactly where they started.
+	if bal := f.walletBalance(t); bal != 0 {
+		t.Fatalf("wallet after cancel = %d, want 0", bal)
+	}
+	var guestCycle, guestOrder string
+	if err := f.pool.QueryRow(ctx, `
+		SELECT c.status, o.status FROM subscription_cycles c JOIN orders o ON o.id = c.order_id
+		 WHERE c.subscription_id = $1`, res.GuestSubscriptionID).Scan(&guestCycle, &guestOrder); err != nil {
+		t.Fatal(err)
+	}
+	if guestCycle != "cancelled" || guestOrder != "cancelled" {
+		t.Fatalf("guest cycle/order = %s/%s, want cancelled", guestCycle, guestOrder)
+	}
+}
+
+func TestCancelAfterGuestWeekDoesNotCreditThePausedWeekTwice(t *testing.T) {
+	f := newGuestFixture(t, 12)
+	ctx := context.Background()
+
+	res, err := f.svc.StartGuestWeek(ctx, f.userID, f.subID, f.guestPlan, f.now)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if res.Status != "active" {
+		t.Fatalf("result = %+v", res)
+	}
+	// 70000 credited by the pause, 70000 spent on the guest week.
+	if bal := f.walletBalance(t); bal != 0 {
+		t.Fatalf("wallet = %d, want 0", bal)
+	}
+
+	if err := f.svc.Cancel(ctx, f.userID, f.subID, "moving"); err != nil {
+		t.Fatalf("cancel original: %v", err)
+	}
+	// 280000 paid, nothing recognised, 70000 already credited for the paused
+	// week: 210000 comes back, not 280000.
+	if bal := f.walletBalance(t); bal != -210000 {
+		t.Fatalf("wallet after cancel = %d, want -210000 (credit of 210 AED)", bal)
+	}
+}
+
+func TestGuestWeekHonoursTheGuestKitchensOwnCutoff(t *testing.T) {
+	f := newGuestFixture(t, 12)
+	ctx := context.Background()
+	// Same price as the guest kitchen, but it needs five days' notice: on
+	// Wednesday, Sunday is too close for it.
+	slowPlan, _ := f.addKitchen(t, "Slow", 70000)
+	if _, err := f.pool.Exec(ctx, `UPDATE subscription_plans SET cutoff_hours = 120 WHERE id = $1`, slowPlan); err != nil {
+		t.Fatal(err)
+	}
+	offer, err := f.svc.GuestWeekOffer(ctx, f.userID, f.subID, f.now)
+	if err != nil || !offer.Eligible {
+		t.Fatalf("offer = %+v, %v", offer, err)
+	}
+	for _, o := range offer.Options {
+		if o.PlanID == slowPlan {
+			t.Fatal("a kitchen past its own cutoff must not be offered")
+		}
+	}
+	_, err = f.svc.StartGuestWeek(ctx, f.userID, f.subID, slowPlan, f.now)
+	if fieldCode(err, "plan_id") != "not_eligible" {
+		t.Fatalf("start with slow kitchen: %v", err)
 	}
 }

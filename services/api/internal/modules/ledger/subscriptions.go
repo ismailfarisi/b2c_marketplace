@@ -375,3 +375,61 @@ func PostSubscriptionPaidFromWallet(ctx context.Context, tx pgx.Tx, c WalletChar
 		},
 	})
 }
+
+// PostSubscriptionWalletReturned gives wallet money back when the cycle it
+// was applied to is voided before it was ever paid for: a swapped-in week or a
+// guest week whose remainder was never settled. Without it the wallet share
+// would sit in deferred revenue for meals that will not be cooked.
+func PostSubscriptionWalletReturned(ctx context.Context, tx pgx.Tx, c SubscriptionCredit) (uuid.UUID, error) {
+	if c.AmountMinor <= 0 {
+		return uuid.Nil, fmt.Errorf("ledger: wallet return must be positive, got %d", c.AmountMinor)
+	}
+	userID := c.UserID
+	reason := c.Reason
+	if reason == "" {
+		reason = "voided subscription cycle"
+	}
+	return Post(ctx, tx, Journal{
+		EventType:     "subscription_wallet_returned",
+		ReferenceType: "subscription_cycle",
+		ReferenceID:   c.CycleID,
+		Description:   fmt.Sprintf("Wallet money returned from %s", reason),
+		Currency:      c.Currency,
+		Postings: []Posting{
+			{
+				Account:     AccountRef{Type: DeferredRevenue, OwnerType: OwnerPlatform, Currency: c.Currency},
+				Direction:   Debit,
+				AmountMinor: c.AmountMinor,
+			},
+			{
+				Account:     AccountRef{Type: CustomerWallet, OwnerType: OwnerUser, OwnerID: &userID, Currency: c.Currency},
+				Direction:   Credit,
+				AmountMinor: c.AmountMinor,
+			},
+		},
+	})
+}
+
+// CycleWalletMovements sums the wallet money that has already moved for one
+// subscription cycle. Credited is what left the cycle's deferred revenue for
+// the wallet (paused weeks); Applied is what the wallet paid into the cycle
+// (a swapped or guest week) less anything already returned. Both are needed
+// to settle a cycle without paying the same week twice.
+func CycleWalletMovements(ctx context.Context, tx pgx.Tx, cycleID uuid.UUID) (credited, applied int64, err error) {
+	err = tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(CASE WHEN j.event_type = 'subscription_credited' THEN e.amount_minor ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN j.event_type IN ('subscription_wallet_applied', 'subscription_paid_from_wallet')
+		                         THEN e.amount_minor
+		                         WHEN j.event_type = 'subscription_wallet_returned' THEN -e.amount_minor
+		                         ELSE 0 END), 0)
+		  FROM ledger_journals j
+		  JOIN ledger_entries e ON e.journal_id = j.id
+		  JOIN ledger_accounts a ON a.id = e.account_id
+		 WHERE j.reference_type = 'subscription_cycle'
+		   AND j.reference_id = $1
+		   AND a.type = $2`, cycleID, CustomerWallet).Scan(&credited, &applied)
+	if err != nil {
+		return 0, 0, fmt.Errorf("ledger: cycle wallet movements: %w", err)
+	}
+	return credited, applied, nil
+}

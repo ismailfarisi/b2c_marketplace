@@ -2,6 +2,7 @@ package subscriptions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -294,7 +295,8 @@ func (s *Service) guestOffer(ctx context.Context, tx pgx.Tx, live *Live, now tim
 	rows, err := tx.Query(ctx, `
 		SELECT p.id, b.id, b.name, b.name_ar, p.name, p.name_ar, COALESCE(b.cuisines, '{}'),
 		       round(p.price_minor::numeric / greatest(1,
-		             round(p.cycle_days * p.days_per_week / 7.0) * p.meals_per_day))::bigint
+		             round(p.cycle_days * p.days_per_week / 7.0) * p.meals_per_day))::bigint,
+		       p.cutoff_hours
 		  FROM subscription_plans p
 		  JOIN vendor_branches b ON b.id = p.branch_id
 		  JOIN addresses a ON a.id = $1
@@ -312,13 +314,14 @@ func (s *Service) guestOffer(ctx context.Context, tx pgx.Tx, live *Live, now tim
 		return nil, fmt.Errorf("subscriptions: guest kitchens: %w", err)
 	}
 	type cand struct {
-		opt GuestWeekOption
+		opt    GuestWeekOption
+		cutoff int
 	}
 	var cands []cand
 	for rows.Next() {
 		var c cand
 		if err := rows.Scan(&c.opt.PlanID, &c.opt.BranchID, &c.opt.KitchenName, &c.opt.KitchenNameAr,
-			&c.opt.PlanName, &c.opt.PlanNameAr, &c.opt.Cuisines, &c.opt.PerMealMinor); err != nil {
+			&c.opt.PlanName, &c.opt.PlanNameAr, &c.opt.Cuisines, &c.opt.PerMealMinor, &c.cutoff); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("subscriptions: scan guest kitchen: %w", err)
 		}
@@ -333,6 +336,11 @@ func (s *Service) guestOffer(ctx context.Context, tx pgx.Tx, live *Live, now tim
 	for _, c := range cands {
 		o := c.opt
 		if avoided[o.BranchID] || seenBranch[o.BranchID] {
+			continue
+		}
+		// The guest kitchen has its own ordering cutoff: it cannot cook the
+		// week if its first delivery is already inside it.
+		if !CanModify(first, c.cutoff, live.Location, now) {
 			continue
 		}
 		if !WithinBand(o.PerMealMinor, g.CurrentPerMealMinor, GuestWeekBandPercent) {
@@ -641,11 +649,15 @@ func (s *Service) StartGuestWeek(ctx context.Context, userID, subID, planID uuid
 				return nil
 			})
 		if err != nil {
+			// The guest week exists and the wallet has paid for it; only the
+			// confirmation failed. Say so instead of a quiet "pending", and
+			// hand back the order so the client can retry the confirmation
+			// through the normal payment endpoint (which also confirms a
+			// zero-due order off-gateway).
 			slog.ErrorContext(ctx, "subscriptions: guest week wallet confirm failed",
 				"subscription_id", out.GuestSubscriptionID, "order_id", orderID, "error", err)
-			o := orderID
-			out.PendingOrderID = &o
-			return out, nil
+			return nil, httpx.Coded(httpx.ErrConflict, "guest_week_confirm_failed",
+				"Your guest week was booked but could not be confirmed; please retry the payment.")
 		}
 		out.Status = "active"
 	}
@@ -836,4 +848,91 @@ func (s *Service) attachGuestWeeks(ctx context.Context, q querier, items []MySub
 		}
 	}
 	return rows.Err()
+}
+
+// unwindGuestWeek undoes what starting a guest week did to the original
+// subscription when the guest subscription is cancelled before it was paid
+// for. voidUnpaidCycles has already returned the wallet share applied to the
+// guest cycle; this gives the original week back too, while its first
+// delivery is still before the kitchen's cutoff: the pause is cancelled, the
+// wallet credit it created goes back into the original cycle's deferred
+// revenue, and the cancelled deliveries are scheduled again. Past the cutoff
+// the original kitchen has already planned without that week, so the pause
+// and its wallet credit stand.
+func (s *Service) unwindGuestWeek(ctx context.Context, tx pgx.Tx, guestSubID uuid.UUID, now time.Time) error {
+	var origID, pauseID, cycleID uuid.UUID
+	var weekStart, weekEnd time.Time
+	var creditMinor int64
+	var currency, pauseState string
+	err := tx.QueryRow(ctx, `
+		SELECT g.subscription_id, g.pause_id, g.cycle_id, g.week_start, g.week_end,
+		       g.credit_minor, g.currency, p.state
+		  FROM subscription_guest_weeks g
+		  JOIN subscription_pauses p ON p.id = g.pause_id
+		 WHERE g.guest_subscription_id = $1
+		 FOR UPDATE OF p`, guestSubID).Scan(&origID, &pauseID, &cycleID, &weekStart, &weekEnd,
+		&creditMinor, &currency, &pauseState)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("subscriptions: guest week of %s: %w", guestSubID, err)
+	}
+	if pauseState != "scheduled" && pauseState != "active" {
+		return nil
+	}
+	var origUser uuid.UUID
+	live, err := s.repo.LoadLive(ctx, tx, origID)
+	if err != nil {
+		return err
+	}
+	origUser = live.UserID
+	if live.Status != "active" && live.Status != "paused" {
+		return nil
+	}
+	first := time.Time{}
+	seenDay := map[Weekday]bool{}
+	for _, r := range live.Rules {
+		seenDay[r.Weekday] = true
+	}
+	for d := dayIn(weekStart, live.Location); !d.After(dayIn(weekEnd, live.Location)); d = d.AddDate(0, 0, 1) {
+		if seenDay[Weekday(d.Weekday())] {
+			first = d
+			break
+		}
+	}
+	if first.IsZero() || !CanModify(first, live.CutoffHours, live.Location, now) {
+		return nil
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE subscription_pauses SET state = 'cancelled' WHERE id = $1`, pauseID); err != nil {
+		return fmt.Errorf("subscriptions: cancel guest-week pause: %w", err)
+	}
+	if creditMinor > 0 {
+		if _, err := ledger.PostSubscriptionWalletApplied(ctx, tx, ledger.SubscriptionCredit{
+			SubscriptionID: origID, CycleID: cycleID, UserID: origUser,
+			Currency: currency, AmountMinor: creditMinor, Reason: "guest week cancelled",
+		}); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE fulfillments f
+		   SET status = 'scheduled'
+		 WHERE f.subscription_id = $1
+		   AND f.scheduled_date BETWEEN $2 AND $3
+		   AND f.scheduled_date >= CURRENT_DATE
+		   AND f.status = 'cancelled'
+		   AND NOT EXISTS (
+		       SELECT 1 FROM subscription_skips k
+		        WHERE k.subscription_id = f.subscription_id
+		          AND k.skip_date = f.scheduled_date
+		          AND (k.meal_slot IS NULL OR k.meal_slot = f.payload_ref))`,
+		origID, weekStart, weekEnd); err != nil {
+		return fmt.Errorf("subscriptions: restore guest-week deliveries: %w", err)
+	}
+	return s.repo.RecordEvent(ctx, tx, origID, "resumed", "", "",
+		"customer", uuid.NullUUID{UUID: origUser, Valid: true},
+		mustJSON(map[string]any{"pause_id": pauseID, "guest_week_cancelled": guestSubID,
+			"resumes_on": weekStart.Format("2006-01-02")}))
 }
