@@ -566,7 +566,7 @@
 "meals_variety_hint_good" = "مزيج جيد. تبديل بسيط قد يجعله أفضل.";
 "meals_variety_hint_great" = "أربعة مذاقات مختلفة على مدار الشهر.";
 "meals_variety_advisory" = "هذه مجرد نصيحة، ويمكنك بدء التناوب بأي أربعة مطابخ.";
-"meals_variety_same_cuisine" = "%lld من مطابخك تطبخ المطبخ %@.";
+"meals_variety_same_cuisine" = "%lld من مطابخك تقدّم أكلات %@.";
 "meals_variety_repeated_dish" = "%@ يوم %@ يأتي من %lld مطابخ.";
 "meals_variety_across_weeks" = "%@ يتكرر في %lld من أسابيعك.";
 "meals_balanced" = "اختر لي تناوبًا متوازنًا";

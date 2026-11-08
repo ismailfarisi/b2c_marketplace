@@ -1380,7 +1380,7 @@ private fun VarietyCard(v: RotationVariety, arabic: Boolean) {
             fontSize = Type.Secondary,
         )
         v.warnings.forEach { w ->
-            val dish = pick(w.dish, w.dishAr, arabic)
+            val dish = isolateBidi(pick(w.dish, w.dishAr, arabic))
             Text(
                 "• " + when (w.code) {
                     "same_cuisine" -> stringResource(
@@ -1395,7 +1395,7 @@ private fun VarietyCard(v: RotationVariety, arabic: Boolean) {
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        if (v.level != "great") Text(stringResource(R.string.meals_variety_advisory), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(top = 4.dp))
+        if (v.level != "great" || v.warnings.isNotEmpty()) Text(stringResource(R.string.meals_variety_advisory), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

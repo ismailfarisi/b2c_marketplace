@@ -54,6 +54,8 @@ private func trPlural(_ key: String, _ count: Int, _ name: String) -> String {
 }
 
 private func pick(_ en: String, _ ar: String?) -> String { localised(en, ar ?? "") }
+/// FSI/PDI around a name so a Latin dish inside an Arabic sentence keeps the sentence's order.
+private func isolateBidi(_ s: String) -> String { s.isEmpty ? s : "\u{2068}\(s)\u{2069}" }
 
 private func money(_ minor: Int64, _ currency: String) -> String {
     let f = NumberFormatter()
@@ -2027,7 +2029,7 @@ private struct VarietyBox: View {
     private var tone: Color { v.level == "great" ? Warm.leaf : v.level == "good" ? Warm.saffron : Warm.chilli }
 
     private func text(_ w: RotationVarietyWarning) -> String {
-        let dish = pick(w.dish, w.dishAr)
+        let dish = isolateBidi(pick(w.dish, w.dishAr))
         switch w.code {
         case "same_cuisine":
             let names = w.cuisines.map { tagLabel($0) }.joined(separator: isArabicLocale ? " و" : " and ")
@@ -2060,7 +2062,7 @@ private struct VarietyBox: View {
                     .font(.system(size: TypeScale.secondary))
                     .foregroundStyle(Warm.ink)
             }
-            if v.level != "great" {
+            if v.level != "great" || !v.warnings.isEmpty {
                 Text(NSLocalizedString("meals_variety_advisory", comment: ""))
                     .font(.system(size: TypeScale.secondary))
                     .foregroundStyle(Warm.muted)

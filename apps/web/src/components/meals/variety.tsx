@@ -36,7 +36,7 @@ export const VARIETY_COPY = {
     },
     advisory: "هذه مجرد نصيحة، ويمكنك بدء التناوب بأي أربعة مطابخ.",
     sameCuisine: (cuisines: string, n: number) =>
-      `${n} من مطابخك تطبخ المطبخ ${cuisines}.`,
+      `${n} من مطابخك تقدّم أكلات ${cuisines}.`,
     repeatedDish: (dish: string, day: string, n: number) =>
       `${dish} يأتي من ${n} مطابخ في أيام ${day}.`,
     acrossWeeks: (dish: string, n: number) =>
@@ -45,9 +45,13 @@ export const VARIETY_COPY = {
   },
 };
 
+// An English dish name inside an Arabic sentence (or the reverse) is isolated
+// with FSI/PDI so the surrounding numbers and words keep their order.
+const isolate = (s: string) => (s ? `\u2068${s}\u2069` : s);
+
 export function varietyWarningText(w: RotationVarietyWarning, locale: Locale): string {
   const t = VARIETY_COPY[locale];
-  const dish = (locale === "ar" && w.dish_ar) || w.dish || "";
+  const dish = isolate((locale === "ar" && w.dish_ar) || w.dish || "");
   switch (w.code) {
     case "same_cuisine":
       return t.sameCuisine(
@@ -86,7 +90,9 @@ export function VarietyMeter({ variety, locale }: { variety: RotationVariety; lo
           ))}
         </ul>
       )}
-      {variety.level !== "great" && <p className="ms-note">{t.advisory}</p>}
+      {(variety.level !== "great" || variety.warnings.length > 0) && (
+        <p className="ms-note">{t.advisory}</p>
+      )}
     </section>
   );
 }

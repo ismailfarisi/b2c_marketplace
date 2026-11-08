@@ -131,6 +131,9 @@ internal fun statusLabel(status: String): String = when (status) {
 
 internal fun pick(en: String, ar: String?, arabic: Boolean) = localised(en, ar ?: "", arabic)
 
+/** Wraps a name in FSI/PDI so a Latin dish inside an Arabic sentence keeps the sentence's order. */
+internal fun isolateBidi(s: String) = if (s.isEmpty()) s else "\u2068$s\u2069"
+
 /** A photo when the kitchen has one, otherwise a coloured cover with its initial. */
 @Composable
 internal fun KitchenCover(
