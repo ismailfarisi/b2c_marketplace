@@ -218,7 +218,9 @@ struct RootView: View {
             return
         }
         route = .none
-        destinationRaw = Destination.meals.rawValue
+        // Both meals tabs host MealsScreen, which follows the link itself; a
+        // tab that can take it keeps it (see MainActivity on Android).
+        if destinationRaw != Destination.myMeals.rawValue { destinationRaw = Destination.meals.rawValue }
         link = target
     }
 

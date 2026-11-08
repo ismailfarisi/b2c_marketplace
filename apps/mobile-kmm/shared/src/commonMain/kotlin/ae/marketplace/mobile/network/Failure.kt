@@ -85,6 +85,8 @@ sealed interface Failure {
         val fields: Map<String, String> = emptyMap(),
         val detail: String? = null,
         val fieldCodes: Map<String, String> = emptyMap(),
+        /** The server's own words per field; never shown, read for facts such as the date a `too_soon` names. */
+        val fieldMessages: Map<String, String> = emptyMap(),
     ) : Failure
 
     /** Too fast, or too often. [retryAfterSeconds] when the server said. */
@@ -153,6 +155,7 @@ private fun ApiException.fromStatus(): Failure = when (status) {
         fields = fieldErrors,
         detail = problem?.detail,
         fieldCodes = problem?.errors.orEmpty().associate { it.field to it.code },
+        fieldMessages = problem?.errors.orEmpty().associate { it.field to it.message.orEmpty() },
     )
     429 -> Failure.RateLimited(retryAfterSeconds)
     in 500..599 -> Failure.Server(status, requestId)

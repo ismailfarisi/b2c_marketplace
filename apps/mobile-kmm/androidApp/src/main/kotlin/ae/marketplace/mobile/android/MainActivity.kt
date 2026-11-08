@@ -386,7 +386,15 @@ class MainActivity : ComponentActivity() {
                             pendingMealsHelp = true
                             pendingMeals = { openHelp(id, switchToMe = false) }
                         }
-                    } else { route = Route.None; destination = Destination.Meals }
+                    } else {
+                        route = Route.None
+                        // Both meals tabs host MealsTab, which opens the link
+                        // itself. Switching My meals to Meals here re-keyed the
+                        // tab, and the remount landed on Meals home after the
+                        // link had already been handled; so a tab that can take
+                        // the link keeps it.
+                        if (destination != Destination.MyMeals) destination = Destination.Meals
+                    }
                 }
                 val context = LocalContext.current
                 ae.marketplace.mobile.android.push.PushPrompt(authorised)

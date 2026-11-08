@@ -39,8 +39,14 @@ data class Kitchen(
     @SerialName("rotation_week_price_minor") val rotationWeekPriceMinor: Long? = null,
     @SerialName("food_safety_verified") val foodSafetyVerified: Boolean = false,
     @SerialName("week_dishes") val weekDishes: List<DishThumb> = emptyList(),
-    /** Weeks the menu runs before a dish repeats; above 1 the card says "No repeats for N weeks". */
+    /** Weeks the menu runs before it starts over; the week tabs follow it. */
     @SerialName("menu_weeks") val menuWeeks: Int = 1,
+    /**
+     * Weeks without the same default dish on the same weekday and slot: [menuWeeks]
+     * when every week differs, smaller when a week was copied. Above 1 the card
+     * says "No repeats for N weeks".
+     */
+    @SerialName("no_repeat_weeks") val noRepeatWeeks: Int = 1,
 )
 
 /** One of this week's default dishes, photographed ones first. */
@@ -98,6 +104,8 @@ data class KitchenDetail(
     @SerialName("delivery_windows") val deliveryWindows: List<DeliveryWindow> = emptyList(),
     val menu: WeeklyMenu = WeeklyMenu(),
     @SerialName("menu_weeks") val menuWeeks: Int = 1,
+    /** Honest "No repeats for N weeks" value; see [PublicKitchen.noRepeatWeeks]. */
+    @SerialName("no_repeat_weeks") val noRepeatWeeks: Int = 1,
     /** The menu over real dates: this week first, one entry per week up to [menuWeeks]. */
     @SerialName("menu_calendar") val menuCalendar: List<MenuWeek> = emptyList(),
     @SerialName("plan_list") val plans: List<MealPlan> = emptyList(),
@@ -324,6 +332,10 @@ data class MySubscription(
     @SerialName("amount_minor") val amountMinor: Long = 0,
     val currency: String = "AED",
     @SerialName("pending_order_id") val pendingOrderId: String? = null,
+    /** Wallet credit already applied to this cycle (a guest week's paused-week credit). */
+    @SerialName("wallet_applied_minor") val walletAppliedMinor: Long = 0,
+    /** What the pending order collects: [amountMinor] less [walletAppliedMinor]. Pay shows this. */
+    @SerialName("due_minor") val dueMinor: Long = amountMinor,
     /** Set when a company pays for this office lunch; never the employee's to pay. */
     @SerialName("company_name") val companyName: String? = null,
     @SerialName("rotation_id") val rotationId: String? = null,

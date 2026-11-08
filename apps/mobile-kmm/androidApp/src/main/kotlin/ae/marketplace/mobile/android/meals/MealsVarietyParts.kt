@@ -55,8 +55,9 @@ internal fun NextWeekCard(items: List<NextWeekPreview>, arabic: Boolean, onKitch
             Modifier.fillMaxWidth().clickable { onKitchen(p.branchId) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // No cuisine caption: a 72dp cover clips it, and the title line says it.
             KitchenCover(
-                kitchen, p.coverImageUrl, p.cuisines, Modifier.size(72.dp),
+                kitchen, p.coverImageUrl, emptyList(), Modifier.size(72.dp),
                 fallbackUrl = p.meals.firstNotNullOfOrNull { m -> m.shown?.imageUrl },
             )
             Column(Modifier.weight(1f).padding(start = Space.Large)) {

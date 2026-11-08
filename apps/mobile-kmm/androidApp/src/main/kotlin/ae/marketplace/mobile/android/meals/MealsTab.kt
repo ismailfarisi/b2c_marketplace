@@ -627,7 +627,7 @@ internal fun KitchenCard(k: Kitchen, arabic: Boolean, onClick: () -> Unit) {
                         modifier = Modifier.background(M.LeafSoft, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
-                if (k.menuWeeks > 1) VarietyBadge(k.menuWeeks)
+                if (k.noRepeatWeeks > 1) VarietyBadge(k.noRepeatWeeks)
             }
         }
         Column(Modifier.padding(Space.Medium), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -824,7 +824,7 @@ private fun KitchenBody(
                         )
                         RatingText(k.rating, k.ratingCount)
                         if (k.foodSafetyVerified) VerifiedBadge()
-                        if (k.menuWeeks > 1) VarietyBadge(k.menuWeeks)
+                        if (k.noRepeatWeeks > 1) VarietyBadge(k.noRepeatWeeks)
                     }
                     OfferChips(state.offers, arabic)
                     k.description?.let { Text(pick(it, k.descriptionAr, arabic), color = M.Muted, fontSize = Type.Body) }
@@ -1830,7 +1830,13 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                         // A company lunch is never the employee's to pay.
                         if (sub.pendingOrderId != null && sub.companyName != null) {
                             Text(stringResource(R.string.meals_company_unpaid, sub.companyName.orEmpty()), color = M.Ink, fontSize = Type.Body)
-                        } else if (sub.pendingOrderId != null) PrimaryButton(stringResource(R.string.meals_pay_due), vm::payPending, enabled = !s.busy)
+                        } else if (sub.pendingOrderId != null) {
+                            // The wallet credit a guest week applied is already off the bill.
+                            if (sub.walletAppliedMinor > 0) {
+                                Text(stringResource(R.string.meals_wallet_applied, money(sub.walletAppliedMinor, sub.currency)), color = M.Muted, fontSize = Type.Secondary)
+                            }
+                            PrimaryButton(stringResource(R.string.meals_pay_due_amount, money(sub.dueMinor, sub.currency)), vm::payPending, enabled = !s.busy)
+                        }
                         if (sub.canRenew) PrimaryButton(stringResource(R.string.meals_renew), vm::renew, enabled = !s.busy)
                     }
                     s.error?.let { FailureStrip(it, onRetry = vm::retry, onDismiss = vm::dismissError) }
@@ -1839,7 +1845,7 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                 if (meals.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_upcoming)) }
                     items(meals, key = { it.date + it.mealSlot }) { m ->
-                        if (m.skipped) SkippedMealCard(m, arabic, s.busy, vm) else MealCard(m, arabic, s.busy, vm, s.avoidedDishes, s.tasteBusy)
+                        if (m.skipped) SkippedMealCard(m, arabic, s.busy, vm) else MealCard(m, arabic, s.busy, vm, s.avoidedDishes, s.tasteBusy, s.lovedDishes)
                     }
                 }
                 if (sub.recent.isNotEmpty()) item { RecentDeliveriesCard(sub.recent, arabic) }
@@ -2102,7 +2108,7 @@ private fun swapDifference(minor: Long, currency: String): String = when {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsViewModel, avoided: Set<String> = emptySet(), tasteBusy: Set<String> = emptySet()) {
+private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsViewModel, avoided: Set<String> = emptySet(), tasteBusy: Set<String> = emptySet(), loved: Set<String> = emptySet()) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(shortDate(m.date, arabic) + " · " + slotLabel(m.mealSlot), color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -2136,11 +2142,21 @@ private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsV
                 Chip(pick(o.name, o.nameAr, arabic), o.id == chosen, { vm.choose(m.date, m.mealSlot, o.id) }, enabled = !m.locked && !busy)
             }
         }
-        // A delivered dish can be marked "not again": remembered, and the default moves off it.
+        // A delivered dish can be hearted or marked "not again": one mark at a
+        // time, remembered; the default moves off an avoided dish.
         if (m.deliveryStatus == "completed" && chosen != null) {
             val saving = chosen in tasteBusy
-            if (chosen in avoided) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+            when (chosen) {
+                in loved -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+                    Text("♥ " + stringResource(R.string.meals_dish_loved), color = M.Leaf, fontSize = Type.Caption, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text(
+                        stringResource(R.string.meals_undo),
+                        color = if (saving) M.Faint else M.Chilli,
+                        fontSize = Type.Secondary,
+                        modifier = Modifier.clickable(enabled = !saving) { vm.setDishLoved(chosen, false) }.padding(Space.Small),
+                    )
+                }
+                in avoided -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
                     Text(stringResource(R.string.meals_dish_avoided), color = M.Muted, fontSize = Type.Caption, modifier = Modifier.weight(1f))
                     Text(
                         stringResource(R.string.meals_undo),
@@ -2149,13 +2165,20 @@ private fun MealCard(m: UpcomingMeal, arabic: Boolean, busy: Boolean, vm: MealsV
                         modifier = Modifier.clickable(enabled = !saving) { vm.setDishAvoided(chosen, false) }.padding(Space.Small),
                     )
                 }
-            } else {
-                Text(
-                    stringResource(R.string.meals_not_again),
-                    color = if (saving) M.Faint else M.Muted,
-                    fontSize = Type.Secondary,
-                    modifier = Modifier.clickable(enabled = !saving) { vm.setDishAvoided(chosen, true) }.padding(vertical = Space.Small),
-                )
+                else -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Large)) {
+                    Text(
+                        "♡ " + stringResource(R.string.meals_dish_love),
+                        color = if (saving) M.Faint else M.Leaf,
+                        fontSize = Type.Secondary,
+                        modifier = Modifier.clickable(enabled = !saving) { vm.setDishLoved(chosen, true) }.padding(vertical = Space.Small),
+                    )
+                    Text(
+                        stringResource(R.string.meals_not_again),
+                        color = if (saving) M.Faint else M.Muted,
+                        fontSize = Type.Secondary,
+                        modifier = Modifier.clickable(enabled = !saving) { vm.setDishAvoided(chosen, true) }.padding(vertical = Space.Small),
+                    )
+                }
             }
         }
     }

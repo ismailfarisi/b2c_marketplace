@@ -1103,7 +1103,7 @@ private struct KitchenCard: View {
                                 .padding(.vertical, 5)
                                 .background(Warm.leafSoft, in: Capsule())
                         }
-                        if k.menuWeeks > 1 { VarietyBadge(weeks: Int(k.menuWeeks)) }
+                        if k.noRepeatWeeks > 1 { VarietyBadge(weeks: Int(k.noRepeatWeeks)) }
                     }
                     .padding(Space.medium)
                 }
@@ -1318,7 +1318,7 @@ private struct KitchenBody: View {
                             HStack(spacing: Space.small) {
                                 RatingText(rating: k.rating, count: k.ratingCount)
                                 if k.foodSafetyVerified { VerifiedBadge() }
-                                if k.menuWeeks > 1 { VarietyBadge(weeks: Int(k.menuWeeks)) }
+                                if k.noRepeatWeeks > 1 { VarietyBadge(weeks: Int(k.noRepeatWeeks)) }
                             }
                             if !offers.isEmpty { OfferChips(offers: offers) }
                             if let d = k.description_ {
@@ -2812,7 +2812,12 @@ private struct SubscriptionPage: View {
                         Text(String(format: NSLocalizedString("meals_company_unpaid", comment: ""), company))
                             .font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
                     } else if sub.pendingOrderId != nil {
-                        PrimaryButton(label: NSLocalizedString("meals_pay_due", comment: ""), enabled: !s.busy) { vm.payPending() }
+                        // The wallet credit a guest week applied is already off the bill.
+                        if sub.walletAppliedMinor > 0 {
+                            Text(tr("meals_wallet_applied", money(sub.walletAppliedMinor, sub.currency)))
+                                .font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                        }
+                        PrimaryButton(label: tr("meals_pay_due_amount", money(sub.dueMinor, sub.currency)), enabled: !s.busy) { vm.payPending() }
                     }
                     if sub.canRenew {
                         PrimaryButton(label: NSLocalizedString("meals_renew", comment: ""), enabled: !s.busy) { vm.renew_() }
@@ -2828,7 +2833,7 @@ private struct SubscriptionPage: View {
                         if m.skipped {
                             SkippedMealCard(m: m, busy: s.busy, vm: vm)
                         } else {
-                            MealCard(m: m, busy: s.busy, vm: vm, avoided: s.avoidedDishes, tasteBusy: s.tasteBusy)
+                            MealCard(m: m, busy: s.busy, vm: vm, avoided: s.avoidedDishes, tasteBusy: s.tasteBusy, loved: s.lovedDishes)
                         }
                     }
                 }
@@ -3095,6 +3100,7 @@ private struct MealCard: View {
     let vm: MealsViewModel
     var avoided: Set<String> = []
     var tasteBusy: Set<String> = []
+    var loved: Set<String> = []
     @State private var confirmingSkip = false
 
     var body: some View {
@@ -3128,10 +3134,21 @@ private struct MealCard: View {
                     }
                 }
             }
-            // A delivered dish can be marked "not again": remembered, and the default moves off it.
+            // A delivered dish can be hearted or marked "not again": one mark at a
+            // time, remembered; the default moves off an avoided dish.
             if m.deliveryStatus == "completed", let dish = chosen {
                 let saving = tasteBusy.contains(dish)
-                if avoided.contains(dish) {
+                if loved.contains(dish) {
+                    HStack(spacing: Space.small) {
+                        Text("♥ " + NSLocalizedString("meals_dish_loved", comment: ""))
+                            .font(.system(size: TypeScale.caption, weight: .semibold)).foregroundStyle(Warm.leaf)
+                        Spacer()
+                        Button { vm.setDishLoved(dishId: dish, love: false) } label: {
+                            Text("meals_undo").font(.system(size: TypeScale.secondary)).foregroundStyle(saving ? MP.textFaint : Warm.chilli)
+                        }
+                        .disabled(saving)
+                    }
+                } else if avoided.contains(dish) {
                     HStack(spacing: Space.small) {
                         Text("meals_dish_avoided").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
                         Spacer()
@@ -3141,11 +3158,19 @@ private struct MealCard: View {
                         .disabled(saving)
                     }
                 } else {
-                    Button { vm.setDishAvoided(dishId: dish, avoid: true) } label: {
-                        Text("meals_not_again").font(.system(size: TypeScale.secondary)).foregroundStyle(saving ? MP.textFaint : MP.textMuted)
-                            .padding(.vertical, Space.small)
+                    HStack(spacing: Space.large) {
+                        Button { vm.setDishLoved(dishId: dish, love: true) } label: {
+                            Text("♡ " + NSLocalizedString("meals_dish_love", comment: ""))
+                                .font(.system(size: TypeScale.secondary)).foregroundStyle(saving ? MP.textFaint : Warm.leaf)
+                                .padding(.vertical, Space.small)
+                        }
+                        .disabled(saving)
+                        Button { vm.setDishAvoided(dishId: dish, avoid: true) } label: {
+                            Text("meals_not_again").font(.system(size: TypeScale.secondary)).foregroundStyle(saving ? MP.textFaint : MP.textMuted)
+                                .padding(.vertical, Space.small)
+                        }
+                        .disabled(saving)
                     }
-                    .disabled(saving)
                 }
             }
         }
@@ -3196,7 +3221,8 @@ private struct NextWeekCard: View {
             CardBox {
                 Button { onKitchen(p.branchId) } label: {
                     HStack(spacing: Space.medium) {
-                        KitchenCover(name: kitchen, imageUrl: p.coverImageUrl, cuisines: p.cuisines)
+                        // No cuisine caption: a 72pt cover clips it, and the title line says it.
+                        KitchenCover(name: kitchen, imageUrl: p.coverImageUrl, cuisines: [])
                             .frame(width: 72, height: 72)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(tr("meals_next_week_kicker", shortDate(p.startsOn) + " – " + shortDate(p.endsOn)))

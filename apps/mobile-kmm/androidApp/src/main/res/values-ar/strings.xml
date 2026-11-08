@@ -401,6 +401,8 @@
     <string name="meals_locked">مقفل</string>
     <string name="meals_auto_renew">التجديد التلقائي</string>
     <string name="meals_pay_due">ادفع الآن</string>
+    <string name="meals_pay_due_amount">ادفع الآن · %1$s</string>
+    <string name="meals_wallet_applied">%1$s مدفوعة من رصيد محفظتك</string>
     <string name="meals_renew">جدّد مع هذا المطبخ</string>
     <string name="meals_cancel">إلغاء الاشتراك</string>
     <string name="meals_cancel_rotation">إلغاء التناوب</string>
@@ -638,9 +640,9 @@
     <string name="meals_renew_lede">أسابيعك الأربعة التالية. أبقينا ما تحبه ووجدنا مطابخ جديدة توصّل إليك في نفس الأيام والوجبات.</string>
     <string name="meals_renew_starts">يبدأ %1$s</string>
     <string name="meals_refresh_on_renew">مطابخ جديدة عند التجديد</string>
-    <string name="meals_refresh_note">يحتفظ بمطبخين على الأكثر أحببتهما ويضيف مطابخ جديدة، في حدود ١٠٪ من سعر هذا التناوب. عند الإيقاف: نفس المطابخ الأربعة.</string>
+    <string name="meals_refresh_note">عند التجديد التلقائي يحتفظ بمطبخين على الأكثر أحببتهما ويضيف مطابخ جديدة، في حدود ١٠٪ من سعر هذا التناوب. عند الإيقاف: نفس المطابخ الأربعة.</string>
     <string name="meals_renew_note_same">نفس المطابخ الأربعة والعنوان والأيام والوجبات، بالسعر الأسبوعي الحالي لكل مطبخ.</string>
-    <string name="meals_renew_note_fresh">مطابخ جديدة في حدود ١٠٪ من سعر هذا التناوب، بنفس العنوان والأيام والوجبات. راجعها أولًا عبر «اختر المطابخ التالية».</string>
+    <string name="meals_renew_note_fresh">مطابخ جديدة بنفس العنوان والأيام والوجبات. التجديد التلقائي يبقى في حدود ١٠٪ من سعر هذا التناوب؛ أما المطابخ التي تختارها بنفسك فبسعرها المعروض، وترى السعرين قبل أن تدفع.</string>
     <string name="meals_edit_before_pay">تناوبك التالي جاهز. غيّر المطابخ قبل أن تدفع.</string>
     <string name="meals_swap">بدّل</string>
     <string name="meals_swap_done">تم</string>
@@ -672,7 +674,10 @@
     <string name="meals_not_again">ليس مرة أخرى</string>
     <string name="meals_kitchen_avoided">ليس مرة أخرى — خارج اقتراحاتك</string>
     <string name="meals_dish_avoided">ليس مرة أخرى — سنختار الطبق الآخر عندما يتوفر</string>
+    <string name="meals_dish_love">أحببته</string>
+    <string name="meals_dish_loved">أحببته — سنتذكره عند تجديد تناوبك</string>
     <string name="meals_undo">تراجع</string>
+    <string name="err_already_renewed">تم التجديد مسبقًا.</string>
     <string name="account_meal_prefs">تفضيلات الوجبات</string>
     <string name="account_adventure">كم تحب المغامرة في تناوبك التالي؟</string>
 

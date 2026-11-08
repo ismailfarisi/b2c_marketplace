@@ -269,6 +269,8 @@ data class SubscriptionUiState(
     val review: ReviewUiState = ReviewUiState(),
     /** Dishes the customer marked "not again"; the default moves off them. */
     val avoidedDishes: Set<String> = emptySet(),
+    /** Dishes the customer hearted; a dish is never in both sets. */
+    val lovedDishes: Set<String> = emptySet(),
     /** Dish marks being saved. */
     val tasteBusy: Set<String> = emptySet(),
     val tasteError: Failure? = null,
@@ -533,27 +535,49 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     }
 
     private suspend fun loadAvoidedDishes(subscriptionId: String) {
-        val avoided = runCatching { api.tastes().items }.getOrNull()
-            ?.filter { it.subjectKind == "dish" && it.sentiment == "avoid" }?.map { it.subjectId }?.toSet() ?: return
-        _sub.update { if (it.id == subscriptionId) it.copy(avoidedDishes = avoided) else it }
+        val dishes = runCatching { api.tastes().items }.getOrNull()?.filter { it.subjectKind == "dish" } ?: return
+        val avoided = dishes.filter { it.sentiment == "avoid" }.map { it.subjectId }.toSet()
+        val loved = dishes.filter { it.sentiment == "favourite" }.map { it.subjectId }.toSet()
+        _sub.update { if (it.id == subscriptionId) it.copy(avoidedDishes = avoided, lovedDishes = loved) else it }
     }
 
     /** "Not again" on a delivered dish (or taking it back). Flips at once, back on failure. */
-    fun setDishAvoided(dishId: String, avoid: Boolean) {
+    fun setDishAvoided(dishId: String, avoid: Boolean) = setDishTaste(dishId, if (avoid) "avoid" else null)
+
+    /** "Loved it" on a delivered dish (or taking it back). Flips at once, back on failure. */
+    fun setDishLoved(dishId: String, love: Boolean) = setDishTaste(dishId, if (love) "favourite" else null)
+
+    /**
+     * One mark per dish: the API keeps a single sentiment, so hearting an
+     * avoided dish replaces the avoid, and the other way round. Null clears.
+     */
+    private fun setDishTaste(dishId: String, sentiment: String?) {
         val subId = _sub.value.id ?: return
         if (dishId in _sub.value.tasteBusy) return
-        fun put(on: Boolean) = _sub.update { it.copy(avoidedDishes = if (on) it.avoidedDishes + dishId else it.avoidedDishes - dishId) }
-        put(avoid)
+        val before = _sub.value
+        fun put(mark: String?) = _sub.update {
+            it.copy(
+                avoidedDishes = if (mark == "avoid") it.avoidedDishes + dishId else it.avoidedDishes - dishId,
+                lovedDishes = if (mark == "favourite") it.lovedDishes + dishId else it.lovedDishes - dishId,
+            )
+        }
+        put(sentiment)
         _sub.update { it.copy(tasteBusy = it.tasteBusy + dishId, tasteError = null) }
         viewModelScope.launch {
             try {
-                if (avoid) api.setTaste("dish", dishId, "avoid", newIdempotencyKey()) else api.clearTaste("dish", dishId, newIdempotencyKey())
+                if (sentiment != null) api.setTaste("dish", dishId, sentiment, newIdempotencyKey()) else api.clearTaste("dish", dishId, newIdempotencyKey())
                 // The default dish moves off an avoided one: show the meals again.
                 reloadSubscription(subId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                put(!avoid)
+                put(
+                    when (dishId) {
+                        in before.avoidedDishes -> "avoid"
+                        in before.lovedDishes -> "favourite"
+                        else -> null
+                    },
+                )
                 _sub.update { it.copy(tasteError = e.toFailure()) }
             } finally {
                 _sub.update { it.copy(tasteBusy = it.tasteBusy - dishId) }
@@ -936,7 +960,10 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         _rotation.update { s ->
             val next = if (branchId in s.picked) s.picked - branchId
             else if (s.picked.size < ROTATION_KITCHENS) s.picked + branchId else s.picked
-            s.copy(picked = next, quote = null).newDraft()
+            // The server refuses a start before the slowest picked kitchen's
+            // cutoff, so the date keeps up with the picks.
+            val cutoff = next.mapNotNull { s.plans[it]?.cutoffHours }.maxOrNull() ?: 48
+            s.copy(picked = next, startDate = maxOf(s.startDate, earliestStart(cutoff).toString()), quote = null).newDraft()
         }
         quoteRotation()
     }
@@ -984,7 +1011,17 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 val q = api.previewRotation(input)
                 _rotation.update { it.copy(quote = q, error = null) }
             } catch (e: Throwable) {
-                _rotation.update { it.copy(error = e.toFailure()) }
+                val f = e.toFailure()
+                // The server is the authority on cutoffs: a start it refuses as
+                // too soon moves to the first date it names, and the quote is
+                // asked for again, instead of leaving the builder stuck.
+                val earliest = earliestFromTooSoon(f)
+                if (earliest != null && earliest > input.startDate) {
+                    _rotation.update { it.copy(startDate = earliest, quote = null, error = null).newDraft() }
+                    quoteRotation()
+                } else {
+                    _rotation.update { it.copy(error = f) }
+                }
             }
         }
     }
@@ -1428,6 +1465,13 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     private fun earliestStart(cutoffHours: Int): LocalDate =
         earliestStartAt(cutoffHours, Clock.System.now().toLocalDateTime(DUBAI))
+
+    /** The first allowed start a `too_soon` refusal names (YYYY-MM-DD), or null. */
+    private fun earliestFromTooSoon(f: Failure): String? {
+        val r = f as? Failure.Rejected ?: return null
+        if (r.fieldCodes["start_date"] != "too_soon") return null
+        return Regex("""\d{4}-\d{2}-\d{2}""").find(r.fieldMessages["start_date"].orEmpty())?.value
+    }
 
     companion object {
         /**
