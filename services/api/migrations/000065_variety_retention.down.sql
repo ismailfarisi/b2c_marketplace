@@ -1,3 +1,4 @@
+ALTER TABLE subscription_pauses DROP CONSTRAINT IF EXISTS subscription_pauses_no_overlap;
 DROP TABLE IF EXISTS subscription_guest_week_dismissals;
 DROP TABLE IF EXISTS subscription_guest_weeks;
 DROP INDEX IF EXISTS meal_rotations_cancellation_code_idx;

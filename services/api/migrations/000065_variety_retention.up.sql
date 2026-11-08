@@ -57,3 +57,12 @@ CREATE TABLE subscription_guest_week_dismissals (
     dismissed_at    timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (subscription_id, cycle_id)
 );
+
+-- One credit per day: a guest week's pause and an ordinary pause must never
+-- cover the same day of a subscription, or the week is credited twice. The
+-- service checks first; this is the backstop for two requests racing.
+-- btree_gist (migration 000001) lets the uuid ride in the GiST index.
+ALTER TABLE subscription_pauses
+    ADD CONSTRAINT subscription_pauses_no_overlap
+    EXCLUDE USING gist (subscription_id WITH =, daterange(from_date, to_date, '[]') WITH &&)
+    WHERE (state IN ('scheduled', 'active'));

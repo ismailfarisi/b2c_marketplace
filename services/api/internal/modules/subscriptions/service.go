@@ -553,6 +553,12 @@ func (s *Service) Pause(ctx context.Context, in PauseInput) error {
 	}
 
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		// Serialise against another pause or a guest week on the same
+		// subscription: the overlap check below must see what they inserted.
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM subscriptions WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+			in.SubscriptionID, in.UserID); err != nil {
+			return fmt.Errorf("subscriptions: lock: %w", err)
+		}
 		live, err := s.loadOwned(ctx, tx, in.UserID, in.SubscriptionID)
 		if err != nil {
 			return err
@@ -568,6 +574,19 @@ func (s *Service) Pause(ctx context.Context, in PauseInput) error {
 		if to.Before(from) {
 			return &httpx.ValidationError{Fields: []httpx.FieldError{{
 				Field: "to_date", Code: "before_from",
+			}}}
+		}
+
+		// A day can only be credited once. This catches an ordinary pause laid
+		// over another one and over a guest week's pause alike.
+		overlaps, err := pauseOverlaps(ctx, tx, in.SubscriptionID, from, to)
+		if err != nil {
+			return err
+		}
+		if overlaps {
+			return &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "from_date", Code: "overlaps_pause",
+				Message: "those days are already paused",
 			}}}
 		}
 

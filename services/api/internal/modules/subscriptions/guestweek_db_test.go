@@ -591,3 +591,71 @@ func TestGuestWeekHonoursTheGuestKitchensOwnCutoff(t *testing.T) {
 		t.Fatalf("start with slow kitchen: %v", err)
 	}
 }
+
+// A paused week carries one credit. A guest week over a wallet pause, or a
+// pause over a guest week, would credit the same days twice.
+func TestGuestWeekAndPauseNeverCreditTheSameWeekTwice(t *testing.T) {
+	ctx := context.Background()
+	weekOf := func(f guestFixture) (time.Time, time.Time) {
+		from, _ := time.Parse("2006-01-02", f.weekStart)
+		to, _ := time.Parse("2006-01-02", f.weekEnd)
+		return from, to
+	}
+	allowPauses := func(t *testing.T, f guestFixture) {
+		if _, err := f.pool.Exec(ctx, `UPDATE subscription_plans SET allowed_pause_days = 14 WHERE id = $1`, f.planID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("pause first, then guest week", func(t *testing.T) {
+		f := newGuestFixture(t, 12)
+		allowPauses(t, f)
+		from, to := weekOf(f)
+		if err := f.svc.Pause(ctx, PauseInput{UserID: f.userID, SubscriptionID: f.subID,
+			From: from, To: to, CreditMode: "wallet"}); err != nil {
+			t.Fatalf("pause: %v", err)
+		}
+		offer, err := f.svc.GuestWeekOffer(ctx, f.userID, f.subID, f.now)
+		if err != nil || offer.Eligible || offer.Reason != "already_paused" {
+			t.Fatalf("offer = %+v, %v; want already_paused", offer, err)
+		}
+		_, err = f.svc.StartGuestWeek(ctx, f.userID, f.subID, f.guestPlan, f.now)
+		if codeOf(err) != "guest_week_already_paused" {
+			t.Fatalf("start over a pause: %v", err)
+		}
+		// Ledger balances are debit-positive: one pause credit, not two.
+		if bal := f.walletBalance(t); bal != -70000 {
+			t.Fatalf("wallet = %d, want the single pause credit -70000", bal)
+		}
+	})
+
+	t.Run("guest week first, then pause", func(t *testing.T) {
+		f := newGuestFixture(t, 12)
+		allowPauses(t, f)
+		from, to := weekOf(f)
+		if _, err := f.svc.StartGuestWeek(ctx, f.userID, f.subID, f.guestPlan, f.now); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+		err := f.svc.Pause(ctx, PauseInput{UserID: f.userID, SubscriptionID: f.subID,
+			From: from, To: to, CreditMode: "wallet"})
+		if fieldCode(err, "from_date") != "overlaps_pause" {
+			t.Fatalf("pause over a guest week: %v", err)
+		}
+		// Overlapping by a single day is still an overlap.
+		err = f.svc.Pause(ctx, PauseInput{UserID: f.userID, SubscriptionID: f.subID,
+			From: to, To: to.AddDate(0, 0, 3), CreditMode: "wallet"})
+		if fieldCode(err, "from_date") != "overlaps_pause" {
+			t.Fatalf("pause touching a guest week: %v", err)
+		}
+		if bal := f.walletBalance(t); bal != 0 {
+			t.Fatalf("wallet = %d, want 0 (the credit was spent on the guest week)", bal)
+		}
+		// The database refuses the overlap even if the service check is bypassed.
+		_, err = f.pool.Exec(ctx, `
+			INSERT INTO subscription_pauses (subscription_id, from_date, to_date, credit_mode)
+			VALUES ($1, $2, $3, 'extend')`, f.subID, from, to)
+		if err == nil {
+			t.Fatal("exclusion constraint let an overlapping pause in")
+		}
+	})
+}

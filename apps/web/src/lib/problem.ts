@@ -26,6 +26,7 @@ const FIELD: Record<string, { en: string; ar: string }> = {
     ar: "هذه أيام إيقاف أكثر مما تبقى لك في هذه الدورة.",
   },
   no_deliveries: { en: "There are no deliveries in those dates.", ar: "لا توجد توصيلات في هذه التواريخ." },
+  overlaps_pause: { en: "Those days are already paused.", ar: "هذه الأيام متوقفة بالفعل." },
   not_on_menu: { en: "That dish is no longer on the menu.", ar: "هذا الطبق لم يعد في القائمة." },
   not_optional: {
     en: "Delivery, account and order messages can't be switched off.",
@@ -49,6 +50,10 @@ const REASON: Record<string, { en: string; ar: string }> = {
   over_credit_limit: { en: "That's over the company's credit limit.", ar: "هذا يتجاوز حد الائتمان للشركة." },
   role_read_only: { en: "Your role can view this but not change it.", ar: "دورك يسمح بالعرض فقط دون التعديل." },
   not_paused: { en: "There is no pause to end.", ar: "لا يوجد إيقاف لإنهائه." },
+  guest_week_already_paused: {
+    en: "Next week is already paused on this subscription.",
+    ar: "الأسبوع القادم متوقف بالفعل في هذا الاشتراك.",
+  },
   resume_past_cutoff: {
     en: "The rest of this pause is past the cutoff and can no longer change.",
     ar: "باقي أيام الإيقاف تجاوزت موعد التغيير ولا يمكن تعديلها.",

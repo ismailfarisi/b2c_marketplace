@@ -1848,7 +1848,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: >-
-            `guest_week_exists` (already one this cycle), `guest_week_not_eligible`,
+            `guest_week_exists` (already one this cycle), `guest_week_already_paused`
+            (next week is already paused), `guest_week_not_eligible`,
             `guest_week_unavailable`.
           content:
             application/problem+json:

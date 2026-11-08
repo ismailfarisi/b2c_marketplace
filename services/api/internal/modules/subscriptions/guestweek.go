@@ -53,8 +53,8 @@ type GuestWeekOption struct {
 type GuestWeekOffer struct {
 	Eligible bool `json:"eligible"`
 	// Reason the offer is not available: rotation, not_active, too_few_weeks,
-	// past_cutoff, already_used, dismissed, no_deliveries, no_kitchens,
-	// unavailable.
+	// past_cutoff, already_used, already_paused, dismissed, no_deliveries,
+	// no_kitchens, unavailable.
 	Reason              string            `json:"reason,omitempty"`
 	WeekStart           string            `json:"week_start,omitempty"`
 	WeekEnd             string            `json:"week_end,omitempty"`
@@ -242,6 +242,15 @@ func (s *Service) guestOffer(ctx context.Context, tx pgx.Tx, live *Live, now tim
 	}
 	if cycleEnd := dayIn(cycle.Ends, live.Location); to.After(cycleEnd) {
 		to = cycleEnd
+	}
+	// A week already paused has already been credited (or extended); a guest
+	// week on top of it would credit the same meals a second time.
+	paused, err := pauseOverlaps(ctx, tx, live.ID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if paused {
+		return notEligible("already_paused"), nil
 	}
 
 	g := &guestPlan{from: from, to: to, cycle: cycle, plans: map[uuid.UUID]PlanTemplate{}}
@@ -469,6 +478,9 @@ func (s *Service) StartGuestWeek(ctx context.Context, userID, subID, planID uuid
 			case "already_used":
 				return httpx.Coded(httpx.ErrConflict, "guest_week_exists",
 					"You already have a guest week in this cycle.")
+			case "already_paused":
+				return httpx.Coded(httpx.ErrConflict, "guest_week_already_paused",
+					"Next week is already paused on this subscription.")
 			case "past_cutoff":
 				return &httpx.ValidationError{Fields: []httpx.FieldError{{
 					Field: "week_start", Code: "past_cutoff",
@@ -935,4 +947,23 @@ func (s *Service) unwindGuestWeek(ctx context.Context, tx pgx.Tx, guestSubID uui
 		"customer", uuid.NullUUID{UUID: origUser, Valid: true},
 		mustJSON(map[string]any{"pause_id": pauseID, "guest_week_cancelled": guestSubID,
 			"resumes_on": weekStart.Format("2006-01-02")}))
+}
+
+// pauseOverlaps reports whether a scheduled or active pause on the
+// subscription touches any day of [from, to]. Both the guest week and an
+// ordinary pause credit the customer for the suppressed days, so one week
+// must never carry two of them; the EXCLUDE constraint on subscription_pauses
+// is the backstop for a race this check cannot see.
+func pauseOverlaps(ctx context.Context, tx pgx.Tx, subID uuid.UUID, from, to time.Time) (bool, error) {
+	var overlaps bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM subscription_pauses
+			 WHERE subscription_id = $1
+			   AND state IN ('scheduled', 'active')
+			   AND from_date <= $3::date AND to_date >= $2::date)`,
+		subID, from, to).Scan(&overlaps); err != nil {
+		return false, fmt.Errorf("subscriptions: overlapping pauses: %w", err)
+	}
+	return overlaps, nil
 }
