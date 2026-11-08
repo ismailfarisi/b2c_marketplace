@@ -3751,6 +3751,15 @@ body {
   overflow: hidden;
   margin-block: 1rem;
 }
+.ms-next-week-empty {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  padding: 1rem 1.25rem;
+}
+.ms-next-week-empty > .ms-sub {
+  margin: 0;
+}
 .ms-next-week > .ms-sub {
   padding: 0 1.25rem 1rem;
 }

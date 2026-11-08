@@ -721,6 +721,9 @@
     <string name="meals_next_week_more">+%1$d مطابخ أخرى الأسبوع القادم</string>
     <string name="meals_next_week_no_dishes">القائمة قريبًا</string>
     <string name="meals_next_week_open">عرض المطبخ</string>
+    <string name="meals_next_week_none">لا وجبات الأسبوع القادم</string>
+    <string name="meals_next_week_none_hint">لا شيء في الطريق الأسبوع القادم. جدّد اشتراكك أو ابحث عن مطبخ.</string>
+    <string name="meals_next_week_find">ابحث عن مطبخ</string>
     <string name="meals_recap_title">شهرك مع المطابخ</string>
     <string name="meals_recap_ended">انتهى شهرك مع المطابخ</string>
     <string name="meals_recap_kitchens">المطابخ</string>

@@ -2159,6 +2159,8 @@ private struct MinePage: View {
                         }
                         if !s.nextWeek.isEmpty {
                             NextWeekCard(items: s.nextWeek, onKitchen: onKitchen)
+                        } else if s.extrasError == nil && (!s.subscriptions.isEmpty || !s.rotations.isEmpty) {
+                            NextWeekEmptyCard(onFindKitchen: onBack)
                         }
                         ForEach(s.companies, id: \.companyId) { c in companyCard(c.name) }
                         if !s.rotations.isEmpty {
@@ -3165,6 +3167,25 @@ private func cuisineLine(_ cuisines: [String]) -> String {
 }
 
 /// The "Next week" card at the top of My meals: who cooks and what, per day.
+/// My meals when nothing is on the way next week: say so, and point at the kitchens.
+private struct NextWeekEmptyCard: View {
+    let onFindKitchen: () -> Void
+
+    var body: some View {
+        CardBox {
+            VStack(alignment: .leading, spacing: Space.tight) {
+                Text(tr("meals_next_week_none")).font(.system(size: TypeScale.heading, weight: .semibold)).foregroundStyle(MP.text)
+                Text(tr("meals_next_week_none_hint")).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                Button(action: onFindKitchen) {
+                    Text(tr("meals_next_week_find")).font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(MP.chilli)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, Space.small)
+            }
+        }
+    }
+}
+
 private struct NextWeekCard: View {
     let items: [NextWeekPreview]
     let onKitchen: (String) -> Void

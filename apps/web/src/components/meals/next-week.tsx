@@ -27,8 +27,10 @@ const COPY = {
     title: (kitchen: string) => `Next week: ${kitchen}`,
     homeCooking: (cuisine: string) => `${cuisine} home cooking`,
     homeStyle: "Home-style cooking",
-    menuWeek: (n: number) => `Menu week ${n}`,
     noDishes: "Menu coming soon",
+    noMeals: "No meals next week",
+    noMealsHint: "Nothing is on the way next week. Renew, or find a kitchen.",
+    browse: "Find a kitchen",
     loading: "Loading next week…",
     open: "See the kitchen",
     more: (n: number) => `+${n} more kitchen${n === 1 ? "" : "s"} next week`,
@@ -46,8 +48,10 @@ const COPY = {
     title: (kitchen: string) => `الأسبوع القادم: ${kitchen}`,
     homeCooking: (cuisine: string) => `طبخ بيتي ${cuisine}`,
     homeStyle: "طبخ بيتي",
-    menuWeek: (n: number) => `أسبوع القائمة ${n}`,
     noDishes: "القائمة قريبًا",
+    noMeals: "لا وجبات الأسبوع القادم",
+    noMealsHint: "لا شيء في الطريق الأسبوع القادم. جدّد اشتراكك أو ابحث عن مطبخ.",
+    browse: "ابحث عن مطبخ",
     loading: "جارٍ تحميل الأسبوع القادم…",
     open: "عرض المطبخ",
     more: (n: number) => `+${n} مطابخ أخرى الأسبوع القادم`,
@@ -72,12 +76,27 @@ export function cuisineLine(cuisines: string[], locale: Locale) {
   return first ? t.homeCooking(tagLabel(first, locale)) : t.homeStyle;
 }
 
+/** The dish the kitchen will send: chosen, else the default, else the first. */
 function shownDish(dishes: PreviewDish[]) {
-  return dishes.find((d) => d.chosen) ?? dishes[0];
+  return (
+    dishes.find((d) => d.chosen) ??
+    dishes.find((d) => d.is_default) ??
+    dishes[0]
+  );
 }
 
-/** The "Next week" card at the top of My meals. */
-export function NextWeekCard({ locale }: { locale: Locale }) {
+/**
+ * The "Next week" card at the top of My meals. `hasSubscriptions` turns the
+ * empty answer into a "No meals next week" card; a customer with nothing to
+ * renew sees the page's own empty state instead.
+ */
+export function NextWeekCard({
+  locale,
+  hasSubscriptions = false,
+}: {
+  locale: Locale;
+  hasSubscriptions?: boolean;
+}) {
   const signedIn = useHasSession();
   const q = useQuery({
     queryKey: ["me", "next-week"],
@@ -103,7 +122,18 @@ export function NextWeekCard({ locale }: { locale: Locale }) {
     );
   }
   const [first, ...rest] = q.data.items;
-  if (!first) return null;
+  if (!first) {
+    if (!hasSubscriptions) return null;
+    return (
+      <section className="ms-next-week ms-next-week-empty" aria-live="polite">
+        <strong>{t.noMeals}</strong>
+        <p className="ms-sub">{t.noMealsHint}</p>
+        <Link className="ms-cta ms-cta-quiet" href={`/${locale}`}>
+          {t.browse}
+        </Link>
+      </section>
+    );
+  }
   return (
     <section className="ms-next-week" aria-labelledby="ms-next-week-title">
       <NextWeekBody locale={locale} p={first} />
@@ -138,9 +168,6 @@ function NextWeekBody({ locale, p }: { locale: Locale; p: NextWeekPreview }) {
           <strong id="ms-next-week-title" dir="auto">
             {t.title(kitchen)} – {cuisineLine(p.cuisines, locale)}
           </strong>
-          {p.menu_week > 1 && (
-            <span className="ms-sub">{t.menuWeek(p.menu_week)}</span>
-          )}
           <span className="ms-next-week-open">{t.open}</span>
         </span>
       </Link>

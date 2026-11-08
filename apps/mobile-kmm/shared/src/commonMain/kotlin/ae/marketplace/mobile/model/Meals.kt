@@ -739,8 +739,8 @@ data class PreviewMeal(
     @SerialName("meal_slot") val mealSlot: String,
     val dishes: List<PreviewDish> = emptyList(),
 ) {
-    /** The dish this meal brings: the customer's choice, else the kitchen's first. */
-    val shown: PreviewDish? get() = dishes.firstOrNull { it.chosen } ?: dishes.firstOrNull()
+    /** The dish this meal brings: the customer's choice, else the kitchen's default, else its first. */
+    val shown: PreviewDish? get() = dishes.firstOrNull { it.chosen } ?: dishes.firstOrNull { it.isDefault } ?: dishes.firstOrNull()
 }
 
 @Serializable

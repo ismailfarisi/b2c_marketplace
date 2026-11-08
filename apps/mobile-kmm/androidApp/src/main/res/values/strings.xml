@@ -783,6 +783,9 @@
     <string name="meals_next_week_more">+%1$d more kitchens next week</string>
     <string name="meals_next_week_no_dishes">Menu coming soon</string>
     <string name="meals_next_week_open">See the kitchen</string>
+    <string name="meals_next_week_none">No meals next week</string>
+    <string name="meals_next_week_none_hint">Nothing is on the way next week. Renew, or find a kitchen.</string>
+    <string name="meals_next_week_find">Find a kitchen</string>
     <string name="meals_recap_title">Your month of kitchens</string>
     <string name="meals_recap_ended">Your month of kitchens is done</string>
     <string name="meals_recap_kitchens">Kitchens</string>

@@ -110,7 +110,10 @@ export default function MySubscriptionsPage({
   return (
     <CustomerShell locale={locale}>
       <h1>{t.title}</h1>
-      <NextWeekCard locale={locale} />
+      <NextWeekCard
+        locale={locale}
+        hasSubscriptions={items.length > 0 || rotations.length > 0}
+      />
       <p>
         <Link href={`/${locale}/invoices`}>{t.invoices}</Link>
       </p>

@@ -1465,6 +1465,8 @@ private fun MinePage(
                 }
                 if (s.nextWeek.isNotEmpty()) {
                     item(key = "next-week") { NextWeekCard(s.nextWeek, arabic, onKitchen) }
+                } else if (s.extrasError == null && (s.subscriptions.isNotEmpty() || s.rotations.isNotEmpty())) {
+                    item(key = "next-week-empty") { NextWeekEmptyCard(onBack) }
                 }
                 items(s.companies, key = { "company-" + it.companyId }) { c -> CompanyCoversCard(c.name, arabic) }
                 if (s.rotations.isNotEmpty()) {

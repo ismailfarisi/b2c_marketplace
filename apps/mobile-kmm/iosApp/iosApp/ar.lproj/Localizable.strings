@@ -578,7 +578,9 @@
 "meals_variety_advisory" = "هذه مجرد نصيحة، ويمكنك بدء التناوب بأي أربعة مطابخ.";
 "meals_variety_same_cuisine" = "%lld من مطابخك تقدّم أكلات %@.";
 "meals_variety_repeated_dish" = "%@ يوم %@ يأتي من %lld مطابخ.";
+"meals_variety_repeated_dish_two" = "%@ يوم %@ يأتي من مطبخين.";
 "meals_variety_across_weeks" = "%@ يتكرر في %lld من أسابيعك.";
+"meals_variety_across_weeks_two" = "%@ يتكرر في أسبوعين من أسابيعك.";
 "meals_balanced" = "اختر لي تناوبًا متوازنًا";
 "meals_balancing" = "نبحث عن أربعة مطابخ مختلفة…";
 "meals_balanced_none" = "لا توجد مطابخ تناوب كافية قرب هذا العنوان لاختيار متوازن بعد. اختر مطابخك الأربعة بنفسك.";
@@ -589,6 +591,9 @@
 "meals_next_week_more" = "+%lld مطابخ أخرى الأسبوع القادم";
 "meals_next_week_no_dishes" = "القائمة قريبًا";
 "meals_next_week_open" = "عرض المطبخ";
+"meals_next_week_none" = "لا وجبات الأسبوع القادم";
+"meals_next_week_none_hint" = "لا شيء في الطريق الأسبوع القادم. جدّد اشتراكك أو ابحث عن مطبخ.";
+"meals_next_week_find" = "ابحث عن مطبخ";
 "meals_recap_title" = "شهرك مع المطابخ";
 "meals_recap_ended" = "انتهى شهرك مع المطابخ";
 "meals_recap_kitchens" = "المطابخ";

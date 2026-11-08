@@ -31,6 +31,20 @@ private fun cuisineLine(cuisines: List<String>, arabic: Boolean): String {
     return stringResource(R.string.meals_next_week_home_cooking, MealTags.label(first, arabic))
 }
 
+/** My meals when nothing is on the way next week: say so, and point at the kitchens. */
+@Composable
+internal fun NextWeekEmptyCard(onFindKitchen: () -> Unit) {
+    Card {
+        Text(stringResource(R.string.meals_next_week_none), color = M.Ink, fontSize = Type.Heading, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.meals_next_week_none_hint), color = M.Muted, fontSize = Type.Secondary, modifier = Modifier.padding(top = Space.Tight))
+        Text(
+            stringResource(R.string.meals_next_week_find),
+            color = M.Chilli, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = Space.Small).clickable(onClick = onFindKitchen),
+        )
+    }
+}
+
 /** The "Next week" card at the top of My meals: who cooks and what, per day. */
 @Composable
 internal fun NextWeekCard(items: List<NextWeekPreview>, arabic: Boolean, onKitchen: (String) -> Unit) {

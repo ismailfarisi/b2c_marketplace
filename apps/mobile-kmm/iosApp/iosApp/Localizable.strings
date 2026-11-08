@@ -578,7 +578,9 @@
 "meals_variety_advisory" = "This is only advice. You can still start any four kitchens.";
 "meals_variety_same_cuisine" = "%lld of your kitchens cook %@ food.";
 "meals_variety_repeated_dish" = "%@ on %@ comes from %lld kitchens.";
+"meals_variety_repeated_dish_two" = "%@ on %@ comes from two kitchens.";
 "meals_variety_across_weeks" = "%@ shows up in %lld of your weeks.";
+"meals_variety_across_weeks_two" = "%@ shows up in two of your weeks.";
 "meals_balanced" = "Build a balanced rotation for me";
 "meals_balancing" = "Finding four different kitchens…";
 "meals_balanced_none" = "There aren't enough rotation kitchens near this address for a balanced pick yet. Choose your own four.";
@@ -589,6 +591,9 @@
 "meals_next_week_more" = "+%lld more kitchens next week";
 "meals_next_week_no_dishes" = "Menu coming soon";
 "meals_next_week_open" = "See the kitchen";
+"meals_next_week_none" = "No meals next week";
+"meals_next_week_none_hint" = "Nothing is on the way next week. Renew, or find a kitchen.";
+"meals_next_week_find" = "Find a kitchen";
 "meals_recap_title" = "Your month of kitchens";
 "meals_recap_ended" = "Your month of kitchens is done";
 "meals_recap_kitchens" = "Kitchens";
