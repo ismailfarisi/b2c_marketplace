@@ -2,6 +2,7 @@ package kitchen
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/marketplace/api/internal/httpx"
 	"github.com/marketplace/api/internal/modules/notify"
 )
 
@@ -135,11 +137,28 @@ func TestMultiWeekMenuServesWeekTwo(t *testing.T) {
 	if _, err := s.SetMenuWeeks(ctx, branchID, 3); err == nil {
 		t.Error("extended to 3 weeks with an empty week 3")
 	}
+	// Copying an empty week is a mistake, not a no-op.
+	var verr *httpx.ValidationError
+	if _, err := s.CopyMenuWeek(ctx, branchID, 4, 3); !errors.As(err, &verr) || verr.Fields[0].Code != "source_week_empty" {
+		t.Errorf("copy from an empty week: %v", err)
+	}
 	if _, err := s.CopyMenuWeek(ctx, branchID, 1, 3); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CopyMenuWeek(ctx, branchID, 1, 3); err == nil {
-		t.Error("copied into a week that already has dishes")
+	// The same copy again (a retry whose first response was lost) succeeds;
+	// once week 3 differs from week 1 it is a conflict.
+	if _, err := s.CopyMenuWeek(ctx, branchID, 1, 3); err != nil {
+		t.Errorf("repeating a copy that went through: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO menu_day_items (cycle_day_id, menu_item_id, meal_slot, is_default, sort_order)
+		SELECT cd.id, $2, 'lunch', false, 9 FROM menu_cycle_days cd
+		 WHERE cd.cycle_id = $1 AND cd.week_no = 3 AND cd.weekday = 1`, cycleID, week2); err != nil {
+		t.Fatal(err)
+	}
+	var coded *httpx.CodedError
+	if _, err := s.CopyMenuWeek(ctx, branchID, 1, 3); !errors.As(err, &coded) || coded.Code != "week_not_empty" {
+		t.Errorf("copied into a week with different dishes: %v", err)
 	}
 	m, err := s.SetMenuWeeks(ctx, branchID, 3)
 	if err != nil {

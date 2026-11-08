@@ -327,11 +327,13 @@ export const copyMenuWeek = (
   branchId: string,
   week: number,
   fromWeek: number,
+  opts?: { headers?: HeadersInit },
 ) =>
   apiFetch<WeeklyMenu>({
     url: `/branches/${branchId}/menu/weeks/${week}/copy`,
     method: "POST",
     data: { from_week: fromWeek },
+    headers: opts?.headers,
   });
 
 export const listPlans = (branchId: string) =>

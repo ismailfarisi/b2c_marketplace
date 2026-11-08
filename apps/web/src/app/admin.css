@@ -1669,6 +1669,9 @@ table.menu-grid {
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
+  /* Seven day columns need room to read; on a phone the .table-wrap around
+     the grid scrolls sideways instead of wrapping dish names letter by letter. */
+  min-inline-size: 56rem;
 }
 
 table.menu-grid th {

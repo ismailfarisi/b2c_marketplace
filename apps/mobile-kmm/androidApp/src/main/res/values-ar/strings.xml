@@ -626,6 +626,7 @@
     <string name="invoice_not_found">هذه الفاتورة ليست في حسابك.</string>
     <!-- Multi-week kitchen menus -->
     <string name="meals_no_repeats">بلا تكرار لمدة %1$d أسابيع</string>
+    <string name="meals_no_repeats_two">بلا تكرار لمدة أسبوعين</string>
     <string name="meals_this_week">هذا الأسبوع</string>
     <string name="meals_next_week">الأسبوع القادم</string>
     <string name="meals_in_weeks">بعد %1$d أسابيع</string>

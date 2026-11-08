@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Panel } from "@/components/admin/detail";
 import { label } from "@/components/kitchen/copy";
@@ -24,6 +24,7 @@ import {
   type Slot,
 } from "@/lib/vendor-api";
 import { useBusyGuard } from "@/lib/use-busy-guard";
+import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 
 /**
  * The weekly menu: for each weekday and meal, one default dish and optionally
@@ -119,9 +120,16 @@ export default function MenuPage() {
     },
     onSettled: tap.release,
   });
+  // One key per target week: a copy retried after a lost response is the
+  // same request, not a second one that finds the week already filled.
+  const copyKey = useIdempotencyKey();
+  useEffect(() => copyKey.reset(), [viewWeek, copyKey]);
   const copy = useMutation({
-    mutationFn: (to: number) => copyMenuWeek(id, to, 1),
-    onSuccess: (m) => qc.setQueryData(["vendor", "menu", id], m),
+    mutationFn: (to: number) => copyMenuWeek(id, to, 1, { headers: copyKey.headers() }),
+    onSuccess: (m) => {
+      copyKey.reset();
+      qc.setQueryData(["vendor", "menu", id], m);
+    },
     onSettled: tap.release,
   });
   const serve = useMutation({

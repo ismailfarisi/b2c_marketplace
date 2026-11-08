@@ -710,7 +710,8 @@ private fun RatingText(rating: Double?, count: Int) {
 @Composable
 private fun VarietyBadge(weeks: Int) {
     Text(
-        "↻ " + stringResource(R.string.meals_no_repeats, weeks),
+        // Arabic needs the dual for two weeks, as the week tabs already do.
+        "↻ " + if (weeks == 2) stringResource(R.string.meals_no_repeats_two) else stringResource(R.string.meals_no_repeats, weeks),
         color = M.Ink,
         fontSize = Type.Caption,
         fontWeight = FontWeight.Bold,

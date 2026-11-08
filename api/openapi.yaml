@@ -4082,7 +4082,11 @@ paths:
       tags: [kitchen]
       operationId: copyMenuWeek
       summary: Fill an empty menu week with a copy of another week
-      description: A 409 (week_not_empty) when the target week already has dishes.
+      description: |
+        A 409 (week_not_empty) when the target week already has dishes that
+        differ from the source; a target already identical to the source (a
+        repeated copy) succeeds. A 422 on `from_week` with code
+        `source_week_empty` when the source week has no dishes.
       parameters:
         - $ref: "#/components/parameters/BranchId"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -4105,7 +4109,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: The target week already has dishes (code week_not_empty)
+          description: The target week already has different dishes (code week_not_empty)
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }

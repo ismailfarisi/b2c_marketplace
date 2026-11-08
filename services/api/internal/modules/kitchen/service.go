@@ -443,6 +443,10 @@ var weekdayNames = [7]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursd
 
 // CopyMenuWeek fills an empty week with a copy of another week's cells, the
 // quick start for a second week: copy week 1, then change a few dishes.
+//
+// A retry of a copy that already went through (the response was lost, the
+// vendor pressed again) finds the target identical to the source and
+// succeeds; only a target with different dishes is week_not_empty.
 func (s *Service) CopyMenuWeek(ctx context.Context, branchID uuid.UUID, from, to int) (WeeklyMenu, error) {
 	if err := validMenuWeek(to); err != nil {
 		return WeeklyMenu{}, err
@@ -456,11 +460,26 @@ func (s *Service) CopyMenuWeek(ctx context.Context, branchID uuid.UUID, from, to
 		if err != nil {
 			return err
 		}
-		var filled bool
+		var sourceFilled, filled, same bool
 		if err := tx.QueryRow(ctx, `
-			SELECT EXISTS (SELECT 1 FROM menu_cycle_days cd JOIN menu_day_items di ON di.cycle_day_id = cd.id
-			                WHERE cd.cycle_id = $1 AND cd.week_no = $2)`, cycleID, to).Scan(&filled); err != nil {
+			WITH cells AS (
+				SELECT cd.week_no, cd.weekday, di.meal_slot, di.menu_item_id, di.portion_cap, di.is_default, di.sort_order
+				  FROM menu_cycle_days cd JOIN menu_day_items di ON di.cycle_day_id = cd.id
+				 WHERE cd.cycle_id = $1 AND cd.week_no IN ($2, $3)),
+			src AS (SELECT weekday, meal_slot, menu_item_id, portion_cap, is_default, sort_order FROM cells WHERE week_no = $2),
+			dst AS (SELECT weekday, meal_slot, menu_item_id, portion_cap, is_default, sort_order FROM cells WHERE week_no = $3)
+			SELECT EXISTS (SELECT 1 FROM src), EXISTS (SELECT 1 FROM dst),
+			       NOT EXISTS (SELECT * FROM src EXCEPT SELECT * FROM dst)
+			       AND NOT EXISTS (SELECT * FROM dst EXCEPT SELECT * FROM src)`,
+			cycleID, from, to).Scan(&sourceFilled, &filled, &same); err != nil {
 			return fmt.Errorf("kitchen: check week: %w", err)
+		}
+		if !sourceFilled {
+			return &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: "from_week", Code: "source_week_empty", Message: "that week has no dishes to copy"}}}
+		}
+		if filled && same {
+			return nil
 		}
 		if filled {
 			return httpx.Coded(httpx.ErrConflict, "week_not_empty",

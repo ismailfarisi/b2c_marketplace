@@ -551,7 +551,8 @@ private struct VarietyBadge: View {
     let weeks: Int
 
     var body: some View {
-        Text("↻ " + tr("meals_no_repeats", weeks))
+        // Arabic needs the dual for two weeks, as the week tabs already do.
+        Text("↻ " + (weeks == 2 ? tr("meals_no_repeats_two") : tr("meals_no_repeats", weeks)))
             .font(.system(size: TypeScale.caption, weight: .bold))
             .foregroundStyle(Warm.ink)
             .padding(.horizontal, 8)

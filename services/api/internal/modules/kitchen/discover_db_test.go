@@ -25,30 +25,47 @@ func TestDiscoverMatchesMenuDishes(t *testing.T) {
 	}
 	defer pool.Close()
 
-	var branchID uuid.UUID
-	if err := pool.QueryRow(ctx, `
-		SELECT b.id FROM vendor_branches b
-		  JOIN vendors v ON v.id = b.vendor_id
-		 WHERE b.deleted_at IS NULL AND b.is_active AND v.deleted_at IS NULL AND v.status = 'active'
-		   AND EXISTS (SELECT 1 FROM subscription_plans sp
-		                WHERE sp.branch_id = b.id AND sp.service_type = $1 AND sp.is_active)
-		 LIMIT 1`, planServiceType).Scan(&branchID); err != nil {
-		t.Skipf("no kitchen with a live plan seeded: %v", err)
-	}
-
+	// The test owns its kitchen: a shared demo branch must not be left with
+	// a second active menu (the schema now forbids one anyway).
 	tag := fmt.Sprintf("%08d", rand.IntN(100_000_000))
+	vendorID, branchID := uuid.New(), uuid.New()
+	for _, st := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO vendors (id, slug, legal_name, trade_name, status) VALUES ($1, $2, 'T LLC', 'T', 'active')`,
+			[]any{vendorID, "discover-" + tag}},
+		{`INSERT INTO vendor_branches (id, vendor_id, name, timezone, point) VALUES ($1, $2, $3, 'Asia/Dubai',
+			ST_SetSRID(ST_MakePoint(55.23, 25.14), 4326)::geography)`,
+			[]any{branchID, vendorID, "Discover " + tag}},
+		{`INSERT INTO subscription_plans (branch_id, service_type, name, cycle_days, days_per_week,
+			cutoff_hours, price_minor, delivery_weekdays, meal_slots)
+			VALUES ($1, $2, 'T plan', 7, 5, 12, 70000, '{0,1,2,3,4}', '{lunch}')`,
+			[]any{branchID, planServiceType}},
+	} {
+		if _, err := pool.Exec(ctx, st.sql, st.args...); err != nil {
+			t.Fatalf("%s: %v", st.sql, err)
+		}
+	}
+	t.Cleanup(func() {
+		bg := context.Background()
+		_, _ = pool.Exec(bg, `DELETE FROM menu_cycles WHERE branch_id = $1`, branchID)
+		_, _ = pool.Exec(bg, `DELETE FROM menu_items WHERE branch_id = $1`, branchID)
+		_, _ = pool.Exec(bg, `DELETE FROM subscription_plans WHERE branch_id = $1`, branchID)
+		_, _ = pool.Exec(bg, `DELETE FROM vendor_branches WHERE id = $1`, branchID)
+		_, _ = pool.Exec(bg, `DELETE FROM vendors WHERE id = $1`, vendorID)
+	})
+
 	name, nameAr := "Zzdish"+tag, "طبق"+tag
 	var itemID, cycleID, dayID uuid.UUID
 	if err := pool.QueryRow(ctx, `INSERT INTO menu_items (branch_id, name, name_ar) VALUES ($1, $2, $3) RETURNING id`,
 		branchID, name, nameAr).Scan(&itemID); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM menu_items WHERE id = $1`, itemID) })
 	if err := pool.QueryRow(ctx, `INSERT INTO menu_cycles (branch_id, name, anchor_date, is_active) VALUES ($1, $2, CURRENT_DATE, false) RETURNING id`,
 		branchID, "test "+tag).Scan(&cycleID); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM menu_cycles WHERE id = $1`, cycleID) })
 	if err := pool.QueryRow(ctx, `INSERT INTO menu_cycle_days (cycle_id, week_no, weekday) VALUES ($1, 1, 0) RETURNING id`,
 		cycleID).Scan(&dayID); err != nil {
 		t.Fatal(err)
