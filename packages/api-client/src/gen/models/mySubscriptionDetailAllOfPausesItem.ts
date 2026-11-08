@@ -23,4 +23,6 @@ Conventions:
 export type MySubscriptionDetailAllOfPausesItem = {
   from_date?: string;
   to_date?: string;
+  /** False for a pause already credited to the wallet (a guest week's among them), which cannot be ended early. */
+  can_resume?: boolean;
 };

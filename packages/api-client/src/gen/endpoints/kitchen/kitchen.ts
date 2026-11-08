@@ -819,7 +819,11 @@ export const useSetMenuWeeks = <TError = ForbiddenResponse | NotFoundResponse | 
       return useMutation(mutationOptions);
     }
     /**
- * A 409 (week_not_empty) when the target week already has dishes.
+ * A 409 (week_not_empty) when the target week already has dishes that
+differ from the source; a target already identical to the source (a
+repeated copy) succeeds. A 422 on `from_week` with code
+`source_week_empty` when the source week has no dishes.
+
  * @summary Fill an empty menu week with a copy of another week
  */
 export const copyMenuWeek = (

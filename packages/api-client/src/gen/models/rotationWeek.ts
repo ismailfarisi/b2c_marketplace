@@ -24,6 +24,7 @@ import type { RotationWeekSubscriptionId } from './rotationWeekSubscriptionId';
 import type { RotationWeekSubscriptionNo } from './rotationWeekSubscriptionNo';
 import type { RotationWeekStatus } from './rotationWeekStatus';
 import type { RotationWeekSwapUntil } from './rotationWeekSwapUntil';
+import type { RotationWeekDueMinor } from './rotationWeekDueMinor';
 
 export interface RotationWeek {
   /**
@@ -49,4 +50,10 @@ export interface RotationWeek {
   swapped?: boolean;
   /** Last day the kitchen can be changed. */
   swap_until?: RotationWeekSwapUntil;
+  /** What a swapped-in week still owes when its dearer kitchen's
+difference was not collected. Repeating the swap with the same
+plan_id retries the payment. Unpaid past the swap cutoff, the week
+is voided and the money returned to the wallet.
+ */
+  due_minor?: RotationWeekDueMinor;
 }

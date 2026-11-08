@@ -648,6 +648,7 @@ export * from './rotationVarietyWarning';
 export * from './rotationVarietyWarningCode';
 export * from './rotationVarietyWarningDishAr';
 export * from './rotationWeek';
+export * from './rotationWeekDueMinor';
 export * from './rotationWeekKitchenNameAr';
 export * from './rotationWeekStatus';
 export * from './rotationWeekSubscriptionId';

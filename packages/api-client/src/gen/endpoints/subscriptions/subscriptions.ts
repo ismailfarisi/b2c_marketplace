@@ -1276,7 +1276,7 @@ export const useDismissGuestWeek = <TError = UnauthorizedResponse | NotFoundResp
       return useMutation(mutationOptions);
     }
     /**
- * Checks the four plans the same way createRotation does (all in the rotation, four different kitchens, the schedule fits every plan, every kitchen delivers to the address) and returns the week order the platform would assign. Creates nothing.
+ * Checks the four plans the same way createRotation does (all in the rotation, four different kitchens, the schedule fits every plan, every kitchen delivers to the address) and returns the week order the platform would assign. Creates nothing. Validation codes: on `delivery_weekdays` `invalid_weekday` (outside 0 Sunday..6 Saturday) and `duplicate`; on `meal_slots` `empty_slot` and `duplicate`; on `start_date` `in_the_past` and `too_soon` (before the earliest day the longest kitchen cutoff still allows; the message names that day).
  * @summary Which kitchen would cook which week, and the total
  */
 export const previewRotation = (
@@ -1341,7 +1341,7 @@ export const usePreviewRotation = <TError = UnauthorizedResponse | Unprocessable
       return useMutation(mutationOptions);
     }
     /**
- * Picks four well-rated rotation kitchens that deliver to the address on one shared schedule, with as many different cuisines as possible in a similar weekly price band, and quotes them exactly like previewRotation. Leave delivery_weekdays or meal_slots out to use the schedule most kitchens share. Creates nothing; the variety check is advisory and never blocks buying any rotation.
+ * Picks four well-rated rotation kitchens that deliver to the address on one shared schedule, with as many different cuisines as possible in a similar weekly price band, and quotes them exactly like previewRotation. Leave delivery_weekdays or meal_slots out to use the schedule most kitchens share. Creates nothing; the variety check is advisory and never blocks buying any rotation. A given schedule is validated like previewRotation (`invalid_weekday`, `duplicate`, `empty_slot`).
  * @summary A balanced four-kitchen rotation for an address
  */
 export const suggestRotation = (
@@ -2032,6 +2032,11 @@ kitchen is charged the difference through the payment flow (the
 `payment` intent); a cheaper one leaves the difference in the wallet.
 Idempotent: repeating the swap returns the first result. Send an
 `Idempotency-Key`.
+
+422 field codes on `plan_id`: `same_kitchen` (the week's current
+kitchen), `follows_last_week` (the kitchen cooks the adjacent week of
+the previous or next rotation, so it would cook two weeks in a row);
+on `plan_ids`: `same_kitchen_twice` (already in another week).
 
  * @summary Change the kitchen of one future rotation week
  */
