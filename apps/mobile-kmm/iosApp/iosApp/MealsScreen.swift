@@ -1997,12 +1997,15 @@ private struct RotationPage: View {
                             VarietyBox(v: v)
                         }
                     }
-                    // Before the kitchens load, retry loads them; after, the pay button is the retry.
+                    // Before the kitchens load, retry loads them; a failed quote is
+                    // asked for again; once there is a quote, the pay button is the retry.
                     if let failure = s.error {
-                        if s.candidatesLoaded {
-                            FailureStrip(failure: failure)
-                        } else {
+                        if !s.candidatesLoaded {
                             FailureStrip(failure: failure, onRetry: { vm.startRotation() })
+                        } else if s.quote == nil && s.picked.count == 4 {
+                            FailureStrip(failure: failure, onRetry: { vm.retryQuote() })
+                        } else {
+                            FailureStrip(failure: failure)
                         }
                     }
                 }

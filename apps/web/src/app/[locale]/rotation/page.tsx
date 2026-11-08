@@ -66,6 +66,8 @@ const COPY = {
     paying: "Processing…",
     loading: "Loading…",
     failed: "Something went wrong. Try again.",
+    quoteFailed: "Couldn't price this rotation.",
+    retry: "Try again",
     balanced: "Build a balanced rotation for me",
     balancing: "Finding four different kitchens…",
     balancedHint:
@@ -115,6 +117,8 @@ const COPY = {
     paying: "جارٍ المعالجة…",
     loading: "جارٍ التحميل…",
     failed: "حدث خطأ. حاول مرة أخرى.",
+    quoteFailed: "تعذر تسعير هذا التناوب.",
+    retry: "حاول مرة أخرى",
     balanced: "اختر لي تناوبًا متوازنًا",
     balancing: "نبحث عن أربعة مطابخ مختلفة…",
     balancedHint:
@@ -331,6 +335,10 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   const money = (n: number) =>
     formatMoney({ amount: n, currency: currency ?? "AED" }, locale);
   const problem = (err: unknown) => rotationProblem(err, locale, t.failed);
+  // A refused quote (422: cutoff passed, incompatible plans) will not change
+  // by asking again; a dropped connection or a 5xx will.
+  const quoteRetryable = (err: unknown) =>
+    !(err instanceof ApiError && err.status >= 400 && err.status < 500);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -611,9 +619,21 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
         ) : preview.isPending ? (
           <p className="ms-note">{t.loading}</p>
         ) : preview.isError ? (
-          <p className="ms-bad" role="alert">
-            {problem(preview.error)}
-          </p>
+          <div className="ms-bad" role="alert">
+            <p>
+              {rotationProblem(preview.error, locale, t.quoteFailed)}
+            </p>
+            {quoteRetryable(preview.error) && (
+              <button
+                type="button"
+                className="ms-btn"
+                disabled={preview.isFetching}
+                onClick={() => void preview.refetch()}
+              >
+                {t.retry}
+              </button>
+            )}
+          </div>
         ) : (
           <>
             <ol className="ms-weeks">

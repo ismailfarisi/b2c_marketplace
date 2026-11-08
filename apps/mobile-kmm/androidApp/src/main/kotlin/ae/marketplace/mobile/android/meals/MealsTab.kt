@@ -1342,8 +1342,18 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
                 }
                 q.variety?.let { VarietyCard(it, arabic) }
             }
-            // Before the kitchens load, retry loads them; after, the pay button is the retry.
-            s.error?.let { FailureStrip(it, onRetry = if (s.candidatesLoaded) null else vm::startRotation) }
+            // Before the kitchens load, retry loads them; a failed quote is asked
+            // for again; once there is a quote, the pay button is the retry.
+            s.error?.let {
+                FailureStrip(
+                    it,
+                    onRetry = when {
+                        !s.candidatesLoaded -> vm::startRotation
+                        s.quote == null && s.picked.size == 4 -> vm::retryQuote
+                        else -> null
+                    },
+                )
+            }
         }
         Box(Modifier.padding(Space.Edge)) {
             PrimaryButton(

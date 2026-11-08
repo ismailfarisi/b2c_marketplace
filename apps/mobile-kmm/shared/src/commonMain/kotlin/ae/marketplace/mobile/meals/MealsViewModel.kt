@@ -967,6 +967,16 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         )
     }
 
+    /**
+     * Asks for the price again after a quote failed: the pay button needs a
+     * quote, so without this a dropped connection while pricing is a dead end.
+     */
+    fun retryQuote() {
+        if (_rotation.value.busy) return
+        _rotation.update { it.copy(error = null) }
+        quoteRotation()
+    }
+
     private fun quoteRotation() {
         val input = rotationInput(_rotation.value) ?: return
         viewModelScope.launch {
