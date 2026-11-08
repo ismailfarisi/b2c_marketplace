@@ -584,7 +584,7 @@
 "meals_recap_ended" = "انتهى شهرك مع المطابخ";
 "meals_recap_kitchens" = "المطابخ";
 "meals_recap_cuisines" = "أنواع المطبخ";
-"meals_recap_dishes" = "الأطباق المُوصلة";
+"meals_recap_dishes" = "الوجبات المُوصلة";
 "meals_recap_skipped" = "الأيام المتخطاة";
 "meals_recap_favourite" = "المفضل لديك: %@ (%lld★)";
 "meals_recap_renew" = "شاهد مطابخ الشهر القادم";

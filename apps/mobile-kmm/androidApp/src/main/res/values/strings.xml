@@ -776,7 +776,7 @@
     <string name="meals_recap_ended">Your month of kitchens is done</string>
     <string name="meals_recap_kitchens">Kitchens</string>
     <string name="meals_recap_cuisines">Cuisines</string>
-    <string name="meals_recap_dishes">Dishes delivered</string>
+    <string name="meals_recap_dishes">Meals delivered</string>
     <string name="meals_recap_skipped">Days skipped</string>
     <string name="meals_recap_favourite">Your favourite: %1$s (%2$d★)</string>
     <string name="meals_recap_renew">See next month\'s kitchens</string>

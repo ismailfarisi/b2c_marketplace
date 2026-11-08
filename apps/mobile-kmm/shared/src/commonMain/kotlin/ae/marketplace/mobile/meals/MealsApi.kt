@@ -162,8 +162,11 @@ class MealsApi(private val client: HttpClient) {
             json(PlanBody(planId))
         }.body()
 
-    suspend fun dismissGuestWeek(id: String) {
-        client.post("subscriptions/$id/guest-week/dismiss") { json(Empty()) }
+    suspend fun dismissGuestWeek(id: String, idempotencyKey: String? = null) {
+        client.post("subscriptions/$id/guest-week/dismiss") {
+            idempotencyKey?.let { header("Idempotency-Key", it) }
+            json(Empty())
+        }
     }
 
     suspend fun cheaperPlans(id: String): CheaperPlans = client.get("me/subscriptions/$id/cheaper-plans").body()

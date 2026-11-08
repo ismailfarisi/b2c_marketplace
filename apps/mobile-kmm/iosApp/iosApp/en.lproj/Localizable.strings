@@ -584,7 +584,7 @@
 "meals_recap_ended" = "Your month of kitchens is done";
 "meals_recap_kitchens" = "Kitchens";
 "meals_recap_cuisines" = "Cuisines";
-"meals_recap_dishes" = "Dishes delivered";
+"meals_recap_dishes" = "Meals delivered";
 "meals_recap_skipped" = "Days skipped";
 "meals_recap_favourite" = "Your favourite: %@ (%lld★)";
 "meals_recap_renew" = "See next month's kitchens";

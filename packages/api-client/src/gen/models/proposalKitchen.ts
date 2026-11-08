@@ -40,6 +40,8 @@ export interface ProposalKitchen {
   in_current: boolean;
   /** The customer hearted this kitchen. */
   favourite: boolean;
+  /** Marked "Not again"; only a current kitchen can still be listed. */
+  avoided?: boolean;
   /** The customer's own rating */
   own_rating: number;
   /** Why it is proposed; empty on an eligible kitchen that is not. */

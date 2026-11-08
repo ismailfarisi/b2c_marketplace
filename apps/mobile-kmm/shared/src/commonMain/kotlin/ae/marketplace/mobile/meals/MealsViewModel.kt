@@ -1155,7 +1155,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         }
     }
 
-    fun dismissGuestWeek() = act { api.dismissGuestWeek(it) }
+    fun dismissGuestWeek() = act { api.dismissGuestWeek(it, newIdempotencyKey()) }
 
     fun loadCheaperPlans() {
         val id = _sub.value.subscription?.id ?: return
