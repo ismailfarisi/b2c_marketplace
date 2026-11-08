@@ -75,6 +75,23 @@ func TestScoreVarietyMultiCuisineKitchensCountOnce(t *testing.T) {
 	}
 }
 
+// Two kitchens tagged "indian, pakistani" are the same food twice; the
+// matching must not hand one "indian" and the other "pakistani".
+func TestScoreVarietyIdenticalMultiTagSetsCountOnce(t *testing.T) {
+	v := ScoreVariety([]VarietyKitchen{
+		{Cuisines: []string{"indian", "pakistani"}},
+		{Cuisines: []string{"pakistani", "indian"}},
+		{Cuisines: []string{"arab"}},
+		{Cuisines: []string{"filipino"}},
+	})
+	if v.DistinctCuisines != 3 || v.Level == VarietyGreat {
+		t.Fatalf("got %+v", v)
+	}
+	if len(v.Warnings) == 0 || v.Warnings[0].Code != WarnSameCuisine || v.Warnings[0].Kitchens != 2 {
+		t.Fatalf("warning %+v", v.Warnings)
+	}
+}
+
 func TestScoreVarietyMatchesArabicNames(t *testing.T) {
 	v := ScoreVariety([]VarietyKitchen{
 		kitchenWith("kerala", VarietyDish{Weekday: 2, Name: "Chicken machboos", NameAr: ptr("مَجْبُوس الدجاج")}),

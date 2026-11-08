@@ -83,7 +83,9 @@ func ScoreVariety(kitchens []VarietyKitchen) Variety {
 
 	v.Score = max(0, min(100, score))
 	switch {
-	case v.Score >= 85 && v.DistinctCuisines == n:
+	// "Great" with a warning underneath reads as a contradiction; any
+	// advisory caps the level at good.
+	case v.Score >= 85 && v.DistinctCuisines == n && len(v.Warnings) == 0:
 		v.Level = VarietyGreat
 	case v.Score >= 55:
 		v.Level = VarietyGood
@@ -116,8 +118,27 @@ func containsString(list []string, s string) bool {
 
 // distinctCuisines is the most distinct cuisines the kitchens can represent
 // when each kitchen counts for one of its cuisines. A kitchen with no cuisine
-// listed counts as its own.
+// listed counts as its own. Two kitchens tagged with the same set of cuisines
+// are the same kind of food twice, not two cuisines, so identical sets are
+// counted once before kitchens are matched to cuisines.
 func distinctCuisines(sets [][]string) int {
+	seen := map[string]bool{}
+	uniq := make([][]string, 0, len(sets))
+	for _, set := range sets {
+		if len(set) == 0 {
+			uniq = append(uniq, set)
+			continue
+		}
+		sorted := append([]string(nil), set...)
+		sort.Strings(sorted)
+		key := strings.Join(sorted, "\x00")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		uniq = append(uniq, set)
+	}
+	sets = uniq
 	best := 0
 	used := map[string]int{}
 	var walk func(i, distinct int)
