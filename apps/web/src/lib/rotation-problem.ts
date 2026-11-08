@@ -101,6 +101,10 @@ const ROTATION: Record<string, { en: string; ar: string }> = {
     en: "Choose a different kitchen for this week.",
     ar: "اختر مطبخًا مختلفًا لهذا الأسبوع.",
   },
+  follows_last_week: {
+    en: "This kitchen cooks the week right next to this one, so it can't cook two weeks in a row.",
+    ar: "هذا المطبخ يطبخ الأسبوع المجاور لهذا الأسبوع، فلا يمكنه الطبخ أسبوعين متتاليين.",
+  },
 };
 
 /** The stable codes a rotation refusal carries, field errors first. */

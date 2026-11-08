@@ -2301,6 +2301,11 @@ paths:
         `payment` intent); a cheaper one leaves the difference in the wallet.
         Idempotent: repeating the swap returns the first result. Send an
         `Idempotency-Key`.
+
+        422 field codes on `plan_id`: `same_kitchen` (the week's current
+        kitchen), `follows_last_week` (the kitchen cooks the adjacent week of
+        the previous or next rotation, so it would cook two weeks in a row);
+        on `plan_ids`: `same_kitchen_twice` (already in another week).
       parameters:
         - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
         - { name: week, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 4 } }

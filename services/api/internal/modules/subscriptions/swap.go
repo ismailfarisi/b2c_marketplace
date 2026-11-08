@@ -85,6 +85,10 @@ type swapTarget struct {
 	others         []swapWeekRow
 	swappedTo      uuid.NullUUID
 	loc            *time.Location
+	// neighbours are kitchens cooking the week right before week 1 (the
+	// previous rotation's last week) or right after week 4 (the prepared
+	// renewal's first week): the same kitchen must not cook two weeks running.
+	neighbours []uuid.UUID
 }
 
 func swapConflict(code, msg string) error { return httpx.Coded(httpx.ErrConflict, code, msg) }
@@ -177,6 +181,28 @@ func (s *Service) loadSwapTarget(ctx context.Context, q swapQuerier, userID, rot
 		t.loc = time.UTC
 	}
 	t.target.start, t.target.end = dayIn(t.target.start, t.loc), dayIn(t.target.end, t.loc)
+	switch week {
+	case 1:
+		rows, err = q.Query(ctx, `
+			SELECT s.branch_id FROM subscriptions s
+			 WHERE s.rotation_id = (SELECT renewed_from_id FROM meal_rotations WHERE id = $1)
+			   AND s.rotation_week = $2 AND s.status <> 'cancelled'`, rotationID, RotationKitchens)
+	case RotationKitchens:
+		rows, err = q.Query(ctx, `
+			SELECT s.branch_id FROM subscriptions s
+			  JOIN meal_rotations n ON n.id = s.rotation_id
+			 WHERE n.renewed_from_id = $1 AND n.status <> 'cancelled'
+			   AND s.rotation_week = 1 AND s.status <> 'cancelled'`, rotationID)
+	default:
+		return t, nil
+	}
+	if err != nil {
+		return t, fmt.Errorf("subscriptions: swap neighbours: %w", err)
+	}
+	t.neighbours, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return t, fmt.Errorf("subscriptions: swap neighbours: %w", err)
+	}
 	return t, nil
 }
 
@@ -198,6 +224,7 @@ func (s *Service) SwapOptions(ctx context.Context, userID, rotationID uuid.UUID,
 	for _, o := range t.others {
 		exclude = append(exclude, o.branchID)
 	}
+	exclude = append(exclude, t.neighbours...)
 	var serviceType string
 	if err := s.pool.QueryRow(ctx, `SELECT service_type FROM subscriptions WHERE id = $1`, t.target.subID).Scan(&serviceType); err != nil {
 		return SwapOptions{}, fmt.Errorf("subscriptions: swap service type: %w", err)
@@ -331,6 +358,12 @@ func (s *Service) SwapRotationWeek(ctx context.Context, userID, rotationID uuid.
 		p := plans[0]
 		if p.BranchID == t.target.branchID {
 			return rotationInvalid("plan_id", "same_kitchen", "choose a different kitchen for this week")
+		}
+		for _, n := range t.neighbours {
+			if n == p.BranchID {
+				return rotationInvalid("plan_id", "follows_last_week",
+					"this kitchen cooks the week right next to this one")
+			}
 		}
 
 		paid, err := s.paidCycles(ctx, tx, t.target.subID)

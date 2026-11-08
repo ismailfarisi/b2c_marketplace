@@ -484,3 +484,73 @@ func TestSwapWeekDifferenceIsCollectedOnce(t *testing.T) {
 		t.Fatalf("authorize after payment: %v, want conflict", err)
 	}
 }
+
+// The kitchen that cooks the last week of a rotation never cooks the first
+// week of the renewal that follows it, and a swap cannot undo that from
+// either side.
+func TestSwapWeekKeepsNeighbouringRotationsApart(t *testing.T) {
+	f := newSwapFixture(t, 1)
+	ctx := context.Background()
+	last := f.week(t, 4)
+	// Two kitchens new to the customer first, so one of them gets week 1.
+	plans := []uuid.UUID{f.plans[4], f.plans[5]}
+	for i := 0; i < RotationKitchens; i++ {
+		if p := f.plans[i]; p != last.PlanID && len(plans) < RotationKitchens {
+			plans = append(plans, p)
+		}
+	}
+	next, err := f.svc.RenewRotation(ctx, f.userID, f.rotation.ID, time.Now(), RenewOptions{PlanIDs: plans})
+	if err != nil {
+		t.Fatalf("renew: %v", err)
+	}
+	exec := func(sql string, args ...any) {
+		if _, err := f.pool.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("%v\n%s", err, sql)
+		}
+	}
+	exec(`UPDATE subscription_cycles SET status = 'paid', paid_at = now()
+		 WHERE subscription_id IN (SELECT id FROM subscriptions WHERE rotation_id = $1)`, next.ID)
+	exec(`UPDATE subscriptions SET status = 'active' WHERE rotation_id = $1`, next.ID)
+	exec(`UPDATE meal_rotations SET status = 'active' WHERE id = $1`, next.ID)
+	next, err = f.svc.MyRotation(ctx, f.userID, next.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Weeks[0].BranchID == last.BranchID {
+		t.Fatalf("the renewal starts with the old last kitchen")
+	}
+
+	// Renewal week 1 -> the old rotation's last kitchen: refused and not offered.
+	_, err = f.svc.SwapRotationWeek(ctx, f.userID, next.ID, 1, last.PlanID)
+	if fieldCode(err, "plan_id") != "follows_last_week" {
+		t.Fatalf("swap renewal week 1 to the previous last kitchen: %v, want follows_last_week", err)
+	}
+	opts, err := f.svc.SwapOptions(ctx, f.userID, next.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range opts.Items {
+		if o.BranchID == last.BranchID {
+			t.Fatalf("the previous last kitchen is offered for renewal week 1")
+		}
+	}
+
+	// Old rotation week 4 -> the renewal's first kitchen: the same rule.
+	first := next.Weeks[0]
+	_, err = f.svc.SwapRotationWeek(ctx, f.userID, f.rotation.ID, 4, first.PlanID)
+	if code := fieldCode(err, "plan_id"); code != "follows_last_week" {
+		t.Fatalf("swap old week 4 to the renewal's first kitchen: %v, want follows_last_week", err)
+	}
+	opts, err = f.svc.SwapOptions(ctx, f.userID, f.rotation.ID, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range opts.Items {
+		if o.BranchID == first.BranchID {
+			t.Fatalf("the renewal's first kitchen is offered for the old week 4")
+		}
+	}
+	if n := f.count(t, `SELECT count(*) FROM meal_rotation_swaps WHERE rotation_id IN ($1, $2)`, f.rotation.ID, next.ID); n != 0 {
+		t.Fatalf("%d swap records after refusals, want 0", n)
+	}
+}
