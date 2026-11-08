@@ -491,7 +491,9 @@ func (s *Service) createRotation(ctx context.Context, in RotationInput, renewedF
 const rotationSelect = `
 	SELECT r.id, r.rotation_no, r.status, r.meal_slots, r.delivery_weekdays,
 	       r.created_at, r.start_date, r.end_date, r.amount_minor, r.currency,
-	       r.auto_renew, r.renewed_from_id, n.id, n.status, r.refresh_on_renew
+	       r.auto_renew, r.renewed_from_id, n.id, n.status, r.refresh_on_renew,
+	       COALESCE((SELECT sum(discount_minor) FROM promo_redemptions pr
+	                  WHERE pr.rotation_id = r.id AND pr.status = 'redeemed'), 0)
 	  FROM meal_rotations r
 	  LEFT JOIN LATERAL (
 	       SELECT id, status FROM meal_rotations
@@ -504,7 +506,8 @@ func scanRotation(row pgx.Row) (Rotation, error) {
 	var start, end time.Time
 	if err := row.Scan(&r.ID, &r.RotationNo, &r.Status, &r.MealSlots, &weekdays,
 		&r.CreatedAt, &start, &end, &r.AmountMinor, &r.Currency,
-		&r.AutoRenew, &r.RenewedFromID, &r.RenewedByID, &r.RenewedByStatus, &r.RefreshOnRenew); err != nil {
+		&r.AutoRenew, &r.RenewedFromID, &r.RenewedByID, &r.RenewedByStatus, &r.RefreshOnRenew,
+		&r.DiscountMinor); err != nil {
 		return r, err
 	}
 	for _, d := range weekdays {

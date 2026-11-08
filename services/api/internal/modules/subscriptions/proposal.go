@@ -167,6 +167,7 @@ func proposeKitchens(current, others []ProposalKitchen, tc tasteContext) []Propo
 			add(k, ReasonTopRated, "")
 		}
 	}
+	kept := len(picked)
 
 	fresh := make([]ProposalKitchen, 0, len(others))
 	for _, k := range others {
@@ -183,7 +184,7 @@ func proposeKitchens(current, others []ProposalKitchen, tc tasteContext) []Propo
 		}
 		// balanced alternates: a known cuisine, then a new one.
 		wantFamiliar := tc.adventure == taste.Familiar ||
-			(tc.adventure == taste.Balanced && (len(picked)-len(keep))%2 == 0)
+			(tc.adventure == taste.Balanced && (len(picked)-kept)%2 == 0)
 		wantNew := tc.adventure == taste.Surprise ||
 			(tc.adventure == taste.Balanced && !wantFamiliar)
 		best, bestScore := -1, 0.0
@@ -461,8 +462,17 @@ func (s *Service) RenewalProposal(ctx context.Context, userID, id uuid.UUID, now
 }
 
 func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uuid.UUID, start time.Time) (RenewalProposal, error) {
+	out, _, err := s.proposeWith(ctx, r, userID, addressID, start)
+	return out, err
+}
+
+// proposeWith is propose with the taste context it used, for callers that
+// need to keep working with the same avoided and familiar sets.
+func (s *Service) proposeWith(ctx context.Context, r Rotation, userID, addressID uuid.UUID, start time.Time) (RenewalProposal, tasteContext, error) {
 	out := RenewalProposal{
 		RotationID: r.ID, StartDate: start.Format("2006-01-02"), Currency: r.Currency,
+		// What the kitchens cost before any promo: a first-month discount must
+		// not shrink the price cap and quietly disable the refresh.
 		RefreshOnRenew: r.RefreshOnRenew, PreviousAmountMinor: r.AmountMinor + r.DiscountMinor,
 		MealsPerWeek: len(r.Weekdays) * len(r.MealSlots), Adventure: taste.Balanced,
 	}
@@ -472,12 +482,12 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return out, fmt.Errorf("subscriptions: proposal tx: %w", err)
+		return out, tc, fmt.Errorf("subscriptions: proposal tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	if err := tx.QueryRow(ctx, `SELECT adventure FROM meal_preferences WHERE user_id = $1`, userID).Scan(&tc.adventure); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return out, fmt.Errorf("subscriptions: adventure: %w", err)
+		return out, tc, fmt.Errorf("subscriptions: adventure: %w", err)
 	}
 	out.Adventure = tc.adventure
 
@@ -486,7 +496,7 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 		  FROM meal_tastes t JOIN vendor_branches b ON b.id = t.subject_id
 		 WHERE t.user_id = $1 AND t.subject_kind = 'kitchen'`, userID)
 	if err != nil {
-		return out, fmt.Errorf("subscriptions: kitchen tastes: %w", err)
+		return out, tc, fmt.Errorf("subscriptions: kitchen tastes: %w", err)
 	}
 	for rows.Next() {
 		var bid uuid.UUID
@@ -494,7 +504,7 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 		var cuisines []string
 		if err := rows.Scan(&bid, &sentiment, &cuisines); err != nil {
 			rows.Close()
-			return out, fmt.Errorf("subscriptions: scan taste: %w", err)
+			return out, tc, fmt.Errorf("subscriptions: scan taste: %w", err)
 		}
 		if sentiment == taste.Avoid {
 			tc.avoided[bid] = true
@@ -507,7 +517,7 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return out, err
+		return out, tc, err
 	}
 
 	// Cuisines eaten: every paid-for kitchen ever is familiar; this rotation
@@ -521,14 +531,14 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 		   AND NOT EXISTS (SELECT 1 FROM meal_rotation_swaps sw WHERE sw.old_subscription_id = s.id)`,
 		userID, r.ID)
 	if err != nil {
-		return out, fmt.Errorf("subscriptions: eaten cuisines: %w", err)
+		return out, tc, fmt.Errorf("subscriptions: eaten cuisines: %w", err)
 	}
 	for rows.Next() {
 		var cuisines []string
 		var recent *bool
 		if err := rows.Scan(&cuisines, &recent); err != nil {
 			rows.Close()
-			return out, fmt.Errorf("subscriptions: scan eaten: %w", err)
+			return out, tc, fmt.Errorf("subscriptions: scan eaten: %w", err)
 		}
 		for _, c := range cuisines {
 			tc.familiar[c] = true
@@ -539,7 +549,7 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return out, err
+		return out, tc, err
 	}
 
 	currentBranches := make([]uuid.UUID, 0, RotationKitchens)
@@ -551,20 +561,20 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 		 WHERE user_id = $1 AND branch_id = ANY($2) AND status = 'published'
 		 GROUP BY branch_id`, userID, currentBranches)
 	if err != nil {
-		return out, fmt.Errorf("subscriptions: own ratings: %w", err)
+		return out, tc, fmt.Errorf("subscriptions: own ratings: %w", err)
 	}
 	for rows.Next() {
 		var bid uuid.UUID
 		var rating int
 		if err := rows.Scan(&bid, &rating); err != nil {
 			rows.Close()
-			return out, fmt.Errorf("subscriptions: scan own rating: %w", err)
+			return out, tc, fmt.Errorf("subscriptions: scan own rating: %w", err)
 		}
 		ownRating[bid] = rating
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return out, err
+		return out, tc, err
 	}
 
 	current := make([]ProposalKitchen, 0, RotationKitchens)
@@ -576,12 +586,12 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 			continue
 		}
 		if err != nil {
-			return out, err
+			return out, tc, err
 		}
 		if serviceType == "" {
 			p, err := s.repo.LoadPlan(ctx, tx, w.PlanID, uuid.NullUUID{})
 			if err != nil {
-				return out, err
+				return out, tc, err
 			}
 			serviceType = p.ServiceType
 		}
@@ -612,20 +622,20 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 		 ORDER BY b.id, p.rotation_week_price_minor, p.created_at`,
 		addressID, serviceType, weekdays, r.MealSlots, currentBranches, userID)
 	if err != nil {
-		return out, fmt.Errorf("subscriptions: eligible kitchens: %w", err)
+		return out, tc, fmt.Errorf("subscriptions: eligible kitchens: %w", err)
 	}
 	var planIDs []uuid.UUID
 	for rows.Next() {
 		var id uuid.UUID
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return out, fmt.Errorf("subscriptions: scan eligible: %w", err)
+			return out, tc, fmt.Errorf("subscriptions: scan eligible: %w", err)
 		}
 		planIDs = append(planIDs, id)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return out, err
+		return out, tc, err
 	}
 	others := make([]ProposalKitchen, 0, len(planIDs))
 	for _, id := range planIDs {
@@ -634,7 +644,7 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 			continue
 		}
 		if err != nil {
-			return out, err
+			return out, tc, err
 		}
 		k.Favourite = favourites[k.BranchID]
 		others = append(others, k)
@@ -663,13 +673,13 @@ func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uui
 	if len(out.Kitchens) > 0 {
 		out.Currency = out.Kitchens[0].Currency
 	}
-	return out, nil
+	return out, tc, nil
 }
 
 // cappedProposalPlans is the proposal the worker renews with: within the
 // price cap, or the previous kitchens where it is not.
 func (s *Service) cappedProposalPlans(ctx context.Context, r Rotation, userID, addressID uuid.UUID, start time.Time) ([]uuid.UUID, error) {
-	p, err := s.propose(ctx, r, userID, addressID, start)
+	p, tc, err := s.proposeWith(ctx, r, userID, addressID, start)
 	if err != nil {
 		return nil, err
 	}
@@ -682,7 +692,8 @@ func (s *Service) cappedProposalPlans(ctx context.Context, r Rotation, userID, a
 			current = append(current, k)
 		}
 	}
-	tc := tasteContext{adventure: p.Adventure, familiar: map[string]bool{}, recent: map[string]bool{}, avoided: map[uuid.UUID]bool{}}
+	// The same taste context the proposal used: a kitchen marked "not again"
+	// must not come back through the price cap either.
 	capped := capProposal(p.Kitchens, current, p.Eligible, p.PreviousAmountMinor, tc)
 	ids := make([]uuid.UUID, 0, RotationKitchens)
 	for _, k := range capped {
