@@ -23,6 +23,7 @@ import type { RotationAllOfStatus } from './rotationAllOfStatus';
 import type { RotationAllOfRenewedFromId } from './rotationAllOfRenewedFromId';
 import type { RotationAllOfRenewedById } from './rotationAllOfRenewedById';
 import type { RotationAllOfRenewedByStatus } from './rotationAllOfRenewedByStatus';
+import type { DeliveryAddress } from './deliveryAddress';
 
 export type RotationAllOf = {
   id: string;
@@ -37,4 +38,10 @@ export type RotationAllOf = {
   renewed_by_status?: RotationAllOfRenewedByStatus;
   /** Renewals propose fresh kitchens instead of the same four. */
   refresh_on_renew?: boolean;
+  /** The default delivery address; see delivery_addresses for each meal. */
+  address_id?: string;
+  /** Where each meal of the rotation goes, in order of the day. */
+  delivery_addresses?: DeliveryAddress[];
+  /** False once the rotation is cancelled or completed. */
+  can_change_address?: boolean;
 };

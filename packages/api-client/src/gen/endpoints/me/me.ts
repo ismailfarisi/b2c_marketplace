@@ -35,6 +35,8 @@ import type {
 
 import type {
   Address,
+  AddressCoverage,
+  AddressCoverageInput,
   AddressInput,
   ListAddresses200,
   ListMyTastes200,
@@ -327,6 +329,8 @@ export const useRegisterDevice = <TError = UnauthorizedResponse | UnprocessableE
       return useMutation(mutationOptions);
     }
     /**
+ * The caller's own delivery addresses. A company office saved for an office lunch belongs to the company and is not listed.
+
  * @summary The user's saved addresses
  */
 export const listAddresses = (
@@ -780,6 +784,71 @@ export const useSetMealPreferences = <TError = UnauthorizedResponse | Unprocessa
       > => {
 
       const mutationOptions = getSetMealPreferencesMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * One item per (kitchen, address) pair, in request order. Only the caller's own, non-deleted addresses are answered; unknown kitchens or other people's addresses are simply left out. At most 60 kitchens and 6 addresses per call (`too_many` on `branch_ids` / `address_ids`).
+ * @summary Which kitchens deliver to which of my addresses
+ */
+export const addressCoverage = (
+    addressCoverageInput: AddressCoverageInput,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiFetch<AddressCoverage>(
+      {url: `/me/addresses/coverage`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: addressCoverageInput, signal
+    },
+      );
+    }
+  
+
+
+export const getAddressCoverageMutationOptions = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addressCoverage>>, TError,{data: AddressCoverageInput}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof addressCoverage>>, TError,{data: AddressCoverageInput}, TContext> => {
+
+const mutationKey = ['addressCoverage'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addressCoverage>>, {data: AddressCoverageInput}> = (props) => {
+          const {data} = props ?? {};
+
+          return  addressCoverage(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddressCoverageMutationResult = NonNullable<Awaited<ReturnType<typeof addressCoverage>>>
+    export type AddressCoverageMutationBody = AddressCoverageInput
+    export type AddressCoverageMutationError = UnauthorizedResponse | UnprocessableEntityResponse
+
+    /**
+ * @summary Which kitchens deliver to which of my addresses
+ */
+export const useAddressCoverage = <TError = UnauthorizedResponse | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addressCoverage>>, TError,{data: AddressCoverageInput}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addressCoverage>>,
+        TError,
+        {data: AddressCoverageInput},
+        TContext
+      > => {
+
+      const mutationOptions = getAddressCoverageMutationOptions(options);
 
       return useMutation(mutationOptions);
     }

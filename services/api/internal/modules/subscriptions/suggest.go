@@ -2,9 +2,10 @@ package subscriptions
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -34,12 +35,13 @@ const (
 // SuggestInput asks for a balanced rotation delivered to an address. Empty
 // Weekdays or Slots let the suggestion pick the schedule most kitchens share.
 type SuggestInput struct {
-	UserID    uuid.UUID
-	AddressID uuid.UUID
-	StartDate *time.Time
-	Weekdays  []int
-	Slots     []string
-	Promo     promo.Ref
+	UserID        uuid.UUID
+	AddressID     uuid.UUID
+	SlotAddresses map[string]uuid.UUID
+	StartDate     *time.Time
+	Weekdays      []int
+	Slots         []string
+	Promo         promo.Ref
 }
 
 // RotationSuggestion is a balanced rotation: the plans to send to preview and
@@ -108,11 +110,14 @@ func (s *Service) SuggestRotation(ctx context.Context, in SuggestInput) (Rotatio
 	if err := validateSchedule(in.Weekdays, in.Slots); err != nil {
 		return RotationSuggestion{}, err
 	}
-	cands, err := s.suggestCandidates(ctx, in.UserID, in.AddressID)
+	cands, err := s.suggestCandidates(ctx, in.UserID, in.AddressID, in.SlotAddresses)
 	if err != nil {
 		return RotationSuggestion{}, err
 	}
 	pool, weekdays, slots := suggestionPool(cands, in.Weekdays, in.Slots)
+	if err := validateSlotAddresses(slots, in.SlotAddresses); err != nil {
+		return RotationSuggestion{}, err
+	}
 	if len(pool) < RotationKitchens {
 		return RotationSuggestion{}, rotationInvalid("address_id", "not_enough_kitchens",
 			fmt.Sprintf("fewer than %d rotation kitchens deliver here on that schedule", RotationKitchens))
@@ -138,7 +143,7 @@ func (s *Service) SuggestRotation(ctx context.Context, in SuggestInput) (Rotatio
 		out.BranchIDs = append(out.BranchIDs, c.BranchID)
 	}
 	out.Quote, err = s.PreviewRotation(ctx, RotationInput{
-		UserID: in.UserID, AddressID: in.AddressID, PlanIDs: out.PlanIDs,
+		UserID: in.UserID, AddressID: in.AddressID, SlotAddresses: in.SlotAddresses, PlanIDs: out.PlanIDs,
 		StartDate: start, Weekdays: weekdays, Slots: slots, Promo: in.Promo,
 	})
 	if err != nil {
@@ -149,19 +154,30 @@ func (s *Service) SuggestRotation(ctx context.Context, in SuggestInput) (Rotatio
 }
 
 // suggestCandidates lists each kitchen's cheapest rotation plan among the
-// kitchens that deliver to the customer's address and take deliveries.
-func (s *Service) suggestCandidates(ctx context.Context, userID, addressID uuid.UUID) ([]suggestCandidate, error) {
-	var found bool
-	err := s.pool.QueryRow(ctx,
-		`SELECT true FROM addresses WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
-		addressID, userID).Scan(&found)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, rotationInvalid("address_id", "not_found", "choose one of your saved addresses")
+// kitchens that deliver to every one of the customer's addresses and take
+// deliveries.
+func (s *Service) suggestCandidates(ctx context.Context, userID, addressID uuid.UUID, slotAddresses map[string]uuid.UUID) ([]suggestCandidate, error) {
+	addressIDs := distinctAddresses(addressID, slotAddresses)
+	var owned []uuid.UUID
+	rows, err := s.pool.Query(ctx,
+		`SELECT id FROM addresses WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NULL`,
+		addressIDs, userID)
+	if err == nil {
+		owned, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	}
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: suggestion address: %w", err)
 	}
-	rows, err := s.pool.Query(ctx, `
+	if !slices.Contains(owned, addressID) {
+		return nil, rotationInvalid("address_id", "not_found", "choose one of your saved addresses")
+	}
+	for _, slot := range slices.Sorted(maps.Keys(slotAddresses)) {
+		if !slices.Contains(owned, slotAddresses[slot]) {
+			return nil, rotationInvalid("slot_addresses", "not_found",
+				fmt.Sprintf("address for %s not found", slot))
+		}
+	}
+	rows, err = s.pool.Query(ctx, `
 		SELECT DISTINCT ON (b.id)
 		       p.id, b.id, COALESCE(b.cuisines, '{}'), b.rating::float8, b.rating_count,
 		       p.rotation_week_price_minor, p.currency, p.days_per_week, p.meals_per_day,
@@ -170,17 +186,19 @@ func (s *Service) suggestCandidates(ctx context.Context, userID, addressID uuid.
 		  FROM subscription_plans p
 		  JOIN vendor_branches b ON b.id = p.branch_id
 		  JOIN vendors v ON v.id = b.vendor_id
-		  JOIN addresses a ON a.id = $1
 		 WHERE p.service_type = $2 AND p.is_active AND p.rotation_enabled
 		   AND p.rotation_week_price_minor IS NOT NULL
 		   AND b.deleted_at IS NULL AND b.is_active
 		   AND v.deleted_at IS NULL AND v.status = 'active'
-		   AND b.service_area IS NOT NULL AND ST_Intersects(b.service_area, a.point)
+		   AND b.service_area IS NOT NULL
+		   AND NOT EXISTS (SELECT 1 FROM addresses a
+		                    WHERE a.id = ANY($1::uuid[])
+		                      AND NOT COALESCE(ST_Intersects(b.service_area, a.point), false))
 		   AND EXISTS (SELECT 1 FROM time_windows tw WHERE tw.branch_id = b.id AND tw.is_active)
 		   AND NOT EXISTS (SELECT 1 FROM meal_tastes t
 		                    WHERE t.user_id = $3 AND t.subject_kind = 'kitchen'
 		                      AND t.subject_id = b.id AND t.sentiment = 'avoid')
-		 ORDER BY b.id, p.price_minor, p.id`, addressID, rotationServiceType, userID)
+		 ORDER BY b.id, p.price_minor, p.id`, addressIDs, rotationServiceType, userID)
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: suggestion kitchens: %w", err)
 	}

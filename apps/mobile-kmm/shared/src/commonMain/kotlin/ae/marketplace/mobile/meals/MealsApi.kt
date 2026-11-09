@@ -6,6 +6,12 @@ import ae.marketplace.mobile.model.NextDayDishes
 import ae.marketplace.mobile.model.NextWeekPage
 import ae.marketplace.mobile.model.RotationRecapPage
 import ae.marketplace.mobile.model.AddressInput
+import ae.marketplace.mobile.model.AddressChangeInput
+import ae.marketplace.mobile.model.AddressChanges
+import ae.marketplace.mobile.model.AddressCoverage
+import ae.marketplace.mobile.model.AddressCoverageInput
+import ae.marketplace.mobile.model.DeliveryAddress
+import ae.marketplace.mobile.model.SlotAddress
 import ae.marketplace.mobile.model.AddressPage
 import ae.marketplace.mobile.model.KitchenDetail
 import ae.marketplace.mobile.model.KitchenPage
@@ -51,6 +57,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /** The meals storefront (anonymous) and the signed-in customer's subscriptions. */
 class MealsApi(private val client: HttpClient) {
@@ -92,6 +100,38 @@ class MealsApi(private val client: HttpClient) {
 
     suspend fun createAddress(input: AddressInput): Address =
         client.post("me/addresses") { json(input) }.body()
+
+    /**
+     * Which of [branchIds] deliver to which of the caller's [addressIds]. The
+     * API caps a call at 60 kitchens and 6 addresses, so bigger asks are split.
+     */
+    suspend fun addressCoverage(branchIds: List<String>, addressIds: List<String>): AddressCoverage {
+        if (branchIds.isEmpty() || addressIds.isEmpty()) return AddressCoverage()
+        val items = branchIds.distinct().chunked(MAX_COVERAGE_BRANCHES).flatMap { b ->
+            addressIds.distinct().chunked(MAX_COVERAGE_ADDRESSES).flatMap { a ->
+                client.post("me/addresses/coverage") { json(AddressCoverageInput(b, a)) }.body<AddressCoverage>().items
+            }
+        }
+        return AddressCoverage(items)
+    }
+
+    /** Moves the given meals to new addresses; answers the updated subscription and what moved from when. */
+    suspend fun changeSubscriptionAddresses(id: String, addresses: List<SlotAddress>, idempotencyKey: String): AddressChanged<MySubscription> {
+        val body = client.put("subscriptions/$id/addresses") {
+            header("Idempotency-Key", idempotencyKey)
+            json(AddressChangeInput(addresses))
+        }.body<JsonObject>()
+        return AddressChanged(lenient.decodeFromJsonElement(MySubscription.serializer(), body), lenient.decodeFromJsonElement(AddressChanges.serializer(), body).changed)
+    }
+
+    /** The same for a rotation: every remaining week (and an unstarted renewal) moves, or none does. */
+    suspend fun changeRotationAddresses(id: String, addresses: List<SlotAddress>, idempotencyKey: String): AddressChanged<Rotation> {
+        val body = client.put("rotations/$id/addresses") {
+            header("Idempotency-Key", idempotencyKey)
+            json(AddressChangeInput(addresses))
+        }.body<JsonObject>()
+        return AddressChanged(lenient.decodeFromJsonElement(Rotation.serializer(), body), lenient.decodeFromJsonElement(AddressChanges.serializer(), body).changed)
+    }
 
     suspend fun preview(input: SubscribeInput): SubscriptionPreview =
         client.post("subscriptions/preview") { json(input) }.body()
@@ -275,6 +315,8 @@ class MealsApi(private val client: HttpClient) {
         client.put("rotations/$id/renewal") { json(AutoBody(auto)) }
     }
 
+    private val lenient = Json { ignoreUnknownKeys = true; explicitNulls = false }
+
     private fun HttpRequestBuilder.point(at: LatLng) {
         parameter("lat", at.lat)
         parameter("lng", at.lng)
@@ -285,6 +327,12 @@ class MealsApi(private val client: HttpClient) {
         setBody(body)
     }
 }
+
+/** A change-address answer: the updated detail and the meals that moved. */
+data class AddressChanged<T>(val detail: T, val changed: List<DeliveryAddress>)
+
+const val MAX_COVERAGE_BRANCHES = 60
+const val MAX_COVERAGE_ADDRESSES = 6
 
 @Serializable private class Empty
 @Serializable private data class RenewBody(@SerialName("plan_ids") val planIds: List<String>)

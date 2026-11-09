@@ -24,6 +24,7 @@ import type { UpcomingMeal } from './upcomingMeal';
 import type { MyDelivery } from './myDelivery';
 import type { MySubscriptionDetailAllOfCyclesItem } from './mySubscriptionDetailAllOfCyclesItem';
 import type { MySubscriptionDetailAllOfPausesItem } from './mySubscriptionDetailAllOfPausesItem';
+import type { DeliveryAddress } from './deliveryAddress';
 
 export type MySubscriptionDetailAllOf = {
   cutoff_hours?: number;
@@ -37,4 +38,8 @@ export type MySubscriptionDetailAllOf = {
   recent?: MyDelivery[];
   cycles?: MySubscriptionDetailAllOfCyclesItem[];
   pauses?: MySubscriptionDetailAllOfPausesItem[];
+  /** Where each meal goes, in order of the day. A meal whose weekdays use different addresses shows the one most of them use. */
+  delivery_addresses?: DeliveryAddress[];
+  /** False for company lunches and for cancelled or completed subscriptions. */
+  can_change_address?: boolean;
 };

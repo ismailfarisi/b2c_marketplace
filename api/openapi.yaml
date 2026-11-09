@@ -385,6 +385,9 @@ paths:
       tags: [me]
       operationId: listAddresses
       summary: The user's saved addresses
+      description: >
+        The caller's own delivery addresses. A company office saved for an
+        office lunch belongs to the company and is not listed.
       responses:
         "200":
           description: OK
@@ -1414,6 +1417,10 @@ paths:
                         description: |
                           Per-day override. Office Sunday to Thursday and home on
                           Friday is the normal case in this market, not an edge one.
+                          An address the kitchen does not deliver to answers 422 with
+                          field `schedule[<i>].address_id` (or `address_id` for the
+                          default), code `outside_delivery_area` or `not_found`, and
+                          a message naming the meal.
                 source_reel_id: { type: [string, "null"], format: uuid }
                 source_action_id: { type: [string, "null"], format: uuid }
       responses:
@@ -1735,6 +1742,48 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: Not in a state that allows this
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /subscriptions/{subscriptionId}/addresses:
+    put:
+      tags: [subscriptions]
+      operationId: changeSubscriptionAddresses
+      summary: Send some meals to another address
+      description: >
+        Moves the listed meals (only those) to other saved addresses of the
+        caller for everything still to come: the schedule, and already planned
+        deliveries whose order cutoff has not passed. Deliveries the kitchen is
+        already preparing keep the old address. All or nothing: a kitchen that
+        does not deliver to a new address answers 422 with one field per
+        refused meal, `addresses[<meal_slot>]`, code `outside_delivery_area`
+        and a message naming the kitchen and the meal, and nothing changes.
+        Other 422 codes: `addresses` `required`, `addresses[<meal_slot>]`
+        `unknown_slot` (not one of the plan's meals), `addresses[<i>].meal_slot`
+        `duplicate`. Someone else's address: 404 code `address_not_found`.
+        Allowed while active, paused or pending payment; otherwise 409
+        `not_changeable`. Send an Idempotency-Key like other mutations.
+        A company lunch answers 409 `company_lunch`; a rotation week answers 409
+        `rotation_week` (change it on the rotation instead).
+      parameters:
+        - { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddressChangeInput" }
+      responses:
+        "200":
+          description: The updated detail; `changed` lists each moved meal with `effective_from`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionAddressChange" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Company lunch, rotation week, or a subscription that has ended
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -2141,6 +2190,49 @@ paths:
                         active: { type: boolean }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /rotations/{rotationId}/addresses:
+    put:
+      tags: [subscriptions]
+      operationId: changeRotationAddresses
+      summary: Send some meals of a rotation to another address
+      description: >
+        Moves the listed meals (only those) to other saved addresses of the
+        caller for everything still to come: the schedule, and already planned
+        deliveries whose order cutoff has not passed. Deliveries the kitchen is
+        already preparing keep the old address. All or nothing: a kitchen that
+        does not deliver to a new address answers 422 with one field per
+        refused meal and week, `addresses[<meal_slot>]`, code
+        `outside_delivery_area` and a message naming the kitchen, the meal and
+        the week; every remaining week is checked and nothing changes. Other
+        422 codes: `addresses` `required`, `addresses[<meal_slot>]`
+        `unknown_slot` (not one of the plan's meals), `addresses[<i>].meal_slot`
+        `duplicate`. Someone else's address: 404 code `address_not_found`.
+        Allowed while active, paused or pending payment; otherwise 409
+        `not_changeable`. Send an Idempotency-Key like other mutations.
+        Applies to every week that has not ended and to a renewal that has not
+        started yet.
+      parameters:
+        - { name: rotationId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddressChangeInput" }
+      responses:
+        "200":
+          description: The updated rotation; `changed` lists each moved meal with `effective_from`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RotationAddressChange" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The rotation has ended
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /me/rotations/{rotationId}:
     get:
       tags: [subscriptions]
@@ -2377,6 +2469,30 @@ paths:
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/RotationRecap" } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /me/addresses/coverage:
+    post:
+      tags: [me]
+      operationId: addressCoverage
+      summary: Which kitchens deliver to which of my addresses
+      description: >-
+        One item per (kitchen, address) pair, in request order. Only the
+        caller's own, non-deleted addresses are answered; unknown kitchens or
+        other people's addresses are simply left out. At most 60 kitchens and
+        6 addresses per call (`too_many` on `branch_ids` / `address_ids`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddressCoverageInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddressCoverage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /me/addresses/{addressId}:
     patch:
@@ -7550,6 +7666,86 @@ components:
           oneOf:
             - $ref: "#/components/schemas/GuestWeekLink"
             - type: "null"
+    SlotAddress:
+      type: object
+      required: [meal_slot, address_id]
+      description: Sends one meal (lunch, dinner, ...) to one of the customer's saved addresses.
+      properties:
+        meal_slot: { type: string, enum: [breakfast, lunch, dinner, snack, suhoor, iftar] }
+        address_id: { type: string, format: uuid }
+    DeliveryAddress:
+      type: object
+      required: [meal_slot, address_id, label, line, effective_from]
+      description: Where one meal of a subscription or rotation goes.
+      properties:
+        meal_slot: { type: string }
+        address_id: { type: string, format: uuid }
+        label: { type: string }
+        line: { type: string, description: One-line summary of the address. }
+        effective_from:
+          type: [string, "null"]
+          format: date
+          description: >-
+            After an address change, the first delivery date that goes to the
+            new address; null otherwise.
+    AddressChangeInput:
+      type: object
+      required: [addresses]
+      properties:
+        addresses:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SlotAddress" }
+          description: Only the meals being moved; each meal at most once.
+    SubscriptionAddressChange:
+      allOf:
+        - $ref: "#/components/schemas/MySubscriptionDetail"
+        - type: object
+          required: [changed]
+          properties:
+            changed:
+              type: array
+              description: The moved meals, each with `effective_from`.
+              items: { $ref: "#/components/schemas/DeliveryAddress" }
+    RotationAddressChange:
+      allOf:
+        - $ref: "#/components/schemas/Rotation"
+        - type: object
+          required: [changed]
+          properties:
+            changed:
+              type: array
+              description: The moved meals, each with `effective_from`.
+              items: { $ref: "#/components/schemas/DeliveryAddress" }
+    AddressCoverageInput:
+      type: object
+      required: [branch_ids, address_ids]
+      properties:
+        branch_ids:
+          type: array
+          minItems: 1
+          maxItems: 60
+          items: { type: string, format: uuid }
+        address_ids:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items: { type: string, format: uuid }
+          description: Only the caller's own, non-deleted addresses are answered; others are left out.
+    AddressCoverageItem:
+      type: object
+      required: [branch_id, address_id, delivers]
+      properties:
+        branch_id: { type: string, format: uuid }
+        address_id: { type: string, format: uuid }
+        delivers: { type: boolean, description: The kitchen's delivery area contains the address. }
+    AddressCoverage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AddressCoverageItem" }
     RotationInput:
       type: object
       required: [plan_ids, address_id, start_date, delivery_weekdays, meal_slots]
@@ -7560,7 +7756,20 @@ components:
           maxItems: 4
           items: { type: string, format: uuid }
           description: One rotation-enabled plan from each of four different kitchens.
-        address_id: { type: string, format: uuid }
+        address_id:
+          type: string
+          format: uuid
+          description: Default delivery address for every meal not listed in slot_addresses.
+        slot_addresses:
+          type: array
+          items: { $ref: "#/components/schemas/SlotAddress" }
+          description: >-
+            Per-meal addresses (lunch at the office, dinner at home). Every
+            kitchen of the rotation must deliver to every address; a kitchen
+            that does not answers 422 with field `slot_addresses` (or
+            `address_id` for the default), code `outside_delivery_area` and a
+            message naming the kitchen and the meal. A meal not in meal_slots is
+            `unknown_slot`; a missing address is `not_found`.
         start_date: { type: string, format: date }
         delivery_weekdays:
           type: array
@@ -7646,6 +7855,10 @@ components:
       required: [address_id]
       properties:
         address_id: { type: string, format: uuid }
+        slot_addresses:
+          type: array
+          items: { $ref: "#/components/schemas/SlotAddress" }
+          description: Per-meal addresses; only kitchens delivering to all of them are suggested.
         start_date: { type: string, format: date, description: Defaults to the earliest start the kitchens allow. }
         delivery_weekdays: { type: array, items: { type: integer, minimum: 0, maximum: 6 } }
         meal_slots: { type: array, items: { type: string } }
@@ -7716,6 +7929,17 @@ components:
             refresh_on_renew:
               type: boolean
               description: Renewals propose fresh kitchens instead of the same four.
+            address_id:
+              type: string
+              format: uuid
+              description: The default delivery address; see delivery_addresses for each meal.
+            delivery_addresses:
+              type: array
+              description: Where each meal of the rotation goes, in order of the day.
+              items: { $ref: "#/components/schemas/DeliveryAddress" }
+            can_change_address:
+              type: boolean
+              description: False once the rotation is cancelled or completed.
     # ── Variety at renewal: proposal, taste memory, adventure setting ──────────
     ProposalKitchen:
       type: object
@@ -7989,6 +8213,15 @@ components:
                     description: >-
                       False for a pause already credited to the wallet (a guest
                       week's among them), which cannot be ended early.
+            delivery_addresses:
+              type: array
+              description: >-
+                Where each meal goes, in order of the day. A meal whose weekdays
+                use different addresses shows the one most of them use.
+              items: { $ref: "#/components/schemas/DeliveryAddress" }
+            can_change_address:
+              type: boolean
+              description: False for company lunches and for cancelled or completed subscriptions.
     CancellationReasonCode:
       type: string
       description: Structured answer to "why are you leaving?", stored next to the free-text note.

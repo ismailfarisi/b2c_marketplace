@@ -144,6 +144,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/subscriptions/{subscriptionId}/renew", h.Subscriptions.Renew)
 			r.Get("/me/subscriptions", h.Subscriptions.Mine)
 			r.Get("/me/subscriptions/{subscriptionId}", h.Subscriptions.MyDetail)
+			r.Put("/subscriptions/{subscriptionId}/addresses", h.Subscriptions.ChangeAddresses)
 			r.Get("/me/subscriptions/{subscriptionId}/guest-week", h.Subscriptions.GuestWeekOffer)
 			r.Get("/me/subscriptions/{subscriptionId}/cheaper-plans", h.Subscriptions.CheaperPlans)
 			if h.Subscriptions.Reviews != nil {
@@ -164,6 +165,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/rotations/{rotationId}/weeks/{week}/swap", h.Rotations.SwapWeek)
 			r.Get("/me/rotations", h.Rotations.Mine)
 			r.Get("/me/rotations/{rotationId}", h.Rotations.Detail)
+			r.Put("/rotations/{rotationId}/addresses", h.Rotations.ChangeAddresses)
 			r.Get("/me/rotations/{rotationId}/renewal-proposal", h.Rotations.Proposal)
 			r.Get("/me/rotations/{rotationId}/cheaper-plans", h.Rotations.CheaperPlans)
 			r.Get("/me/next-week", h.Rotations.NextWeek)
@@ -198,6 +200,7 @@ func Mount(r chi.Router, h *Handlers, issuer *auth.Issuer, idem httpx.Idempotenc
 			r.Post("/me/addresses", h.Addresses.Create)
 			r.Patch("/me/addresses/{addressId}", h.Addresses.Update)
 			r.Delete("/me/addresses/{addressId}", h.Addresses.Delete)
+			r.Post("/me/addresses/coverage", h.Addresses.Coverage)
 		}
 
 		// Phase 6 — classifieds.

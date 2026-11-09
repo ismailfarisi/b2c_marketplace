@@ -152,3 +152,27 @@ func (h *KitchenHandlers) PrepSheet(w http.ResponseWriter, r *http.Request) {
 		"date": date.Format("2006-01-02"), "items": lines,
 	})
 }
+
+// Coverage answers POST /me/addresses/coverage: which of the given kitchens
+// deliver to which of the caller's addresses.
+func (h *AddressHandlers) Coverage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := httpx.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteProblem(w, r, httpx.ErrUnauthorized)
+		return
+	}
+	var body struct {
+		BranchIDs  []uuid.UUID `json:"branch_ids"`
+		AddressIDs []uuid.UUID `json:"address_ids"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	items, err := h.Addresses.Coverage(r.Context(), userID, body.BranchIDs, body.AddressIDs)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", map[string]any{"items": items})
+}

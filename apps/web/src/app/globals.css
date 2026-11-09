@@ -755,6 +755,70 @@ a.ms-cta {
 .ms-newaddr h3 {
   font-size: 1rem;
 }
+/* Per-meal delivery addresses. */
+.ms-address.ms-address-no {
+  border-style: dashed;
+}
+.ms-address.ms-address-no:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.ms-addr-no {
+  display: inline-block;
+  margin-inline-start: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ms-bad);
+}
+.ms-meal-addr > .ms-addr-no {
+  margin-inline-start: 0;
+}
+.ms-meal-addrs {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 0.5rem;
+}
+@media (min-width: 640px) {
+  .ms-meal-addrs {
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  }
+}
+.ms-meal-addr {
+  margin: 0;
+  gap: 0.3rem;
+}
+.ms-meal-addr select {
+  inline-size: 100%;
+}
+.ms-deliver-to {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.ms-deliver-to li {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) minmax(0, 1fr);
+  gap: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.ms-deliver-line {
+  display: block;
+  font-size: 0.85rem;
+}
+.ms-addr-section {
+  margin-block: 1.5rem;
+}
+.ms-addr-change {
+  align-items: stretch;
+}
+.ms-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
 .ms-subs {
   list-style: none;
   padding: 0;

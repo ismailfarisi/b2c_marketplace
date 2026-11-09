@@ -779,4 +779,36 @@
     <string name="meals_make_rotation_btn">أنشئ تناوبي</string>
     <string name="meals_guest_line">أسبوع ضيف: %1$s يطبخ أسبوعًا واحدًا</string>
     <string name="meals_guest_of_line">ضيف لأسبوع واحد من اشتراكك في %1$s</string>
+    <!-- Per-meal delivery addresses: checkout, rotation builder, change address. -->
+    <string name="meals_addr_all_one">كل الوجبات إلى عنوان واحد</string>
+    <string name="meals_addr_per_meal">عنوان مختلف لكل وجبة</string>
+    <string name="meals_addr_slot_to">%1$s إلى</string>
+    <string name="meals_addr_not_here">لا توصيل إلى هنا</string>
+    <string name="meals_addr_blocked_one">هذا المطبخ لا يوصّل إلى %1$s. اختر عنواناً آخر.</string>
+    <string name="meals_addr_blocked_slot">هذا المطبخ لا يوصّل %1$s إلى %2$s. اختر عنواناً آخر.</string>
+    <string name="meals_addr_err_slot">هذا المطبخ لا يوصّل %1$s إلى هذا العنوان. اختر عنواناً آخر.</string>
+    <string name="meals_addr_err_kitchen_slot">لا يصل %2$s من %1$s إلى هذا العنوان.</string>
+    <string name="meals_addr_err_kitchen">لا توصيل من %1$s إلى هذا العنوان.</string>
+    <string name="meals_addr_err_company">تدير شركتك عنوان المكتب لهذا الغداء.</string>
+    <string name="meals_addr_err_closed">انتهت هذه الخطة، لذا لا يمكن تغيير عنوانها.</string>
+    <string name="meals_addr_err_rotation_week">غيّر العنوان من التناوب لتنتقل كل الأسابيع معاً.</string>
+    <string name="meals_addr_err_unknown_slot">هذه الوجبة ليست ضمن هذه الخطة.</string>
+    <string name="meals_addr_unavailable">لا توصيل إلى %1$s</string>
+    <string name="meals_addr_picked_unavailable">أحد المطابخ التي اخترتها لا يوصّل إلى كل العناوين التي اخترتها. اختر مطبخاً أو عنواناً آخر.</string>
+    <string name="meals_addr_delivery">التوصيل</string>
+    <string name="meals_addr_all_to">كل الوجبات: %1$s</string>
+    <string name="meals_addr_slot_line">%1$s: %2$s</string>
+    <string name="meals_addr_change">تغيير العنوان</string>
+    <string name="meals_addr_company_note">تدير شركتك عنوان المكتب.</string>
+    <string name="meals_addr_rotation_note">غيّر عنوان هذا الأسبوع من التناوب.</string>
+    <string name="meals_addr_change_title">إلى أين نوصّل وجباتك؟</string>
+    <string name="meals_addr_rotation_check">نتحقّق من مطبخ كل أسبوع متبقٍّ قبل أي تغيير.</string>
+    <string name="meals_addr_save">حفظ التغييرات</string>
+    <string name="meals_addr_saving">جارٍ الحفظ…</string>
+    <string name="meals_addr_keep">إبقاء كما هو</string>
+    <string name="meals_addr_changed_from">ابتداءً من %1$s، %2$s</string>
+    <string name="meals_addr_goes_to">يُوصَل %1$s إلى %2$s.</string>
+    <string name="meals_addr_now_goes">يُوصَل %1$s الآن إلى %2$s.</string>
+    <string name="meals_addr_prepared_note">الوجبات التي يجري تحضيرها تُوصَل إلى العنوان القديم.</string>
+    <string name="meals_addr_done">حسناً</string>
 </resources>

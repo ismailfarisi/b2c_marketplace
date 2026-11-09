@@ -460,7 +460,7 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 	if !rotationRenewable(r.Status) || len(r.Weeks) != RotationKitchens {
 		return Rotation{}, httpx.Coded(httpx.ErrConflict, "not_renewable", "This rotation cannot be renewed.")
 	}
-	addressID, loc, err := s.rotationContext(ctx, id)
+	addresses, loc, err := s.rotationContext(ctx, id)
 	if err != nil {
 		return Rotation{}, err
 	}
@@ -469,7 +469,7 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 		return Rotation{}, err
 	}
 	plans, err := renewalPlans(r, opts, func() ([]uuid.UUID, error) {
-		ids, err := s.cappedProposalPlans(ctx, r, userID, addressID, start)
+		ids, err := s.cappedProposalPlans(ctx, r, userID, addresses, start)
 		if err != nil {
 			// The proposal is a nicety; the renewal itself must still happen.
 			slog.ErrorContext(ctx, "renewal proposal failed, keeping kitchens", "rotation_id", id, "error", err)
@@ -481,7 +481,8 @@ func (s *Service) RenewRotation(ctx context.Context, userID, id uuid.UUID, now t
 		return Rotation{}, err
 	}
 	in := RotationInput{
-		UserID: userID, AddressID: addressID, PlanIDs: plans, StartDate: start,
+		UserID: userID, AddressID: addresses.Default, SlotAddresses: addresses.Slots,
+		PlanIDs: plans, StartDate: start,
 		Weekdays: r.Weekdays, Slots: r.MealSlots, RefreshOnRenew: r.RefreshOnRenew,
 		ContinuesRotation: true,
 	}

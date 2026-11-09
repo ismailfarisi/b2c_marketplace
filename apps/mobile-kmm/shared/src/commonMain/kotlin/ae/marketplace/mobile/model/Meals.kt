@@ -278,6 +278,8 @@ data class ScheduleRule(
     val weekday: Int,
     @SerialName("meal_slot") val mealSlot: String,
     @SerialName("window_id") val windowId: String,
+    /** This meal's own address; null sends it to the subscription's address. */
+    @SerialName("address_id") val addressId: String? = null,
 )
 
 @Serializable
@@ -357,6 +359,10 @@ data class MySubscription(
     /** On a guest subscription: the subscription it is a guest of. */
     @SerialName("guest_of") val guestOf: GuestWeekLink? = null,
     @SerialName("guest_week_offer") val guestWeekOffer: GuestWeekOffer? = null,
+    /** Where each meal goes, in order of the day. */
+    @SerialName("delivery_addresses") val deliveryAddresses: List<DeliveryAddress> = emptyList(),
+    /** False for company lunches (the company keeps the office address) and ended plans. */
+    @SerialName("can_change_address") val canChangeAddress: Boolean = false,
 )
 
 /** Structured answers to "why are you leaving?"; the free-text note rides along. */
@@ -520,6 +526,8 @@ data class RotationInput(
     @SerialName("delivery_weekdays") val deliveryWeekdays: List<Int>,
     @SerialName("meal_slots") val mealSlots: List<String>,
     @SerialName("promo_code") val promoCode: String? = null,
+    /** Meals going somewhere other than [addressId]; every kitchen must deliver to all of them. */
+    @SerialName("slot_addresses") val slotAddresses: List<SlotAddress>? = null,
 )
 
 @Serializable
@@ -527,6 +535,7 @@ data class RotationWeek(
     val week: Int,
     @SerialName("starts_on") val startsOn: String,
     @SerialName("ends_on") val endsOn: String,
+    @SerialName("branch_id") val branchId: String = "",
     @SerialName("kitchen_name") val kitchenName: String,
     @SerialName("kitchen_name_ar") val kitchenNameAr: String? = null,
     @SerialName("plan_id") val planId: String = "",
@@ -562,6 +571,10 @@ data class Rotation(
 
     /** Advisory variety check from preview; it never blocks buying. */
     val variety: RotationVariety? = null,
+    /** The default address; meals in [deliveryAddresses] may go elsewhere. */
+    @SerialName("address_id") val addressId: String? = null,
+    @SerialName("delivery_addresses") val deliveryAddresses: List<DeliveryAddress> = emptyList(),
+    @SerialName("can_change_address") val canChangeAddress: Boolean = false,
 ) {
     /** Created, not paid yet: the card offers to pay. */
     val awaitingPayment: Boolean get() = status == "pending_payment" || status == "pending"
@@ -618,6 +631,8 @@ data class RotationVarietyWarning(
 data class RotationSuggestionInput(
     @SerialName("address_id") val addressId: String,
     @SerialName("promo_code") val promoCode: String? = null,
+    @SerialName("slot_addresses") val slotAddresses: List<SlotAddress>? = null,
+    @SerialName("meal_slots") val mealSlots: List<String>? = null,
 )
 
 @Serializable
@@ -797,3 +812,58 @@ data class RotationRecap(
 
 @Serializable
 data class RotationRecapPage(val items: List<RotationRecap> = emptyList())
+
+// ── Per-meal delivery addresses ─────────────────────────────────────────────
+
+/** Sends one meal (lunch, dinner, ...) to one of the customer's saved addresses. */
+@Serializable
+data class SlotAddress(
+    @SerialName("meal_slot") val mealSlot: String,
+    @SerialName("address_id") val addressId: String,
+)
+
+/** Where one meal of a subscription or rotation goes. */
+@Serializable
+data class DeliveryAddress(
+    @SerialName("meal_slot") val mealSlot: String,
+    @SerialName("address_id") val addressId: String,
+    val label: String = "",
+    val line: String = "",
+    /** After a change: the first delivery date (YYYY-MM-DD) going to the new address. */
+    @SerialName("effective_from") val effectiveFrom: String? = null,
+)
+
+@Serializable
+data class AddressCoverageInput(
+    @SerialName("branch_ids") val branchIds: List<String>,
+    @SerialName("address_ids") val addressIds: List<String>,
+)
+
+@Serializable
+data class AddressCoverageItem(
+    @SerialName("branch_id") val branchId: String,
+    @SerialName("address_id") val addressId: String,
+    val delivers: Boolean,
+)
+
+@Serializable
+data class AddressCoverage(val items: List<AddressCoverageItem> = emptyList())
+
+@Serializable
+data class AddressChangeInput(val addresses: List<SlotAddress>)
+
+/** The `changed` part of a change-address answer; the rest is the updated detail. */
+@Serializable
+data class AddressChanges(val changed: List<DeliveryAddress> = emptyList())
+
+/** Meal slots in the order of the day, as the API orders them. */
+object MealSlots {
+    val order: List<String> = listOf("suhoor", "breakfast", "lunch", "snack", "iftar", "dinner")
+
+    fun sorted(slots: Iterable<String>): List<String> =
+        slots.distinct().sortedBy { s -> order.indexOf(s).let { i -> if (i < 0) order.size else i } }
+
+    /** The one address every meal goes to, or null when meals go to different places. */
+    fun single(items: List<DeliveryAddress>): DeliveryAddress? =
+        items.firstOrNull()?.takeIf { first -> items.all { it.addressId == first.addressId } }
+}

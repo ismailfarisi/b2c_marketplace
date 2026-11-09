@@ -17,6 +17,7 @@ import {
   GuestWeekCard,
 } from "@/components/meals/guest-week";
 import { RateKitchen } from "@/components/meals/rate-kitchen";
+import { DeliveryAddresses } from "@/components/meals/meal-addresses";
 import {
   CustomerShell,
   STATUS,
@@ -32,6 +33,7 @@ import {
   listMyTastes,
   setMyTaste,
   getCheaperPlans,
+  changeSubscriptionAddresses,
   getMySubscription,
   pauseSubscription,
   payOrder,
@@ -440,6 +442,35 @@ function Detail({
           </button>
         </section>
       )}
+
+      <DeliveryAddresses
+        locale={locale}
+        items={s.delivery_addresses ?? []}
+        // A rotation's week moves with the rotation (its page changes all
+        // weeks at once); a company lunch's office is the company's to set.
+        canChange={(s.can_change_address ?? false) && !s.rotation_id}
+        isCompany={!!s.company_name}
+        companyName={s.company_name}
+        kitchens={[
+          {
+            branch_id: s.branch_id,
+            name: (locale === "ar" && s.kitchen_name_ar) || s.kitchen_name,
+          },
+        ]}
+        kitchenName={(name) =>
+          name === s.kitchen_name
+            ? (locale === "ar" && s.kitchen_name_ar) || s.kitchen_name
+            : null
+        }
+        save={(addresses, headers) =>
+          changeSubscriptionAddresses(s.id, addresses, { headers })
+        }
+        onSaved={(out) => {
+          const { changed: _changed, ...detail } = out;
+          qc.setQueryData(["me", "subscription", s.id], detail);
+          return refresh();
+        }}
+      />
 
       <section>
         <h2>{t.upcoming}</h2>

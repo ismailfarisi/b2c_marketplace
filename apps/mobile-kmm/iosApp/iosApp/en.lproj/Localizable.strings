@@ -647,6 +647,37 @@
 "meals_make_rotation_btn" = "Build my rotation";
 "meals_guest_line" = "Guest week: %@ cooks one week";
 "meals_guest_of_line" = "One-week guest from your %@ subscription";
+"meals_addr_all_one" = "All meals to one address";
+"meals_addr_per_meal" = "Different address per meal";
+"meals_addr_slot_to" = "%@ to";
+"meals_addr_not_here" = "Doesn't deliver here";
+"meals_addr_blocked_one" = "This kitchen doesn't deliver to %@. Choose another address.";
+"meals_addr_blocked_slot" = "This kitchen doesn't deliver %@ to %@. Choose another address.";
+"meals_addr_err_slot" = "This kitchen doesn't deliver %@ to that address. Choose another address.";
+"meals_addr_err_kitchen_slot" = "%@ doesn't deliver %@ to that address.";
+"meals_addr_err_kitchen" = "%@ doesn't deliver to that address.";
+"meals_addr_err_company" = "Your company manages the office address for this lunch.";
+"meals_addr_err_closed" = "This plan has ended, so its address can't be changed.";
+"meals_addr_err_rotation_week" = "Change the address from the rotation, so every week moves together.";
+"meals_addr_err_unknown_slot" = "That meal isn't part of this plan.";
+"meals_addr_unavailable" = "Doesn't deliver to %@";
+"meals_addr_picked_unavailable" = "A kitchen you picked doesn't deliver to every address you chose. Pick another kitchen or address.";
+"meals_addr_delivery" = "Delivery";
+"meals_addr_all_to" = "All meals: %@";
+"meals_addr_slot_line" = "%@: %@";
+"meals_addr_change" = "Change address";
+"meals_addr_company_note" = "Your company manages the office address.";
+"meals_addr_rotation_note" = "Change this week's address from the rotation.";
+"meals_addr_change_title" = "Where should your meals go?";
+"meals_addr_rotation_check" = "Every remaining week's kitchen is checked before anything changes.";
+"meals_addr_save" = "Save changes";
+"meals_addr_saving" = "Saving…";
+"meals_addr_keep" = "Keep as is";
+"meals_addr_changed_from" = "From %@, %@";
+"meals_addr_goes_to" = "%@ goes to %@.";
+"meals_addr_now_goes" = "%@ now goes to %@.";
+"meals_addr_prepared_note" = "Meals already being prepared still go to the old address.";
+"meals_addr_done" = "Got it";
 
 /* Not in the Android chrome — iOS draws a back chevron where Compose relies on
    the system gesture, and a chevron needs a label for VoiceOver. */

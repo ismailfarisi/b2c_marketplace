@@ -29,6 +29,7 @@ import {
   getMyRotation,
   listMyRotationRecaps,
   listRotationSwapOptions,
+  changeRotationAddresses,
   payRotation,
   renewRotation,
   setRotationRenewal,
@@ -37,6 +38,7 @@ import {
   type RotationSwapOption,
   type RotationWeek,
 } from "@/lib/customer-api";
+import { DeliveryAddresses } from "@/components/meals/meal-addresses";
 
 const COPY = {
   en: {
@@ -302,6 +304,33 @@ function Detail({ r, locale, t }: { r: Rotation; locale: Locale; t: Copy }) {
           </button>
         </section>
       )}
+
+      <DeliveryAddresses
+        locale={locale}
+        items={r.delivery_addresses ?? []}
+        canChange={r.can_change_address ?? false}
+        isCompany={false}
+        companyName={null}
+        // The weeks still to come are the kitchens a new address must suit.
+        kitchens={r.weeks
+          .filter((w) => w.ends_on >= todayISO())
+          .map((w) => ({
+            branch_id: w.branch_id,
+            name: (locale === "ar" && w.kitchen_name_ar) || w.kitchen_name,
+          }))}
+        kitchenName={(name) => {
+          const w = r.weeks.find((x) => x.kitchen_name === name);
+          return w ? (locale === "ar" && w.kitchen_name_ar) || w.kitchen_name : null;
+        }}
+        save={(addresses, headers) =>
+          changeRotationAddresses(r.id, addresses, { headers })
+        }
+        onSaved={(out) => {
+          const { changed: _changed, ...detail } = out;
+          qc.setQueryData(["me", "rotation", r.id], detail);
+          return refresh();
+        }}
+      />
 
       <section>
         <ol className="ms-weeks ms-timeline">
@@ -703,4 +732,9 @@ function Renewal({
       )}
     </section>
   );
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }

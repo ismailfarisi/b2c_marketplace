@@ -137,3 +137,56 @@ func TestDeletePromotesNewestRemaining(t *testing.T) {
 		t.Fatalf("second delete: want 404, got %v", err)
 	}
 }
+
+func TestCoverageAnswersOnlyTheCallersAddresses(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	exec := func(sql string, args ...any) {
+		if _, err := pool.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("fixture: %v\n%s", err, sql)
+		}
+	}
+	user, other := uuid.New(), uuid.New()
+	exec(`INSERT INTO users (id, phone) VALUES ($1, $2), ($3, $4)`, user, fmt.Sprintf("+97157%07d", rand.IntN(10_000_000)),
+		other, fmt.Sprintf("+97157%07d", rand.IntN(10_000_000)))
+	vendor, near, far := uuid.New(), uuid.New(), uuid.New()
+	exec(`INSERT INTO vendors (id, slug, legal_name, trade_name) VALUES ($1, $2, 'C LLC', 'C')`, vendor, "coverage-"+vendor.String())
+	for _, b := range []struct {
+		id  uuid.UUID
+		lng float64
+	}{{near, 55.23}, {far, 56.50}} {
+		exec(`INSERT INTO vendor_branches (id, vendor_id, name, point, service_area) VALUES ($1, $2, 'C',
+			ST_SetSRID(ST_MakePoint($3, 25.14), 4326)::geography,
+			ST_Multi(ST_Buffer(ST_SetSRID(ST_MakePoint($3, 25.14), 4326)::geography, 10000)::geometry)::geography)`, b.id, vendor, b.lng)
+	}
+	home, theirs, deleted := uuid.New(), uuid.New(), uuid.New()
+	exec(`INSERT INTO addresses (id, user_id, label, city, point) VALUES
+		($1, $4, 'Home', 'Dubai', ST_SetSRID(ST_MakePoint(55.25, 25.14), 4326)::geography),
+		($2, $5, 'Theirs', 'Dubai', ST_SetSRID(ST_MakePoint(55.25, 25.14), 4326)::geography),
+		($3, $4, 'Old', 'Dubai', ST_SetSRID(ST_MakePoint(55.25, 25.14), 4326)::geography)`, home, theirs, deleted, user, other)
+	exec(`UPDATE addresses SET deleted_at = now() WHERE id = $1`, deleted)
+
+	s := NewService(pool)
+	items, err := s.Coverage(ctx, user, []uuid.UUID{near, far}, []uuid.UUID{home, theirs, deleted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 || items[0].BranchID != near || !items[0].Delivers || items[1].BranchID != far || items[1].Delivers ||
+		items[0].AddressID != home || items[1].AddressID != home {
+		t.Fatalf("items = %+v", items)
+	}
+	if _, err := s.Coverage(ctx, user, make([]uuid.UUID, CoverageMaxBranches+1), []uuid.UUID{home}); err == nil {
+		t.Fatal("too many kitchens must be refused")
+	}
+	if _, err := s.Coverage(ctx, user, []uuid.UUID{near}, nil); err == nil {
+		t.Fatal("no addresses must be refused")
+	}
+}

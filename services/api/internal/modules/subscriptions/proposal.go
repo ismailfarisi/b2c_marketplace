@@ -371,21 +371,26 @@ func renewalWindow(r Rotation, now time.Time, loc *time.Location) (time.Time, uu
 	return start, notFirst, nil
 }
 
-// rotationContext loads the address and time zone a rotation delivers to.
-func (s *Service) rotationContext(ctx context.Context, id uuid.UUID) (uuid.UUID, *time.Location, error) {
-	var addressID uuid.UUID
+// rotationContext loads the addresses and time zone a rotation delivers to.
+func (s *Service) rotationContext(ctx context.Context, id uuid.UUID) (rotationAddresses, *time.Location, error) {
+	var ra rotationAddresses
 	var tz string
 	if err := s.pool.QueryRow(ctx, `
 		SELECT r.address_id, s.timezone FROM meal_rotations r
 		  JOIN subscriptions s ON s.rotation_id = r.id
-		 WHERE r.id = $1 ORDER BY s.rotation_week LIMIT 1`, id).Scan(&addressID, &tz); err != nil {
-		return uuid.Nil, nil, fmt.Errorf("subscriptions: rotation address: %w", err)
+		 WHERE r.id = $1 ORDER BY s.rotation_week LIMIT 1`, id).Scan(&ra.Default, &tz); err != nil {
+		return ra, nil, fmt.Errorf("subscriptions: rotation address: %w", err)
 	}
+	slots, err := rotationSlotAddresses(ctx, s.pool, id)
+	if err != nil {
+		return ra, nil, err
+	}
+	ra.Slots = slots
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
 		loc = time.UTC
 	}
-	return addressID, loc, nil
+	return ra, loc, nil
 }
 
 // weekQuote prices one rotation week of a plan the way the rotation does.
@@ -450,7 +455,7 @@ func (s *Service) RenewalProposal(ctx context.Context, userID, id uuid.UUID, now
 	if !rotationRenewable(r.Status) || len(r.Weeks) != RotationKitchens {
 		return RenewalProposal{}, httpx.Coded(httpx.ErrConflict, "not_renewable", "This rotation cannot be renewed.")
 	}
-	addressID, loc, err := s.rotationContext(ctx, id)
+	addresses, loc, err := s.rotationContext(ctx, id)
 	if err != nil {
 		return RenewalProposal{}, err
 	}
@@ -458,17 +463,17 @@ func (s *Service) RenewalProposal(ctx context.Context, userID, id uuid.UUID, now
 	if err != nil {
 		return RenewalProposal{}, err
 	}
-	return s.propose(ctx, r, userID, addressID, start)
+	return s.propose(ctx, r, userID, addresses, start)
 }
 
-func (s *Service) propose(ctx context.Context, r Rotation, userID, addressID uuid.UUID, start time.Time) (RenewalProposal, error) {
-	out, _, err := s.proposeWith(ctx, r, userID, addressID, start)
+func (s *Service) propose(ctx context.Context, r Rotation, userID uuid.UUID, addresses rotationAddresses, start time.Time) (RenewalProposal, error) {
+	out, _, err := s.proposeWith(ctx, r, userID, addresses, start)
 	return out, err
 }
 
 // proposeWith is propose with the taste context it used, for callers that
 // need to keep working with the same avoided and familiar sets.
-func (s *Service) proposeWith(ctx context.Context, r Rotation, userID, addressID uuid.UUID, start time.Time) (RenewalProposal, tasteContext, error) {
+func (s *Service) proposeWith(ctx context.Context, r Rotation, userID uuid.UUID, addresses rotationAddresses, start time.Time) (RenewalProposal, tasteContext, error) {
 	out := RenewalProposal{
 		RotationID: r.ID, StartDate: start.Format("2006-01-02"), Currency: r.Currency,
 		// What the kitchens cost before any promo: a first-month discount must
@@ -608,19 +613,22 @@ func (s *Service) proposeWith(ctx context.Context, r Rotation, userID, addressID
 		  FROM subscription_plans p
 		  JOIN vendor_branches b ON b.id = p.branch_id AND b.deleted_at IS NULL AND b.is_active
 		  JOIN vendors v ON v.id = b.vendor_id AND v.deleted_at IS NULL AND v.status = 'active'
-		  JOIN addresses a ON a.id = $1
 		 WHERE p.is_active AND p.service_type = $2 AND p.rotation_enabled
 		   AND p.rotation_week_price_minor IS NOT NULL
 		   AND p.delivery_weekdays::int[] @> $3::int[]
 		   AND p.meal_slots @> $4::text[]
-		   AND b.service_area IS NOT NULL AND ST_Intersects(b.service_area, a.point)
+		   AND p.meals_per_day = cardinality($4::text[])
+		   AND b.service_area IS NOT NULL
+		   AND NOT EXISTS (SELECT 1 FROM addresses a
+		                    WHERE a.id = ANY($1::uuid[])
+		                      AND NOT COALESCE(ST_Intersects(b.service_area, a.point), false))
 		   AND EXISTS (SELECT 1 FROM time_windows w WHERE w.branch_id = b.id AND w.is_active)
 		   AND NOT (b.id = ANY($5))
 		   AND NOT EXISTS (SELECT 1 FROM meal_tastes t
 		                    WHERE t.user_id = $6 AND t.subject_kind = 'kitchen'
 		                      AND t.subject_id = b.id AND t.sentiment = 'avoid')
 		 ORDER BY b.id, p.rotation_week_price_minor, p.created_at`,
-		addressID, serviceType, weekdays, r.MealSlots, currentBranches, userID)
+		addresses.All(), serviceType, weekdays, r.MealSlots, currentBranches, userID)
 	if err != nil {
 		return out, tc, fmt.Errorf("subscriptions: eligible kitchens: %w", err)
 	}
@@ -678,8 +686,8 @@ func (s *Service) proposeWith(ctx context.Context, r Rotation, userID, addressID
 
 // cappedProposalPlans is the proposal the worker renews with: within the
 // price cap, or the previous kitchens where it is not.
-func (s *Service) cappedProposalPlans(ctx context.Context, r Rotation, userID, addressID uuid.UUID, start time.Time) ([]uuid.UUID, error) {
-	p, tc, err := s.proposeWith(ctx, r, userID, addressID, start)
+func (s *Service) cappedProposalPlans(ctx context.Context, r Rotation, userID uuid.UUID, addresses rotationAddresses, start time.Time) ([]uuid.UUID, error) {
+	p, tc, err := s.proposeWith(ctx, r, userID, addresses, start)
 	if err != nil {
 		return nil, err
 	}

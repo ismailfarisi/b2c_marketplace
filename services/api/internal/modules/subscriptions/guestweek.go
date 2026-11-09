@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -308,16 +309,18 @@ func (s *Service) guestOffer(ctx context.Context, tx pgx.Tx, live *Live, now tim
 		       p.cutoff_hours
 		  FROM subscription_plans p
 		  JOIN vendor_branches b ON b.id = p.branch_id
-		  JOIN addresses a ON a.id = $1
 		 WHERE p.is_active AND b.is_active AND b.deleted_at IS NULL
 		   AND p.service_type = $2 AND p.currency = $3
 		   AND b.id <> $4
-		   AND ST_Intersects(b.service_area, a.point)
+		   AND NOT EXISTS (SELECT 1 FROM addresses a
+		                    WHERE a.id = ANY($1::uuid[])
+		                      AND NOT COALESCE(ST_Intersects(b.service_area, a.point), false))
 		   AND p.delivery_weekdays @> $5::smallint[]
 		   AND p.meal_slots @> $6::text[]
+		   AND p.meals_per_day = cardinality($6::text[])
 		   AND EXISTS (SELECT 1 FROM time_windows tw WHERE tw.branch_id = b.id AND tw.is_active)
 		 ORDER BY b.name, p.price_minor`,
-		live.AddressID, s.serviceTypeOf(ctx, tx, live.PlanID), cycle.Currency, live.BranchID,
+		liveAddressIDs(live), s.serviceTypeOf(ctx, tx, live.PlanID), cycle.Currency, live.BranchID,
 		g.weekdays, g.slots)
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: guest kitchens: %w", err)
@@ -695,7 +698,7 @@ func (s *Service) CheaperPlans(ctx context.Context, userID, subID uuid.UUID) (*C
 			slots[r.Slot] = true
 		}
 		perMeal := PerMeal(cycle.AmountMinor, cycle.DeliverableDays, max(1, len(slots)))
-		out, err = s.cheaperPlans(ctx, tx, live.AddressID, s.serviceTypeOf(ctx, tx, live.PlanID),
+		out, err = s.cheaperPlans(ctx, tx, liveAddressIDs(live), s.serviceTypeOf(ctx, tx, live.PlanID),
 			cycle.Currency, perMeal, []uuid.UUID{live.BranchID})
 		return err
 	})
@@ -730,7 +733,7 @@ func (s *Service) CheaperPlansForRotation(ctx context.Context, userID, rotationI
 		}
 		var total, meals int64
 		var currency, serviceType string
-		var addressID uuid.UUID
+		var addressIDs []uuid.UUID
 		exclude := make([]uuid.UUID, 0, len(weeks))
 		for _, w := range weeks {
 			live, err := s.repo.LoadLive(ctx, tx, w.ID)
@@ -747,7 +750,12 @@ func (s *Service) CheaperPlansForRotation(ctx context.Context, userID, rotationI
 			}
 			total += cycle.AmountMinor
 			meals += int64(cycle.DeliverableDays * max(1, len(slots)))
-			currency, addressID = cycle.Currency, live.AddressID
+			currency = cycle.Currency
+			for _, id := range liveAddressIDs(live) {
+				if !slices.Contains(addressIDs, id) {
+					addressIDs = append(addressIDs, id)
+				}
+			}
 			serviceType = s.serviceTypeOf(ctx, tx, live.PlanID)
 			exclude = append(exclude, w.Branch)
 		}
@@ -755,13 +763,13 @@ func (s *Service) CheaperPlansForRotation(ctx context.Context, userID, rotationI
 		if meals > 0 {
 			perMeal = total / meals
 		}
-		out, err = s.cheaperPlans(ctx, tx, addressID, serviceType, currency, perMeal, exclude)
+		out, err = s.cheaperPlans(ctx, tx, addressIDs, serviceType, currency, perMeal, exclude)
 		return err
 	})
 	return out, err
 }
 
-func (s *Service) cheaperPlans(ctx context.Context, tx pgx.Tx, addressID uuid.UUID,
+func (s *Service) cheaperPlans(ctx context.Context, tx pgx.Tx, addressIDs []uuid.UUID,
 	serviceType, currency string, perMeal int64, exclude []uuid.UUID) (*CheaperPlans, error) {
 	out := &CheaperPlans{CurrentPerMealMinor: perMeal, Currency: currency, Items: []CheaperPlan{}}
 	if perMeal <= 0 {
@@ -775,15 +783,16 @@ func (s *Service) cheaperPlans(ctx context.Context, tx pgx.Tx, addressID uuid.UU
 		                 round(p.cycle_days * p.days_per_week / 7.0) * p.meals_per_day))::bigint AS per_meal
 		      FROM subscription_plans p
 		      JOIN vendor_branches b ON b.id = p.branch_id
-		      JOIN addresses a ON a.id = $1
 		     WHERE p.is_active AND b.is_active AND b.deleted_at IS NULL
 		       AND p.service_type = $2 AND p.currency = $3
 		       AND NOT (b.id = ANY($4))
-		       AND ST_Intersects(b.service_area, a.point)
+		       AND NOT EXISTS (SELECT 1 FROM addresses a
+		                    WHERE a.id = ANY($1::uuid[])
+		                      AND NOT COALESCE(ST_Intersects(b.service_area, a.point), false))
 		     ORDER BY b.id, 9) x
 		 WHERE per_meal < $5
 		 ORDER BY per_meal LIMIT 5`,
-		addressID, serviceType, currency, exclude, perMeal)
+		addressIDs, serviceType, currency, exclude, perMeal)
 	if err != nil {
 		return nil, fmt.Errorf("subscriptions: cheaper plans: %w", err)
 	}

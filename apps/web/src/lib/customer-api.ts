@@ -63,7 +63,45 @@ export interface ScheduleRule {
   weekday: number;
   meal_slot: string;
   window_id: string;
+  /** This meal's own address; omitted = the subscription's address_id. */
+  address_id?: string;
 }
+
+/** One meal's address on a rotation request; meals not listed use address_id. */
+export interface SlotAddress {
+  meal_slot: string;
+  address_id: string;
+}
+
+/** Where one meal of a plan goes. */
+export interface DeliveryAddress {
+  meal_slot: string;
+  address_id: string;
+  label: string;
+  line: string;
+  /** After a change, the first delivery date that goes to the new address. */
+  effective_from: string | null;
+}
+
+export interface AddressCoverageItem {
+  branch_id: string;
+  address_id: string;
+  delivers: boolean;
+}
+
+/**
+ * Which of the caller's addresses each kitchen delivers to. At most 60
+ * kitchens and 6 addresses a call; foreign or deleted addresses are left out.
+ */
+export const addressCoverage = (data: {
+  branch_ids: string[];
+  address_ids: string[];
+}) =>
+  apiFetch<{ items: AddressCoverageItem[] }>({
+    url: "/me/addresses/coverage",
+    method: "POST",
+    data,
+  });
 
 export interface SubscribeInput {
   plan_id: string;
@@ -312,6 +350,9 @@ export interface MySubscriptionDetail extends MySubscription {
   }>;
   /** `can_resume` is false for a wallet-credited pause, a guest week's among them. */
   pauses: Array<{ from_date: string; to_date: string; can_resume?: boolean }>;
+  delivery_addresses?: DeliveryAddress[];
+  /** False for company office lunches and ended subscriptions. */
+  can_change_address?: boolean;
 }
 
 export const listMySubscriptions = () =>
@@ -415,6 +456,7 @@ export const renewSubscription = (id: string, opts?: CallOptions) =>
 export interface RotationInput {
   plan_ids: string[];
   address_id: string;
+  slot_addresses?: SlotAddress[];
   start_date: string;
   delivery_weekdays: number[];
   meal_slots: string[];
@@ -473,6 +515,7 @@ export interface RotationVariety {
 
 export interface RotationSuggestionInput {
   address_id: string;
+  slot_addresses?: SlotAddress[];
   start_date?: string;
   delivery_weekdays?: number[];
   meal_slots?: string[];
@@ -501,7 +544,37 @@ export interface Rotation extends RotationQuote {
   renewed_by_status: string | null;
   /** Renewals propose fresh kitchens instead of the same four. */
   refresh_on_renew: boolean;
+  /** The default address; delivery_addresses has each meal's. */
+  address_id?: string;
+  delivery_addresses?: DeliveryAddress[];
+  can_change_address?: boolean;
 }
+
+/** Moves the listed meals to new addresses, for every remaining delivery. */
+export const changeSubscriptionAddresses = (
+  id: string,
+  addresses: SlotAddress[],
+  opts?: CallOptions,
+) =>
+  apiFetch<MySubscriptionDetail & { changed: DeliveryAddress[] }>({
+    url: `/subscriptions/${id}/addresses`,
+    method: "PUT",
+    data: { addresses },
+    headers: opts?.headers,
+  });
+
+/** Same for a rotation: every remaining week (and a booked renewal) moves together. */
+export const changeRotationAddresses = (
+  id: string,
+  addresses: SlotAddress[],
+  opts?: CallOptions,
+) =>
+  apiFetch<Rotation & { changed: DeliveryAddress[] }>({
+    url: `/rotations/${id}/addresses`,
+    method: "PUT",
+    data: { addresses },
+    headers: opts?.headers,
+  });
 
 /** Which kitchen the platform would give each week, and the total. */
 export const previewRotation = (data: RotationInput) =>

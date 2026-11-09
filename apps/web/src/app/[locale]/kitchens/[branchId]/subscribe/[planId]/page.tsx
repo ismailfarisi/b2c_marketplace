@@ -13,6 +13,13 @@ import {
 import { useCustomerPoint } from "@/components/meals/location";
 import { CustomerShell, asLocale, type Locale } from "@/components/meals/shell";
 import { NewAddress } from "@/components/meals/new-address";
+import {
+  MealAddressPicker,
+  blockedMessage,
+  checkoutAddressProblems,
+  useCoverage,
+  useMealAddresses,
+} from "@/components/meals/meal-addresses";
 import { OFFER_COPY, offerLabel, offerName } from "@/components/meals/offers";
 import {
   describeAddress,
@@ -229,9 +236,12 @@ function Checkout({
   const [slots, setSlots] = useState<string[]>([]);
   const [windowId, setWindowId] = useState<string>("");
   const [start, setStart] = useState("");
-  const [addressId, setAddressId] = useState<string>("");
+  const where = useMealAddresses(slots);
+  const addressId = where.base;
+  const setAddressId = where.setBase;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitAddress, setSubmitAddress] = useState<Record<string, string> | null>(null);
   // A public offer arrives as ?promo=<id> from the kitchen page; a code is typed.
   const [promoId, setPromoId] = useState<string | null>(null);
   const [codeDraft, setCodeDraft] = useState("");
@@ -290,11 +300,15 @@ function Checkout({
           address_id: addressId,
           start_date: start,
           schedule: days.flatMap((weekday) =>
-            slots.map((meal_slot) => ({
-              weekday,
-              meal_slot,
-              window_id: windowId,
-            })),
+            slots.map((meal_slot) => {
+              const own = where.of(meal_slot);
+              return {
+                weekday,
+                meal_slot,
+                window_id: windowId,
+                ...(own && own !== addressId ? { address_id: own } : {}),
+              };
+            }),
           ),
           ...(code
             ? { promo_code: code }
@@ -319,22 +333,59 @@ function Checkout({
   const draftKey = JSON.stringify(input);
   const resetKey = idem.reset;
   useEffect(() => resetKey(), [draftKey, resetKey]);
+  useEffect(() => setSubmitAddress(null), [draftKey]);
   // A changed draft is a different request: a new key, so it isn't refused
   // as a replay with another body.
   const lunchDraft = JSON.stringify([companyId, lunch]);
   const resetLunchKey = lunchKey.reset;
   useEffect(() => resetLunchKey(), [lunchDraft, resetLunchKey]);
+  // Which saved addresses this kitchen delivers to; an uncovered one is
+  // marked and blocks checkout before the server has to refuse it.
+  const coverage = useCoverage(
+    [branchId],
+    (addresses.data?.items ?? []).map((a) => a.id),
+  );
+  const kitchenLabel =
+    (locale === "ar" && kitchen.data?.name_ar) || kitchen.data?.name || "";
+  const addressLabel = (id: string) =>
+    addresses.data?.items.find((a) => a.id === id)?.label ?? "";
+  // A company lunch goes to the office the company chose, so coverage is not
+  // the employee's to check here; `null` would mean "the default address is
+  // uncovered" and block the Start button.
+  const uncovered: string | null | undefined = company
+    ? undefined
+    : (where.split && slots.length >= 2 ? slots : [null]).find(
+        (slot) =>
+          coverage.delivers(branchId, slot ? where.of(slot) : addressId) === false,
+      );
+  const blocked =
+    uncovered !== undefined && uncovered !== null
+      ? blockedMessage(locale, kitchenLabel, uncovered, addressLabel(where.of(uncovered)))
+      : uncovered === null
+        ? blockedMessage(locale, kitchenLabel, null, addressLabel(addressId))
+        : null;
   const preview = useQuery({
     queryKey: ["subscription-preview", company ? lunch : input, companyId],
     queryFn: () =>
       company
         ? previewLunch(company.company_id, lunch!).then((r) => r.preview)
         : previewSubscription(input!),
-    enabled: company ? lunch != null : input != null,
+    enabled: company ? lunch != null : input != null && !blocked,
     retry: false,
   });
+  const addressProblems = (err: unknown) =>
+    checkoutAddressProblems(
+      err,
+      locale,
+      (i) => input?.schedule[i]?.meal_slot,
+      (slot) => addressLabel(slot ? where.of(slot) : addressId) || null,
+      kitchenLabel,
+    );
+  const previewAddress = preview.isError ? addressProblems(preview.error) : null;
   const previewProblem = preview.isError
-    ? checkoutProblem(preview.error, locale)
+    ? previewAddress
+      ? Object.values(previewAddress)[0]!
+      : checkoutProblem(preview.error, locale)
     : null;
   // A quote refused as too_soon names the server's first allowed date; the
   // checkout moves there instead of staying stuck on a day past its cutoff.
@@ -371,7 +422,8 @@ function Checkout({
   const k = kitchen.data;
   const money = (n: number) =>
     formatMoney({ amount: n, currency: plan.currency }, locale);
-  const ready = (company ? lunch != null : input != null) && !preview.isError;
+  const ready =
+    (company ? lunch != null : input != null) && !preview.isError && !blocked;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -407,7 +459,9 @@ function Checkout({
       idem.reset();
       router.replace(`/${locale}/subscriptions/${sub.id}?${outcome}`);
     } catch (err) {
-      setError(checkoutProblem(err, locale));
+      const byMeal = addressProblems(err);
+      setSubmitAddress(byMeal);
+      setError(byMeal ? Object.values(byMeal)[0]! : checkoutProblem(err, locale));
       setBusy(false);
     }
   }
@@ -598,40 +652,24 @@ function Checkout({
             </div>
           </fieldset>
         ) : (
-          <fieldset className="ms-field">
-            <legend>{t.address}</legend>
-            {(addresses.data?.items ?? []).length === 0 && (
-              <p className="ms-sub">{t.noAddress}</p>
-            )}
-            <div className="ms-addresses">
-              {(addresses.data?.items ?? []).map((a) => (
-                <label
-                  key={a.id}
-                  className={`ms-address${a.id === addressId ? " on" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="address"
-                    value={a.id}
-                    checked={a.id === addressId}
-                    onChange={() => setAddressId(a.id)}
-                  />
-                  <span>
-                    <strong dir="auto">{a.label}</strong>
-                    <br />
-                    <span className="ms-sub" dir="auto">
-                      {describeAddress(a)}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <NewAddress
-              t={t}
-              initial={point && exact ? point : null}
-              onSaved={(a) => setAddressId(a.id)}
-            />
-          </fieldset>
+          <MealAddressPicker
+            locale={locale}
+            legend={t.address}
+            addresses={addresses.data?.items ?? []}
+            m={where}
+            covers={(id) => coverage.delivers(branchId, id)}
+            problems={submitAddress ?? previewAddress ?? undefined}
+            coverageError={coverage.isError}
+            onRetryCoverage={() => void coverage.refetch()}
+            noAddress={t.noAddress}
+            footer={
+              <NewAddress
+                t={t}
+                initial={point && exact ? point : null}
+                onSaved={(a) => setAddressId(a.id)}
+              />
+            }
+          />
         )}
       </div>
 
@@ -719,6 +757,11 @@ function Checkout({
         {preview.isError && !promoRejected && previewProblem && (
           <p className="ms-bad" role="alert">
             {previewProblem}
+          </p>
+        )}
+        {blocked && !company && (
+          <p className="ms-bad" role="alert">
+            {blocked}
           </p>
         )}
         {error && (
