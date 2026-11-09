@@ -340,14 +340,25 @@ data class AddressChangeUiState(
     /** All meals to one address (true) or a choice per meal. */
     val allMeals: Boolean = true,
     val picks: Map<String, String> = emptyMap(),
-    /** Addresses the subscription's kitchen does not deliver to; rotations leave it to the server. */
-    val outsideAddresses: Set<String> = emptySet(),
+    /**
+     * Addresses one of the plan's kitchens does not deliver to, each with the
+     * branch of the first kitchen that refuses it (a rotation checks every
+     * remaining week's kitchen). The server still checks everything on save.
+     */
+    val outsideBy: Map<String, String> = emptyMap(),
     val busy: Boolean = false,
     val error: Failure? = null,
+    /** Bumped each time a new address is saved from the sheet, so the form can close and clear. */
+    val addressAdded: Int = 0,
+    /** Why the new address could not be saved (the save error is [error]). */
+    val addError: Failure? = null,
     val changed: List<DeliveryAddress> = emptyList(),
 ) {
+    val outsideAddresses: Set<String> get() = outsideBy.keys
     fun picked(slot: String): String? = picks[slot]
-    fun outside(id: String): Boolean = id in outsideAddresses
+    fun outside(id: String): Boolean = id in outsideBy
+    /** The kitchen (branch id) known not to deliver to [id], when there is one. */
+    fun outsideKitchen(id: String): String? = outsideBy[id]
     /** Why the server refused the change, worded by the screen. */
     val problem: AddressProblem? get() = AddressProblem.ofChange(error)
 }
@@ -1687,8 +1698,8 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         val canChange: () -> Boolean,
         val get: () -> AddressChangeUiState,
         val set: ((AddressChangeUiState) -> AddressChangeUiState) -> Unit,
-        /** The kitchen to check coverage against, when there is exactly one. */
-        val branchId: () -> String?,
+        /** The kitchens a new address must suit: one for a subscription, every remaining week's for a rotation. */
+        val branchIds: () -> List<String>,
         val otherBusy: () -> Boolean,
         val save: suspend (List<SlotAddress>, String) -> List<DeliveryAddress>,
     ) {
@@ -1716,15 +1727,60 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 try {
                     val items = api.addresses().items
                     set { it.copy(addresses = items, loading = false) }
-                    val branch = branchId()
-                    if (branch != null && items.isNotEmpty()) {
-                        val cov = orNullUnlessCancelled { api.addressCoverage(listOf(branch), items.map { it.id }) }
-                        if (cov != null) set { it.copy(outsideAddresses = cov.items.filter { !it.delivers }.map { it.addressId }.toSet()) }
-                    }
+                    checkCoverage(items)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
                     set { it.copy(loading = false, loadError = e.toFailure()) }
+                }
+            }
+        }
+
+        /** Marks the addresses one of the plan's kitchens does not deliver to. */
+        private suspend fun checkCoverage(items: List<Address>) {
+            val branches = branchIds()
+            if (branches.isEmpty() || items.isEmpty()) return
+            val cov = orNullUnlessCancelled { api.addressCoverage(branches, items.map { it.id }) } ?: return
+            val outside = cov.items.filter { !it.delivers }
+                .groupBy({ it.addressId }, { it.branchId })
+                .mapValues { (_, b) -> b.minByOrNull { branches.indexOf(it) } ?: b.first() }
+            set { it.copy(outsideBy = outside) }
+        }
+
+        /** Saves a new address from the sheet and picks it (for every meal when they share one). */
+        fun add(label: String, building: String, area: String, city: String, at: LatLng) {
+            val s = get()
+            if (s.busy || otherBusy()) return
+            set { it.copy(busy = true, addError = null) }
+            viewModelScope.launch {
+                try {
+                    val a = api.createAddress(
+                        AddressInput(
+                            label = label.trim(),
+                            building = building.trim().ifBlank { null },
+                            area = area.trim().ifBlank { null },
+                            city = city.trim(),
+                            point = at,
+                            isDefault = s.addresses.isEmpty(),
+                        ),
+                    )
+                    set {
+                        it.copy(
+                            addresses = it.addresses + a,
+                            picks = if (it.allMeals) current().associate { d -> d.mealSlot to a.id } else it.picks,
+                            busy = false,
+                            error = null,
+                            addressAdded = it.addressAdded + 1,
+                        )
+                    }
+                    // The checkout and rotation builder keep their own lists.
+                    _checkout.update { it.copy(addresses = it.addresses + a) }
+                    _rotation.update { it.copy(addresses = it.addresses + a) }
+                    checkCoverage(get().addresses)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    set { it.copy(busy = false, addError = e.toFailure()) }
                 }
             }
         }
@@ -1777,7 +1833,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         canChange = { _sub.value.subscription?.let { it.canChangeAddress && it.rotationId == null } == true },
         get = { _sub.value.addressChange },
         set = { f -> _sub.update { it.copy(addressChange = f(it.addressChange)) } },
-        branchId = { _sub.value.subscription?.branchId?.ifBlank { null } },
+        branchIds = { listOfNotNull(_sub.value.subscription?.branchId?.ifBlank { null }) },
         otherBusy = { _sub.value.busy },
         save = { moves, key ->
             val id = _sub.value.subscription?.id ?: error("no subscription")
@@ -1792,8 +1848,8 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         canChange = { _rotationDetail.value.rotation?.canChangeAddress == true },
         get = { _rotationDetail.value.addressChange },
         set = { f -> _rotationDetail.update { it.copy(addressChange = f(it.addressChange)) } },
-        // Four kitchens: the server checks every week and names the one that fails.
-        branchId = { null },
+        // Every week still to come: the server checks them too and names the one that fails.
+        branchIds = { _rotationDetail.value.rotation?.let(::remainingRotationBranches).orEmpty() },
         otherBusy = { _rotationDetail.value.busy },
         save = { moves, key ->
             val id = _rotationDetail.value.rotation?.id ?: error("no rotation")
@@ -1813,6 +1869,9 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     fun saveAddressChange() = subAddresses.save()
     fun closeAddressChange() = subAddresses.close()
     fun dismissAddressChanged() = subAddresses.dismissChanged()
+    /** Saves a new address from the sheet and picks it. */
+    fun addChangeAddress(label: String, building: String, area: String, city: String, at: LatLng) =
+        subAddresses.add(label, building, area, city, at)
 
     /** The same for the open rotation: every remaining week moves, or none does. */
     fun openRotationAddressChange() = rotationAddresses.open()
@@ -1823,6 +1882,17 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     fun saveRotationAddressChange() = rotationAddresses.save()
     fun closeRotationAddressChange() = rotationAddresses.close()
     fun dismissRotationAddressChanged() = rotationAddresses.dismissChanged()
+    fun addRotationChangeAddress(label: String, building: String, area: String, city: String, at: LatLng) =
+        rotationAddresses.add(label, building, area, city, at)
+
+    /** The kitchens of the weeks that have not ended (in week order), whose areas a new address must suit. */
+    private fun remainingRotationBranches(r: Rotation): List<String> {
+        val today = Clock.System.now().toLocalDateTime(DUBAI).date.toString()
+        return r.weeks.sortedBy { it.week }
+            .filter { it.endsOn >= today && it.status != "cancelled" && it.branchId.isNotBlank() }
+            .map { it.branchId }
+            .distinct()
+    }
 
     /** Drops the account's own data when the session ends. */
     fun forget() {

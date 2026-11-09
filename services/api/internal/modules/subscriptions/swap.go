@@ -255,6 +255,7 @@ func (s *Service) SwapOptions(ctx context.Context, userID, rotationID uuid.UUID,
 		   AND p.service_type = $2 AND p.currency = $3
 		   AND p.delivery_weekdays @> $4::smallint[]
 		   AND p.meal_slots @> $5::text[]
+		   AND p.meals_per_day = cardinality($5::text[])
 		   AND b.is_active AND b.deleted_at IS NULL
 		   AND v.status = 'active' AND v.deleted_at IS NULL
 		   AND b.id <> ALL ($6::uuid[])

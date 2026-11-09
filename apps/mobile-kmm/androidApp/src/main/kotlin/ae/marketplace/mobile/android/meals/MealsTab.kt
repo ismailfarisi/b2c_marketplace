@@ -1900,6 +1900,7 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                                 onSave = vm::saveAddressChange,
                                 onClose = vm::closeAddressChange,
                                 onRetryLoad = vm::retryAddressChangeLoad,
+                                onAdd = vm::addChangeAddress,
                             )
                         }
                         if (change.changed.isNotEmpty()) AddressChangedCard(change.changed, arabic, vm::dismissAddressChanged)
@@ -2003,12 +2004,14 @@ private fun RotationDetailPage(
                         if (change.visible) {
                             AddressChangeCard(
                                 change, r.deliveryAddresses, rotation = true,
+                                kitchenNames = r.weeks.associate { it.branchId to ((if (arabic) it.kitchenNameAr else null) ?: it.kitchenName) },
                                 onAllMeals = vm::setRotationAddressChangeAllMeals,
                                 onPick = vm::pickRotationChangeAddress,
                                 onPickAll = vm::pickRotationChangeAddressForAll,
                                 onSave = vm::saveRotationAddressChange,
                                 onClose = vm::closeRotationAddressChange,
                                 onRetryLoad = vm::retryRotationAddressChangeLoad,
+                                onAdd = vm::addRotationChangeAddress,
                             )
                         }
                         if (change.changed.isNotEmpty()) AddressChangedCard(change.changed, arabic, vm::dismissRotationAddressChanged)
@@ -2362,6 +2365,10 @@ private fun AddressChangeCard(
     onSave: () -> Unit,
     onClose: () -> Unit,
     onRetryLoad: () -> Unit,
+    /** Saves a new address from the sheet (label, building, area, city, pin). */
+    onAdd: (String, String, String, String, LatLng) -> Unit,
+    /** Kitchen names by branch id, so a rotation can say which week's kitchen refuses an address. */
+    kitchenNames: Map<String, String> = emptyMap(),
 ) {
     Card {
         Text(stringResource(R.string.meals_addr_change_title), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
@@ -2373,20 +2380,28 @@ private fun AddressChangeCard(
         loadError != null && s.addresses.isEmpty() -> FailureStrip(loadError, onRetry = onRetryLoad)
         else -> {
             val notHere = stringResource(R.string.meals_addr_not_here)
+            // Name the kitchen when there are several (a rotation); one kitchen is "this kitchen".
+            @Composable
+            fun warning(a: ae.marketplace.mobile.model.Address): String? {
+                if (!s.outside(a.id)) return null
+                val kitchen = s.outsideKitchen(a.id)?.let { kitchenNames[it] }
+                return if (kitchen != null) stringResource(R.string.meals_addr_err_kitchen, kitchen) else notHere
+            }
             if (current.size > 1) SplitChips(!s.allMeals) { onAllMeals(!it) }
             if (s.allMeals) {
                 val first = current.firstOrNull()?.mealSlot?.let(s::picked)
                 s.addresses.forEach { a ->
-                    Choice(a.label, a.line, first == a.id, warning = if (s.outside(a.id)) notHere else null) { if (!s.busy) onPickAll(a.id) }
+                    Choice(a.label, a.line, first == a.id, warning = warning(a)) { if (!s.busy) onPickAll(a.id) }
                 }
             } else {
                 current.forEach { d ->
                     Label(stringResource(R.string.meals_addr_slot_to, slotLabel(d.mealSlot)))
                     s.addresses.forEach { a ->
-                        Choice(a.label, a.line, s.picked(d.mealSlot) == a.id, warning = if (s.outside(a.id)) notHere else null) { if (!s.busy) onPick(d.mealSlot, a.id) }
+                        Choice(a.label, a.line, s.picked(d.mealSlot) == a.id, warning = warning(a)) { if (!s.busy) onPick(d.mealSlot, a.id) }
                     }
                 }
             }
+            AddressForm(false, s.busy, s.addressAdded, s.addError, onAdd)
             val problem = s.problem
             val error = s.error
             when {

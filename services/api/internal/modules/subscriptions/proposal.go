@@ -617,6 +617,7 @@ func (s *Service) proposeWith(ctx context.Context, r Rotation, userID uuid.UUID,
 		   AND p.rotation_week_price_minor IS NOT NULL
 		   AND p.delivery_weekdays::int[] @> $3::int[]
 		   AND p.meal_slots @> $4::text[]
+		   AND p.meals_per_day = cardinality($4::text[])
 		   AND b.service_area IS NOT NULL
 		   AND NOT EXISTS (SELECT 1 FROM addresses a
 		                    WHERE a.id = ANY($1::uuid[])

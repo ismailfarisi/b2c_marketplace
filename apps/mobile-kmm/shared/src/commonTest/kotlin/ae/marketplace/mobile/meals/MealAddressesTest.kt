@@ -365,6 +365,73 @@ class MealAddressesTest {
     }
 
     @Test
+    fun addingAnAddressFromTheChangeSheetPicksItAndChecksCoverage() = runTest {
+        val vm = vm { req ->
+            val path = req.url.encodedPath
+            when {
+                path.endsWith("me/subscriptions/s1") -> respond(detail("home") + "}", HttpStatusCode.OK, json)
+                path.endsWith("me/addresses/coverage") -> {
+                    val body = Json.parseToJsonElement((req.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()).jsonObject
+                    val ids = body["address_ids"]!!.jsonArray.map { it.jsonPrimitive.content }
+                    val items = ids.map { a -> """{"branch_id":"b1","address_id":"$a","delivers":${a != "far" && a != "gym"}}""" }
+                    respond(items.joinToString(",", "{\"items\":[", "]}"), HttpStatusCode.OK, json)
+                }
+                path.endsWith("me/addresses") && req.method == HttpMethod.Post -> respond(
+                    """{"id":"gym","label":"Gym","city":"Dubai","point":{"lat":25.3,"lng":55.4}}""", HttpStatusCode.Created, json,
+                )
+                path.endsWith("me/addresses") -> respond(addresses, HttpStatusCode.OK, json)
+                else -> respond("""{"items":[]}""", HttpStatusCode.OK, json)
+            }
+        }
+        vm.openSubscription("s1")
+        vm.sub.until { it.subscription != null }
+        vm.openAddressChange()
+        vm.sub.until { it.addressChange.addresses.isNotEmpty() && it.addressChange.outsideAddresses.isNotEmpty() }
+        vm.addChangeAddress("Gym", "", "Marina", "Dubai", ae.marketplace.mobile.model.LatLng(25.3, 55.4))
+        val s = vm.sub.until { it.addressChange.addressAdded == 1 && it.addressChange.outside("gym") }
+        assertEquals(1, requests("me/addresses").count { it.method == HttpMethod.Post })
+        assertTrue(s.addressChange.addresses.any { it.id == "gym" }, "the new address joins the list")
+        assertEquals("gym", s.addressChange.picked("lunch"), "all meals follow the new address")
+        assertEquals("gym", s.addressChange.picked("dinner"))
+        assertFalse(s.addressChange.busy)
+        assertNull(s.addressChange.addError)
+    }
+
+    @Test
+    fun rotationChangeMarksAddressesTheRemainingWeeksKitchensDoNotCover() = runTest {
+        fun week(n: Int, branch: String, start: String, end: String) =
+            """{"week":$n,"starts_on":"$start","ends_on":"$end","branch_id":"$branch","kitchen_name":"K$branch","plan_id":"p$branch","price_minor":1}"""
+        val rotation = """{"id":"r2","status":"active","start_date":"2020-01-05","end_date":"2099-02-01","amount_minor":4,
+            "weeks":[${week(1, "k1", "2020-01-05", "2020-01-11")},${week(2, "k2", "2099-01-12", "2099-01-18")},
+                     ${week(3, "k3", "2099-01-19", "2099-01-25")},${week(4, "k4", "2099-01-26", "2099-02-01")}],
+            "can_change_address":true,"delivery_addresses":[{"meal_slot":"lunch","address_id":"home","label":"Home","line":"","effective_from":null}]}"""
+        val vm = vm { req ->
+            val path = req.url.encodedPath
+            when {
+                path.endsWith("me/rotations/r2") -> respond(rotation, HttpStatusCode.OK, json)
+                path.endsWith("me/addresses") -> respond(addresses, HttpStatusCode.OK, json)
+                path.endsWith("me/addresses/coverage") -> {
+                    val body = Json.parseToJsonElement((req.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()).jsonObject
+                    val branches = body["branch_ids"]!!.jsonArray.map { it.jsonPrimitive.content }
+                    val ids = body["address_ids"]!!.jsonArray.map { it.jsonPrimitive.content }
+                    val items = branches.flatMap { k -> ids.map { a -> """{"branch_id":"$k","address_id":"$a","delivers":${!(k == "k3" && a == "office") && a != "far"}}""" } }
+                    respond(items.joinToString(",", "{\"items\":[", "]}"), HttpStatusCode.OK, json)
+                }
+                else -> respond("""{"items":[]}""", HttpStatusCode.OK, json)
+            }
+        }
+        vm.openRotation("r2")
+        vm.rotationDetail.until { it.rotation != null }
+        vm.openRotationAddressChange()
+        val s = vm.rotationDetail.until { it.addressChange.outsideAddresses.isNotEmpty() }
+        val asked = requests("me/addresses/coverage").single().body!!["branch_ids"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(listOf("k2", "k3", "k4"), asked, "only the weeks still to come are checked")
+        assertEquals("k3", s.addressChange.outsideKitchen("office"), "the week-3 kitchen is named for the office")
+        assertEquals("k2", s.addressChange.outsideKitchen("far"), "the first refusing kitchen is named")
+        assertFalse(s.addressChange.outside("home"))
+    }
+
+    @Test
     fun companyLunchAndMissingAddressRefusalsAreWorded() = runTest {
         val vm = vm { req ->
             val path = req.url.encodedPath

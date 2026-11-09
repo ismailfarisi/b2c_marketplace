@@ -376,3 +376,34 @@ func TestChangeRotationAddressesAppliesToEveryRemainingWeek(t *testing.T) {
 		t.Fatalf("someone else's rotation: %v", err)
 	}
 }
+
+// A kitchen whose plan serves a different number of meals a day cannot join a
+// rotation (its week would fail wrong_meal_count), so swaps and renewal
+// proposals must not offer it even when it delivers to every address.
+func TestSwapOptionsAndProposalSkipPlansWithAnotherMealCount(t *testing.T) {
+	f := newSwapFixture(t, 7)
+	ctx := context.Background()
+	mustExec(t, f.pool, `UPDATE subscription_plans SET meal_slots = '{lunch,dinner}', meals_per_day = 2 WHERE id = $1`,
+		f.plans[swapDearer])
+
+	opts, err := f.svc.SwapOptions(ctx, f.userID, f.rotation.ID, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range opts.Items {
+		if o.BranchID == f.branches[swapDearer] {
+			t.Fatalf("swap options offer a two-meal plan to a one-meal rotation")
+		}
+	}
+
+	end, _ := time.Parse("2006-01-02", f.rotation.EndDate)
+	p, err := f.svc.propose(ctx, f.rotation, f.userID, rotationAddresses{Default: f.addressID}, end.AddDate(0, 0, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range p.Eligible {
+		if k.BranchID == f.branches[swapDearer] {
+			t.Fatalf("proposal offers a two-meal plan to a one-meal rotation")
+		}
+	}
+}

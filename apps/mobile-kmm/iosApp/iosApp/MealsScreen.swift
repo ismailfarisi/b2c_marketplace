@@ -2644,7 +2644,9 @@ private struct RotationDetailPage: View {
                             onPickAll: { vm.pickRotationChangeAddressForAll(addressId: $0) },
                             onSave: { vm.saveRotationAddressChange() },
                             onClose: { vm.closeRotationAddressChange() },
-                            onRetryLoad: { vm.retryRotationAddressChangeLoad() }
+                            onRetryLoad: { vm.retryRotationAddressChangeLoad() },
+                            onAdd: { vm.addRotationChangeAddress(label: $0, building: $1, area: $2, city: $3, at: $4) },
+                            kitchenNames: Dictionary(r.weeks.map { ($0.branchId, pick($0.kitchenName, $0.kitchenNameAr)) }, uniquingKeysWith: { a, _ in a })
                         )
                     }
                     if !change.changed.isEmpty {
@@ -2911,7 +2913,8 @@ private struct SubscriptionPage: View {
                             onPickAll: { vm.pickChangeAddressForAll(addressId: $0) },
                             onSave: { vm.saveAddressChange() },
                             onClose: { vm.closeAddressChange() },
-                            onRetryLoad: { vm.retryAddressChangeLoad() }
+                            onRetryLoad: { vm.retryAddressChangeLoad() },
+                            onAdd: { vm.addChangeAddress(label: $0, building: $1, area: $2, city: $3, at: $4) }
                         )
                     }
                     if !change.changed.isEmpty {
@@ -3757,8 +3760,21 @@ private struct AddressChangeCard: View {
     let onSave: () -> Void
     let onClose: () -> Void
     let onRetryLoad: () -> Void
+    /// Saves a new address from the sheet (label, building, area, city, pin).
+    let onAdd: (String, String, String, String, LatLng) -> Void
+    /// Kitchen names by branch id, so a rotation can say which week's kitchen refuses an address.
+    var kitchenNames: [String: String] = [:]
 
     private var notHere: String { NSLocalizedString("meals_addr_not_here", comment: "") }
+
+    /// Names the kitchen when there are several (a rotation); one kitchen is "this kitchen".
+    private func warning(_ a: Address) -> String? {
+        guard s.outside(id: a.id) else { return nil }
+        if let branch = s.outsideKitchen(id: a.id), let kitchen = kitchenNames[branch] {
+            return tr("meals_addr_err_kitchen", kitchen)
+        }
+        return notHere
+    }
 
     private var blocked: Bool {
         current.contains { d in s.picked(slot: d.mealSlot).map { s.outside(id: $0) } ?? false }
@@ -3785,17 +3801,18 @@ private struct AddressChangeCard: View {
                     let first = current.first.flatMap { s.picked(slot: $0.mealSlot) }
                     ForEach(s.addresses, id: \.id) { a in
                         Choice(title: a.label, detail: a.line, selected: first == a.id,
-                               warning: s.outside(id: a.id) ? notHere : nil) { if !s.busy { onPickAll(a.id) } }
+                               warning: warning(a)) { if !s.busy { onPickAll(a.id) } }
                     }
                 } else {
                     ForEach(current, id: \.mealSlot) { d in
                         FieldLabel(text: tr("meals_addr_slot_to", slotLabel(d.mealSlot)))
                         ForEach(s.addresses, id: \.id) { a in
                             Choice(title: a.label, detail: a.line, selected: s.picked(slot: d.mealSlot) == a.id,
-                                   warning: s.outside(id: a.id) ? notHere : nil) { if !s.busy { onPick(d.mealSlot, a.id) } }
+                                   warning: warning(a)) { if !s.busy { onPick(d.mealSlot, a.id) } }
                         }
                     }
                 }
+                AddressForm(startOpen: false, busy: s.busy, added: Int(s.addressAdded), failure: s.addError, onSave: onAdd)
                 if let problem = s.problem {
                     AddressWarning(text: addressProblemText(problem, nil))
                 } else if let failure = s.error {

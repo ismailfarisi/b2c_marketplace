@@ -317,6 +317,7 @@ func (s *Service) guestOffer(ctx context.Context, tx pgx.Tx, live *Live, now tim
 		                      AND NOT COALESCE(ST_Intersects(b.service_area, a.point), false))
 		   AND p.delivery_weekdays @> $5::smallint[]
 		   AND p.meal_slots @> $6::text[]
+		   AND p.meals_per_day = cardinality($6::text[])
 		   AND EXISTS (SELECT 1 FROM time_windows tw WHERE tw.branch_id = b.id AND tw.is_active)
 		 ORDER BY b.name, p.price_minor`,
 		liveAddressIDs(live), s.serviceTypeOf(ctx, tx, live.PlanID), cycle.Currency, live.BranchID,
