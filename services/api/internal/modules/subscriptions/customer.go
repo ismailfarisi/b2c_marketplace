@@ -134,6 +134,10 @@ type MyDetail struct {
 	// The last two weeks' deliveries, newest first.
 	Recent         []MyDelivery    `json:"recent"`
 	GuestWeekOffer *GuestWeekOffer `json:"guest_week_offer"`
+	// DeliveryAddresses is where each meal goes; CanChangeAddress is false
+	// for company lunches and for subscriptions that have ended.
+	DeliveryAddresses []DeliveryAddress `json:"delivery_addresses"`
+	CanChangeAddress  bool              `json:"can_change_address"`
 }
 
 const mySelect = `
@@ -223,6 +227,15 @@ func (s *Service) MyDetail(ctx context.Context, userID, subID uuid.UUID, now tim
 			return fmt.Errorf("subscriptions: load mine: %w", err)
 		}
 		d.CutoffHours = live.CutoffHours
+		slots, perSlot := ruleSlotAddresses(live.Rules, live.AddressID)
+		if d.DeliveryAddresses, err = deliveryAddressesFor(ctx, tx, slots, live.AddressID, perSlot); err != nil {
+			return err
+		}
+		company, err := isCompanyLunch(ctx, tx, subID)
+		if err != nil {
+			return err
+		}
+		d.CanChangeAddress = canChangeAddress(live.Status, company)
 		one := []MySubscription{d.MySubscription}
 		if err := s.attachGuestWeeks(ctx, tx, one, now); err != nil {
 			return err

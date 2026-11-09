@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,13 +23,49 @@ type RotationHandlers struct {
 }
 
 type rotationBody struct {
-	PlanIDs   []uuid.UUID `json:"plan_ids"`
-	AddressID uuid.UUID   `json:"address_id"`
-	StartDate string      `json:"start_date"`
-	Weekdays  []int       `json:"delivery_weekdays"`
-	MealSlots []string    `json:"meal_slots"`
-	PromoCode string      `json:"promo_code"`
-	PromoID   *uuid.UUID  `json:"promo_id"`
+	PlanIDs       []uuid.UUID   `json:"plan_ids"`
+	AddressID     uuid.UUID     `json:"address_id"`
+	SlotAddresses []slotAddress `json:"slot_addresses"`
+	StartDate     string        `json:"start_date"`
+	Weekdays      []int         `json:"delivery_weekdays"`
+	MealSlots     []string      `json:"meal_slots"`
+	PromoCode     string        `json:"promo_code"`
+	PromoID       *uuid.UUID    `json:"promo_id"`
+}
+
+// slotAddress sends one meal of a rotation or subscription to an address.
+type slotAddress struct {
+	MealSlot  string    `json:"meal_slot"`
+	AddressID uuid.UUID `json:"address_id"`
+}
+
+// slotAddressMap turns the request list into the service's per-meal map,
+// rejecting blank meals, blank addresses and a meal listed twice.
+func slotAddressMap(field string, items []slotAddress) (map[string]uuid.UUID, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]uuid.UUID, len(items))
+	for i, it := range items {
+		if it.MealSlot == "" {
+			return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: fmt.Sprintf("%s[%d].meal_slot", field, i), Code: "required", Message: "meal slot is required",
+			}}}
+		}
+		if it.AddressID == uuid.Nil {
+			return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: fmt.Sprintf("%s[%d].address_id", field, i), Code: "required", Message: "address is required",
+			}}}
+		}
+		if _, dup := out[it.MealSlot]; dup {
+			return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+				Field: fmt.Sprintf("%s[%d].meal_slot", field, i), Code: "duplicate",
+				Message: fmt.Sprintf("%s is listed twice", it.MealSlot),
+			}}}
+		}
+		out[it.MealSlot] = it.AddressID
+	}
+	return out, nil
 }
 
 func (h *RotationHandlers) input(w http.ResponseWriter, r *http.Request) (subscriptions.RotationInput, bool) {
@@ -49,8 +86,13 @@ func (h *RotationHandlers) input(w http.ResponseWriter, r *http.Request) (subscr
 		}}})
 		return subscriptions.RotationInput{}, false
 	}
+	slotAddresses, err := slotAddressMap("slot_addresses", body.SlotAddresses)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return subscriptions.RotationInput{}, false
+	}
 	return subscriptions.RotationInput{
-		UserID: userID, AddressID: body.AddressID, PlanIDs: body.PlanIDs,
+		UserID: userID, AddressID: body.AddressID, SlotAddresses: slotAddresses, PlanIDs: body.PlanIDs,
 		StartDate: start, Weekdays: body.Weekdays, Slots: body.MealSlots,
 		Promo: promo.Ref{Code: body.PromoCode, ID: body.PromoID},
 	}, true
@@ -71,12 +113,13 @@ func (h *RotationHandlers) Preview(w http.ResponseWriter, r *http.Request) {
 }
 
 type suggestionBody struct {
-	AddressID uuid.UUID  `json:"address_id"`
-	StartDate string     `json:"start_date"`
-	Weekdays  []int      `json:"delivery_weekdays"`
-	MealSlots []string   `json:"meal_slots"`
-	PromoCode string     `json:"promo_code"`
-	PromoID   *uuid.UUID `json:"promo_id"`
+	AddressID     uuid.UUID     `json:"address_id"`
+	SlotAddresses []slotAddress `json:"slot_addresses"`
+	StartDate     string        `json:"start_date"`
+	Weekdays      []int         `json:"delivery_weekdays"`
+	MealSlots     []string      `json:"meal_slots"`
+	PromoCode     string        `json:"promo_code"`
+	PromoID       *uuid.UUID    `json:"promo_id"`
 }
 
 // Suggest answers POST /rotations/suggestion: a balanced rotation of four
@@ -92,8 +135,14 @@ func (h *RotationHandlers) Suggest(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, err)
 		return
 	}
+	slotAddresses, err := slotAddressMap("slot_addresses", body.SlotAddresses)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
 	in := subscriptions.SuggestInput{
-		UserID: userID, AddressID: body.AddressID, Weekdays: body.Weekdays, Slots: body.MealSlots,
+		UserID: userID, AddressID: body.AddressID, SlotAddresses: slotAddresses,
+		Weekdays: body.Weekdays, Slots: body.MealSlots,
 		Promo: promo.Ref{Code: body.PromoCode, ID: body.PromoID},
 	}
 	if body.StartDate != "" {
@@ -395,4 +444,22 @@ func (h *RotationHandlers) CheaperPlans(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", res)
+}
+
+// ChangeAddresses answers PUT /rotations/{rotationId}/addresses.
+func (h *RotationHandlers) ChangeAddresses(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := rotationTarget(w, r)
+	if !ok {
+		return
+	}
+	changes, ok := decodeAddressChanges(w, r)
+	if !ok {
+		return
+	}
+	out, err := h.Service.ChangeRotationAddresses(r.Context(), userID, id, changes, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", out)
 }

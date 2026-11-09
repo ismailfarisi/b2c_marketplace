@@ -19,9 +19,12 @@ Conventions:
 
  * OpenAPI spec version: 0.1.0
  */
+import type { SlotAddress } from './slotAddress';
 
 export interface RotationSuggestionInput {
   address_id: string;
+  /** Per-meal addresses; only kitchens delivering to all of them are suggested. */
+  slot_addresses?: SlotAddress[];
   /** Defaults to the earliest start the kitchens allow. */
   start_date?: string;
   delivery_weekdays?: number[];

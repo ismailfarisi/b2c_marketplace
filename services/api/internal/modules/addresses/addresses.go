@@ -244,3 +244,62 @@ func say(locale, en, ar string) string {
 	}
 	return en
 }
+
+// Coverage caps keep the matrix a client can ask for small: a kitchen list
+// page of branches against the customer's handful of saved addresses.
+const (
+	CoverageMaxBranches  = 60
+	CoverageMaxAddresses = 6
+)
+
+// CoverageItem says whether one kitchen delivers to one of the customer's
+// addresses.
+type CoverageItem struct {
+	BranchID  uuid.UUID `json:"branch_id"`
+	AddressID uuid.UUID `json:"address_id"`
+	Delivers  bool      `json:"delivers"`
+}
+
+// Coverage answers, for every (branch, address) pair, whether the kitchen's
+// delivery area contains the address. Only the caller's own live addresses are
+// considered; other ids are left out rather than reported.
+func (s *Service) Coverage(ctx context.Context, userID uuid.UUID, branchIDs, addressIDs []uuid.UUID) ([]CoverageItem, error) {
+	if len(branchIDs) == 0 {
+		return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "branch_ids", Code: "required", Message: "choose at least one kitchen"}}}
+	}
+	if len(branchIDs) > CoverageMaxBranches {
+		return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "branch_ids", Code: "too_many",
+			Message: fmt.Sprintf("at most %d kitchens per request", CoverageMaxBranches)}}}
+	}
+	if len(addressIDs) == 0 {
+		return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "address_ids", Code: "required", Message: "choose at least one address"}}}
+	}
+	if len(addressIDs) > CoverageMaxAddresses {
+		return nil, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "address_ids", Code: "too_many",
+			Message: fmt.Sprintf("at most %d addresses per request", CoverageMaxAddresses)}}}
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT b.id, a.id, COALESCE(ST_Intersects(b.service_area, a.point), false)
+		  FROM unnest($1::uuid[]) WITH ORDINALITY AS bi(id, ord)
+		  JOIN vendor_branches b ON b.id = bi.id
+		  CROSS JOIN unnest($2::uuid[]) WITH ORDINALITY AS ai(id, ord)
+		  JOIN addresses a ON a.id = ai.id AND a.user_id = $3 AND a.deleted_at IS NULL
+		 ORDER BY bi.ord, ai.ord`, branchIDs, addressIDs, userID)
+	if err != nil {
+		return nil, fmt.Errorf("addresses: coverage: %w", err)
+	}
+	defer rows.Close()
+	out := []CoverageItem{}
+	for rows.Next() {
+		var it CoverageItem
+		if err := rows.Scan(&it.BranchID, &it.AddressID, &it.Delivers); err != nil {
+			return nil, fmt.Errorf("addresses: scan coverage: %w", err)
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}

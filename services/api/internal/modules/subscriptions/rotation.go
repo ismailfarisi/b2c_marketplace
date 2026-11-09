@@ -24,11 +24,14 @@ const RotationKitchens = 4
 type RotationInput struct {
 	UserID    uuid.UUID
 	AddressID uuid.UUID
-	PlanIDs   []uuid.UUID
-	StartDate time.Time
-	Weekdays  []int
-	Slots     []string
-	Promo     promo.Ref
+	// SlotAddresses sends some meals elsewhere than AddressID (lunch at the
+	// office); every kitchen must deliver to each of them.
+	SlotAddresses map[string]uuid.UUID
+	PlanIDs       []uuid.UUID
+	StartDate     time.Time
+	Weekdays      []int
+	Slots         []string
+	Promo         promo.Ref
 	// RefreshOnRenew: renewals take the proposal's fresh kitchens.
 	RefreshOnRenew bool
 	// ContinuesRotation: a renewal or swap whose start date the previous
@@ -94,6 +97,12 @@ type Rotation struct {
 	RenewedByStatus *string    `json:"renewed_by_status"`
 	// RefreshOnRenew: a renewal proposes fresh kitchens instead of the same four.
 	RefreshOnRenew bool `json:"refresh_on_renew"`
+	// AddressID is the default delivery address; DeliveryAddresses says where
+	// each meal actually goes. CanChangeAddress is false once the rotation
+	// has ended.
+	AddressID         uuid.UUID         `json:"address_id"`
+	DeliveryAddresses []DeliveryAddress `json:"delivery_addresses"`
+	CanChangeAddress  bool              `json:"can_change_address"`
 	RotationQuote
 }
 
@@ -150,6 +159,9 @@ func (s *Service) prepareRotation(ctx context.Context, tx pgx.Tx, in RotationInp
 			"choose the delivery days and meals")
 	}
 	if err := validateSchedule(in.Weekdays, in.Slots); err != nil {
+		return nil, time.Time{}, nil, err
+	}
+	if err := validateSlotAddresses(in.Slots, in.SlotAddresses); err != nil {
 		return nil, time.Time{}, nil, err
 	}
 
@@ -226,7 +238,8 @@ func (s *Service) prepareRotation(ctx context.Context, tx pgx.Tx, in RotationInp
 		}
 		for _, d := range in.Weekdays {
 			for _, slot := range in.Slots {
-				p.Rules = append(p.Rules, Rule{Weekday: Weekday(d), Slot: slot, WindowID: window})
+				p.Rules = append(p.Rules, Rule{Weekday: Weekday(d), Slot: slot, WindowID: window,
+					AddressID: slotAddress(in.SlotAddresses, slot)})
 			}
 		}
 		if err := validateRules(p.Rules, p.PlanTemplate); err != nil {
@@ -238,9 +251,7 @@ func (s *Service) prepareRotation(ctx context.Context, tx pgx.Tx, in RotationInp
 			}
 			return nil, time.Time{}, nil, err
 		}
-		if err := s.checkAddresses(ctx, tx, SubscribeInput{
-			UserID: in.UserID, AddressID: in.AddressID, Rules: p.Rules,
-		}, p.BranchID); err != nil {
+		if err := checkRotationAddresses(ctx, tx, in, p.KitchenName, p.BranchID); err != nil {
 			return nil, time.Time{}, nil, err
 		}
 
@@ -483,6 +494,9 @@ func (s *Service) createRotation(ctx context.Context, in RotationInput, renewedF
 				return fmt.Errorf("subscriptions: insert rotation: %w", err)
 			}
 		}
+		if err := insertRotationAddresses(ctx, tx, id, in.SlotAddresses); err != nil {
+			return err
+		}
 
 		for w, k := range order {
 			p := plans[k]
@@ -540,7 +554,7 @@ func (s *Service) createRotation(ctx context.Context, in RotationInput, renewedF
 const rotationSelect = `
 	SELECT r.id, r.rotation_no, r.status, r.meal_slots, r.delivery_weekdays,
 	       r.created_at, r.start_date, r.end_date, r.amount_minor, r.currency,
-	       r.auto_renew, r.renewed_from_id, n.id, n.status, r.refresh_on_renew,
+	       r.auto_renew, r.renewed_from_id, n.id, n.status, r.refresh_on_renew, r.address_id,
 	       COALESCE((SELECT sum(discount_minor) FROM promo_redemptions pr
 	                  WHERE pr.rotation_id = r.id AND pr.status = 'redeemed'), 0)
 	  FROM meal_rotations r
@@ -556,7 +570,7 @@ func scanRotation(row pgx.Row) (Rotation, error) {
 	if err := row.Scan(&r.ID, &r.RotationNo, &r.Status, &r.MealSlots, &weekdays,
 		&r.CreatedAt, &start, &end, &r.AmountMinor, &r.Currency,
 		&r.AutoRenew, &r.RenewedFromID, &r.RenewedByID, &r.RenewedByStatus, &r.RefreshOnRenew,
-		&r.DiscountMinor); err != nil {
+		&r.AddressID, &r.DiscountMinor); err != nil {
 		return r, err
 	}
 	for _, d := range weekdays {
@@ -590,6 +604,9 @@ func (s *Service) MyRotations(ctx context.Context, userID uuid.UUID) ([]Rotation
 		if out[i].Weeks, err = s.rotationWeeks(ctx, out[i].ID); err != nil {
 			return nil, err
 		}
+		if err := s.attachRotationAddresses(ctx, &out[i]); err != nil {
+			return nil, err
+		}
 		markSwappable(&out[i], time.Now())
 	}
 	return out, nil
@@ -607,8 +624,24 @@ func (s *Service) MyRotation(ctx context.Context, userID, id uuid.UUID) (Rotatio
 	if r.Weeks, err = s.rotationWeeks(ctx, id); err != nil {
 		return r, err
 	}
+	if err := s.attachRotationAddresses(ctx, &r); err != nil {
+		return r, err
+	}
 	markSwappable(&r, time.Now())
 	return r, nil
+}
+
+// attachRotationAddresses fills in where each meal of the rotation goes.
+func (s *Service) attachRotationAddresses(ctx context.Context, r *Rotation) error {
+	perSlot, err := rotationSlotAddresses(ctx, s.pool, r.ID)
+	if err != nil {
+		return err
+	}
+	if r.DeliveryAddresses, err = deliveryAddressesFor(ctx, s.pool, r.MealSlots, r.AddressID, perSlot); err != nil {
+		return err
+	}
+	r.CanChangeAddress = canChangeAddress(r.Status, false)
+	return nil
 }
 
 func (s *Service) rotationWeeks(ctx context.Context, id uuid.UUID) ([]RotationWeek, error) {

@@ -19,6 +19,7 @@ Conventions:
 
  * OpenAPI spec version: 0.1.0
  */
+import type { SlotAddress } from './slotAddress';
 import type { RotationInputMealSlotsItem } from './rotationInputMealSlotsItem';
 
 export interface RotationInput {
@@ -28,7 +29,10 @@ export interface RotationInput {
    * @maxItems 4
    */
   plan_ids: string[];
+  /** Default delivery address for every meal not listed in slot_addresses. */
   address_id: string;
+  /** Per-meal addresses (lunch at the office, dinner at home). Every kitchen of the rotation must deliver to every address; a kitchen that does not answers 422 with field `slot_addresses` (or `address_id` for the default), code `outside_delivery_area` and a message naming the kitchen and the meal. A meal not in meal_slots is `unknown_slot`; a missing address is `not_found`. */
+  slot_addresses?: SlotAddress[];
   start_date: string;
   /** 0 = Sunday. Every chosen kitchen's plan must deliver on these days. */
   delivery_weekdays: number[];

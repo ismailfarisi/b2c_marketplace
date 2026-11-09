@@ -34,6 +34,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AddressChangeInput,
   CancelRotationBody,
   CancelSubscriptionBody,
   CheaperPlans,
@@ -56,6 +57,7 @@ import type {
   RenewalProposal,
   ResumeSubscription200,
   Rotation,
+  RotationAddressChange,
   RotationInput,
   RotationQuote,
   RotationSuggestion,
@@ -66,6 +68,7 @@ import type {
   SetSubscriptionRenewalBody,
   SkipDeliveryBody,
   StartGuestWeekBody,
+  SubscriptionAddressChange,
   SubscriptionCreated,
   SubscriptionPreview,
   SwapRotationWeekBody,
@@ -856,6 +859,72 @@ export const useRenewSubscription = <TError = UnauthorizedResponse | NotFoundRes
       > => {
 
       const mutationOptions = getRenewSubscriptionMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
+ * Moves the listed meals (only those) to other saved addresses of the caller for everything still to come: the schedule, and already planned deliveries whose order cutoff has not passed. Deliveries the kitchen is already preparing keep the old address. All or nothing: a kitchen that does not deliver to a new address answers 422 with field `addresses`, code `outside_delivery_area` and a message naming the kitchen, and nothing changes. Other 422 codes on `addresses`: `required`, `unknown_slot` (not one of the plan's meals), `addresses[<i>].meal_slot` `duplicate`. Someone else's address: 404 code `address_not_found`. Allowed while active, paused or pending payment; otherwise 409 `not_changeable`. Send an Idempotency-Key like other mutations. A company lunch answers 409 `company_lunch`; a rotation week answers 409 `rotation_week` (change it on the rotation instead).
+
+ * @summary Send some meals to another address
+ */
+export const changeSubscriptionAddresses = (
+    subscriptionId: string,
+    addressChangeInput: AddressChangeInput,
+ ) => {
+      
+      
+      return apiFetch<SubscriptionAddressChange>(
+      {url: `/subscriptions/${subscriptionId}/addresses`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: addressChangeInput
+    },
+      );
+    }
+  
+
+
+export const getChangeSubscriptionAddressesMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeSubscriptionAddresses>>, TError,{subscriptionId: string;data: AddressChangeInput}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof changeSubscriptionAddresses>>, TError,{subscriptionId: string;data: AddressChangeInput}, TContext> => {
+
+const mutationKey = ['changeSubscriptionAddresses'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeSubscriptionAddresses>>, {subscriptionId: string;data: AddressChangeInput}> = (props) => {
+          const {subscriptionId,data} = props ?? {};
+
+          return  changeSubscriptionAddresses(subscriptionId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeSubscriptionAddressesMutationResult = NonNullable<Awaited<ReturnType<typeof changeSubscriptionAddresses>>>
+    export type ChangeSubscriptionAddressesMutationBody = AddressChangeInput
+    export type ChangeSubscriptionAddressesMutationError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse
+
+    /**
+ * @summary Send some meals to another address
+ */
+export const useChangeSubscriptionAddresses = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeSubscriptionAddresses>>, TError,{subscriptionId: string;data: AddressChangeInput}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeSubscriptionAddresses>>,
+        TError,
+        {subscriptionId: string;data: AddressChangeInput},
+        TContext
+      > => {
+
+      const mutationOptions = getChangeSubscriptionAddressesMutationOptions(options);
 
       return useMutation(mutationOptions);
     }
@@ -1806,6 +1875,72 @@ export function useGetMyReferrals<TData = Awaited<ReturnType<typeof getMyReferra
 
 
 /**
+ * Moves the listed meals (only those) to other saved addresses of the caller for everything still to come: the schedule, and already planned deliveries whose order cutoff has not passed. Deliveries the kitchen is already preparing keep the old address. All or nothing: a kitchen that does not deliver to a new address answers 422 with field `addresses`, code `outside_delivery_area` and a message naming the kitchen and the week, and nothing changes. Other 422 codes on `addresses`: `required`, `unknown_slot` (not one of the plan's meals), `addresses[<i>].meal_slot` `duplicate`. Someone else's address: 404 code `address_not_found`. Allowed while active, paused or pending payment; otherwise 409 `not_changeable`. Send an Idempotency-Key like other mutations. Applies to every week that has not ended and to a renewal that has not started yet.
+
+ * @summary Send some meals of a rotation to another address
+ */
+export const changeRotationAddresses = (
+    rotationId: string,
+    addressChangeInput: AddressChangeInput,
+ ) => {
+      
+      
+      return apiFetch<RotationAddressChange>(
+      {url: `/rotations/${rotationId}/addresses`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: addressChangeInput
+    },
+      );
+    }
+  
+
+
+export const getChangeRotationAddressesMutationOptions = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeRotationAddresses>>, TError,{rotationId: string;data: AddressChangeInput}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof changeRotationAddresses>>, TError,{rotationId: string;data: AddressChangeInput}, TContext> => {
+
+const mutationKey = ['changeRotationAddresses'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeRotationAddresses>>, {rotationId: string;data: AddressChangeInput}> = (props) => {
+          const {rotationId,data} = props ?? {};
+
+          return  changeRotationAddresses(rotationId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeRotationAddressesMutationResult = NonNullable<Awaited<ReturnType<typeof changeRotationAddresses>>>
+    export type ChangeRotationAddressesMutationBody = AddressChangeInput
+    export type ChangeRotationAddressesMutationError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse
+
+    /**
+ * @summary Send some meals of a rotation to another address
+ */
+export const useChangeRotationAddresses = <TError = UnauthorizedResponse | NotFoundResponse | Problem | UnprocessableEntityResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeRotationAddresses>>, TError,{rotationId: string;data: AddressChangeInput}, TContext>, }
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeRotationAddresses>>,
+        TError,
+        {rotationId: string;data: AddressChangeInput},
+        TContext
+      > => {
+
+      const mutationOptions = getChangeRotationAddressesMutationOptions(options);
+
+      return useMutation(mutationOptions);
+    }
+    /**
  * Someone else's rotation answers 404.
  * @summary One rotation with its four weeks
  */

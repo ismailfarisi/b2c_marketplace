@@ -46,7 +46,7 @@ func testCappedProposalAvoids(t *testing.T, avoided, plain int) {
 
 	start, _ := time.Parse("2006-01-02", f.rotation.EndDate)
 	start = start.AddDate(0, 0, 1)
-	ids, err := f.svc.cappedProposalPlans(ctx, f.rotation, f.userID, f.addressID, start)
+	ids, err := f.svc.cappedProposalPlans(ctx, f.rotation, f.userID, rotationAddresses{Default: f.addressID}, start)
 	if err != nil {
 		t.Fatal(err)
 	}

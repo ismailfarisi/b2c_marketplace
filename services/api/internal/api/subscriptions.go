@@ -431,3 +431,46 @@ func (h *SubscriptionHandlers) CheaperPlans(w http.ResponseWriter, r *http.Reque
 	}
 	httpx.WriteJSON(w, http.StatusOK, "", res)
 }
+
+// changeAddressesBody lists the meals to move and where to.
+type changeAddressesBody struct {
+	Addresses []slotAddress `json:"addresses"`
+}
+
+func decodeAddressChanges(w http.ResponseWriter, r *http.Request) (map[string]uuid.UUID, bool) {
+	var body changeAddressesBody
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteProblem(w, r, err)
+		return nil, false
+	}
+	changes, err := slotAddressMap("addresses", body.Addresses)
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return nil, false
+	}
+	if len(changes) == 0 {
+		httpx.WriteProblem(w, r, &httpx.ValidationError{Fields: []httpx.FieldError{{
+			Field: "addresses", Code: "required", Message: "choose at least one meal to move",
+		}}})
+		return nil, false
+	}
+	return changes, true
+}
+
+// ChangeAddresses answers PUT /subscriptions/{subscriptionId}/addresses.
+func (h *SubscriptionHandlers) ChangeAddresses(w http.ResponseWriter, r *http.Request) {
+	userID, subID, ok := userAndSubscription(w, r)
+	if !ok {
+		return
+	}
+	changes, ok := decodeAddressChanges(w, r)
+	if !ok {
+		return
+	}
+	out, err := h.Service.ChangeSubscriptionAddresses(r.Context(), userID, subID, changes, time.Now())
+	if err != nil {
+		httpx.WriteProblem(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, "", out)
+}

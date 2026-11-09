@@ -80,6 +80,7 @@ type swapWeekRow struct {
 type swapTarget struct {
 	rotationStatus string
 	addressID      uuid.UUID
+	slotAddresses  map[string]uuid.UUID
 	slots          []string
 	weekdays       []int
 	currency       string
@@ -139,6 +140,9 @@ func (s *Service) loadSwapTarget(ctx context.Context, q swapQuerier, userID, rot
 	}
 	for _, d := range weekdays {
 		t.weekdays = append(t.weekdays, int(d))
+	}
+	if t.slotAddresses, err = rotationSlotAddresses(ctx, q, rotationID); err != nil {
+		return t, err
 	}
 	rows, err := q.Query(ctx, `
 		SELECT s.rotation_week, s.id, s.plan_id, s.branch_id, s.start_date, s.end_date, s.status, s.timezone,
@@ -247,7 +251,6 @@ func (s *Service) SwapOptions(ctx context.Context, userID, rotationID uuid.UUID,
 		  FROM subscription_plans p
 		  JOIN vendor_branches b ON b.id = p.branch_id
 		  JOIN vendors v ON v.id = b.vendor_id
-		  JOIN addresses a ON a.id = $1
 		 WHERE p.is_active AND p.rotation_enabled AND p.rotation_week_price_minor IS NOT NULL
 		   AND p.service_type = $2 AND p.currency = $3
 		   AND p.delivery_weekdays @> $4::smallint[]
@@ -255,13 +258,16 @@ func (s *Service) SwapOptions(ctx context.Context, userID, rotationID uuid.UUID,
 		   AND b.is_active AND b.deleted_at IS NULL
 		   AND v.status = 'active' AND v.deleted_at IS NULL
 		   AND b.id <> ALL ($6::uuid[])
-		   AND b.service_area IS NOT NULL AND ST_Intersects(b.service_area, a.point)
+		   AND b.service_area IS NOT NULL
+		   AND NOT EXISTS (SELECT 1 FROM addresses a
+		                    WHERE a.id = ANY($1::uuid[])
+		                      AND NOT COALESCE(ST_Intersects(b.service_area, a.point), false))
 		   AND EXISTS (SELECT 1 FROM time_windows w WHERE w.branch_id = b.id AND w.is_active)
 		   AND NOT EXISTS (SELECT 1 FROM meal_tastes t
 		                    WHERE t.user_id = $7 AND t.subject_kind = 'kitchen'
 		                      AND t.subject_id = b.id AND t.sentiment = 'avoid')
 		 ORDER BY b.id, p.rotation_week_price_minor, p.name`,
-		t.addressID, serviceType, t.currency, weekdays, t.slots, exclude, userID)
+		distinctAddresses(t.addressID, t.slotAddresses), serviceType, t.currency, weekdays, t.slots, exclude, userID)
 	if err != nil {
 		return SwapOptions{}, fmt.Errorf("subscriptions: swap options: %w", err)
 	}
@@ -348,8 +354,9 @@ func (s *Service) SwapRotationWeek(ctx context.Context, userID, rotationID uuid.
 		if planID == t.target.planID {
 			return rotationInvalid("plan_id", "same_kitchen", "choose a different kitchen for this week")
 		}
-		in := RotationInput{UserID: userID, AddressID: t.addressID, PlanIDs: []uuid.UUID{planID},
-			StartDate: t.target.start, Weekdays: t.weekdays, Slots: t.slots, ContinuesRotation: true}
+		in := RotationInput{UserID: userID, AddressID: t.addressID, SlotAddresses: t.slotAddresses,
+			PlanIDs: []uuid.UUID{planID}, StartDate: t.target.start, Weekdays: t.weekdays, Slots: t.slots,
+			ContinuesRotation: true}
 		for _, o := range t.others {
 			in.PlanIDs = append(in.PlanIDs, o.planID)
 		}

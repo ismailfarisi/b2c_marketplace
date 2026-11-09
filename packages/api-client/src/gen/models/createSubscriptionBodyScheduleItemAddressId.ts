@@ -23,6 +23,10 @@ Conventions:
 /**
  * Per-day override. Office Sunday to Thursday and home on
 Friday is the normal case in this market, not an edge one.
+An address the kitchen does not deliver to answers 422 with
+field `schedule[<i>].address_id` (or `address_id` for the
+default), code `outside_delivery_area` or `not_found`, and
+a message naming the meal.
 
  */
 export type CreateSubscriptionBodyScheduleItemAddressId = string | null;
