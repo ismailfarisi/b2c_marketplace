@@ -304,6 +304,7 @@ class MealAddressesTest {
     @Test
     fun changingTheLunchAddressSendsOnlyLunchAndShowsWhenItStarts() = runTest {
         var failNext = true
+        val firstSaveHeld = kotlinx.coroutines.CompletableDeferred<Unit>()
         val vm = vm { req ->
             val path = req.url.encodedPath
             when {
@@ -312,6 +313,7 @@ class MealAddressesTest {
                 path.endsWith("me/addresses") -> respond(addresses, HttpStatusCode.OK, json)
                 path.endsWith("subscriptions/s1/addresses") && failNext -> {
                     failNext = false
+                    firstSaveHeld.await()
                     respond("""{"title":"down"}""", HttpStatusCode.ServiceUnavailable, json)
                 }
                 path.endsWith("subscriptions/s1/addresses") -> respond(
@@ -332,6 +334,7 @@ class MealAddressesTest {
         vm.pickChangeAddress("lunch", "office")
         vm.saveAddressChange()
         vm.saveAddressChange() // double tap while saving is ignored
+        firstSaveHeld.complete(Unit)
         val failed = vm.sub.until { it.addressChange.error != null }
         assertTrue(failed.addressChange.visible, "a failed save keeps the sheet and the picks")
         vm.saveAddressChange()
