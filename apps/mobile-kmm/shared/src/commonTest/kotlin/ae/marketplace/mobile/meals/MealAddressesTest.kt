@@ -175,13 +175,13 @@ class MealAddressesTest {
 
     private val preview = """{"subtotal_minor":100000,"total_minor":100000}"""
 
-    private fun checkoutVm(previewAnswer: () -> Pair<HttpStatusCode, String> = { HttpStatusCode.OK to preview }) = vm { req ->
+    private fun checkoutVm(previewAnswer: (HttpRequestData) -> Pair<HttpStatusCode, String> = { HttpStatusCode.OK to preview }) = vm { req ->
         val path = req.url.encodedPath
         when {
             path.endsWith("meals/kitchens/b1") -> respond(kitchen, HttpStatusCode.OK, json)
             path.endsWith("me/addresses/coverage") -> respond(coverage, HttpStatusCode.OK, json)
             path.endsWith("me/addresses") -> respond(addresses, HttpStatusCode.OK, json)
-            path.endsWith("subscriptions/preview") -> previewAnswer().let { (st, body) -> respond(body, st, json) }
+            path.endsWith("subscriptions/preview") -> previewAnswer(req).let { (st, body) -> respond(body, st, json) }
             else -> respond("""{"items":[]}""", HttpStatusCode.OK, json)
         }
     }
@@ -248,16 +248,17 @@ class MealAddressesTest {
 
     @Test
     fun serverRefusalOfOneMealsAddressShowsOnThatMeal() = runTest {
-        var refuse = false
-        val vm = checkoutVm {
-            if (refuse) {
+        // Only dinner-to-Office is refused, so earlier previews in flight
+        // can't mark another address outside and stop the preview.
+        val vm = checkoutVm { req ->
+            val body = (req.body as? OutgoingContent.ByteArrayContent)?.bytes()?.decodeToString().orEmpty()
+            if (Regex(""""meal_slot":"dinner"[^}]*"address_id":"office"""").containsMatchIn(body)) {
                 HttpStatusCode.UnprocessableEntity to """{"title":"invalid","status":422,"errors":[{"field":"schedule[1].address_id","code":"outside_delivery_area","message":"this kitchen does not deliver dinner to that address"}]}"""
             } else {
                 HttpStatusCode.OK to preview
             }
         }
         vm.atCheckout()
-        refuse = true
         vm.setPerMealAddresses(true)
         vm.selectSlotAddress("dinner", "office")
         val s = vm.checkout.until { it.slotProblems.isNotEmpty() }
