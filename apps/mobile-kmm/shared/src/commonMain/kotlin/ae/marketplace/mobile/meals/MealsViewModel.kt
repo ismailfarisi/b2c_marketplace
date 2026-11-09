@@ -4,6 +4,9 @@ import ae.marketplace.mobile.model.CollectionKitchens
 import ae.marketplace.mobile.model.DayDish
 import ae.marketplace.mobile.model.Address
 import ae.marketplace.mobile.model.AddressInput
+import ae.marketplace.mobile.model.DeliveryAddress
+import ae.marketplace.mobile.model.MealSlots
+import ae.marketplace.mobile.model.SlotAddress
 import ae.marketplace.mobile.model.HomeSection
 import ae.marketplace.mobile.model.Kitchen
 import ae.marketplace.mobile.model.KitchenDetail
@@ -28,6 +31,7 @@ import ae.marketplace.mobile.model.RotationSuggestionInput
 import ae.marketplace.mobile.model.ScheduleRule
 import ae.marketplace.mobile.model.SubscribeInput
 import ae.marketplace.mobile.model.SubscriptionPreview
+import ae.marketplace.mobile.network.ApiException
 import ae.marketplace.mobile.network.Failure
 import ae.marketplace.mobile.network.orNullUnlessCancelled
 import ae.marketplace.mobile.network.toFailure
@@ -180,11 +184,39 @@ data class CheckoutUiState(
     val paymentFailed: Boolean = false,
     /** The provider has not confirmed yet (requires_action with no page to open). */
     val paymentPending: Boolean = false,
+    /** Each meal to its own address instead of every meal to [addressId]. */
+    val perMeal: Boolean = false,
+    /** Meal slot to address while [perMeal]; a slot not here goes to [addressId]. */
+    val slotAddresses: Map<String, String> = emptyMap(),
+    /** Addresses this kitchen does not deliver to (from the coverage check). */
+    val outsideAddresses: Set<String> = emptySet(),
+    /** Why the server refused a meal's address, by meal slot. */
+    val slotProblems: Map<String, AddressProblem> = emptyMap(),
 ) {
+    /** Two or more meals a day: they can go to different addresses. */
+    val canSplitAddresses: Boolean get() = (plan?.mealsPerDay ?: 0) >= 2
+
+    /** The chosen meals in order of the day. */
+    val chosenSlots: List<String> get() = MealSlots.sorted(slots)
+
+    /** Where [slot] goes as things stand. */
+    fun addressFor(slot: String): String? = if (perMeal) slotAddresses[slot] ?: addressId else addressId
+
+    /** The kitchen is known not to deliver to [id]. */
+    fun outside(id: String): Boolean = id in outsideAddresses
+
+    /** Chosen meals headed to an address the kitchen does not deliver to. */
+    val uncoveredSlots: List<String>
+        get() = chosenSlots.filter { slot -> addressFor(slot)?.let(::outside) == true }
+
+    /** The one-address choice is an address the kitchen does not deliver to. */
+    val addressOutside: Boolean get() = !perMeal && addressId?.let(::outside) == true
+
     val ready: Boolean
         get() = plan != null && addressId != null && windowId != null &&
             weekdays.size == plan.daysPerWeek && slots.size == plan.mealsPerDay &&
-            validStart(startDate, earliestStart)
+            validStart(startDate, earliestStart) && uncoveredSlots.isEmpty() &&
+            (!perMeal || chosenSlots.all { addressFor(it) != null })
 }
 
 /** A YYYY-MM-DD date on or after [earliest]. */
@@ -221,10 +253,48 @@ data class RotationUiState(
     val suggestError: Failure? = null,
     /** Too few kitchens near the address for a balanced suggestion. */
     val suggestNone: Boolean = false,
+    /** Each meal to its own address instead of every meal to [addressId]. */
+    val perMeal: Boolean = false,
+    /** Meal slot to address while [perMeal]; a slot not here goes to [addressId]. */
+    val slotAddresses: Map<String, String> = emptyMap(),
+    /** Address id to the candidate kitchens known not to deliver there. */
+    val outside: Map<String, Set<String>> = emptyMap(),
 ) {
     /** Fewer kitchens deliver here than a rotation needs. */
     val tooFewKitchens: Boolean
         get() = candidatesLoaded && candidates.size < MealsViewModel.ROTATION_KITCHENS
+
+    /**
+     * The meals the per-meal picker offers: the ones every picked kitchen
+     * serves, else the suggestion's, else any candidate's, in order of the day.
+     */
+    val mealSlotOptions: List<String>
+        get() {
+            val picks = picked.mapNotNull { plans[it] }
+            return when {
+                picks.isNotEmpty() -> MealSlots.sorted(picks.map { it.mealSlots.toSet() }.reduce { a, b -> a intersect b })
+                slots.isNotEmpty() -> MealSlots.sorted(slots)
+                else -> MealSlots.sorted(plans.values.flatMap { it.mealSlots })
+            }
+        }
+
+    val canSplitAddresses: Boolean get() = mealSlotOptions.size >= 2
+
+    fun addressFor(slot: String): String? = if (perMeal) slotAddresses[slot] ?: addressId else addressId
+
+    /** Every address some meal goes to, the default first. */
+    val chosenAddressIds: List<String>
+        get() = if (!perMeal) listOfNotNull(addressId)
+        else (mealSlotOptions.mapNotNull { addressFor(it) }.ifEmpty { listOfNotNull(addressId) }).distinct()
+
+    /** The first chosen address [branchId] does not deliver to, or null when it covers them all (or is unknown). */
+    fun unavailableAt(branchId: String): Address? =
+        chosenAddressIds.firstOrNull { branchId in outside[it].orEmpty() }?.let { id -> addresses.firstOrNull { it.id == id } }
+
+    fun unavailable(branchId: String): Boolean = unavailableAt(branchId) != null
+
+    /** A picked kitchen does not deliver to one of the chosen addresses. */
+    val pickedUnavailable: Boolean get() = picked.any(::unavailable)
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -256,6 +326,36 @@ data class MyMealsUiState(
     val cheaperError: Failure? = null,
 )
 
+/**
+ * The change-address sheet on a subscription or rotation. [picks] holds the
+ * address chosen per meal; only meals whose pick differs from where they go
+ * now are sent. [changed] is filled after a save, for the confirmation.
+ */
+data class AddressChangeUiState(
+    /** The sheet is showing ("open" is a Swift keyword). */
+    val visible: Boolean = false,
+    val addresses: List<Address> = emptyList(),
+    val loading: Boolean = false,
+    val loadError: Failure? = null,
+    /** All meals to one address (true) or a choice per meal. */
+    val allMeals: Boolean = true,
+    val picks: Map<String, String> = emptyMap(),
+    /** Addresses the subscription's kitchen does not deliver to; rotations leave it to the server. */
+    val outsideAddresses: Set<String> = emptySet(),
+    val busy: Boolean = false,
+    val error: Failure? = null,
+    val changed: List<DeliveryAddress> = emptyList(),
+) {
+    fun picked(slot: String): String? = picks[slot]
+    fun outside(id: String): Boolean = id in outsideAddresses
+    /** Why the server refused the change, worded by the screen. */
+    val problem: AddressProblem? get() = AddressProblem.ofChange(error)
+}
+
+/** The meals [picks] moves away from where [current] sends them. */
+internal fun addressMoves(current: List<DeliveryAddress>, picks: Map<String, String>): List<SlotAddress> =
+    current.mapNotNull { d -> picks[d.mealSlot]?.takeIf { it != d.addressId }?.let { SlotAddress(d.mealSlot, it) } }
+
 data class SubscriptionUiState(
     /** The subscription being shown, kept so a failed open can be retried. */
     val id: String? = null,
@@ -280,6 +380,7 @@ data class SubscriptionUiState(
     val cheaperError: Failure? = null,
     /** Set once a guest week was started from this screen. */
     val guestStarted: GuestWeekResult? = null,
+    val addressChange: AddressChangeUiState = AddressChangeUiState(),
 )
 
 /**
@@ -303,6 +404,7 @@ data class RotationDetailUiState(
     val paymentUrl: String? = null,
     /** Set once the rotation is cancelled, for the screen to leave. */
     val cancelled: Boolean = false,
+    val addressChange: AddressChangeUiState = AddressChangeUiState(),
 )
 
 data class ReviewUiState(
@@ -730,6 +832,8 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 _checkout.update { it.copy(addresses = items, addressId = it.addressId ?: pick?.id) }
                 _rotation.update { it.copy(addresses = items, addressId = it.addressId ?: pick?.id) }
                 refreshPreview()
+                checkCheckoutCoverage()
+                checkRotationCoverage()
             } catch (e: Throwable) {
                 _checkout.update { it.copy(error = e.toFailure()) }
             }
@@ -769,14 +873,60 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                     it.copy(addresses = it.addresses + a, addressId = a.id, busy = false, addressAdded = it.addressAdded + 1)
                 }
                 _rotation.update { it.copy(addresses = it.addresses + a, addressId = a.id) }
+                _checkout.value.let { c ->
+                    if (c.perMeal) {
+                        // A new address saved mid per-meal choice goes to the first meal still headed nowhere it can.
+                        val target = c.chosenSlots.firstOrNull { slot -> c.addressFor(slot)?.let(c::outside) == true }
+                        if (target != null) _checkout.update { it.copy(slotAddresses = it.slotAddresses + (target to a.id)) }
+                    }
+                }
                 refreshPreview()
+                checkCheckoutCoverage()
+                checkRotationCoverage()
             } catch (e: Throwable) {
                 _checkout.update { it.copy(busy = false, error = e.toFailure()) }
             }
         }
     }
 
-    fun selectAddress(id: String) { _checkout.update { it.copy(addressId = id) }; refreshPreview() }
+    fun selectAddress(id: String) {
+        _checkout.update { it.copy(addressId = id, slotProblems = emptyMap()) }
+        refreshPreview()
+    }
+
+    /** Every meal to one address ([on] false) or a picker per meal, starting from the one address. */
+    fun setPerMealAddresses(on: Boolean) {
+        _checkout.update { s ->
+            if (!s.canSplitAddresses && on) return
+            val start = s.addressId
+            s.copy(
+                perMeal = on,
+                slotAddresses = if (on && start != null) s.plan?.mealSlots.orEmpty().associateWith { slot -> s.slotAddresses[slot] ?: start } else s.slotAddresses,
+                slotProblems = emptyMap(),
+            )
+        }
+        refreshPreview()
+    }
+
+    /** Sends [slot] ("lunch") to address [id]. */
+    fun selectSlotAddress(slot: String, id: String) {
+        _checkout.update { it.copy(perMeal = true, slotAddresses = it.slotAddresses + (slot to id), slotProblems = it.slotProblems - slot) }
+        refreshPreview()
+    }
+
+    /** Asks which saved addresses this kitchen delivers to; unknown stays unknown (the server still checks). */
+    private fun checkCheckoutCoverage() {
+        val s = _checkout.value
+        val branch = s.kitchen?.branchId ?: return
+        val ids = s.addresses.map { it.id }
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val cov = orNullUnlessCancelled { api.addressCoverage(listOf(branch), ids) } ?: return@launch
+            val outside = cov.items.filter { !it.delivers && it.branchId == branch }.map { it.addressId }.toSet()
+            val known = cov.items.map { it.addressId }.toSet()
+            _checkout.update { if (it.kitchen?.branchId == branch) it.copy(outsideAddresses = it.outsideAddresses - known + outside) else it }
+        }
+    }
 
     fun toggleWeekday(day: Int) {
         _checkout.update { s ->
@@ -809,13 +959,25 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     private fun subscribeInput(s: CheckoutUiState): SubscribeInput? {
         if (!s.ready) return null
         val window = s.windowId ?: return null
+        val slots = s.chosenSlots
+        // Per meal, the first meal's address is the plan's default and every
+        // rule names its own, so a refusal points at the meal it is about.
+        val default = if (s.perMeal) slots.firstNotNullOfOrNull { s.addressFor(it) } ?: s.addressId!! else s.addressId!!
         return SubscribeInput(
             planId = s.plan!!.id,
-            addressId = s.addressId!!,
+            addressId = default,
             startDate = s.startDate,
-            schedule = s.weekdays.sorted().flatMap { d -> s.slots.map { ScheduleRule(d, it, window) } },
+            schedule = s.weekdays.sorted().flatMap { d ->
+                slots.map { ScheduleRule(d, it, window, addressId = if (s.perMeal) s.addressFor(it) else null) }
+            },
             promoCode = s.promoCode.ifBlank { null },
         )
+    }
+
+    /** The checkout failure with any per-meal address refusals pulled out by meal. */
+    private fun CheckoutUiState.failed(e: Throwable, input: SubscribeInput): CheckoutUiState {
+        val f = e.toFailure()
+        return copy(error = f, slotProblems = AddressProblem.bySlot(f, input.schedule, input.addressId, perMeal))
     }
 
     private fun refreshPreview() {
@@ -827,9 +989,11 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         previewJob = viewModelScope.launch {
             try {
                 val p = api.preview(input)
-                _checkout.update { it.copy(preview = p, error = null) }
+                _checkout.update { it.copy(preview = p, error = null, slotProblems = emptyMap()) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
-                _checkout.update { it.copy(preview = null, error = e.toFailure()) }
+                _checkout.update { it.copy(preview = null).failed(e, input) }
             }
         }
     }
@@ -842,6 +1006,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
      * a failed payment only retries the payment, never the signup.
      */
     fun subscribe() {
+        if (_checkout.value.busy) return
         val input = subscribeInput(_checkout.value) ?: return
         if (input != draft) {
             draft = input
@@ -868,7 +1033,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                     _mine.update { it.copy(loaded = false) }
                 }
             } catch (e: Throwable) {
-                _checkout.update { it.copy(busy = false, error = e.toFailure()) }
+                _checkout.update { it.copy(busy = false).failed(e, input) }
                 return@launch
             }
             try {
@@ -934,6 +1099,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                         candidatesLoaded = true,
                     )
                 }
+                checkRotationCoverage()
             } catch (e: Throwable) {
                 _rotation.update { it.copy(busy = false, error = e.toFailure()) }
             }
@@ -958,6 +1124,8 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     fun togglePick(branchId: String) {
         _rotation.update { s ->
+            // A kitchen that does not deliver to a chosen address can be let go, not picked.
+            if (branchId !in s.picked && s.unavailable(branchId)) return
             val next = if (branchId in s.picked) s.picked - branchId
             else if (s.picked.size < ROTATION_KITCHENS) s.picked + branchId else s.picked
             // The server refuses a start before the slowest picked kitchen's
@@ -968,7 +1136,47 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         quoteRotation()
     }
 
-    fun selectRotationAddress(id: String) { _rotation.update { it.copy(addressId = id, quote = null).newDraft() }; quoteRotation() }
+    fun selectRotationAddress(id: String) {
+        _rotation.update { it.copy(addressId = id, quote = null, error = null).newDraft() }
+        checkRotationCoverage()
+        quoteRotation()
+    }
+
+    /** Every meal of the rotation to one address, or a picker per meal starting from it. */
+    fun setRotationPerMeal(on: Boolean) {
+        _rotation.update { s ->
+            if (on && !s.canSplitAddresses) return
+            val start = s.addressId
+            s.copy(
+                perMeal = on,
+                slotAddresses = if (on && start != null) s.mealSlotOptions.associateWith { slot -> s.slotAddresses[slot] ?: start } else s.slotAddresses,
+                quote = null,
+                error = null,
+            ).newDraft()
+        }
+        checkRotationCoverage()
+        quoteRotation()
+    }
+
+    fun selectRotationSlotAddress(slot: String, id: String) {
+        _rotation.update { it.copy(perMeal = true, slotAddresses = it.slotAddresses + (slot to id), quote = null, error = null).newDraft() }
+        checkRotationCoverage()
+        quoteRotation()
+    }
+
+    /** Marks the candidate kitchens that do not deliver to a chosen address not checked yet. */
+    private fun checkRotationCoverage() {
+        val s = _rotation.value
+        val branches = s.candidates.map { it.branchId }
+        val missing = s.chosenAddressIds.filter { it !in s.outside }
+        if (branches.isEmpty() || missing.isEmpty()) return
+        viewModelScope.launch {
+            val cov = orNullUnlessCancelled { api.addressCoverage(branches, missing) } ?: return@launch
+            val answered = cov.items.map { it.addressId }.toSet()
+            val byAddress = answered.associateWith { a -> cov.items.filter { it.addressId == a && !it.delivers }.map { it.branchId }.toSet() }
+            _rotation.update { it.copy(outside = it.outside + byAddress) }
+        }
+    }
 
     /** A changed pick is a different rotation: it gets its own create. */
     private fun RotationUiState.newDraft(): RotationUiState = copy(rotationId = null, idempotencyKey = newIdempotencyKey())
@@ -985,12 +1193,17 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         val perDay = plans.minOf { it.mealsPerDay }
         val chosenDays = s.days.takeIf { it.size == perWeek && days.containsAll(it) } ?: days.sorted().take(perWeek)
         val chosenSlots = s.slots.takeIf { it.size == perDay && slots.containsAll(it) } ?: slots.sorted().take(perDay)
+        // Per meal, the first meal's address is the default; only meals going
+        // elsewhere are listed, and only meals the rotation delivers.
+        val default = if (s.perMeal) MealSlots.sorted(chosenSlots).firstNotNullOfOrNull { s.addressFor(it) } ?: address else address
+        val perSlot = if (s.perMeal) chosenSlots.mapNotNull { slot -> s.addressFor(slot)?.takeIf { it != default }?.let { SlotAddress(slot, it) } } else emptyList()
         return RotationInput(
             planIds = plans.map { it.id },
-            addressId = address,
+            addressId = default,
             startDate = s.startDate,
             deliveryWeekdays = chosenDays.sorted(),
             mealSlots = chosenSlots,
+            slotAddresses = perSlot.ifEmpty { null },
         )
     }
 
@@ -1032,9 +1245,23 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
         if (s.suggesting || s.busy) return
         val address = s.addressId ?: return
         _rotation.update { it.copy(suggesting = true, suggestError = null, suggestNone = false) }
+        val options = s.mealSlotOptions
+        val default = if (s.perMeal) options.firstNotNullOfOrNull { s.addressFor(it) } ?: address else address
+        val perSlot = if (s.perMeal) options.mapNotNull { slot -> s.addressFor(slot)?.takeIf { it != default }?.let { SlotAddress(slot, it) } } else emptyList()
         viewModelScope.launch {
             try {
-                val sug = api.suggestRotation(RotationSuggestionInput(address))
+                val input = RotationSuggestionInput(default, slotAddresses = perSlot.ifEmpty { null })
+                val sug = try {
+                    api.suggestRotation(input)
+                } catch (e: ApiException) {
+                    // The suggestion picked meals without one the customer gave an
+                    // address for: ask again for exactly the meals they set up.
+                    if (perSlot.isNotEmpty() && e.problem?.errors.orEmpty().any { it.field == "slot_addresses" && it.code == "unknown_slot" }) {
+                        api.suggestRotation(input.copy(mealSlots = options))
+                    } else {
+                        throw e
+                    }
+                }
                 _rotation.update {
                     it.copy(
                         picked = sug.branchIds.filter { id -> id in it.plans }.take(ROTATION_KITCHENS),
@@ -1063,7 +1290,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
 
     fun payRotation() {
         val draft = _rotation.value
-        if (draft.busy) return
+        if (draft.busy || draft.pickedUnavailable) return
         val input = rotationInput(draft) ?: return
         viewModelScope.launch {
             _rotation.update { it.copy(busy = true, error = null) }
@@ -1451,6 +1678,151 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
             loadMine(force = true)
         }
     }
+
+    // ── Change delivery address ─────────────────────────────────────────────
+
+    /** One change-address sheet's plumbing; the subscription and rotation screens each have one. */
+    private inner class AddressChanger(
+        val current: () -> List<DeliveryAddress>,
+        val canChange: () -> Boolean,
+        val get: () -> AddressChangeUiState,
+        val set: ((AddressChangeUiState) -> AddressChangeUiState) -> Unit,
+        /** The kitchen to check coverage against, when there is exactly one. */
+        val branchId: () -> String?,
+        val otherBusy: () -> Boolean,
+        val save: suspend (List<SlotAddress>, String) -> List<DeliveryAddress>,
+    ) {
+        // One Idempotency-Key per body: a retried save is the same request.
+        private var draft: List<SlotAddress>? = null
+        private var key = ""
+
+        fun open() {
+            if (!canChange()) return
+            val now = current()
+            set {
+                AddressChangeUiState(
+                    visible = true,
+                    loading = true,
+                    allMeals = now.size < 2 || MealSlots.single(now) != null,
+                    picks = now.associate { it.mealSlot to it.addressId },
+                )
+            }
+            load()
+        }
+
+        fun load() {
+            set { it.copy(loading = true, loadError = null) }
+            viewModelScope.launch {
+                try {
+                    val items = api.addresses().items
+                    set { it.copy(addresses = items, loading = false) }
+                    val branch = branchId()
+                    if (branch != null && items.isNotEmpty()) {
+                        val cov = orNullUnlessCancelled { api.addressCoverage(listOf(branch), items.map { it.id }) }
+                        if (cov != null) set { it.copy(outsideAddresses = cov.items.filter { !it.delivers }.map { it.addressId }.toSet()) }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    set { it.copy(loading = false, loadError = e.toFailure()) }
+                }
+            }
+        }
+
+        fun allMeals(on: Boolean) = set { s ->
+            // Back to one address: every meal follows the first meal's pick.
+            val first = current().firstOrNull()?.mealSlot?.let { s.picks[it] }
+            s.copy(allMeals = on, error = null, picks = if (on && first != null) s.picks.mapValues { first } else s.picks)
+        }
+
+        fun pick(slot: String, id: String) = set { it.copy(picks = it.picks + (slot to id), error = null) }
+
+        fun pickAll(id: String) = set { s -> s.copy(picks = current().associate { it.mealSlot to id }, error = null) }
+
+        fun save() {
+            val s = get()
+            if (s.busy || otherBusy()) return
+            val moves = addressMoves(current(), s.picks)
+            if (moves.isEmpty()) {
+                set { AddressChangeUiState() }
+                return
+            }
+            if (moves != draft) {
+                draft = moves
+                key = newIdempotencyKey()
+            }
+            val k = key
+            set { it.copy(busy = true, error = null) }
+            viewModelScope.launch {
+                try {
+                    val changed = save(moves, k)
+                    draft = null
+                    set { AddressChangeUiState(changed = changed) }
+                    _mine.update { it.copy(loaded = false) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    set { it.copy(busy = false, error = AddressProblem.failureOf(e)) }
+                }
+            }
+        }
+
+        fun close() = set { if (it.busy) it else AddressChangeUiState(changed = it.changed) }
+
+        fun dismissChanged() = set { it.copy(changed = emptyList()) }
+    }
+
+    private val subAddresses = AddressChanger(
+        current = { _sub.value.subscription?.deliveryAddresses.orEmpty() },
+        canChange = { _sub.value.subscription?.let { it.canChangeAddress && it.rotationId == null } == true },
+        get = { _sub.value.addressChange },
+        set = { f -> _sub.update { it.copy(addressChange = f(it.addressChange)) } },
+        branchId = { _sub.value.subscription?.branchId?.ifBlank { null } },
+        otherBusy = { _sub.value.busy },
+        save = { moves, key ->
+            val id = _sub.value.subscription?.id ?: error("no subscription")
+            val res = api.changeSubscriptionAddresses(id, moves, key)
+            _sub.update { it.copy(subscription = res.detail) }
+            res.changed
+        },
+    )
+
+    private val rotationAddresses = AddressChanger(
+        current = { _rotationDetail.value.rotation?.deliveryAddresses.orEmpty() },
+        canChange = { _rotationDetail.value.rotation?.canChangeAddress == true },
+        get = { _rotationDetail.value.addressChange },
+        set = { f -> _rotationDetail.update { it.copy(addressChange = f(it.addressChange)) } },
+        // Four kitchens: the server checks every week and names the one that fails.
+        branchId = { null },
+        otherBusy = { _rotationDetail.value.busy },
+        save = { moves, key ->
+            val id = _rotationDetail.value.rotation?.id ?: error("no rotation")
+            val res = api.changeRotationAddresses(id, moves, key)
+            _rotationDetail.update { it.copy(rotation = res.detail) }
+            res.changed
+        },
+    )
+
+    /** Opens the change-address sheet for the open subscription (not for company lunches or rotation weeks). */
+    fun openAddressChange() = subAddresses.open()
+    fun retryAddressChangeLoad() = subAddresses.load()
+    fun setAddressChangeAllMeals(on: Boolean) = subAddresses.allMeals(on)
+    fun pickChangeAddress(slot: String, addressId: String) = subAddresses.pick(slot, addressId)
+    fun pickChangeAddressForAll(addressId: String) = subAddresses.pickAll(addressId)
+    /** Saves the meals whose pick changed; a retry after a failure reuses the same Idempotency-Key. */
+    fun saveAddressChange() = subAddresses.save()
+    fun closeAddressChange() = subAddresses.close()
+    fun dismissAddressChanged() = subAddresses.dismissChanged()
+
+    /** The same for the open rotation: every remaining week moves, or none does. */
+    fun openRotationAddressChange() = rotationAddresses.open()
+    fun retryRotationAddressChangeLoad() = rotationAddresses.load()
+    fun setRotationAddressChangeAllMeals(on: Boolean) = rotationAddresses.allMeals(on)
+    fun pickRotationChangeAddress(slot: String, addressId: String) = rotationAddresses.pick(slot, addressId)
+    fun pickRotationChangeAddressForAll(addressId: String) = rotationAddresses.pickAll(addressId)
+    fun saveRotationAddressChange() = rotationAddresses.save()
+    fun closeRotationAddressChange() = rotationAddresses.close()
+    fun dismissRotationAddressChanged() = rotationAddresses.dismissChanged()
 
     /** Drops the account's own data when the session ends. */
     fun forget() {

@@ -461,6 +461,7 @@ private struct Choice: View {
     let title: String
     let detail: String
     let selected: Bool
+    var warning: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -474,6 +475,9 @@ private struct Choice: View {
                     Text(title).font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
                     if !detail.isEmpty {
                         Text(detail).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                    }
+                    if let warning {
+                        Text(warning).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.bad)
                     }
                 }
                 Spacer()
@@ -1679,7 +1683,7 @@ private struct CheckoutPage: View {
     }
 
     private var addressCode: String? {
-        guard let failure = s.error, case .rejected(let r) = onEnum(of: failure) else { return nil }
+        guard !s.perMeal, let failure = s.error, case .rejected(let r) = onEnum(of: failure) else { return nil }
         return r.fieldCodes["address_id"]
     }
 
@@ -1726,17 +1730,39 @@ private struct CheckoutPage: View {
                         .font(.system(size: TypeScale.body)).foregroundStyle(Warm.chilli)
                 }
                 FieldLabel(text: NSLocalizedString("meals_address", comment: ""))
-                ForEach(s.addresses, id: \.id) { a in
-                    Choice(title: a.label, detail: a.line, selected: a.id == s.addressId) { vm.selectAddress(id: a.id) }
+                if s.canSplitAddresses && s.addresses.count > 1 {
+                    SplitChips(perMeal: s.perMeal) { vm.setPerMealAddresses(on: $0) }
                 }
-                // Under the addresses rather than in the generic strip at the
-                // bottom: the fix is to pick another one, right here.
-                if let code = addressCode {
-                    Text(NSLocalizedString(code == "not_found" ? "meals_address_gone" : "meals_address_outside", comment: ""))
-                        .font(.system(size: TypeScale.secondary))
-                        .foregroundStyle(MP.bad)
-                        .padding(.horizontal, Space.edge)
-                        .padding(.vertical, 6)
+                if !s.perMeal {
+                    ForEach(s.addresses, id: \.id) { a in
+                        Choice(title: a.label, detail: a.line, selected: a.id == s.addressId,
+                               warning: s.outside(id: a.id) ? NSLocalizedString("meals_addr_not_here", comment: "") : nil) {
+                            vm.selectAddress(id: a.id)
+                        }
+                    }
+                    // Under the addresses rather than in the generic strip at the
+                    // bottom: the fix is to pick another one, right here.
+                    if let code = addressCode {
+                        AddressWarning(text: NSLocalizedString(code == "not_found" ? "meals_address_gone" : "meals_address_outside", comment: ""))
+                    } else if s.addressOutside {
+                        AddressWarning(text: tr("meals_addr_blocked_one", s.addresses.first { $0.id == s.addressId }?.label ?? ""))
+                    }
+                } else {
+                    ForEach(s.chosenSlots, id: \.self) { slot in
+                        FieldLabel(text: tr("meals_addr_slot_to", slotLabel(slot)))
+                        ForEach(s.addresses, id: \.id) { a in
+                            Choice(title: a.label, detail: a.line, selected: s.addressFor(slot: slot) == a.id,
+                                   warning: s.outside(id: a.id) ? NSLocalizedString("meals_addr_not_here", comment: "") : nil) {
+                                vm.selectSlotAddress(slot: slot, id: a.id)
+                            }
+                        }
+                        if let problem = s.slotProblems[slot] {
+                            AddressWarning(text: addressProblemText(problem, slot))
+                        } else if let chosen = s.addressFor(slot: slot), s.outside(id: chosen) {
+                            AddressWarning(text: tr("meals_addr_blocked_slot", slotLabel(slot).lowercased(),
+                                                    s.addresses.first { $0.id == chosen }?.label ?? ""))
+                        }
+                    }
                 }
                 AddressForm(startOpen: s.addresses.isEmpty, busy: s.busy,
                             added: Int(s.addressAdded), failure: s.error) { label, building, area, city, at in
@@ -1796,7 +1822,7 @@ private struct CheckoutPage: View {
                         .padding(.horizontal, Space.edge)
                         .padding(.vertical, 6)
                 }
-                if promoCode == nil, startCode == nil, addressCode == nil, let failure = s.error {
+                if promoCode == nil, startCode == nil, addressCode == nil, s.slotProblems.isEmpty, let failure = s.error {
                     FailureStrip(failure: failure, onRetry: { vm.retryCheckout() })
                 }
                 Color.clear.frame(height: Space.xl)
@@ -1929,6 +1955,7 @@ private struct RotationPage: View {
 
     @State private var current: RotationUiState?
     private var s: RotationUiState { current ?? vm.rotation.value }
+    private var rotationProblem: AddressProblem? { AddressProblem.companion.ofRotation(f: s.error) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1936,10 +1963,27 @@ private struct RotationPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     FieldLabel(text: NSLocalizedString("meals_address", comment: ""))
-                    ForEach(s.addresses, id: \.id) { a in
-                        Choice(title: a.label, detail: a.line, selected: a.id == s.addressId) {
-                            vm.selectRotationAddress(id: a.id)
+                    if s.canSplitAddresses && s.addresses.count > 1 {
+                        SplitChips(perMeal: s.perMeal) { vm.setRotationPerMeal(on: $0) }
+                    }
+                    if !s.perMeal {
+                        ForEach(s.addresses, id: \.id) { a in
+                            Choice(title: a.label, detail: a.line, selected: a.id == s.addressId) {
+                                vm.selectRotationAddress(id: a.id)
+                            }
                         }
+                    } else {
+                        ForEach(s.mealSlotOptions, id: \.self) { slot in
+                            FieldLabel(text: tr("meals_addr_slot_to", slotLabel(slot)))
+                            ForEach(s.addresses, id: \.id) { a in
+                                Choice(title: a.label, detail: a.line, selected: s.addressFor(slot: slot) == a.id) {
+                                    vm.selectRotationSlotAddress(slot: slot, id: a.id)
+                                }
+                            }
+                        }
+                    }
+                    if let problem = rotationProblem {
+                        AddressWarning(text: addressProblemText(problem, nil))
                     }
                     if let a = s.adventure {
                         AdventureChips(current: a, enabled: true) { vm.setBuilderAdventure(adventure: $0) }
@@ -1969,8 +2013,12 @@ private struct RotationPage: View {
                         Choice(
                             title: pick(k.name, k.nameAr),
                             detail: money(price, k.currency),
-                            selected: s.picked.contains(k.branchId)
+                            selected: s.picked.contains(k.branchId),
+                            warning: s.unavailableAt(branchId: k.branchId).map { tr("meals_addr_unavailable", $0.label) }
                         ) { vm.togglePick(branchId: k.branchId) }
+                    }
+                    if s.pickedUnavailable {
+                        AddressWarning(text: NSLocalizedString("meals_addr_picked_unavailable", comment: ""))
                     }
                     if s.tooFewKitchens {
                         Text(tr("meals_rotation_few", s.candidates.count))
@@ -2000,7 +2048,7 @@ private struct RotationPage: View {
                     }
                     // Before the kitchens load, retry loads them; a failed quote is
                     // asked for again; once there is a quote, the pay button is the retry.
-                    if let failure = s.error {
+                    if let failure = s.error, rotationProblem == nil {
                         if !s.candidatesLoaded {
                             FailureStrip(failure: failure, onRetry: { vm.startRotation() })
                         } else if s.quote == nil && s.picked.count == 4 {
@@ -2013,7 +2061,7 @@ private struct RotationPage: View {
             }
             PrimaryButton(
                 label: tr("meals_pay", s.quote.map { money($0.amountMinor, $0.currency) } ?? ""),
-                enabled: s.quote != nil && !s.busy
+                enabled: s.quote != nil && !s.busy && !s.pickedUnavailable
             ) { vm.payRotation() }
             .padding(Space.edge)
             Color.clear.frame(height: navBarHeight)
@@ -2584,6 +2632,25 @@ private struct RotationDetailPage: View {
                 if let failure = s.actionError { FailureStrip(failure: failure, onDismiss: { vm.dismissRotationDetailError() }) }
                 // From week 4 on: the month in numbers and the way to next month's kitchens.
                 if let recap = (mine ?? vm.mine.value).recaps[r.id] { RecapBlock(recap: recap, onLink: onLink) }
+                if !r.deliveryAddresses.isEmpty {
+                    let change = s.addressChange
+                    DeliveryCard(items: r.deliveryAddresses, canChange: r.canChangeAddress, note: nil,
+                                 changing: change.visible, busy: s.busy) { vm.openRotationAddressChange() }
+                    if change.visible {
+                        AddressChangeCard(
+                            s: change, current: r.deliveryAddresses, rotation: true,
+                            onAllMeals: { vm.setRotationAddressChangeAllMeals(on: $0) },
+                            onPick: { vm.pickRotationChangeAddress(slot: $0, addressId: $1) },
+                            onPickAll: { vm.pickRotationChangeAddressForAll(addressId: $0) },
+                            onSave: { vm.saveRotationAddressChange() },
+                            onClose: { vm.closeRotationAddressChange() },
+                            onRetryLoad: { vm.retryRotationAddressChangeLoad() }
+                        )
+                    }
+                    if !change.changed.isEmpty {
+                        AddressChangedCard(changed: change.changed) { vm.dismissRotationAddressChanged() }
+                    }
+                }
                 ForEach(r.weeks.sorted { $0.week < $1.week }, id: \.week) { w in
                     let picking = s.picking?.int32Value == w.week
                     RotationWeekCard(w: w, currency: r.currency, picking: picking, busy: s.busy, vm: vm, onOpen: onOpen)
@@ -2825,6 +2892,31 @@ private struct SubscriptionPage: View {
                 }
                 if let failure = s.error {
                     FailureStrip(failure: failure, onRetry: { vm.retry() }, onDismiss: { vm.dismissError() })
+                }
+                if !sub.deliveryAddresses.isEmpty {
+                    let change = s.addressChange
+                    DeliveryCard(
+                        items: sub.deliveryAddresses,
+                        canChange: sub.canChangeAddress && sub.rotationId == nil && sub.companyName == nil,
+                        note: sub.companyName != nil ? NSLocalizedString("meals_addr_company_note", comment: "")
+                            : (sub.rotationId != nil && sub.canChangeAddress ? NSLocalizedString("meals_addr_rotation_note", comment: "") : nil),
+                        changing: change.visible,
+                        busy: s.busy
+                    ) { vm.openAddressChange() }
+                    if change.visible {
+                        AddressChangeCard(
+                            s: change, current: sub.deliveryAddresses, rotation: false,
+                            onAllMeals: { vm.setAddressChangeAllMeals(on: $0) },
+                            onPick: { vm.pickChangeAddress(slot: $0, addressId: $1) },
+                            onPickAll: { vm.pickChangeAddressForAll(addressId: $0) },
+                            onSave: { vm.saveAddressChange() },
+                            onClose: { vm.closeAddressChange() },
+                            onRetryLoad: { vm.retryAddressChangeLoad() }
+                        )
+                    }
+                    if !change.changed.isEmpty {
+                        AddressChangedCard(changed: change.changed) { vm.dismissAddressChanged() }
+                    }
                 }
                 let meals = (sub.upcoming + sub.skipped).sorted { ($0.date, $0.cutoffAt) < ($1.date, $1.cutoffAt) }
                 if !meals.isEmpty {
@@ -3557,5 +3649,192 @@ private struct GuestOptionRow: View {
         }
         .disabled(!enabled)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+}
+
+// MARK: - Per-meal delivery addresses
+
+/// "All meals to one address" or "Different address per meal".
+private struct SplitChips: View {
+    let perMeal: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Space.small) {
+                Chip(label: NSLocalizedString("meals_addr_all_one", comment: ""), selected: !perMeal) { if perMeal { onChange(false) } }
+                Chip(label: NSLocalizedString("meals_addr_per_meal", comment: ""), selected: perMeal) { if !perMeal { onChange(true) } }
+            }
+            .padding(.horizontal, Space.edge)
+        }
+        .padding(.vertical, Space.small)
+    }
+}
+
+private struct AddressWarning: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: TypeScale.secondary))
+            .foregroundStyle(MP.bad)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Space.edge)
+            .padding(.vertical, 6)
+    }
+}
+
+/// Words an address refusal; `slot` is the meal it is shown under when the server named none.
+private func addressProblemText(_ p: AddressProblem, _ slot: String?) -> String {
+    let meal = (p.slot ?? slot).map { slotLabel($0).lowercased() }
+    var base: String
+    switch p.kind {
+    case "outside":
+        if let k = p.kitchen, let m = meal {
+            base = tr("meals_addr_err_kitchen_slot", k, m)
+        } else if let k = p.kitchen {
+            base = tr("meals_addr_err_kitchen", k)
+        } else if let m = meal {
+            base = tr("meals_addr_err_slot", m)
+        } else {
+            base = NSLocalizedString("meals_address_outside", comment: "")
+        }
+    case "gone": base = NSLocalizedString("meals_address_gone", comment: "")
+    case "company": base = NSLocalizedString("meals_addr_err_company", comment: "")
+    case "closed": base = NSLocalizedString("meals_addr_err_closed", comment: "")
+    case "rotation_week": base = NSLocalizedString("meals_addr_err_rotation_week", comment: "")
+    default: base = NSLocalizedString("meals_addr_err_unknown_slot", comment: "")
+    }
+    if p.weekNo > 0 { base += " · " + tr("meals_week", Int(p.weekNo)) }
+    return base
+}
+
+/// Where each meal goes (one line when they all go to one place), with "Change address".
+private struct DeliveryCard: View {
+    let items: [DeliveryAddress]
+    let canChange: Bool
+    let note: String?
+    let changing: Bool
+    let busy: Bool
+    let onChange: () -> Void
+
+    var body: some View {
+        CardBox {
+            Text("meals_addr_delivery")
+                .font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(MP.textMuted)
+            if let one = MealSlots.shared.single(items: items) {
+                Text(tr("meals_addr_all_to", one.label)).font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
+                if !one.line.isEmpty {
+                    Text(one.line).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+                }
+            } else {
+                ForEach(items, id: \.mealSlot) { d in
+                    Text(tr("meals_addr_slot_line", slotLabel(d.mealSlot), d.label))
+                        .font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
+                    if !d.line.isEmpty {
+                        Text(d.line).font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+                    }
+                }
+            }
+            if let note {
+                Text(note).font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+            }
+            if canChange && !changing {
+                SecondaryButton(label: NSLocalizedString("meals_addr_change", comment: "")) { if !busy { onChange() } }
+                    .padding(.top, Space.small)
+            }
+        }
+    }
+}
+
+/// The change-address sheet, inline under the delivery card: one address for every meal, or one per meal.
+private struct AddressChangeCard: View {
+    let s: AddressChangeUiState
+    let current: [DeliveryAddress]
+    let rotation: Bool
+    let onAllMeals: (Bool) -> Void
+    let onPick: (String, String) -> Void
+    let onPickAll: (String) -> Void
+    let onSave: () -> Void
+    let onClose: () -> Void
+    let onRetryLoad: () -> Void
+
+    private var notHere: String { NSLocalizedString("meals_addr_not_here", comment: "") }
+
+    private var blocked: Bool {
+        current.contains { d in s.picked(slot: d.mealSlot).map { s.outside(id: $0) } ?? false }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CardBox {
+                Text("meals_addr_change_title")
+                    .font(.system(size: TypeScale.body, weight: .semibold)).foregroundStyle(MP.text)
+                if rotation {
+                    Text("meals_addr_rotation_check").font(.system(size: TypeScale.caption)).foregroundStyle(MP.textMuted)
+                }
+            }
+            if s.loading && s.addresses.isEmpty {
+                LoadingBlock()
+            } else if let failure = s.loadError, s.addresses.isEmpty {
+                FailureStrip(failure: failure, onRetry: onRetryLoad)
+            } else {
+                if current.count > 1 {
+                    SplitChips(perMeal: !s.allMeals) { onAllMeals(!$0) }
+                }
+                if s.allMeals {
+                    let first = current.first.flatMap { s.picked(slot: $0.mealSlot) }
+                    ForEach(s.addresses, id: \.id) { a in
+                        Choice(title: a.label, detail: a.line, selected: first == a.id,
+                               warning: s.outside(id: a.id) ? notHere : nil) { if !s.busy { onPickAll(a.id) } }
+                    }
+                } else {
+                    ForEach(current, id: \.mealSlot) { d in
+                        FieldLabel(text: tr("meals_addr_slot_to", slotLabel(d.mealSlot)))
+                        ForEach(s.addresses, id: \.id) { a in
+                            Choice(title: a.label, detail: a.line, selected: s.picked(slot: d.mealSlot) == a.id,
+                                   warning: s.outside(id: a.id) ? notHere : nil) { if !s.busy { onPick(d.mealSlot, a.id) } }
+                        }
+                    }
+                }
+                if let problem = s.problem {
+                    AddressWarning(text: addressProblemText(problem, nil))
+                } else if let failure = s.error {
+                    FailureStrip(failure: failure, onRetry: onSave)
+                }
+                HStack(spacing: Space.small) {
+                    PrimaryButton(label: NSLocalizedString(s.busy ? "meals_addr_saving" : "meals_addr_save", comment: ""),
+                                  enabled: !s.busy && !blocked, action: onSave)
+                    SecondaryButton(label: NSLocalizedString("meals_addr_keep", comment: "")) { if !s.busy { onClose() } }
+                }
+                .padding(.horizontal, Space.edge)
+                .padding(.vertical, Space.small)
+            }
+        }
+    }
+}
+
+/// After a save: from when each moved meal goes to its new address.
+private struct AddressChangedCard: View {
+    let changed: [DeliveryAddress]
+    let onDismiss: () -> Void
+
+    var body: some View {
+        CardBox {
+            ForEach(changed, id: \.mealSlot) { d in
+                Text(line(d)).font(.system(size: TypeScale.body)).foregroundStyle(MP.text)
+            }
+            Text("meals_addr_prepared_note").font(.system(size: TypeScale.secondary)).foregroundStyle(MP.textMuted)
+            Button(action: onDismiss) {
+                Text("meals_addr_done").font(.system(size: TypeScale.secondary, weight: .semibold)).foregroundStyle(Warm.chilli)
+            }
+            .padding(.vertical, Space.small)
+        }
+    }
+
+    private func line(_ d: DeliveryAddress) -> String {
+        if let from = d.effectiveFrom {
+            return tr("meals_addr_changed_from", shortDate(from), tr("meals_addr_goes_to", slotLabel(d.mealSlot).lowercased(), d.label))
+        }
+        return tr("meals_addr_now_goes", slotLabel(d.mealSlot), d.label)
     }
 }

@@ -41,6 +41,10 @@ import ae.marketplace.mobile.model.ProposalKitchen
 import ae.marketplace.mobile.model.Rotation
 import ae.marketplace.mobile.model.RotationWeek
 import ae.marketplace.mobile.meals.RotationDetailUiState
+import ae.marketplace.mobile.meals.AddressChangeUiState
+import ae.marketplace.mobile.meals.AddressProblem
+import ae.marketplace.mobile.model.DeliveryAddress
+import ae.marketplace.mobile.model.MealSlots
 
 import ae.marketplace.mobile.model.RotationVariety
 import ae.marketplace.mobile.model.UpcomingMeal
@@ -1063,19 +1067,36 @@ private fun CheckoutPage(
                 Text(stringResource(R.string.meals_meal_price, money(plan.mealPriceMinor, plan.currency)), color = M.Chilli, fontSize = Type.Body)
             }
             Label(stringResource(R.string.meals_address))
-            s.addresses.forEach { a ->
-                Choice(a.label, a.line, a.id == s.addressId) { vm.selectAddress(a.id) }
+            if (s.canSplitAddresses && s.addresses.size > 1) {
+                SplitChips(s.perMeal, vm::setPerMealAddresses)
             }
+            val notHere = stringResource(R.string.meals_addr_not_here)
             // Under the addresses rather than in the generic strip at the
             // bottom: the fix is to pick another one, right here.
-            val addressCode = (s.error as? Failure.Rejected)?.fieldCodes?.get("address_id")
-            addressCode?.let {
-                Text(
-                    stringResource(addressReason(it)),
-                    color = Palette.Bad,
-                    fontSize = Type.Secondary,
-                    modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp),
-                )
+            val addressCode = (s.error as? Failure.Rejected)?.fieldCodes?.get("address_id")?.takeIf { !s.perMeal }
+            if (!s.perMeal) {
+                s.addresses.forEach { a ->
+                    Choice(a.label, a.line, a.id == s.addressId, warning = if (s.outside(a.id)) notHere else null) { vm.selectAddress(a.id) }
+                }
+                when {
+                    addressCode != null -> AddressWarning(stringResource(addressReason(addressCode)))
+                    s.addressOutside -> AddressWarning(stringResource(R.string.meals_addr_blocked_one, s.addresses.firstOrNull { it.id == s.addressId }?.label.orEmpty()))
+                }
+            } else {
+                s.chosenSlots.forEach { slot ->
+                    Label(stringResource(R.string.meals_addr_slot_to, slotLabel(slot)))
+                    s.addresses.forEach { a ->
+                        Choice(a.label, a.line, s.addressFor(slot) == a.id, warning = if (s.outside(a.id)) notHere else null) { vm.selectSlotAddress(slot, a.id) }
+                    }
+                    val chosen = s.addressFor(slot)
+                    val problem = s.slotProblems[slot]
+                    when {
+                        problem != null -> AddressWarning(addressProblemText(problem, slot))
+                        chosen != null && s.outside(chosen) -> AddressWarning(
+                            stringResource(R.string.meals_addr_blocked_slot, slotLabel(slot).lowercase(), s.addresses.firstOrNull { it.id == chosen }?.label.orEmpty()),
+                        )
+                    }
+                }
             }
             AddressForm(s.addresses.isEmpty(), s.busy, s.addressAdded, s.error) { label, building, area, city, at ->
                 vm.addAddress(label, building, area, city, at)
@@ -1129,7 +1150,7 @@ private fun CheckoutPage(
             if (s.paymentFailed) {
                 Text(stringResource(R.string.meals_pay_failed), color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp))
             }
-            if (promoCode == null && startCode == null && addressCode == null) s.error?.let { FailureStrip(it, onRetry = vm::retryCheckout) }
+            if (promoCode == null && startCode == null && addressCode == null && s.slotProblems.isEmpty()) s.error?.let { FailureStrip(it, onRetry = vm::retryCheckout) }
             Spacer(Modifier.height(Space.XL))
         }
         Box(Modifier.padding(Space.Edge)) {
@@ -1234,7 +1255,7 @@ private fun Label(text: String) {
 }
 
 @Composable
-private fun Choice(title: String, detail: String, selected: Boolean, onClick: () -> Unit) {
+private fun Choice(title: String, detail: String, selected: Boolean, warning: String? = null, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -1249,8 +1270,9 @@ private fun Choice(title: String, detail: String, selected: Boolean, onClick: ()
             if (selected) Box(Modifier.fillMaxSize().background(M.Chilli, RoundedCornerShape(50)))
         }
         Column(Modifier.padding(start = Space.Medium)) {
-            Text(title, color = M.Ink, fontSize = Type.Body)
+            Text(title, color = if (warning != null && !selected) M.Muted else M.Ink, fontSize = Type.Body)
             if (detail.isNotBlank()) Text(detail, color = M.Muted, fontSize = Type.Secondary)
+            warning?.let { Text(it, color = Palette.Bad, fontSize = Type.Secondary) }
         }
     }
 }
@@ -1291,7 +1313,17 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
         TopBar(stringResource(R.string.meals_rotation), onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Label(stringResource(R.string.meals_address))
-            s.addresses.forEach { a -> Choice(a.label, a.line, a.id == s.addressId) { vm.selectRotationAddress(a.id) } }
+            if (s.canSplitAddresses && s.addresses.size > 1) SplitChips(s.perMeal, vm::setRotationPerMeal)
+            if (!s.perMeal) {
+                s.addresses.forEach { a -> Choice(a.label, a.line, a.id == s.addressId) { vm.selectRotationAddress(a.id) } }
+            } else {
+                s.mealSlotOptions.forEach { slot ->
+                    Label(stringResource(R.string.meals_addr_slot_to, slotLabel(slot)))
+                    s.addresses.forEach { a -> Choice(a.label, a.line, s.addressFor(slot) == a.id) { vm.selectRotationSlotAddress(slot, a.id) } }
+                }
+            }
+            val rotationProblem = AddressProblem.ofRotation(s.error)
+            rotationProblem?.let { AddressWarning(addressProblemText(it, null)) }
             s.adventure?.let { a -> AdventureChips(a, enabled = true, onPick = vm::setBuilderAdventure) }
             Label(stringResource(R.string.meals_pick_four, s.picked.size))
             if (s.busy && s.candidates.isEmpty()) LoadingBlock(inline = true)
@@ -1317,8 +1349,10 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
                     pick(k.name, k.nameAr, arabic),
                     money(price, k.currency) + " / " + stringResource(R.string.meals_week, 1).substringBefore(' ').lowercase(),
                     k.branchId in s.picked,
+                    warning = s.unavailableAt(k.branchId)?.let { stringResource(R.string.meals_addr_unavailable, it.label) },
                 ) { vm.togglePick(k.branchId) }
             }
+            if (s.pickedUnavailable) AddressWarning(stringResource(R.string.meals_addr_picked_unavailable))
             if (s.tooFewKitchens) {
                 Text(
                     stringResource(R.string.meals_rotation_few, s.candidates.size),
@@ -1345,7 +1379,7 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
             }
             // Before the kitchens load, retry loads them; a failed quote is asked
             // for again; once there is a quote, the pay button is the retry.
-            s.error?.let {
+            s.error?.takeIf { rotationProblem == null }?.let {
                 FailureStrip(
                     it,
                     onRetry = when {
@@ -1360,7 +1394,7 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
             PrimaryButton(
                 stringResource(R.string.meals_pay, s.quote?.let { money(it.amountMinor, it.currency) } ?: ""),
                 vm::payRotation,
-                enabled = s.quote != null && !s.busy,
+                enabled = s.quote != null && !s.busy && !s.pickedUnavailable,
             )
         }
         BottomPad()
@@ -1841,6 +1875,36 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                     }
                     s.error?.let { FailureStrip(it, onRetry = vm::retry, onDismiss = vm::dismissError) }
                 }
+                if (sub.deliveryAddresses.isNotEmpty()) {
+                    item {
+                        val note = when {
+                            sub.companyName != null -> stringResource(R.string.meals_addr_company_note)
+                            sub.rotationId != null && sub.canChangeAddress -> stringResource(R.string.meals_addr_rotation_note)
+                            else -> null
+                        }
+                        val change = s.addressChange
+                        DeliveryCard(
+                            sub.deliveryAddresses,
+                            canChange = sub.canChangeAddress && sub.rotationId == null && sub.companyName == null,
+                            note = note,
+                            changing = change.visible,
+                            busy = s.busy,
+                            onChange = vm::openAddressChange,
+                        )
+                        if (change.visible) {
+                            AddressChangeCard(
+                                change, sub.deliveryAddresses, rotation = false,
+                                onAllMeals = vm::setAddressChangeAllMeals,
+                                onPick = vm::pickChangeAddress,
+                                onPickAll = vm::pickChangeAddressForAll,
+                                onSave = vm::saveAddressChange,
+                                onClose = vm::closeAddressChange,
+                                onRetryLoad = vm::retryAddressChangeLoad,
+                            )
+                        }
+                        if (change.changed.isNotEmpty()) AddressChangedCard(change.changed, arabic, vm::dismissAddressChanged)
+                    }
+                }
                 val meals = (sub.upcoming + sub.skipped).sortedWith(compareBy({ it.date }, { it.cutoffAt }))
                 if (meals.isNotEmpty()) {
                     item { SectionTitle(stringResource(R.string.meals_upcoming)) }
@@ -1933,6 +1997,22 @@ private fun RotationDetailPage(
                     s.actionError?.let { FailureStrip(it, onRetry = null, onDismiss = vm::dismissRotationDetailError) }
                     // From week 4 on: the month in numbers and the way to next month's kitchens.
                     mine.recaps[r.id]?.let { RecapBlock(it, arabic, onLink) }
+                    if (r.deliveryAddresses.isNotEmpty()) {
+                        val change = s.addressChange
+                        DeliveryCard(r.deliveryAddresses, canChange = r.canChangeAddress, note = null, changing = change.visible, busy = s.busy, onChange = vm::openRotationAddressChange)
+                        if (change.visible) {
+                            AddressChangeCard(
+                                change, r.deliveryAddresses, rotation = true,
+                                onAllMeals = vm::setRotationAddressChangeAllMeals,
+                                onPick = vm::pickRotationChangeAddress,
+                                onPickAll = vm::pickRotationChangeAddressForAll,
+                                onSave = vm::saveRotationAddressChange,
+                                onClose = vm::closeRotationAddressChange,
+                                onRetryLoad = vm::retryRotationAddressChangeLoad,
+                            )
+                        }
+                        if (change.changed.isNotEmpty()) AddressChangedCard(change.changed, arabic, vm::dismissRotationAddressChanged)
+                    }
                 }
                 items(r.weeks.sortedBy { it.week }, key = { it.week }) { w ->
                     RotationWeekCard(w, r.currency, arabic, picking = s.picking == w.week, busy = s.busy, vm, onOpen)
@@ -2197,4 +2277,160 @@ private fun promoReason(code: String): Int = when (code) {
     "already_used" -> R.string.meals_promo_used
     "exhausted" -> R.string.meals_promo_exhausted
     else -> R.string.meals_promo_invalid
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-meal delivery addresses
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** "All meals to one address" or "Different address per meal". */
+@Composable
+private fun SplitChips(perMeal: Boolean, onChange: (Boolean) -> Unit) {
+    FlowRow(
+        Modifier.padding(horizontal = Space.Edge, vertical = Space.Small),
+        horizontalArrangement = Arrangement.spacedBy(Space.Small),
+        verticalArrangement = Arrangement.spacedBy(Space.Small),
+    ) {
+        Chip(stringResource(R.string.meals_addr_all_one), !perMeal, { if (perMeal) onChange(false) })
+        Chip(stringResource(R.string.meals_addr_per_meal), perMeal, { if (!perMeal) onChange(true) })
+    }
+}
+
+@Composable
+private fun AddressWarning(text: String) {
+    Text(text, color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp))
+}
+
+/** Words an address refusal; [slot] is the meal it is shown under, when the server did not name one. */
+@Composable
+private fun addressProblemText(p: AddressProblem, slot: String?): String {
+    val meal = (p.slot ?: slot)?.let { slotLabel(it).lowercase() }
+    val base = when (p.kind) {
+        AddressProblem.OUTSIDE -> when {
+            p.kitchen != null && meal != null -> stringResource(R.string.meals_addr_err_kitchen_slot, p.kitchen!!, meal)
+            p.kitchen != null -> stringResource(R.string.meals_addr_err_kitchen, p.kitchen!!)
+            meal != null -> stringResource(R.string.meals_addr_err_slot, meal)
+            else -> stringResource(R.string.meals_address_outside)
+        }
+        AddressProblem.GONE -> stringResource(R.string.meals_address_gone)
+        AddressProblem.COMPANY -> stringResource(R.string.meals_addr_err_company)
+        AddressProblem.CLOSED -> stringResource(R.string.meals_addr_err_closed)
+        AddressProblem.ROTATION_WEEK -> stringResource(R.string.meals_addr_err_rotation_week)
+        else -> stringResource(R.string.meals_addr_err_unknown_slot)
+    }
+    return p.week?.let { base + " · " + stringResource(R.string.meals_week, it) } ?: base
+}
+
+/** Where each meal goes (one line when they all go to one place), with "Change address". */
+@Composable
+private fun DeliveryCard(
+    items: List<DeliveryAddress>,
+    canChange: Boolean,
+    note: String?,
+    changing: Boolean,
+    busy: Boolean,
+    onChange: () -> Unit,
+) {
+    Card {
+        Text(stringResource(R.string.meals_addr_delivery), color = M.Muted, fontSize = Type.Secondary, fontWeight = FontWeight.SemiBold)
+        val one = MealSlots.single(items)
+        if (one != null) {
+            Text(stringResource(R.string.meals_addr_all_to, one.label), color = M.Ink, fontSize = Type.Body)
+            if (one.line.isNotBlank()) Text(one.line, color = M.Muted, fontSize = Type.Secondary)
+        } else {
+            items.forEach { d ->
+                Text(stringResource(R.string.meals_addr_slot_line, slotLabel(d.mealSlot), d.label), color = M.Ink, fontSize = Type.Body)
+                if (d.line.isNotBlank()) Text(d.line, color = M.Muted, fontSize = Type.Caption)
+            }
+        }
+        note?.let { Text(it, color = M.Muted, fontSize = Type.Secondary) }
+        if (canChange && !changing) {
+            SecondaryButton(stringResource(R.string.meals_addr_change), { if (!busy) onChange() }, Modifier.padding(top = Space.Small))
+        }
+    }
+}
+
+/** The change-address sheet, inline under the delivery card: one address for every meal, or one per meal. */
+@Composable
+private fun AddressChangeCard(
+    s: AddressChangeUiState,
+    current: List<DeliveryAddress>,
+    rotation: Boolean,
+    onAllMeals: (Boolean) -> Unit,
+    onPick: (String, String) -> Unit,
+    onPickAll: (String) -> Unit,
+    onSave: () -> Unit,
+    onClose: () -> Unit,
+    onRetryLoad: () -> Unit,
+) {
+    Card {
+        Text(stringResource(R.string.meals_addr_change_title), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
+        if (rotation) Text(stringResource(R.string.meals_addr_rotation_check), color = M.Muted, fontSize = Type.Caption)
+    }
+    val loadError = s.loadError
+    when {
+        s.loading && s.addresses.isEmpty() -> LoadingBlock(inline = true)
+        loadError != null && s.addresses.isEmpty() -> FailureStrip(loadError, onRetry = onRetryLoad)
+        else -> {
+            val notHere = stringResource(R.string.meals_addr_not_here)
+            if (current.size > 1) SplitChips(!s.allMeals) { onAllMeals(!it) }
+            if (s.allMeals) {
+                val first = current.firstOrNull()?.mealSlot?.let(s::picked)
+                s.addresses.forEach { a ->
+                    Choice(a.label, a.line, first == a.id, warning = if (s.outside(a.id)) notHere else null) { if (!s.busy) onPickAll(a.id) }
+                }
+            } else {
+                current.forEach { d ->
+                    Label(stringResource(R.string.meals_addr_slot_to, slotLabel(d.mealSlot)))
+                    s.addresses.forEach { a ->
+                        Choice(a.label, a.line, s.picked(d.mealSlot) == a.id, warning = if (s.outside(a.id)) notHere else null) { if (!s.busy) onPick(d.mealSlot, a.id) }
+                    }
+                }
+            }
+            val problem = s.problem
+            val error = s.error
+            when {
+                problem != null -> AddressWarning(addressProblemText(problem, null))
+                error != null -> FailureStrip(error, onRetry = onSave)
+            }
+            val blocked = current.any { d -> s.picked(d.mealSlot)?.let(s::outside) == true }
+            Row(Modifier.padding(horizontal = Space.Edge, vertical = Space.Small), horizontalArrangement = Arrangement.spacedBy(Space.Small)) {
+                Box(Modifier.weight(1f)) {
+                    PrimaryButton(
+                        stringResource(if (s.busy) R.string.meals_addr_saving else R.string.meals_addr_save),
+                        onSave,
+                        enabled = !s.busy && !blocked,
+                    )
+                }
+                Box(Modifier.weight(1f)) { SecondaryButton(stringResource(R.string.meals_addr_keep), { if (!s.busy) onClose() }) }
+            }
+        }
+    }
+}
+
+/** After a save: from when each moved meal goes to its new address. */
+@Composable
+private fun AddressChangedCard(changed: List<DeliveryAddress>, arabic: Boolean, onDismiss: () -> Unit) {
+    Card {
+        changed.forEach { d ->
+            val from = d.effectiveFrom
+            Text(
+                if (from != null) {
+                    stringResource(R.string.meals_addr_changed_from, shortDate(from, arabic), stringResource(R.string.meals_addr_goes_to, slotLabel(d.mealSlot).lowercase(), d.label))
+                } else {
+                    stringResource(R.string.meals_addr_now_goes, slotLabel(d.mealSlot), d.label)
+                },
+                color = M.Ink,
+                fontSize = Type.Body,
+            )
+        }
+        Text(stringResource(R.string.meals_addr_prepared_note), color = M.Muted, fontSize = Type.Secondary)
+        Text(
+            stringResource(R.string.meals_addr_done),
+            color = M.Chilli,
+            fontSize = Type.Secondary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clickable(onClick = onDismiss).padding(vertical = Space.Small),
+        )
+    }
 }
