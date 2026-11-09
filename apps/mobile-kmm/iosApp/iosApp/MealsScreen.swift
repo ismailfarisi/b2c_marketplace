@@ -2924,14 +2924,14 @@ private struct SubscriptionPage: View {
                     if change.visible {
                         AddressChangeCard(
                             s: change, current: sub.deliveryAddresses, rotation: false,
-                            kitchenAliases: kitchenAliases([(sub.kitchenName, sub.kitchenNameAr)]),
                             onAllMeals: { vm.setAddressChangeAllMeals(on: $0) },
                             onPick: { vm.pickChangeAddress(slot: $0, addressId: $1) },
                             onPickAll: { vm.pickChangeAddressForAll(addressId: $0) },
                             onSave: { vm.saveAddressChange() },
                             onClose: { vm.closeAddressChange() },
                             onRetryLoad: { vm.retryAddressChangeLoad() },
-                            onAdd: { vm.addChangeAddress(label: $0, building: $1, area: $2, city: $3, at: $4) }
+                            onAdd: { vm.addChangeAddress(label: $0, building: $1, area: $2, city: $3, at: $4) },
+                            kitchenAliases: kitchenAliases([(sub.kitchenName, sub.kitchenNameAr)])
                         )
                     }
                     if !change.changed.isEmpty {
