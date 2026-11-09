@@ -263,12 +263,12 @@ export function MealAddressPicker({
   legend: string;
   addresses: Address[];
   m: MealAddresses;
-  covers?: (addressId: string) => boolean | undefined;
-  problems?: Record<string, string>;
-  coverageError?: boolean;
-  onRetryCoverage?: () => void;
+  covers?: ((addressId: string) => boolean | undefined) | undefined;
+  problems?: Record<string, string> | undefined;
+  coverageError?: boolean | undefined;
+  onRetryCoverage?: (() => void) | undefined;
   noAddress: string;
-  footer?: ReactNode;
+  footer?: ReactNode | undefined;
 }) {
   const t = COPY[locale];
   const canSplit = m.slots.length >= 2 && addresses.length > 0;
@@ -574,7 +574,7 @@ export function DeliveryAddresses<R extends { changed: DeliveryAddress[] }>({
   companyName: string | null;
   /** Kitchens that will deliver from now on, for the "doesn't deliver here" hint. */
   kitchens: { branch_id: string; name: string }[];
-  kitchenName?: (name: string) => string | null | undefined;
+  kitchenName?: ((name: string) => string | null | undefined) | undefined;
   save: (addresses: SlotAddress[], headers: Record<string, string>) => Promise<R>;
   onSaved: (out: R) => Promise<unknown> | void;
 }) {
@@ -644,7 +644,7 @@ function ChangePanel<R extends { changed: DeliveryAddress[] }>({
   locale: Locale;
   items: DeliveryAddress[];
   kitchens: { branch_id: string; name: string }[];
-  kitchenName?: (name: string) => string | null | undefined;
+  kitchenName?: ((name: string) => string | null | undefined) | undefined;
   save: (addresses: SlotAddress[], headers: Record<string, string>) => Promise<R>;
   onCancel: () => void;
   onSaved: (out: R) => Promise<unknown>;

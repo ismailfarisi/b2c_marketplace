@@ -31,6 +31,14 @@ import { tagLabel } from "@/components/meals/kitchen-card";
 import { LoadError } from "@/components/load-error";
 import { earliestFromTooSoon, earliestStart } from "@/lib/earliest-start";
 import { rotationCodes, rotationProblem } from "@/lib/rotation-problem";
+import {
+  MealAddressPicker,
+  blockedMessage,
+  kitchenMiss,
+  rotationAddressProblem,
+  useCoverage,
+  useMealAddresses,
+} from "@/components/meals/meal-addresses";
 import { useIdempotencyKey } from "@/lib/use-idempotency-key";
 import { VarietyMeter } from "@/components/meals/variety";
 
@@ -148,6 +156,8 @@ const COPY = {
 };
 type Copy = (typeof COPY)["en"];
 
+const DEFAULT_SPLIT = ["lunch", "dinner"];
+
 function toggle<T>(list: T[], v: T, max: number): T[] {
   if (list.includes(v)) return list.filter((x) => x !== v);
   if (max === 1) return [v];
@@ -178,10 +188,14 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
     queryKey: ["me", "addresses"],
     queryFn: listAddresses,
   });
-  const [addressId, setAddressId] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [days, setDays] = useState<number[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
+  // Before the meals are known (no kitchens picked yet) the per-meal choice
+  // is offered for lunch and dinner, the usual office/home split.
+  const mealAddresses = useMealAddresses(slots.length ? slots : DEFAULT_SPLIT);
+  const addressId = mealAddresses.base;
+  const setAddressId = mealAddresses.setBase;
   const [start, setStart] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,6 +228,36 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
     queryFn: () => getMealKitchens({ point: where, rotation: true }),
     enabled: where != null,
   });
+
+  // Every kitchen must also deliver to the meals' other addresses; the
+  // coverage check marks the ones that don't and blocks a rotation with one.
+  const coverage = useCoverage(
+    (kitchens.data?.items ?? []).map((k) => k.branch_id),
+    (addresses.data?.items ?? []).map((a) => a.id),
+  );
+  const addressLabel = (id: string) =>
+    addresses.data?.items.find((a) => a.id === id)?.label ?? "";
+  const kitchenLabel = (id: string) => {
+    const k = kitchens.data?.items.find((x) => x.branch_id === id);
+    return k ? (locale === "ar" && k.name_ar) || k.name : "";
+  };
+  const missFor = (branchId: string) =>
+    kitchenMiss(locale, branchId, mealAddresses.distinct, coverage.delivers, addressLabel);
+  const pickedMiss = (() => {
+    for (const b of picked)
+      for (const slot of mealAddresses.split ? mealAddresses.slots : [null]) {
+        const a = slot ? mealAddresses.of(slot) : addressId;
+        if (coverage.delivers(b, a) === false)
+          return blockedMessage(
+            locale,
+            kitchenLabel(b),
+            mealAddresses.split && mealAddresses.slots.length > 1 ? slot : null,
+            addressLabel(a),
+          );
+      }
+    return null;
+  })();
+  const slotAddresses = mealAddresses.overrides.filter((o) => slots.includes(o.meal_slot));
 
   useEffect(() => {
     const ids = new Set((kitchens.data?.items ?? []).map((k) => k.branch_id));
@@ -288,10 +332,12 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
     days.length === shape.days &&
     slots.length === shape.meals &&
     addressId &&
+    !pickedMiss &&
     start
       ? {
           plan_ids: plans.map((p) => p.id),
           address_id: addressId,
+          ...(slotAddresses.length ? { slot_addresses: slotAddresses } : {}),
           start_date: start,
           delivery_weekdays: [...days].sort(),
           meal_slots: slots,
@@ -334,7 +380,19 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
   const currency = plans[0]?.currency ?? kitchens.data?.items[0]?.currency;
   const money = (n: number) =>
     formatMoney({ amount: n, currency: currency ?? "AED" }, locale);
-  const problem = (err: unknown) => rotationProblem(err, locale, t.failed);
+  const kitchenName = (name: string) => {
+    const k = kitchens.data?.items.find((x) => x.name === name);
+    return k ? (locale === "ar" && k.name_ar) || k.name : null;
+  };
+  const addressProblem = (err: unknown) =>
+    rotationAddressProblem(
+      err,
+      locale,
+      (slot) => addressLabel(slot ? mealAddresses.of(slot) : addressId) || null,
+      kitchenName,
+    );
+  const problem = (err: unknown) =>
+    addressProblem(err) ?? rotationProblem(err, locale, t.failed);
   // A refused quote (422: cutoff passed, incompatible plans) will not change
   // by asking again; a dropped connection or a 5xx will.
   const quoteRetryable = (err: unknown) =>
@@ -375,8 +433,17 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
     setSuggesting(true);
     setSuggestError(null);
     try {
+      // Meals sent to another address are asked for by name, so the
+      // suggestion plans them and only picks kitchens that reach every address.
+      const own = mealAddresses.overrides;
       const sug = await suggestRotation({
         address_id: addressId,
+        ...(own.length
+          ? {
+              slot_addresses: own,
+              ...(slots.length ? {} : { meal_slots: mealAddresses.slots }),
+            }
+          : {}),
         ...(code ? { promo_code: code } : {}),
       });
       setPicked(sug.branch_ids.slice(0, 4));
@@ -406,40 +473,31 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
         <h1>{t.title}</h1>
         <p className="ms-sub">{t.intro}</p>
 
-        <fieldset className="ms-field">
-          <legend>{t.address}</legend>
-          {(addresses.data?.items ?? []).length === 0 && (
-            <p className="ms-sub">{t.noAddress}</p>
-          )}
-          <div className="ms-addresses">
-            {(addresses.data?.items ?? []).map((a) => (
-              <label
-                key={a.id}
-                className={`ms-address${a.id === addressId ? " on" : ""}`}
-              >
-                <input
-                  type="radio"
-                  name="address"
-                  value={a.id}
-                  checked={a.id === addressId}
-                  onChange={() => setAddressId(a.id)}
-                />
-                <span>
-                  <strong dir="auto">{a.label}</strong>
-                  <br />
-                  <span className="ms-sub" dir="auto">
-                    {describeAddress(a)}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <NewAddress
-            t={ADDRESS_COPY[locale]}
-            initial={point && exact ? point : null}
-            onSaved={(a) => setAddressId(a.id)}
-          />
-        </fieldset>
+        <MealAddressPicker
+          locale={locale}
+          legend={t.address}
+          addresses={addresses.data?.items ?? []}
+          m={mealAddresses}
+          covers={(id) => {
+            const known = picked.map((b) => coverage.delivers(b, id));
+            return known.some((v) => v === false) ? false : undefined;
+          }}
+          coverageError={coverage.isError}
+          onRetryCoverage={() => void coverage.refetch()}
+          noAddress={t.noAddress}
+          footer={
+            <NewAddress
+              t={ADDRESS_COPY[locale]}
+              initial={point && exact ? point : null}
+              onSaved={(a) => setAddressId(a.id)}
+            />
+          }
+        />
+        {pickedMiss && (
+          <p className="ms-bad" role="alert">
+            {pickedMiss}
+          </p>
+        )}
 
         {where && (
           <fieldset className="ms-field">
@@ -479,7 +537,8 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                       </p>
                     ) : suggestInvalid ? (
                       <p className="ms-bad" role="alert">
-                        {rotationProblem(suggestError, locale, t.balancedFailed)}
+                        {addressProblem(suggestError) ??
+                          rotationProblem(suggestError, locale, t.balancedFailed)}
                       </p>
                     ) : (
                       <LoadError
@@ -493,15 +552,16 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
               <div className="ms-addresses">
                 {list.map((k) => {
                   const on = picked.includes(k.branch_id);
+                  const miss = missFor(k.branch_id);
                   return (
                     <label
                       key={k.branch_id}
-                      className={`ms-address${on ? " on" : ""}`}
+                      className={`ms-address${on ? " on" : ""}${miss ? " ms-address-no" : ""}`}
                     >
                       <input
                         type="checkbox"
                         checked={on}
-                        disabled={!on && picked.length >= 4}
+                        disabled={!on && (picked.length >= 4 || miss != null)}
                         onChange={() =>
                           setPicked((cur) => toggle(cur, k.branch_id, 4))
                         }
@@ -510,6 +570,7 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
                         <strong dir="auto">
                           {(locale === "ar" && k.name_ar) || k.name}
                         </strong>
+                        {miss && <span className="ms-addr-no">{miss}</span>}
                         <br />
                         <span className="ms-sub" dir="auto">
                           {k.cuisines
@@ -621,7 +682,8 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
         ) : preview.isError ? (
           <div className="ms-bad" role="alert">
             <p>
-              {rotationProblem(preview.error, locale, t.quoteFailed)}
+              {addressProblem(preview.error) ??
+                rotationProblem(preview.error, locale, t.quoteFailed)}
             </p>
             {quoteRetryable(preview.error) && (
               <button
