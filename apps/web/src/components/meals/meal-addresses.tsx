@@ -536,12 +536,9 @@ export function DeliveryAddressLines({
           <span>
             <strong dir="auto">{r.d.label}</strong>
             {r.d.line && (
-              <>
-                {" · "}
-                <span className="ms-sub" dir="auto">
-                  {r.d.line}
-                </span>
-              </>
+              <span className="ms-sub ms-deliver-line" dir="auto">
+                {r.d.line}
+              </span>
             )}
           </span>
         </li>
@@ -682,7 +679,7 @@ function ChangePanel<R extends { changed: DeliveryAddress[] }>({
   for (const d of draft) {
     const k = kitchens.find((k) => coverage.delivers(k.branch_id, d.address_id) === false);
     if (k) {
-      blocked = blockedMessage(locale, k.name, items.length > 1 ? d.meal_slot : null, labelOf(d.address_id));
+      blocked = blockedMessage(locale, k.name, split && items.length > 1 ? d.meal_slot : null, labelOf(d.address_id));
       break;
     }
   }

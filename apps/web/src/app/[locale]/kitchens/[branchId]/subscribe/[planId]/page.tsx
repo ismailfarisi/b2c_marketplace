@@ -339,15 +339,6 @@ function Checkout({
   const lunchDraft = JSON.stringify([companyId, lunch]);
   const resetLunchKey = lunchKey.reset;
   useEffect(() => resetLunchKey(), [lunchDraft, resetLunchKey]);
-  const preview = useQuery({
-    queryKey: ["subscription-preview", company ? lunch : input, companyId],
-    queryFn: () =>
-      company
-        ? previewLunch(company.company_id, lunch!).then((r) => r.preview)
-        : previewSubscription(input!),
-    enabled: company ? lunch != null : input != null,
-    retry: false,
-  });
   // Which saved addresses this kitchen delivers to; an uncovered one is
   // marked and blocks checkout before the server has to refuse it.
   const coverage = useCoverage(
@@ -370,6 +361,15 @@ function Checkout({
       : uncovered === null
         ? blockedMessage(locale, kitchenLabel, null, addressLabel(addressId))
         : null;
+  const preview = useQuery({
+    queryKey: ["subscription-preview", company ? lunch : input, companyId],
+    queryFn: () =>
+      company
+        ? previewLunch(company.company_id, lunch!).then((r) => r.preview)
+        : previewSubscription(input!),
+    enabled: company ? lunch != null : input != null && !blocked,
+    retry: false,
+  });
   const addressProblems = (err: unknown) =>
     checkoutAddressProblems(
       err,

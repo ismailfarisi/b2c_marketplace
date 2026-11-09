@@ -803,6 +803,10 @@ a.ms-cta {
   gap: 0.75rem;
   overflow-wrap: anywhere;
 }
+.ms-deliver-line {
+  display: block;
+  font-size: 0.85rem;
+}
 .ms-addr-section {
   margin-block: 1.5rem;
 }
