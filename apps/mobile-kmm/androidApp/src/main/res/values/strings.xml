@@ -841,4 +841,36 @@
     <string name="meals_make_rotation_btn">Build my rotation</string>
     <string name="meals_guest_line">Guest week: %1$s cooks one week</string>
     <string name="meals_guest_of_line">One-week guest from your %1$s subscription</string>
+    <!-- Per-meal delivery addresses: checkout, rotation builder, change address. -->
+    <string name="meals_addr_all_one">All meals to one address</string>
+    <string name="meals_addr_per_meal">Different address per meal</string>
+    <string name="meals_addr_slot_to">%1$s to</string>
+    <string name="meals_addr_not_here">Doesn\'t deliver here</string>
+    <string name="meals_addr_blocked_one">This kitchen doesn\'t deliver to %1$s. Choose another address.</string>
+    <string name="meals_addr_blocked_slot">This kitchen doesn\'t deliver %1$s to %2$s. Choose another address.</string>
+    <string name="meals_addr_err_slot">This kitchen doesn\'t deliver %1$s to that address. Choose another address.</string>
+    <string name="meals_addr_err_kitchen_slot">%1$s doesn\'t deliver %2$s to that address.</string>
+    <string name="meals_addr_err_kitchen">%1$s doesn\'t deliver to that address.</string>
+    <string name="meals_addr_err_company">Your company manages the office address for this lunch.</string>
+    <string name="meals_addr_err_closed">This plan has ended, so its address can\'t be changed.</string>
+    <string name="meals_addr_err_rotation_week">Change the address from the rotation, so every week moves together.</string>
+    <string name="meals_addr_err_unknown_slot">That meal isn\'t part of this plan.</string>
+    <string name="meals_addr_unavailable">Doesn\'t deliver to %1$s</string>
+    <string name="meals_addr_picked_unavailable">A kitchen you picked doesn\'t deliver to every address you chose. Pick another kitchen or address.</string>
+    <string name="meals_addr_delivery">Delivery</string>
+    <string name="meals_addr_all_to">All meals: %1$s</string>
+    <string name="meals_addr_slot_line">%1$s: %2$s</string>
+    <string name="meals_addr_change">Change address</string>
+    <string name="meals_addr_company_note">Your company manages the office address.</string>
+    <string name="meals_addr_rotation_note">Change this week\'s address from the rotation.</string>
+    <string name="meals_addr_change_title">Where should your meals go?</string>
+    <string name="meals_addr_rotation_check">Every remaining week\'s kitchen is checked before anything changes.</string>
+    <string name="meals_addr_save">Save changes</string>
+    <string name="meals_addr_saving">Saving…</string>
+    <string name="meals_addr_keep">Keep as is</string>
+    <string name="meals_addr_changed_from">From %1$s, %2$s</string>
+    <string name="meals_addr_goes_to">%1$s goes to %2$s.</string>
+    <string name="meals_addr_now_goes">%1$s now goes to %2$s.</string>
+    <string name="meals_addr_prepared_note">Meals already being prepared still go to the old address.</string>
+    <string name="meals_addr_done">Got it</string>
 </resources>
