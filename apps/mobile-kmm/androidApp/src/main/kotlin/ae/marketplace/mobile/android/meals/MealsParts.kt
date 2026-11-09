@@ -1,5 +1,6 @@
 package ae.marketplace.mobile.android.meals
 
+import ae.marketplace.mobile.android.ui.rememberArabic
 import ae.marketplace.mobile.android.R
 import ae.marketplace.mobile.android.ui.Palette
 import ae.marketplace.mobile.android.ui.Space
@@ -117,6 +118,20 @@ internal fun slotLabel(slot: String): String = when (slot) {
     "suhoor" -> stringResource(R.string.meals_slot_suhoor)
     "iftar" -> stringResource(R.string.meals_slot_iftar)
     else -> slot
+}
+
+/**
+ * The meal inside a sentence: "lunch" in English, "الغداء" in Arabic (the bare
+ * "غداء" reads wrong after a verb). [title] keeps the English capital for a label.
+ */
+@Composable
+internal fun slotPhrase(slot: String, title: Boolean = false): String {
+    val label = slotLabel(slot)
+    return when {
+        rememberArabic() -> if (label.startsWith("ال")) label else "ال$label"
+        title -> label
+        else -> label.lowercase()
+    }
 }
 
 @Composable

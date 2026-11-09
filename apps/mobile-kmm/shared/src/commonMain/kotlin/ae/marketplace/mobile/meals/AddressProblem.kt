@@ -67,8 +67,23 @@ data class AddressProblem(
         fun ofRotation(f: Failure?): AddressProblem? = of(f, "slot_addresses") ?: of(f, "address_id")
             ?.takeIf { it.kind != COMPANY && it.kind != CLOSED && it.kind != ROTATION_WEEK }
 
-        /** A change-address refusal: the `addresses` field or the 409/404 codes. */
-        fun ofChange(f: Failure?): AddressProblem? = of(f, "addresses")
+        private val changeField = Regex("""^addresses(\[[^\]]*])?$""")
+
+        /**
+         * A change-address refusal: one `addresses[<slot>]` field per refused
+         * meal (and week), of which the first is shown, or the 409/404 codes.
+         */
+        fun ofChange(f: Failure?): AddressProblem? {
+            val r = f as? Failure.Rejected ?: return null
+            val field = r.fieldCodes.keys.firstOrNull { changeField.matches(it) }
+            return of(f, field ?: "addresses")
+        }
+
+        /** Every refused meal of a change-address 422, in the server's order. */
+        fun ofChangeAll(f: Failure?): List<AddressProblem> {
+            val r = f as? Failure.Rejected ?: return emptyList()
+            return r.fieldCodes.keys.filter { changeField.matches(it) }.mapNotNull { of(f, it) }
+        }
 
         /**
          * Checkout refusals by meal slot: `schedule[i].address_id` is rule i of

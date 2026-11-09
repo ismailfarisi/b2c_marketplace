@@ -134,6 +134,21 @@ private func slotLabel(_ slot: String) -> String {
     }
 }
 
+/// The meal inside a sentence: "lunch" in English, "الغداء" in Arabic (the bare
+/// "غداء" reads wrong after a verb); `title` keeps the English capital for a label.
+private func slotPhrase(_ slot: String, title: Bool = false) -> String {
+    let label = slotLabel(slot)
+    if isArabicLocale { return label.hasPrefix("ال") ? label : "ال" + label }
+    return title ? label : label.lowercased()
+}
+
+/// The server names a kitchen in English; in Arabic the screen shows its Arabic
+/// name instead. `kitchens` pairs each English name with its Arabic one.
+private func kitchenAliases(_ kitchens: [(String, String?)]) -> [String: String] {
+    guard isArabicLocale else { return [:] }
+    return Dictionary(kitchens.compactMap { en, ar in (ar?.isEmpty == false) ? (en, ar!) : nil }, uniquingKeysWith: { a, _ in a })
+}
+
 private func statusLabel(_ status: String) -> String {
     switch status {
     case "active": return NSLocalizedString("meals_status_active", comment: "")
@@ -1749,7 +1764,7 @@ private struct CheckoutPage: View {
                     }
                 } else {
                     ForEach(s.chosenSlots, id: \.self) { slot in
-                        FieldLabel(text: tr("meals_addr_slot_to", slotLabel(slot)))
+                        FieldLabel(text: tr("meals_addr_slot_to", slotPhrase(slot, title: true)))
                         ForEach(s.addresses, id: \.id) { a in
                             Choice(title: a.label, detail: a.line, selected: s.addressFor(slot: slot) == a.id,
                                    warning: s.outside(id: a.id) ? NSLocalizedString("meals_addr_not_here", comment: "") : nil) {
@@ -1757,9 +1772,9 @@ private struct CheckoutPage: View {
                             }
                         }
                         if let problem = s.slotProblems[slot] {
-                            AddressWarning(text: addressProblemText(problem, slot))
+                            AddressWarning(text: addressProblemText(problem, slot, kitchenAliases(s.kitchen.map { [($0.name, $0.nameAr)] } ?? [])))
                         } else if let chosen = s.addressFor(slot: slot), s.outside(id: chosen) {
-                            AddressWarning(text: tr("meals_addr_blocked_slot", slotLabel(slot).lowercased(),
+                            AddressWarning(text: tr("meals_addr_blocked_slot", slotPhrase(slot),
                                                     s.addresses.first { $0.id == chosen }?.label ?? ""))
                         }
                     }
@@ -1974,7 +1989,7 @@ private struct RotationPage: View {
                         }
                     } else {
                         ForEach(s.mealSlotOptions, id: \.self) { slot in
-                            FieldLabel(text: tr("meals_addr_slot_to", slotLabel(slot)))
+                            FieldLabel(text: tr("meals_addr_slot_to", slotPhrase(slot, title: true)))
                             ForEach(s.addresses, id: \.id) { a in
                                 Choice(title: a.label, detail: a.line, selected: s.addressFor(slot: slot) == a.id) {
                                     vm.selectRotationSlotAddress(slot: slot, id: a.id)
@@ -1983,7 +1998,7 @@ private struct RotationPage: View {
                         }
                     }
                     if let problem = rotationProblem {
-                        AddressWarning(text: addressProblemText(problem, nil))
+                        AddressWarning(text: addressProblemText(problem, nil, kitchenAliases(s.candidates.map { ($0.name, $0.nameAr) })))
                     }
                     if let a = s.adventure {
                         AdventureChips(current: a, enabled: true) { vm.setBuilderAdventure(adventure: $0) }
@@ -2646,7 +2661,8 @@ private struct RotationDetailPage: View {
                             onClose: { vm.closeRotationAddressChange() },
                             onRetryLoad: { vm.retryRotationAddressChangeLoad() },
                             onAdd: { vm.addRotationChangeAddress(label: $0, building: $1, area: $2, city: $3, at: $4) },
-                            kitchenNames: Dictionary(r.weeks.map { ($0.branchId, pick($0.kitchenName, $0.kitchenNameAr)) }, uniquingKeysWith: { a, _ in a })
+                            kitchenNames: Dictionary(r.weeks.map { ($0.branchId, pick($0.kitchenName, $0.kitchenNameAr)) }, uniquingKeysWith: { a, _ in a }),
+                            kitchenAliases: kitchenAliases(r.weeks.map { ($0.kitchenName, $0.kitchenNameAr) })
                         )
                     }
                     if !change.changed.isEmpty {
@@ -2908,6 +2924,7 @@ private struct SubscriptionPage: View {
                     if change.visible {
                         AddressChangeCard(
                             s: change, current: sub.deliveryAddresses, rotation: false,
+                            kitchenAliases: kitchenAliases([(sub.kitchenName, sub.kitchenNameAr)]),
                             onAllMeals: { vm.setAddressChangeAllMeals(on: $0) },
                             onPick: { vm.pickChangeAddress(slot: $0, addressId: $1) },
                             onPickAll: { vm.pickChangeAddressForAll(addressId: $0) },
@@ -3686,15 +3703,17 @@ private struct AddressWarning: View {
     }
 }
 
-/// Words an address refusal; `slot` is the meal it is shown under when the server named none.
-private func addressProblemText(_ p: AddressProblem, _ slot: String?) -> String {
-    let meal = (p.slot ?? slot).map { slotLabel($0).lowercased() }
+/// Words an address refusal; `slot` is the meal it is shown under when the server
+/// named none; `kitchenAliases` renames a kitchen the server named.
+private func addressProblemText(_ p: AddressProblem, _ slot: String?, _ kitchenAliases: [String: String] = [:]) -> String {
+    let meal = (p.slot ?? slot).map { slotPhrase($0) }
+    let kitchen = p.kitchen.map { kitchenAliases[$0] ?? $0 }
     var base: String
     switch p.kind {
     case "outside":
-        if let k = p.kitchen, let m = meal {
+        if let k = kitchen, let m = meal {
             base = tr("meals_addr_err_kitchen_slot", k, m)
-        } else if let k = p.kitchen {
+        } else if let k = kitchen {
             base = tr("meals_addr_err_kitchen", k)
         } else if let m = meal {
             base = tr("meals_addr_err_slot", m)
@@ -3764,6 +3783,8 @@ private struct AddressChangeCard: View {
     let onAdd: (String, String, String, String, LatLng) -> Void
     /// Kitchen names by branch id, so a rotation can say which week's kitchen refuses an address.
     var kitchenNames: [String: String] = [:]
+    /// English kitchen name to the one to show, for a kitchen the server's message names.
+    var kitchenAliases: [String: String] = [:]
 
     private var notHere: String { NSLocalizedString("meals_addr_not_here", comment: "") }
 
@@ -3805,7 +3826,7 @@ private struct AddressChangeCard: View {
                     }
                 } else {
                     ForEach(current, id: \.mealSlot) { d in
-                        FieldLabel(text: tr("meals_addr_slot_to", slotLabel(d.mealSlot)))
+                        FieldLabel(text: tr("meals_addr_slot_to", slotPhrase(d.mealSlot, title: true)))
                         ForEach(s.addresses, id: \.id) { a in
                             Choice(title: a.label, detail: a.line, selected: s.picked(slot: d.mealSlot) == a.id,
                                    warning: warning(a)) { if !s.busy { onPick(d.mealSlot, a.id) } }
@@ -3814,7 +3835,7 @@ private struct AddressChangeCard: View {
                 }
                 AddressForm(startOpen: false, busy: s.busy, added: Int(s.addressAdded), failure: s.addError, onSave: onAdd)
                 if let problem = s.problem {
-                    AddressWarning(text: addressProblemText(problem, nil))
+                    AddressWarning(text: addressProblemText(problem, nil, kitchenAliases))
                 } else if let failure = s.error {
                     FailureStrip(failure: failure, onRetry: onSave)
                 }
@@ -3850,8 +3871,8 @@ private struct AddressChangedCard: View {
 
     private func line(_ d: DeliveryAddress) -> String {
         if let from = d.effectiveFrom {
-            return tr("meals_addr_changed_from", shortDate(from), tr("meals_addr_goes_to", slotLabel(d.mealSlot).lowercased(), d.label))
+            return tr("meals_addr_changed_from", shortDate(from), tr("meals_addr_goes_to", slotPhrase(d.mealSlot), d.label))
         }
-        return tr("meals_addr_now_goes", slotLabel(d.mealSlot), d.label)
+        return tr("meals_addr_now_goes", slotPhrase(d.mealSlot, title: true), d.label)
     }
 }

@@ -988,7 +988,18 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     /** The checkout failure with any per-meal address refusals pulled out by meal. */
     private fun CheckoutUiState.failed(e: Throwable, input: SubscribeInput): CheckoutUiState {
         val f = e.toFailure()
-        return copy(error = f, slotProblems = AddressProblem.bySlot(f, input.schedule, input.addressId, perMeal))
+        val problems = AddressProblem.bySlot(f, input.schedule, input.addressId, perMeal)
+        // The server's refusal is the truth about the area: the refused address
+        // is marked at once, so Pay waits for another pick.
+        val refused = problems.filter { it.value.kind == AddressProblem.OUTSIDE }.keys
+            .mapNotNull { slot -> input.schedule.firstOrNull { it.mealSlot == slot }?.addressId ?: input.addressId }
+            .toSet()
+        return copy(error = f, slotProblems = problems, outsideAddresses = outsideAddresses + refused)
+    }
+
+    /** After a refusal, asks coverage again so every address shows the kitchen's current area. */
+    private fun recheckAfterRefusal() {
+        if (_checkout.value.slotProblems.values.any { it.kind == AddressProblem.OUTSIDE }) checkCheckoutCoverage()
     }
 
     private fun refreshPreview() {
@@ -1005,6 +1016,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 throw e
             } catch (e: Throwable) {
                 _checkout.update { it.copy(preview = null).failed(e, input) }
+                recheckAfterRefusal()
             }
         }
     }
@@ -1045,6 +1057,7 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 }
             } catch (e: Throwable) {
                 _checkout.update { it.copy(busy = false).failed(e, input) }
+                recheckAfterRefusal()
                 return@launch
             }
             try {
@@ -1818,7 +1831,15 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
-                    set { it.copy(busy = false, error = AddressProblem.failureOf(e)) }
+                    val f = AddressProblem.failureOf(e)
+                    // A kitchen refused the move: mark its address so Save waits
+                    // for another pick, then ask coverage again for the rest.
+                    val branches = branchIds()
+                    val refused = AddressProblem.ofChangeAll(f).filter { it.kind == AddressProblem.OUTSIDE }
+                        .mapNotNull { p -> moves.firstOrNull { it.mealSlot == p.slot }?.addressId ?: moves.singleOrNull()?.addressId }
+                        .associateWith { branches.firstOrNull() ?: "" }
+                    set { it.copy(busy = false, error = f, outsideBy = it.outsideBy + refused) }
+                    if (refused.isNotEmpty()) checkCoverage(get().addresses)
                 }
             }
         }

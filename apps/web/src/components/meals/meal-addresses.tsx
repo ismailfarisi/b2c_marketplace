@@ -47,6 +47,8 @@ const SLOT: Record<Locale, Record<string, string>> = {
 export const slotName = (slot: string, locale: Locale) => SLOT[locale][slot] ?? slot;
 const slotLower = (slot: string, locale: Locale) =>
   locale === "en" ? slotName(slot, locale).toLowerCase() : slotName(slot, locale);
+// "للغداء": the ل prefix merges with the article (لـ + الغداء → للغداء).
+const arFor = (name: string) => (name.startsWith("ال") ? `لل${name.slice(2)}` : `لـ${name}`);
 
 const COPY = {
   en: {
@@ -94,13 +96,15 @@ const COPY = {
     oneAddress: "كل الوجبات إلى عنوان واحد",
     perMeal: "عنوان مختلف لكل وجبة",
     slotTo: (slot: string) => `${slotName(slot, "ar")} إلى`,
-    notHere: "لا يوصل إلى هنا",
-    notHereOption: "لا يوصل إلى هنا",
-    notTo: (label: string) => `لا يوصل إلى ${label}`,
+    notHere: "لا توصيل إلى هنا",
+    notHereOption: "لا توصيل إلى هنا",
+    notTo: (label: string) => `لا توصيل إلى ${label}`,
+    // Worded around the meal and "delivery", so a kitchen with a feminine
+    // name ("سفرة تيتا") needs no verb agreement.
     blocked: (kitchen: string, slot: string | null, label: string) =>
       slot
-        ? `${kitchen} لا يوصل ${slotLower(slot, "ar")} إلى ${label}. اختر عنوانًا آخر لـ${slotLower(slot, "ar")}.`
-        : `${kitchen} لا يوصل إلى ${label}. اختر عنوانًا آخر.`,
+        ? `لا يصل ${slotLower(slot, "ar")} من ${kitchen} إلى ${label}. اختر عنوانًا آخر ${arFor(slotLower(slot, "ar"))}.`
+        : `لا توصيل من ${kitchen} إلى ${label}. اختر عنوانًا آخر.`,
     checkFailed: "تعذر التحقق من العناوين التي يوصل إليها هذا المطبخ.",
     retry: "حاول مرة أخرى",
     thisKitchen: "هذا المطبخ",
@@ -503,11 +507,19 @@ export function addressChangeProblem(
   if (code === "company_lunch") return t.companyLunch;
   if (code === "not_changeable") return t.notChangeable;
   if (code === "rotation_week") return t.rotationWeek;
-  const fe = err.problem?.errors?.find((e) => e.field === "addresses");
-  if (fe?.code === "outside_delivery_area") {
-    const slot = DELIVER_RE.exec(fe.message ?? "")?.[2] ?? null;
-    return outsideAreaMessage(fe.message, locale, slot, labelOf(slot), kitchenName);
+  // One entry per refused meal (`addresses[lunch]`, `addresses[dinner]`, and
+  // per week for a rotation): every kitchen in the way is named.
+  const fes = (err.problem?.errors ?? []).filter((e) => /^addresses(\[[^\]]*\])?$/.test(e.field));
+  const outside = fes.filter((e) => e.code === "outside_delivery_area");
+  if (outside.length) {
+    return outside
+      .map((fe) => {
+        const slot = DELIVER_RE.exec(fe.message ?? "")?.[2] ?? null;
+        return outsideAreaMessage(fe.message, locale, slot, labelOf(slot), kitchenName);
+      })
+      .join(" ");
   }
+  const fe = fes[0];
   if (fe?.code === "unknown_slot") return t.unknownSlot;
   if (err.status >= 500) return t.failed;
   const generic = problemMessage(err, locale);
@@ -690,7 +702,14 @@ function ChangePanel<R extends { changed: DeliveryAddress[] }>({
   useEffect(() => resetKey(), [draftKey, resetKey]);
   const busy = useBusyGuard();
   const [error, setError] = useState<string | null>(null);
+  // A new pick is a new attempt: the last refusal no longer applies to it.
+  useEffect(() => setError(null), [draftKey]);
+  // The meal whose picker was used last gets an address added from the form.
+  const [lastSlot, setLastSlot] = useState<string | null>(null);
   const m = useMutation({
+    // Fail fast offline (with the offline message and Save as the retry)
+    // instead of pausing and sending the move later, unannounced.
+    networkMode: "always",
     mutationFn: () => save(draft, key.headers()),
     onSuccess: async (out) => {
       key.reset();
@@ -759,11 +778,13 @@ function ChangePanel<R extends { changed: DeliveryAddress[] }>({
               <span>{slot ? t.slotTo(slot) : slots.length > 1 ? t.allMeals : t.slotTo(slots[0]!)}</span>
               <select
                 value={value}
-                onChange={(e) =>
-                  slot
-                    ? setPer((cur) => ({ ...cur, [slot]: e.target.value }))
-                    : setAll(e.target.value)
-                }
+                onChange={(e) => {
+                  if (slot) {
+                    setLastSlot(slot);
+                    setPer((cur) => ({ ...cur, [slot]: e.target.value }));
+                  } else setAll(e.target.value);
+                }}
+                onFocus={() => slot && setLastSlot(slot)}
                 aria-invalid={no || undefined}
               >
                 {extra.map((d) => (
@@ -789,7 +810,11 @@ function ChangePanel<R extends { changed: DeliveryAddress[] }>({
       <NewAddress
         t={ADDRESS_COPY[locale]}
         initial={null}
-        onSaved={(a) => (split ? setPer((cur) => ({ ...cur, [slots[0]!]: a.id })) : setAll(a.id))}
+        onSaved={(a) =>
+          split
+            ? setPer((cur) => ({ ...cur, [lastSlot && slots.includes(lastSlot) ? lastSlot : slots[0]!]: a.id }))
+            : setAll(a.id)
+        }
       />
       {coverage.isError && (
         <p className="ms-note" role="alert">

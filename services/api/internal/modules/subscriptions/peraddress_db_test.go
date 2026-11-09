@@ -255,7 +255,7 @@ func TestChangeSubscriptionAddresses(t *testing.T) {
 	}
 
 	_, err = f.svc.ChangeSubscriptionAddresses(ctx, f.userID, res.ID, map[string]uuid.UUID{"lunch": far}, now)
-	if got := fieldCode(err, "addresses"); got != "outside_delivery_area" {
+	if got := fieldCode(err, "addresses[lunch]"); got != "outside_delivery_area" {
 		t.Fatalf("far office: code = %q (%v)", got, err)
 	}
 	if defaultRules() != 7 {
@@ -266,7 +266,7 @@ func TestChangeSubscriptionAddresses(t *testing.T) {
 		t.Fatalf("someone else's address: %v, want not found", err)
 	}
 	_, err = f.svc.ChangeSubscriptionAddresses(ctx, f.userID, res.ID, map[string]uuid.UUID{"dinner": office}, now)
-	if got := fieldCode(err, "addresses"); got != "unknown_slot" {
+	if got := fieldCode(err, "addresses[dinner]"); got != "unknown_slot" {
 		t.Fatalf("unknown slot: code = %q (%v)", got, err)
 	}
 	_, err = f.svc.ChangeSubscriptionAddresses(ctx, stranger, res.ID, map[string]uuid.UUID{"lunch": office}, now)
@@ -342,15 +342,27 @@ func TestChangeRotationAddressesAppliesToEveryRemainingWeek(t *testing.T) {
 	week3 := f.week(t, 3)
 	shrinkArea(t, f.pool, week3.BranchID, 2000)
 	_, err := f.svc.ChangeRotationAddresses(ctx, f.userID, f.rotation.ID, map[string]uuid.UUID{"lunch": office}, now)
-	if got := fieldCode(err, "addresses"); got != "outside_delivery_area" {
+	if got := fieldCode(err, "addresses[lunch]"); got != "outside_delivery_area" {
 		t.Fatalf("code = %q (%v), want outside_delivery_area", got, err)
 	}
-	if msg := fieldMessage(err, "addresses"); !strings.Contains(msg, "week 3") || !strings.Contains(msg, week3.KitchenName) {
+	if msg := fieldMessage(err, "addresses[lunch]"); !strings.Contains(msg, "week 3") || !strings.Contains(msg, week3.KitchenName) {
 		t.Fatalf("message %q should name the kitchen and the week", msg)
 	}
 	if officeRules() != 0 || countRows(t, f.pool, `SELECT count(*) FROM meal_rotation_addresses WHERE rotation_id = $1`, f.rotation.ID) != 0 {
 		t.Fatal("a refused change must change nothing")
 	}
+	// Two weeks in the way: both are named, not just the first.
+	week2 := f.week(t, 2)
+	shrinkArea(t, f.pool, week2.BranchID, 2000)
+	_, err = f.svc.ChangeRotationAddresses(ctx, f.userID, f.rotation.ID, map[string]uuid.UUID{"lunch": office}, now)
+	var ve *httpx.ValidationError
+	if !errors.As(err, &ve) || len(ve.Fields) != 2 {
+		t.Fatalf("two refusing weeks: %v, want two outside_delivery_area fields", err)
+	}
+	if !strings.Contains(ve.Fields[0].Message, "week 2") || !strings.Contains(ve.Fields[1].Message, "week 3") {
+		t.Fatalf("refusals %+v should name week 2 then week 3", ve.Fields)
+	}
+	shrinkArea(t, f.pool, week2.BranchID, 15000)
 
 	shrinkArea(t, f.pool, week3.BranchID, 15000)
 	out, err := f.svc.ChangeRotationAddresses(ctx, f.userID, f.rotation.ID, map[string]uuid.UUID{"lunch": office}, now)

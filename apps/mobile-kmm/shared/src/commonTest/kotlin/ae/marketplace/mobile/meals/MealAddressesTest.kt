@@ -134,6 +134,17 @@ class MealAddressesTest {
         )
         assertEquals(AddressProblem("outside", "Green Bowl", "lunch", 2), outside)
         assertNull(AddressProblem.ofChange(Failure.Offline))
+        // One field per refused meal: the first is shown, every one is known.
+        val two = Failure.Rejected(
+            code = "validation_failed",
+            fieldCodes = mapOf("addresses[dinner]" to "outside_delivery_area", "addresses[lunch]" to "outside_delivery_area"),
+            fieldMessages = mapOf(
+                "addresses[dinner]" to "Green Bowl does not deliver dinner to that address",
+                "addresses[lunch]" to "Green Bowl does not deliver lunch to that address",
+            ),
+        )
+        assertEquals("dinner", AddressProblem.ofChange(two)?.slot)
+        assertEquals(listOf("dinner", "lunch"), AddressProblem.ofChangeAll(two).map { it.slot })
     }
 
     @Test

@@ -349,8 +349,11 @@ function Checkout({
     (locale === "ar" && kitchen.data?.name_ar) || kitchen.data?.name || "";
   const addressLabel = (id: string) =>
     addresses.data?.items.find((a) => a.id === id)?.label ?? "";
-  const uncovered = company
-    ? null
+  // A company lunch goes to the office the company chose, so coverage is not
+  // the employee's to check here; `null` would mean "the default address is
+  // uncovered" and block the Start button.
+  const uncovered: string | null | undefined = company
+    ? undefined
     : (where.split && slots.length >= 2 ? slots : [null]).find(
         (slot) =>
           coverage.delivers(branchId, slot ? where.of(slot) : addressId) === false,

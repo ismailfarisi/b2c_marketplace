@@ -1084,16 +1084,16 @@ private fun CheckoutPage(
                 }
             } else {
                 s.chosenSlots.forEach { slot ->
-                    Label(stringResource(R.string.meals_addr_slot_to, slotLabel(slot)))
+                    Label(stringResource(R.string.meals_addr_slot_to, slotPhrase(slot, title = true)))
                     s.addresses.forEach { a ->
                         Choice(a.label, a.line, s.addressFor(slot) == a.id, warning = if (s.outside(a.id)) notHere else null) { vm.selectSlotAddress(slot, a.id) }
                     }
                     val chosen = s.addressFor(slot)
                     val problem = s.slotProblems[slot]
                     when {
-                        problem != null -> AddressWarning(addressProblemText(problem, slot))
+                        problem != null -> AddressWarning(addressProblemText(problem, slot, kitchenAliases(listOfNotNull(s.kitchen?.let { it.name to it.nameAr }), arabic)))
                         chosen != null && s.outside(chosen) -> AddressWarning(
-                            stringResource(R.string.meals_addr_blocked_slot, slotLabel(slot).lowercase(), s.addresses.firstOrNull { it.id == chosen }?.label.orEmpty()),
+                            stringResource(R.string.meals_addr_blocked_slot, slotPhrase(slot), s.addresses.firstOrNull { it.id == chosen }?.label.orEmpty()),
                         )
                     }
                 }
@@ -1318,12 +1318,12 @@ private fun RotationPage(vm: MealsViewModel, onBack: () -> Unit, onPaid: () -> U
                 s.addresses.forEach { a -> Choice(a.label, a.line, a.id == s.addressId) { vm.selectRotationAddress(a.id) } }
             } else {
                 s.mealSlotOptions.forEach { slot ->
-                    Label(stringResource(R.string.meals_addr_slot_to, slotLabel(slot)))
+                    Label(stringResource(R.string.meals_addr_slot_to, slotPhrase(slot, title = true)))
                     s.addresses.forEach { a -> Choice(a.label, a.line, s.addressFor(slot) == a.id) { vm.selectRotationSlotAddress(slot, a.id) } }
                 }
             }
             val rotationProblem = AddressProblem.ofRotation(s.error)
-            rotationProblem?.let { AddressWarning(addressProblemText(it, null)) }
+            rotationProblem?.let { AddressWarning(addressProblemText(it, null, kitchenAliases(s.candidates.map { k -> k.name to k.nameAr }, arabic))) }
             s.adventure?.let { a -> AdventureChips(a, enabled = true, onPick = vm::setBuilderAdventure) }
             Label(stringResource(R.string.meals_pick_four, s.picked.size))
             if (s.busy && s.candidates.isEmpty()) LoadingBlock(inline = true)
@@ -1894,6 +1894,7 @@ private fun SubscriptionPage(vm: MealsViewModel, onBack: () -> Unit, openPayment
                         if (change.visible) {
                             AddressChangeCard(
                                 change, sub.deliveryAddresses, rotation = false,
+                                kitchenAliases = kitchenAliases(listOf(sub.kitchenName to sub.kitchenNameAr), arabic),
                                 onAllMeals = vm::setAddressChangeAllMeals,
                                 onPick = vm::pickChangeAddress,
                                 onPickAll = vm::pickChangeAddressForAll,
@@ -2005,6 +2006,7 @@ private fun RotationDetailPage(
                             AddressChangeCard(
                                 change, r.deliveryAddresses, rotation = true,
                                 kitchenNames = r.weeks.associate { it.branchId to ((if (arabic) it.kitchenNameAr else null) ?: it.kitchenName) },
+                                kitchenAliases = kitchenAliases(r.weeks.map { it.kitchenName to it.kitchenNameAr }, arabic),
                                 onAllMeals = vm::setRotationAddressChangeAllMeals,
                                 onPick = vm::pickRotationChangeAddress,
                                 onPickAll = vm::pickRotationChangeAddressForAll,
@@ -2304,14 +2306,25 @@ private fun AddressWarning(text: String) {
     Text(text, color = Palette.Bad, fontSize = Type.Secondary, modifier = Modifier.padding(horizontal = Space.Edge, vertical = 6.dp))
 }
 
-/** Words an address refusal; [slot] is the meal it is shown under, when the server did not name one. */
+/**
+ * The server names a kitchen in English; in Arabic the screen shows its Arabic
+ * name instead. [kitchens] pairs each English name with its Arabic one.
+ */
+private fun kitchenAliases(kitchens: List<Pair<String, String?>>, arabic: Boolean): Map<String, String> =
+    if (!arabic) emptyMap() else kitchens.mapNotNull { (en, ar) -> ar?.takeIf { it.isNotBlank() }?.let { en to it } }.toMap()
+
+/**
+ * Words an address refusal; [slot] is the meal it is shown under, when the server
+ * did not name one; [kitchenAliases] renames a kitchen the server named.
+ */
 @Composable
-private fun addressProblemText(p: AddressProblem, slot: String?): String {
-    val meal = (p.slot ?: slot)?.let { slotLabel(it).lowercase() }
+private fun addressProblemText(p: AddressProblem, slot: String?, kitchenAliases: Map<String, String> = emptyMap()): String {
+    val meal = (p.slot ?: slot)?.let { slotPhrase(it) }
+    val kitchen = p.kitchen?.let { kitchenAliases[it] ?: it }
     val base = when (p.kind) {
         AddressProblem.OUTSIDE -> when {
-            p.kitchen != null && meal != null -> stringResource(R.string.meals_addr_err_kitchen_slot, p.kitchen!!, meal)
-            p.kitchen != null -> stringResource(R.string.meals_addr_err_kitchen, p.kitchen!!)
+            kitchen != null && meal != null -> stringResource(R.string.meals_addr_err_kitchen_slot, kitchen, meal)
+            kitchen != null -> stringResource(R.string.meals_addr_err_kitchen, kitchen)
             meal != null -> stringResource(R.string.meals_addr_err_slot, meal)
             else -> stringResource(R.string.meals_address_outside)
         }
@@ -2369,6 +2382,8 @@ private fun AddressChangeCard(
     onAdd: (String, String, String, String, LatLng) -> Unit,
     /** Kitchen names by branch id, so a rotation can say which week's kitchen refuses an address. */
     kitchenNames: Map<String, String> = emptyMap(),
+    /** English kitchen name to the one to show, for a kitchen the server's message names. */
+    kitchenAliases: Map<String, String> = emptyMap(),
 ) {
     Card {
         Text(stringResource(R.string.meals_addr_change_title), color = M.Ink, fontSize = Type.Body, fontWeight = FontWeight.SemiBold)
@@ -2395,7 +2410,7 @@ private fun AddressChangeCard(
                 }
             } else {
                 current.forEach { d ->
-                    Label(stringResource(R.string.meals_addr_slot_to, slotLabel(d.mealSlot)))
+                    Label(stringResource(R.string.meals_addr_slot_to, slotPhrase(d.mealSlot, title = true)))
                     s.addresses.forEach { a ->
                         Choice(a.label, a.line, s.picked(d.mealSlot) == a.id, warning = warning(a)) { if (!s.busy) onPick(d.mealSlot, a.id) }
                     }
@@ -2405,7 +2420,7 @@ private fun AddressChangeCard(
             val problem = s.problem
             val error = s.error
             when {
-                problem != null -> AddressWarning(addressProblemText(problem, null))
+                problem != null -> AddressWarning(addressProblemText(problem, null, kitchenAliases))
                 error != null -> FailureStrip(error, onRetry = onSave)
             }
             val blocked = current.any { d -> s.picked(d.mealSlot)?.let(s::outside) == true }
@@ -2431,9 +2446,9 @@ private fun AddressChangedCard(changed: List<DeliveryAddress>, arabic: Boolean, 
             val from = d.effectiveFrom
             Text(
                 if (from != null) {
-                    stringResource(R.string.meals_addr_changed_from, shortDate(from, arabic), stringResource(R.string.meals_addr_goes_to, slotLabel(d.mealSlot).lowercase(), d.label))
+                    stringResource(R.string.meals_addr_changed_from, shortDate(from, arabic), stringResource(R.string.meals_addr_goes_to, slotPhrase(d.mealSlot), d.label))
                 } else {
-                    stringResource(R.string.meals_addr_now_goes, slotLabel(d.mealSlot), d.label)
+                    stringResource(R.string.meals_addr_now_goes, slotPhrase(d.mealSlot, title = true), d.label)
                 },
                 color = M.Ink,
                 fontSize = Type.Body,

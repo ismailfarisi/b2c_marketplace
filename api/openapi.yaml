@@ -385,6 +385,9 @@ paths:
       tags: [me]
       operationId: listAddresses
       summary: The user's saved addresses
+      description: >
+        The caller's own delivery addresses. A company office saved for an
+        office lunch belongs to the company and is not listed.
       responses:
         "200":
           description: OK
@@ -1754,9 +1757,10 @@ paths:
         caller for everything still to come: the schedule, and already planned
         deliveries whose order cutoff has not passed. Deliveries the kitchen is
         already preparing keep the old address. All or nothing: a kitchen that
-        does not deliver to a new address answers 422 with field `addresses`,
-        code `outside_delivery_area` and a message naming the kitchen,
-        and nothing changes. Other 422 codes on `addresses`: `required`,
+        does not deliver to a new address answers 422 with one field per
+        refused meal, `addresses[<meal_slot>]`, code `outside_delivery_area`
+        and a message naming the kitchen and the meal, and nothing changes.
+        Other 422 codes: `addresses` `required`, `addresses[<meal_slot>]`
         `unknown_slot` (not one of the plan's meals), `addresses[<i>].meal_slot`
         `duplicate`. Someone else's address: 404 code `address_not_found`.
         Allowed while active, paused or pending payment; otherwise 409
@@ -2196,9 +2200,11 @@ paths:
         caller for everything still to come: the schedule, and already planned
         deliveries whose order cutoff has not passed. Deliveries the kitchen is
         already preparing keep the old address. All or nothing: a kitchen that
-        does not deliver to a new address answers 422 with field `addresses`,
-        code `outside_delivery_area` and a message naming the kitchen and the week,
-        and nothing changes. Other 422 codes on `addresses`: `required`,
+        does not deliver to a new address answers 422 with one field per
+        refused meal and week, `addresses[<meal_slot>]`, code
+        `outside_delivery_area` and a message naming the kitchen, the meal and
+        the week; every remaining week is checked and nothing changes. Other
+        422 codes: `addresses` `required`, `addresses[<meal_slot>]`
         `unknown_slot` (not one of the plan's meals), `addresses[<i>].meal_slot`
         `duplicate`. Someone else's address: 404 code `address_not_found`.
         Allowed while active, paused or pending payment; otherwise 409

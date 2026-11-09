@@ -45,6 +45,26 @@ func addressesInvalid(code, msg string) error {
 	return &httpx.ValidationError{Fields: []httpx.FieldError{{Field: "addresses", Code: code, Message: msg}}}
 }
 
+// slotField names the meal a refusal is about: `addresses[lunch]`. The body
+// is a list, but the meal, not its position, is what the reader has to fix.
+func slotField(slot string) string { return "addresses[" + slot + "]" }
+
+// outsideRefusals returns the fields of err when it is a 422 made only of
+// outside_delivery_area refusals, so a rotation can keep checking its other
+// weeks and name every kitchen and meal that refuses, not just the first.
+func outsideRefusals(err error) []httpx.FieldError {
+	var ve *httpx.ValidationError
+	if !errors.As(err, &ve) || len(ve.Fields) == 0 {
+		return nil
+	}
+	for _, f := range ve.Fields {
+		if f.Code != "outside_delivery_area" {
+			return nil
+		}
+	}
+	return ve.Fields
+}
+
 // ChangeSubscriptionAddresses moves the listed meals of one subscription to
 // new addresses of the customer's. Someone else's subscription is 404; a
 // company lunch is 409 company_lunch; a finished subscription is 409
@@ -76,6 +96,9 @@ func (s *Service) ChangeSubscriptionAddresses(ctx context.Context, userID, subID
 		}
 		if !slices.Contains(addressChangeStatuses, live.Status) {
 			return httpx.Coded(httpx.ErrConflict, "not_changeable", "This subscription has ended.")
+		}
+		if err := s.checkOwnAddresses(ctx, tx, userID, changes); err != nil {
+			return err
 		}
 		effective, err = s.applyAddressChange(ctx, tx, live, changes, now, "")
 		return err
@@ -120,6 +143,9 @@ func (s *Service) ChangeRotationAddresses(ctx context.Context, userID, rotationI
 		if err := unknownSlot(slots, changes); err != nil {
 			return err
 		}
+		if err := s.checkOwnAddresses(ctx, tx, userID, changes); err != nil {
+			return err
+		}
 		effective, err = s.applyRotationAddressChange(ctx, tx, userID, rotationID, changes, now)
 		return err
 	})
@@ -136,10 +162,15 @@ func (s *Service) ChangeRotationAddresses(ctx context.Context, userID, rotationI
 }
 
 func unknownSlot(slots []string, changes map[string]uuid.UUID) error {
+	var unknown []httpx.FieldError
 	for _, slot := range slices.Sorted(maps.Keys(changes)) {
 		if !slices.Contains(slots, slot) {
-			return addressesInvalid("unknown_slot", fmt.Sprintf("%s is not one of this plan's meals", slot))
+			unknown = append(unknown, httpx.FieldError{Field: slotField(slot), Code: "unknown_slot",
+				Message: fmt.Sprintf("%s is not one of this plan's meals", slot)})
 		}
+	}
+	if len(unknown) > 0 {
+		return &httpx.ValidationError{Fields: unknown}
 	}
 	return nil
 }
@@ -187,6 +218,9 @@ func (s *Service) applyRotationAddressChange(ctx context.Context, tx pgx.Tx, use
 		effective[slot] = nil
 	}
 	loc := time.UTC
+	// Every week is checked even after one refuses, so the answer names each
+	// kitchen and meal that stands in the way; the transaction rolls back.
+	var refused []httpx.FieldError
 	for _, w := range weeks {
 		live, err := s.repo.LoadLive(ctx, tx, w.id)
 		if err != nil {
@@ -197,6 +231,10 @@ func (s *Service) applyRotationAddressChange(ctx context.Context, tx pgx.Tx, use
 		}
 		loc = live.Location
 		eff, err := s.applyAddressChange(ctx, tx, live, changes, now, fmt.Sprintf(" (week %d)", w.no))
+		if fields := outsideRefusals(err); fields != nil {
+			refused = append(refused, fields...)
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -206,28 +244,29 @@ func (s *Service) applyRotationAddressChange(ctx context.Context, tx pgx.Tx, use
 			}
 		}
 	}
-	if len(weeks) == 0 {
-		// No live week to check the kitchens against: verify ownership at least.
-		if err := s.checkOwnAddresses(ctx, tx, userID, changes); err != nil {
+	if len(refused) == 0 {
+		if err := insertRotationAddresses(ctx, tx, rotationID, changes); err != nil {
 			return nil, err
 		}
-	}
-	if err := insertRotationAddresses(ctx, tx, rotationID, changes); err != nil {
-		return nil, err
 	}
 	var successor uuid.UUID
 	err = tx.QueryRow(ctx, `
 		SELECT id FROM meal_rotations
 		 WHERE renewed_from_id = $1 AND status <> 'cancelled' AND start_date > $2
 		 ORDER BY created_at DESC LIMIT 1`, rotationID, dayIn(now, loc)).Scan(&successor)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return effective, nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("subscriptions: renewal rotation: %w", err)
 	}
-	if _, err := s.applyRotationAddressChange(ctx, tx, userID, successor, changes, now); err != nil {
-		return nil, err
+	if err == nil {
+		_, err := s.applyRotationAddressChange(ctx, tx, userID, successor, changes, now)
+		if fields := outsideRefusals(err); fields != nil {
+			refused = append(refused, fields...)
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	if len(refused) > 0 {
+		return nil, &httpx.ValidationError{Fields: refused}
 	}
 	return effective, nil
 }
@@ -244,11 +283,13 @@ func changedAddressIDs(changes map[string]uuid.UUID) []uuid.UUID {
 }
 
 // checkOwnAddresses rejects addresses that are not the customer's live ones.
+// A company office saved for an office lunch is the company's, not a place
+// the customer can send their own meals.
 func (s *Service) checkOwnAddresses(ctx context.Context, tx pgx.Tx, userID uuid.UUID, changes map[string]uuid.UUID) error {
 	ids := changedAddressIDs(changes)
 	var n int
 	if err := tx.QueryRow(ctx, `SELECT count(DISTINCT id) FROM addresses
-		 WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NULL`, ids, userID).Scan(&n); err != nil {
+		 WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NULL AND company_office_id IS NULL`, ids, userID).Scan(&n); err != nil {
 		return fmt.Errorf("subscriptions: own addresses: %w", err)
 	}
 	if n != len(ids) {
@@ -289,15 +330,19 @@ func (s *Service) applyAddressChange(ctx context.Context, tx pgx.Tx, live *Live,
 	}
 	ordered := slices.Sorted(maps.Keys(changes))
 	slices.SortStableFunc(ordered, func(a, b string) int { return slotOrder(a) - slotOrder(b) })
+	var refused []httpx.FieldError
 	for _, slot := range ordered {
 		ok, found := covered[changes[slot]]
 		if !found {
 			return nil, httpx.Coded(httpx.ErrNotFound, "address_not_found", "address not found")
 		}
 		if !ok {
-			return nil, addressesInvalid("outside_delivery_area",
-				fmt.Sprintf("%s does not deliver %s to that address%s", kitchen, slot, where))
+			refused = append(refused, httpx.FieldError{Field: slotField(slot), Code: "outside_delivery_area",
+				Message: fmt.Sprintf("%s does not deliver %s to that address%s", kitchen, slot, where)})
 		}
+	}
+	if len(refused) > 0 {
+		return nil, &httpx.ValidationError{Fields: refused}
 	}
 	addrs, err := s.repo.LoadAddresses(ctx, tx, ids)
 	if err != nil {

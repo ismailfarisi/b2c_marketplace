@@ -329,6 +329,8 @@ export const useRegisterDevice = <TError = UnauthorizedResponse | UnprocessableE
       return useMutation(mutationOptions);
     }
     /**
+ * The caller's own delivery addresses. A company office saved for an office lunch belongs to the company and is not listed.
+
  * @summary The user's saved addresses
  */
 export const listAddresses = (

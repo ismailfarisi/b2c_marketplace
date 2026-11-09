@@ -113,8 +113,11 @@ func scan(row pgx.Row) (Address, error) {
 }
 
 func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Address, error) {
+	// A company office saved for an office lunch is the company's address,
+	// not one of the customer's own: it is not offered as a delivery choice.
 	rows, err := s.pool.Query(ctx, `SELECT `+cols+` FROM addresses
-		 WHERE user_id = $1 AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC`, userID)
+		 WHERE user_id = $1 AND deleted_at IS NULL AND company_office_id IS NULL
+		 ORDER BY is_default DESC, created_at DESC`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("addresses: list: %w", err)
 	}
