@@ -840,8 +840,12 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
             try {
                 val items = api.addresses().items
                 val pick = items.firstOrNull { it.isDefault } ?: items.firstOrNull()
-                _checkout.update { it.copy(addresses = items, addressId = it.addressId ?: pick?.id) }
-                _rotation.update { it.copy(addresses = items, addressId = it.addressId ?: pick?.id) }
+                // A pick from before (another account, or an address since
+                // removed) only survives while it is still saved.
+                val saved = items.map { it.id }.toSet()
+                fun keep(id: String?) = id?.takeIf { it in saved } ?: pick?.id
+                _checkout.update { it.copy(addresses = items, addressId = keep(it.addressId), slotAddresses = it.slotAddresses.filterValues { v -> v in saved }) }
+                _rotation.update { it.copy(addresses = items, addressId = keep(it.addressId), slotAddresses = it.slotAddresses.filterValues { v -> v in saved }) }
                 refreshPreview()
                 checkCheckoutCoverage()
                 checkRotationCoverage()
@@ -901,6 +905,8 @@ class MealsViewModel(private val api: MealsApi) : ViewModel() {
     }
 
     fun selectAddress(id: String) {
+        val loaded = _checkout.value.addresses
+        if (loaded.isNotEmpty() && loaded.none { it.id == id }) return
         _checkout.update { it.copy(addressId = id, slotProblems = emptyMap()) }
         refreshPreview()
     }

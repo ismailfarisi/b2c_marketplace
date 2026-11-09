@@ -195,6 +195,20 @@ class MealAddressesTest {
     }
 
     @Test
+    fun aRemovedHomeAddressFallsBackToTheDefaultAtCheckout() = runTest {
+        val vm = checkoutVm()
+        vm.setLocation(25.0, 55.0)
+        vm.openKitchen("b1")
+        val k = vm.kitchen.until { it.kitchen != null }.kitchen!!
+        vm.startCheckout(k.plans.first())
+        vm.selectAddress("gone") // the browse place is a saved address since removed
+        val s = vm.checkout.until { it.addresses.isNotEmpty() }
+        assertEquals("home", s.addressId)
+        vm.selectAddress("gone")
+        assertEquals("home", vm.checkout.value.addressId)
+    }
+
+    @Test
     fun perMealCheckoutSendsEachMealsAddressAndBlocksAnUncoveredOne() = runTest {
         val vm = checkoutVm()
         vm.atCheckout()

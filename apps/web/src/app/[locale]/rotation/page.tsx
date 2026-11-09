@@ -441,7 +441,7 @@ function Builder({ locale, t }: { locale: Locale; t: Copy }) {
         ...(own.length
           ? {
               slot_addresses: own,
-              ...(slots.length ? {} : { meal_slots: mealAddresses.slots }),
+              meal_slots: mealAddresses.slots,
             }
           : {}),
         ...(code ? { promo_code: code } : {}),
